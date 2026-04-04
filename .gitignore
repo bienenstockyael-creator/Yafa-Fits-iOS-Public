@@ -1,0 +1,6 @@
+.DS_Store
+Config/Secrets.xcconfig
+*.xcuserstate
+xcuserdata/
+**/*.xcuserstate
+**/xcuserdata/

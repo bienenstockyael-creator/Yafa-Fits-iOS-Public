@@ -1,0 +1,695 @@
+{
+  "outfits": [
+    {
+      "id": "outfit-1",
+      "name": "Outfit 1",
+      "date": "2026-02-07",
+      "frameCount": 242,
+      "folder": "outfit-1",
+      "prefix": "Yael_01_",
+      "scale": 1,
+      "tags": [
+        "Winter",
+        "Work"
+      ],
+      "activity": "Work",
+      "weather": {
+        "tempF": 10,
+        "tempC": -12,
+        "condition": "Stormy"
+      },
+      "products": [
+        {
+          "name": "INSULATED SHELL JACKET",
+          "price": "490 EUR",
+          "image": "/products/tnf-jacket.png"
+        },
+        {
+          "name": "WIDE LEG PANTS",
+          "price": "230 EUR",
+          "image": "/products/wide-leg-pants.png"
+        }
+      ]
+    },
+    {
+      "id": "outfit-2",
+      "name": "Outfit 2",
+      "date": "2026-01-13",
+      "frameCount": 242,
+      "folder": "outfit-2",
+      "prefix": "Yael_02_",
+      "scale": 1,
+      "tags": [
+        "Sport",
+        "Winter"
+      ],
+      "activity": "Ice Skating",
+      "weather": {
+        "tempF": 21,
+        "tempC": -6,
+        "condition": "Breezy"
+      },
+      "products": [
+        {
+          "name": "INSULATED SHELL JACKET",
+          "price": "850 EUR",
+          "image": "/products/tnf-jacket.png"
+        },
+        {
+          "name": "WATERPROOF PLATFORM BOOTS",
+          "price": "420 EUR",
+          "image": "/products/platform-boots.png"
+        }
+      ]
+    },
+    {
+      "id": "outfit-3",
+      "name": "Outfit 3",
+      "date": "2026-02-01",
+      "frameCount": 242,
+      "folder": "outfit-3",
+      "prefix": "Yael_03_",
+      "scale": 1,
+      "tags": [
+        "Minimal",
+        "Spring"
+      ],
+      "activity": "Brunch",
+      "weather": {
+        "tempF": 60,
+        "tempC": 15,
+        "condition": "Cloudy"
+      },
+      "products": [
+        {
+          "name": "RELAXED STRAIGHT JEANS",
+          "price": "340 EUR",
+          "image": "/products/relaxed-straight-jeans.png"
+        },
+        {
+          "name": "ANKLE BOOTS",
+          "price": "210 EUR",
+          "image": "/products/ankle-boots.png"
+        }
+      ]
+    },
+    {
+      "id": "outfit-4",
+      "name": "Outfit 4",
+      "date": "2026-02-05",
+      "frameCount": 242,
+      "folder": "outfit-4",
+      "prefix": "Yael_04_",
+      "scale": 1,
+      "tags": [
+        "Winter",
+        "Date Night"
+      ],
+      "activity": "Dinner",
+      "weather": {
+        "tempF": 21,
+        "tempC": -6,
+        "condition": "Sunny"
+      },
+      "products": [
+        {
+          "name": "COLLARLESS LEATHER JACKET",
+          "price": "550 EUR",
+          "image": "/products/collarless-leather-jacket.png"
+        },
+        {
+          "name": "WIDE LEG PANTS",
+          "price": "230 EUR",
+          "image": "/products/wide-leg-pants.png"
+        }
+      ]
+    },
+    {
+      "id": "outfit-5",
+      "name": "Outfit 5",
+      "date": "2026-02-04",
+      "frameCount": 242,
+      "folder": "outfit-5",
+      "prefix": "Yael_05_",
+      "frameExt": "webp",
+      "scale": 1,
+      "tags": [
+        "Streetwear",
+        "Fall"
+      ],
+      "activity": "Shopping",
+      "weather": {
+        "tempF": 48,
+        "tempC": 9,
+        "condition": "Cloudy"
+      },
+      "products": [
+        {
+          "name": "LEATHER JACKET",
+          "price": "890 EUR",
+          "image": "/products/leather-jacket.png"
+        },
+        {
+          "name": "BLACK DENIM",
+          "price": "240 EUR",
+          "image": "/products/black-denim.png"
+        }
+      ]
+    },
+    {
+      "id": "outfit-6",
+      "name": "Outfit 6",
+      "date": "2026-02-05",
+      "frameCount": 242,
+      "folder": "outfit-6",
+      "prefix": "Yael_06_",
+      "scale": 1,
+      "tags": [
+        "Resort",
+        "Summer"
+      ],
+      "activity": "Beach",
+      "weather": {
+        "tempF": 72,
+        "tempC": 22,
+        "condition": "Sunny"
+      },
+      "products": [
+        {
+          "name": "LINEN SHIRT",
+          "price": "180 EUR",
+          "image": "/products/linen-shirt.png"
+        },
+        {
+          "name": "CHINO SHORTS",
+          "price": "150 EUR",
+          "image": "/products/chino-shorts.png"
+        }
+      ]
+    },
+    {
+      "id": "outfit-7",
+      "name": "Outfit 7",
+      "date": "2026-02-20",
+      "frameCount": 242,
+      "folder": "outfit-7",
+      "prefix": "Yael_07_",
+      "scale": 1,
+      "tags": [
+        "Winter",
+        "Chic"
+      ],
+      "activity": "Brunch",
+      "weather": {
+        "tempF": 41,
+        "tempC": 5,
+        "condition": "Sunny"
+      },
+      "products": [
+        {
+          "name": "Shearling Jacket",
+          "price": "",
+          "image": "/products/shearling-jacket.png"
+        },
+        {
+          "name": "Waterproof Platform Boots",
+          "price": "420 EUR",
+          "image": "/products/platform-boots.png"
+        }
+      ]
+    },
+    {
+      "id": "outfit-8",
+      "name": "Outfit 8",
+      "date": "2026-01-31",
+      "frameCount": 242,
+      "folder": "outfit-8",
+      "prefix": "Yael_08_",
+      "scale": 1,
+      "tags": [
+        "Cozy",
+        "Winter"
+      ],
+      "activity": "Home",
+      "weather": {
+        "tempF": 38,
+        "tempC": 3,
+        "condition": "Cold"
+      },
+      "products": [
+        {
+          "name": "TAILORED BROWN PANTS",
+          "price": "",
+          "image": "/products/tailored-brown-pants.png"
+        },
+        {
+          "name": "WHITE TURTLENECK",
+          "price": "",
+          "image": "/products/white-turtleneck.png"
+        }
+      ]
+    },
+    {
+      "id": "outfit-9",
+      "name": "Outfit 9",
+      "date": "2026-02-01",
+      "frameCount": 242,
+      "folder": "outfit-9",
+      "prefix": "Yael_09_",
+      "scale": 1,
+      "tags": [
+        "Practical",
+        "Rainy Day"
+      ],
+      "activity": "Work",
+      "weather": {
+        "tempF": 42,
+        "tempC": 6,
+        "condition": "Rainy"
+      },
+      "products": [
+        {
+          "name": "RAIN MAC",
+          "price": "340 EUR",
+          "image": "/products/rain-mac.png"
+        },
+        {
+          "name": "RUBBER BOOTS",
+          "price": "180 EUR",
+          "image": "/products/rubber-boots.png"
+        }
+      ]
+    },
+    {
+      "id": "outfit-10",
+      "name": "Outfit 10",
+      "date": "2026-02-02",
+      "frameCount": 242,
+      "folder": "outfit-10",
+      "prefix": "Yael_10_",
+      "scale": 1,
+      "tags": [
+        "Smart",
+        "Spring"
+      ],
+      "activity": "Meeting",
+      "weather": {
+        "tempF": 68,
+        "tempC": 20,
+        "condition": "Clear"
+      },
+      "products": [
+        {
+          "name": "BLAZER",
+          "price": "520 EUR",
+          "image": "/products/blazer.png"
+        },
+        {
+          "name": "SLACK TROUSERS",
+          "price": "280 EUR",
+          "image": "/products/slack-trousers.png"
+        }
+      ]
+    },
+    {
+      "id": "outfit-11",
+      "name": "Outfit 11",
+      "date": "2026-02-08",
+      "frameCount": 242,
+      "folder": "outfit-11",
+      "prefix": "Yael_11_",
+      "scale": 1,
+      "tags": [
+        "Chic",
+        "Winter"
+      ],
+      "activity": "Work",
+      "weather": {
+        "tempF": 47,
+        "tempC": 8,
+        "condition": "Cloudy"
+      },
+      "products": [
+        {
+          "name": "INSULATED SHELL JACKET",
+          "price": "490 EUR",
+          "image": "/products/tnf-jacket.png"
+        },
+        {
+          "name": "ANKLE BOOTS",
+          "price": "210 EUR",
+          "image": "/products/ankle-boots.png"
+        }
+      ]
+    },
+    {
+      "id": "outfit-12",
+      "name": "Outfit 12",
+      "date": "2026-02-09",
+      "frameCount": 242,
+      "folder": "outfit-12",
+      "prefix": "Yael_12_",
+      "scale": 1,
+      "tags": [
+        "Casual",
+        "Winter"
+      ],
+      "activity": "Errands",
+      "weather": {
+        "tempF": 44,
+        "tempC": 7,
+        "condition": "Windy"
+      },
+      "products": [
+        {
+          "name": "Mary Janes",
+          "price": "",
+          "image": "/products/mary-janes.png"
+        }
+      ]
+    },
+    {
+      "id": "outfit-13",
+      "name": "Outfit 13",
+      "date": "2026-02-10",
+      "frameCount": 242,
+      "folder": "outfit-13",
+      "prefix": "Yael_13_",
+      "scale": 1,
+      "tags": [
+        "Streetwear",
+        "Spring"
+      ],
+      "activity": "Dinner",
+      "weather": {
+        "tempF": 62,
+        "tempC": 17,
+        "condition": "Clear"
+      },
+      "products": [
+        {
+          "name": "WATERPROOF PLATFORM BOOTS",
+          "price": "420 EUR",
+          "image": "/products/platform-boots.png"
+        },
+        {
+          "name": "SHEARLING JACKET",
+          "price": "",
+          "image": "/products/shearling-jacket.png"
+        }
+      ]
+    },
+    {
+      "id": "outfit-14",
+      "name": "Outfit 14",
+      "date": "2026-02-13",
+      "frameCount": 242,
+      "folder": "outfit-14",
+      "prefix": "Yael_14_",
+      "scale": 1,
+      "tags": [],
+      "activity": "",
+      "weather": {
+        "tempF": 55,
+        "tempC": 13,
+        "condition": "Cloudy"
+      },
+      "products": []
+    },
+    {
+      "id": "outfit-15",
+      "name": "Outfit 15",
+      "date": "2026-02-14",
+      "frameCount": 242,
+      "folder": "outfit-15",
+      "prefix": "Yael_15_",
+      "scale": 1,
+      "tags": [],
+      "activity": "",
+      "weather": {
+        "tempF": 56,
+        "tempC": 13,
+        "condition": "Cloudy"
+      },
+      "products": []
+    },
+    {
+      "id": "outfit-16",
+      "name": "Outfit 16",
+      "date": "2026-02-15",
+      "frameCount": 242,
+      "folder": "outfit-16",
+      "prefix": "Yael_16_",
+      "scale": 1,
+      "tags": [],
+      "activity": "",
+      "weather": {
+        "tempF": 57,
+        "tempC": 14,
+        "condition": "Cloudy"
+      },
+      "products": []
+    },
+    {
+      "id": "outfit-17",
+      "name": "Outfit 17",
+      "date": "2026-02-16",
+      "frameCount": 242,
+      "folder": "outfit-17",
+      "prefix": "Yael_17_",
+      "scale": 1,
+      "tags": [],
+      "activity": "",
+      "weather": {
+        "tempF": 58,
+        "tempC": 14,
+        "condition": "Cloudy"
+      },
+      "products": []
+    },
+    {
+      "id": "outfit-18",
+      "name": "Outfit 18",
+      "date": "2026-02-17",
+      "frameCount": 242,
+      "folder": "outfit-18",
+      "prefix": "Yael_18_",
+      "scale": 1,
+      "tags": [],
+      "activity": "",
+      "weather": {
+        "tempF": 59,
+        "tempC": 15,
+        "condition": "Cloudy"
+      },
+      "products": []
+    },
+    {
+      "id": "outfit-19",
+      "name": "Outfit 19",
+      "date": "2026-02-18",
+      "frameCount": 242,
+      "folder": "outfit-19",
+      "prefix": "Yael_19_",
+      "scale": 1,
+      "tags": [],
+      "activity": "",
+      "weather": {
+        "tempF": 60,
+        "tempC": 16,
+        "condition": "Cloudy"
+      },
+      "products": []
+    },
+    {
+      "id": "outfit-20",
+      "name": "Outfit 20",
+      "date": "2026-02-19",
+      "frameCount": 242,
+      "folder": "outfit-20",
+      "prefix": "Yael_20_",
+      "scale": 1,
+      "tags": [],
+      "activity": "",
+      "weather": {
+        "tempF": 61,
+        "tempC": 16,
+        "condition": "Cloudy"
+      },
+      "products": []
+    },
+    {
+      "id": "outfit-21",
+      "name": "Outfit 21",
+      "date": "2026-02-19",
+      "frameCount": 242,
+      "folder": "outfit-21",
+      "prefix": "Yael_21_",
+      "scale": 1,
+      "tags": [],
+      "activity": "Work",
+      "weather": {
+        "tempF": 61,
+        "tempC": 16,
+        "condition": "Cloudy"
+      },
+      "products": []
+    },
+    {
+      "id": "outfit-22",
+      "name": "Outfit 22",
+      "date": "2026-02-20",
+      "frameCount": 242,
+      "folder": "outfit-22",
+      "prefix": "Yael_22_",
+      "scale": 1,
+      "tags": [],
+      "activity": "",
+      "weather": {
+        "tempF": 28,
+        "tempC": -2,
+        "condition": "Snowy"
+      },
+      "products": []
+    },
+    {
+      "id": "outfit-23",
+      "name": "Outfit 23",
+      "date": "2026-02-21",
+      "frameCount": 242,
+      "folder": "outfit-23",
+      "prefix": "Yael_23_",
+      "scale": 1,
+      "tags": [],
+      "activity": "",
+      "weather": {
+        "tempF": 25,
+        "tempC": -4,
+        "condition": "Snowy"
+      },
+      "products": []
+    },
+    {
+      "id": "outfit-24",
+      "name": "Outfit 24",
+      "date": "2026-02-22",
+      "frameCount": 242,
+      "folder": "outfit-24",
+      "prefix": "Yael_24_",
+      "scale": 1,
+      "tags": [],
+      "activity": "",
+      "weather": {
+        "tempF": 30,
+        "tempC": -1,
+        "condition": "Snowy"
+      },
+      "products": []
+    },
+    {
+      "id": "outfit-25",
+      "name": "Outfit 25",
+      "date": "2026-02-23",
+      "frameCount": 242,
+      "folder": "outfit-25",
+      "prefix": "Yael_25_",
+      "scale": 1,
+      "tags": [],
+      "activity": "",
+      "weather": {
+        "tempF": 22,
+        "tempC": -6,
+        "condition": "Snowy"
+      },
+      "products": []
+    },
+    {
+      "id": "outfit-26",
+      "name": "Outfit 26",
+      "date": "2026-02-24",
+      "frameCount": 242,
+      "folder": "outfit-26",
+      "prefix": "Yael_26_",
+      "scale": 1,
+      "tags": [],
+      "activity": "",
+      "weather": {
+        "tempF": 18,
+        "tempC": -8,
+        "condition": "Snowy"
+      },
+      "products": []
+    },
+    {
+      "id": "outfit-46-public",
+      "name": "Outfit 46",
+      "date": "2026-03-17",
+      "frameCount": 242,
+      "folder": "outfit-46",
+      "prefix": "outfit-46_",
+      "frameExt": "webp",
+      "scale": 1,
+      "tags": [],
+      "weather": {
+        "tempF": 41,
+        "tempC": 5,
+        "condition": "Partly Cloudy"
+      },
+      "products": []
+    },
+    {
+      "id": "outfit-53-public",
+      "name": "Outfit 53",
+      "date": "2026-03-18",
+      "frameCount": 242,
+      "folder": "outfit-53",
+      "prefix": "outfit-53_",
+      "frameExt": "webp",
+      "scale": 1,
+      "isRotationReversed": false,
+      "tags": [],
+      "weather": {
+        "tempF": 37,
+        "tempC": 3,
+        "condition": "Sunny"
+      },
+      "products": []
+    },
+    {
+      "id": "outfit-64-public",
+      "name": "Outfit 64",
+      "date": "2026-03-25",
+      "frameCount": 242,
+      "folder": "outfit-64",
+      "prefix": "outfit-64_",
+      "frameExt": "webp",
+      "scale": 1,
+      "isRotationReversed": false,
+      "tags": [],
+      "weather": {
+        "tempF": 46,
+        "tempC": 8,
+        "condition": "Cloudy"
+      },
+      "products": []
+    },
+    {
+      "id": "outfit-65-public",
+      "name": "Outfit 65",
+      "date": "2026-03-25",
+      "frameCount": 242,
+      "folder": "outfit-65",
+      "prefix": "outfit-65_",
+      "frameExt": "webp",
+      "scale": 1,
+      "isRotationReversed": true,
+      "tags": [],
+      "weather": {
+        "tempF": 44,
+        "tempC": 7,
+        "condition": "Cloudy"
+      },
+      "products": []
+    }
+  ]
+}

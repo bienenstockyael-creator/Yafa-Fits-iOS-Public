@@ -1,0 +1,26 @@
+{
+  "posts": [
+    {
+      "id": "post-46",
+      "authorName": "Melike",
+      "outfitId": "outfit-46-public",
+      "profileImage": "melike-profile.png",
+      "caption": "Bored at work"
+    },
+    {
+      "id": "post-64",
+      "authorName": "Yael",
+      "outfitId": "outfit-64-public"
+    },
+    {
+      "id": "post-53",
+      "authorName": "Yael",
+      "outfitId": "outfit-53-public"
+    },
+    {
+      "id": "post-65",
+      "authorName": "Yael",
+      "outfitId": "outfit-65-public"
+    }
+  ]
+}
