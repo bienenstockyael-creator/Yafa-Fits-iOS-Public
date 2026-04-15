@@ -80,8 +80,8 @@ struct RotatableOutfitImage: View {
             self._thumbnail = State(initialValue: nil)
         } else {
             let previewImage: UIImage? =
-                (initialFrameIndex ?? 0) == 0
-                    ? (BundledOutfitResources.previewImage(for: outfit) ?? LocalOutfitStore.shared.previewImage(for: outfit))
+                (initialFrameIndex ?? 0) == 0 && outfit.resolvedRemoteBaseURL == nil
+                    ? LocalOutfitStore.shared.previewImage(for: outfit)
                     : nil
             self._thumbnail = State(initialValue: previewImage)
         }

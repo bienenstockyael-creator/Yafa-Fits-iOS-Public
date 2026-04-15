@@ -22,12 +22,17 @@
         {
           "name": "INSULATED SHELL JACKET",
           "price": "490 EUR",
-          "image": "/products/tnf-jacket.png"
+          "image": "/products/tnf-jacket.webp"
         },
         {
           "name": "WIDE LEG PANTS",
           "price": "230 EUR",
-          "image": "/products/wide-leg-pants.png"
+          "image": "/products/wide-leg-pants.webp"
+        },
+        {
+          "name": "Waterproof Platform Boots",
+          "price": "",
+          "image": "/products/platform-boots.webp"
         }
       ]
     },
@@ -41,7 +46,7 @@
       "scale": 1,
       "tags": [
         "Sport",
-        "Winter"
+        "Ice Skating"
       ],
       "activity": "Ice Skating",
       "weather": {
@@ -53,12 +58,17 @@
         {
           "name": "INSULATED SHELL JACKET",
           "price": "850 EUR",
-          "image": "/products/tnf-jacket.png"
+          "image": "/products/tnf-jacket.webp"
         },
         {
           "name": "WATERPROOF PLATFORM BOOTS",
           "price": "420 EUR",
-          "image": "/products/platform-boots.png"
+          "image": "/products/platform-boots.webp"
+        },
+        {
+          "name": "Patagonia Duffel Bag",
+          "price": "",
+          "image": "/products/patagonia-duffel-bag.webp"
         }
       ]
     },
@@ -74,7 +84,7 @@
         "Minimal",
         "Spring"
       ],
-      "activity": "Brunch",
+      "activity": "Girls Night",
       "weather": {
         "tempF": 60,
         "tempC": 15,
@@ -84,12 +94,12 @@
         {
           "name": "RELAXED STRAIGHT JEANS",
           "price": "340 EUR",
-          "image": "/products/relaxed-straight-jeans.png"
+          "image": "/products/relaxed-straight-jeans.webp"
         },
         {
           "name": "ANKLE BOOTS",
           "price": "210 EUR",
-          "image": "/products/ankle-boots.png"
+          "image": "/products/ankle-boots.webp"
         }
       ]
     },
@@ -115,12 +125,17 @@
         {
           "name": "COLLARLESS LEATHER JACKET",
           "price": "550 EUR",
-          "image": "/products/collarless-leather-jacket.png"
+          "image": "/products/collarless-leather-jacket.webp"
         },
         {
           "name": "WIDE LEG PANTS",
           "price": "230 EUR",
-          "image": "/products/wide-leg-pants.png"
+          "image": "/products/wide-leg-pants.webp"
+        },
+        {
+          "name": "Waterproof Platform Boots",
+          "price": "",
+          "image": "/products/platform-boots.webp"
         }
       ]
     },
@@ -137,7 +152,7 @@
         "Streetwear",
         "Fall"
       ],
-      "activity": "Shopping",
+      "activity": "Work",
       "weather": {
         "tempF": 48,
         "tempC": 9,
@@ -145,30 +160,39 @@
       },
       "products": [
         {
-          "name": "LEATHER JACKET",
-          "price": "890 EUR",
-          "image": "/products/leather-jacket.png"
+          "name": "Oversized Jean Shirt",
+          "price": "",
+          "image": "/products/oversized-jean-shirt.webp"
         },
         {
-          "name": "BLACK DENIM",
-          "price": "240 EUR",
-          "image": "/products/black-denim.png"
+          "name": "Blue Striped Poplin Shirt",
+          "price": "",
+          "image": "/products/blue-striped-poplin-shirt.webp"
+        },
+        {
+          "name": "High Rise Wide Legged Jeans",
+          "price": "",
+          "image": "/products/high-rise-wide-legged-jeans.webp"
+        },
+        {
+          "name": "Ankle Boots",
+          "image": "/products/ankle-boots.webp"
         }
       ]
     },
     {
       "id": "outfit-6",
       "name": "Outfit 6",
-      "date": "2026-02-05",
+      "date": "2026-02-06",
       "frameCount": 242,
       "folder": "outfit-6",
       "prefix": "Yael_06_",
       "scale": 1,
       "tags": [
-        "Resort",
-        "Summer"
+        "Evening Wear",
+        "Chic"
       ],
-      "activity": "Beach",
+      "activity": "Occasion",
       "weather": {
         "tempF": 72,
         "tempC": 22,
@@ -176,14 +200,8 @@
       },
       "products": [
         {
-          "name": "LINEN SHIRT",
-          "price": "180 EUR",
-          "image": "/products/linen-shirt.png"
-        },
-        {
-          "name": "CHINO SHORTS",
-          "price": "150 EUR",
-          "image": "/products/chino-shorts.png"
+          "name": "Black Evening Dress",
+          "image": "/products/black-evening-dress.webp"
         }
       ]
     },
@@ -209,12 +227,17 @@
         {
           "name": "Shearling Jacket",
           "price": "",
-          "image": "/products/shearling-jacket.png"
+          "image": "/products/shearling-jacket.webp"
         },
         {
           "name": "Waterproof Platform Boots",
           "price": "420 EUR",
-          "image": "/products/platform-boots.png"
+          "image": "/products/platform-boots.webp"
+        },
+        {
+          "name": "High Rise Flared Jeans",
+          "price": "",
+          "image": "/products/high-rise-flared-jeans.webp"
         }
       ]
     },
@@ -240,19 +263,23 @@
         {
           "name": "TAILORED BROWN PANTS",
           "price": "",
-          "image": "/products/tailored-brown-pants.png"
+          "image": "/products/tailored-brown-pants.webp"
         },
         {
           "name": "WHITE TURTLENECK",
           "price": "",
-          "image": "/products/white-turtleneck.png"
+          "image": "/products/white-turtleneck.webp"
+        },
+        {
+          "name": "Ankle Boots",
+          "image": "/products/ankle-boots.webp"
         }
       ]
     },
     {
       "id": "outfit-9",
       "name": "Outfit 9",
-      "date": "2026-02-01",
+      "date": "2026-02-02",
       "frameCount": 242,
       "folder": "outfit-9",
       "prefix": "Yael_09_",
@@ -269,21 +296,21 @@
       },
       "products": [
         {
-          "name": "RAIN MAC",
-          "price": "340 EUR",
-          "image": "/products/rain-mac.png"
+          "name": "Mini Checkered Skirt",
+          "price": "",
+          "image": "/products/mini-checkered-skirt.webp"
         },
         {
-          "name": "RUBBER BOOTS",
-          "price": "180 EUR",
-          "image": "/products/rubber-boots.png"
+          "name": "Navy Wool Turtleneck",
+          "price": "",
+          "image": "/products/navy-wool-turtleneck.webp"
         }
       ]
     },
     {
       "id": "outfit-10",
       "name": "Outfit 10",
-      "date": "2026-02-02",
+      "date": "2026-02-03",
       "frameCount": 242,
       "folder": "outfit-10",
       "prefix": "Yael_10_",
@@ -300,14 +327,19 @@
       },
       "products": [
         {
-          "name": "BLAZER",
-          "price": "520 EUR",
-          "image": "/products/blazer.png"
+          "name": "Brown Wool Turtleneck",
+          "price": "",
+          "image": "/products/brown-wool-turtleneck.webp"
         },
         {
-          "name": "SLACK TROUSERS",
-          "price": "280 EUR",
-          "image": "/products/slack-trousers.png"
+          "name": "Distressed Leather Mini Skirt",
+          "price": "",
+          "image": "/products/distressed-leather-mini-skirt.webp"
+        },
+        {
+          "name": "Rubber Bridge Boots",
+          "price": "",
+          "image": "/products/rubber-bridge-boots.webp"
         }
       ]
     },
@@ -331,14 +363,18 @@
       },
       "products": [
         {
-          "name": "INSULATED SHELL JACKET",
-          "price": "490 EUR",
-          "image": "/products/tnf-jacket.png"
+          "name": "High Rise Wide Legged Jeans",
+          "price": "",
+          "image": "/products/high-rise-wide-legged-jeans.webp"
         },
         {
-          "name": "ANKLE BOOTS",
-          "price": "210 EUR",
-          "image": "/products/ankle-boots.png"
+          "name": "Navy Cardigan",
+          "price": "",
+          "image": "/products/navy-cardigan.webp"
+        },
+        {
+          "name": "Mary Janes",
+          "image": "/products/mary-janes.webp"
         }
       ]
     },
@@ -351,7 +387,7 @@
       "prefix": "Yael_12_",
       "scale": 1,
       "tags": [
-        "Casual",
+        "Chic",
         "Winter"
       ],
       "activity": "Errands",
@@ -364,57 +400,17 @@
         {
           "name": "Mary Janes",
           "price": "",
-          "image": "/products/mary-janes.png"
-        }
-      ]
-    },
-    {
-      "id": "outfit-13",
-      "name": "Outfit 13",
-      "date": "2026-02-10",
-      "frameCount": 242,
-      "folder": "outfit-13",
-      "prefix": "Yael_13_",
-      "scale": 1,
-      "tags": [
-        "Streetwear",
-        "Spring"
-      ],
-      "activity": "Dinner",
-      "weather": {
-        "tempF": 62,
-        "tempC": 17,
-        "condition": "Clear"
-      },
-      "products": [
-        {
-          "name": "WATERPROOF PLATFORM BOOTS",
-          "price": "420 EUR",
-          "image": "/products/platform-boots.png"
+          "image": "/products/mary-janes.webp"
         },
         {
-          "name": "SHEARLING JACKET",
-          "price": "",
-          "image": "/products/shearling-jacket.png"
+          "name": "Tweed Mini Skirt",
+          "image": "/products/tweed-mini-skirt.webp"
+        },
+        {
+          "name": "Cropped Tweed Jacket",
+          "image": "/products/cropped-tweed-jacket.webp"
         }
       ]
-    },
-    {
-      "id": "outfit-14",
-      "name": "Outfit 14",
-      "date": "2026-02-13",
-      "frameCount": 242,
-      "folder": "outfit-14",
-      "prefix": "Yael_14_",
-      "scale": 1,
-      "tags": [],
-      "activity": "",
-      "weather": {
-        "tempF": 55,
-        "tempC": 13,
-        "condition": "Cloudy"
-      },
-      "products": []
     },
     {
       "id": "outfit-15",
@@ -424,31 +420,31 @@
       "folder": "outfit-15",
       "prefix": "Yael_15_",
       "scale": 1,
-      "tags": [],
-      "activity": "",
+      "tags": [
+        "Vintage",
+        "Fall"
+      ],
+      "activity": "Coffee",
       "weather": {
         "tempF": 56,
         "tempC": 13,
         "condition": "Cloudy"
       },
-      "products": []
-    },
-    {
-      "id": "outfit-16",
-      "name": "Outfit 16",
-      "date": "2026-02-15",
-      "frameCount": 242,
-      "folder": "outfit-16",
-      "prefix": "Yael_16_",
-      "scale": 1,
-      "tags": [],
-      "activity": "",
-      "weather": {
-        "tempF": 57,
-        "tempC": 14,
-        "condition": "Cloudy"
-      },
-      "products": []
+      "products": [
+        {
+          "name": "Vintage Shearling Jacket",
+          "price": "",
+          "image": "/products/vintage-shearling-jacket.webp"
+        },
+        {
+          "name": "Black Boots",
+          "image": "/products/black-boots.webp"
+        },
+        {
+          "name": "Distressed Leather Mini Skirt",
+          "image": "/products/distressed-leather-mini-skirt.webp"
+        }
+      ]
     },
     {
       "id": "outfit-17",
@@ -458,14 +454,38 @@
       "folder": "outfit-17",
       "prefix": "Yael_17_",
       "scale": 1,
-      "tags": [],
-      "activity": "",
+      "tags": [
+        "Layered",
+        "Fall"
+      ],
+      "activity": "Errands",
       "weather": {
         "tempF": 58,
         "tempC": 14,
         "condition": "Cloudy"
       },
-      "products": []
+      "products": [
+        {
+          "name": "Rubber Bridge Boots",
+          "price": "",
+          "image": "/products/rubber-bridge-boots.webp"
+        },
+        {
+          "name": "Navy Wool Turtleneck",
+          "price": "",
+          "image": "/products/navy-wool-turtleneck.webp"
+        },
+        {
+          "name": "Jeans Mini Skirt",
+          "price": "",
+          "image": "/products/jeans-mini-skirt.webp"
+        },
+        {
+          "name": "Beige Trenchcoat",
+          "price": "",
+          "image": "/products/beige-trenchcoat.webp"
+        }
+      ]
     },
     {
       "id": "outfit-18",
@@ -475,31 +495,23 @@
       "folder": "outfit-18",
       "prefix": "Yael_18_",
       "scale": 1,
-      "tags": [],
-      "activity": "",
+      "tags": [
+        "Evening",
+        "Vintage"
+      ],
+      "activity": "Dinner",
       "weather": {
         "tempF": 59,
         "tempC": 15,
         "condition": "Cloudy"
       },
-      "products": []
-    },
-    {
-      "id": "outfit-19",
-      "name": "Outfit 19",
-      "date": "2026-02-18",
-      "frameCount": 242,
-      "folder": "outfit-19",
-      "prefix": "Yael_19_",
-      "scale": 1,
-      "tags": [],
-      "activity": "",
-      "weather": {
-        "tempF": 60,
-        "tempC": 16,
-        "condition": "Cloudy"
-      },
-      "products": []
+      "products": [
+        {
+          "name": "Vintage Jean Paul Gaultier Slip Dress",
+          "price": "",
+          "image": "/products/vintage-jpg-slip-dress.webp"
+        }
+      ]
     },
     {
       "id": "outfit-20",
@@ -509,82 +521,70 @@
       "folder": "outfit-20",
       "prefix": "Yael_20_",
       "scale": 1,
-      "tags": [],
-      "activity": "",
+      "tags": [
+        "Casual",
+        "Spring"
+      ],
+      "activity": "Weekend",
       "weather": {
         "tempF": 61,
         "tempC": 16,
         "condition": "Cloudy"
       },
-      "products": []
+      "products": [
+        {
+          "name": "Relaxed Straight Jeans",
+          "price": "",
+          "image": "/products/relaxed-straight-jeans.webp"
+        },
+        {
+          "name": "White Cardigan",
+          "price": "",
+          "image": "/products/white-cardigan.webp"
+        },
+        {
+          "name": "Mary Janes",
+          "image": "/products/mary-janes.webp"
+        }
+      ]
     },
     {
       "id": "outfit-21",
       "name": "Outfit 21",
-      "date": "2026-02-19",
+      "date": "2026-02-25",
       "frameCount": 242,
       "folder": "outfit-21",
       "prefix": "Yael_21_",
       "scale": 1,
-      "tags": [],
+      "tags": [
+        "Smart",
+        "Office"
+      ],
       "activity": "Work",
       "weather": {
         "tempF": 61,
         "tempC": 16,
         "condition": "Cloudy"
       },
-      "products": []
-    },
-    {
-      "id": "outfit-22",
-      "name": "Outfit 22",
-      "date": "2026-02-20",
-      "frameCount": 242,
-      "folder": "outfit-22",
-      "prefix": "Yael_22_",
-      "scale": 1,
-      "tags": [],
-      "activity": "",
-      "weather": {
-        "tempF": 28,
-        "tempC": -2,
-        "condition": "Snowy"
-      },
-      "products": []
-    },
-    {
-      "id": "outfit-23",
-      "name": "Outfit 23",
-      "date": "2026-02-21",
-      "frameCount": 242,
-      "folder": "outfit-23",
-      "prefix": "Yael_23_",
-      "scale": 1,
-      "tags": [],
-      "activity": "",
-      "weather": {
-        "tempF": 25,
-        "tempC": -4,
-        "condition": "Snowy"
-      },
-      "products": []
-    },
-    {
-      "id": "outfit-24",
-      "name": "Outfit 24",
-      "date": "2026-02-22",
-      "frameCount": 242,
-      "folder": "outfit-24",
-      "prefix": "Yael_24_",
-      "scale": 1,
-      "tags": [],
-      "activity": "",
-      "weather": {
-        "tempF": 30,
-        "tempC": -1,
-        "condition": "Snowy"
-      },
-      "products": []
+      "products": [
+        {
+          "name": "Ankle Boots",
+          "price": "",
+          "image": "/products/ankle-boots.webp",
+          "url": "https://www.vagabond.com/us/hedda-5002-001-20/"
+        },
+        {
+          "name": "Navy Wool Vest",
+          "price": "",
+          "image": "/products/navy-wool-vest.webp",
+          "url": "https://www.selfridges.com/US/en/product/soeur-dream-v-neck-wool-blend-jacket_R04527067/"
+        },
+        {
+          "name": "High Rise Bootcut Jeans",
+          "image": "/products/high-rise-bootcut-jeans.webp",
+          "url": "https://www.thereformation.com/products/blair-high-rise-baby-bootcut-jeans/1318918ELV.html"
+        }
+      ]
     },
     {
       "id": "outfit-25",
@@ -594,14 +594,30 @@
       "folder": "outfit-25",
       "prefix": "Yael_25_",
       "scale": 1,
-      "tags": [],
-      "activity": "",
+      "tags": [
+        "Ski",
+        "Winter"
+      ],
+      "activity": "Skiing",
       "weather": {
         "tempF": 22,
         "tempC": -6,
         "condition": "Snowy"
       },
-      "products": []
+      "products": [
+        {
+          "name": "Patterned Ski Jacket",
+          "image": "/products/patterned-ski-jacket.webp"
+        },
+        {
+          "name": "Patterned Ski Pants",
+          "image": "/products/patterned-ski-pants.webp"
+        },
+        {
+          "name": "Black Crows Skis",
+          "image": "/products/black-crows-skis.webp"
+        }
+      ]
     },
     {
       "id": "outfit-26",
@@ -611,85 +627,757 @@
       "folder": "outfit-26",
       "prefix": "Yael_26_",
       "scale": 1,
-      "tags": [],
-      "activity": "",
+      "tags": [
+        "Ski",
+        "Winter"
+      ],
+      "activity": "Skiing",
       "weather": {
         "tempF": 18,
         "tempC": -8,
         "condition": "Snowy"
       },
-      "products": []
+      "products": [
+        {
+          "name": "Patterned Ski Jacket",
+          "image": "/products/patterned-ski-jacket.webp"
+        },
+        {
+          "name": "Black Crows Skis",
+          "image": "/products/black-crows-skis.webp"
+        },
+        {
+          "name": "North Face Ski Pants",
+          "image": "/products/north-face-ski-pants.webp"
+        }
+      ]
     },
     {
-      "id": "outfit-46-public",
-      "name": "Outfit 46",
-      "date": "2026-03-17",
+      "id": "outfit-90",
+      "name": "Outfit 90",
+      "date": "2026-03-28",
       "frameCount": 242,
-      "folder": "outfit-46",
-      "prefix": "outfit-46_",
+      "folder": "outfit-90",
+      "prefix": "Yael_90_",
       "frameExt": "webp",
       "scale": 1,
-      "tags": [],
+      "tags": [
+        "Casual",
+        "Spring"
+      ],
+      "activity": "Walking",
       "weather": {
-        "tempF": 41,
-        "tempC": 5,
-        "condition": "Partly Cloudy"
+        "tempF": 55,
+        "tempC": 13,
+        "condition": "Cloudy"
       },
-      "products": []
+      "products": [
+        {
+          "name": "Ankle Boots",
+          "image": "/products/ankle-boots.webp"
+        },
+        {
+          "name": "Black Tailored Trousers",
+          "image": "/products/black-tailored-trousers.webp"
+        },
+        {
+          "name": "Black Tailored Coat",
+          "image": "/products/black-tailored-coat.webp"
+        },
+        {
+          "name": "Bucket Hat",
+          "image": "/products/bucket-hat.webp"
+        }
+      ]
     },
     {
-      "id": "outfit-53-public",
-      "name": "Outfit 53",
+      "id": "outfit-91",
+      "name": "Outfit 91",
+      "date": "2026-04-03",
+      "frameCount": 242,
+      "folder": "outfit-91",
+      "prefix": "Yael_91_",
+      "frameExt": "webp",
+      "scale": 1,
+      "tags": [
+        "Layered",
+        "Chic"
+      ],
+      "activity": "Brunch",
+      "weather": {
+        "tempF": 48,
+        "tempC": 9,
+        "condition": "Cold"
+      },
+      "products": [
+        {
+          "name": "Sleeveless Knit",
+          "image": "/products/sleeveless-knit.webp"
+        },
+        {
+          "name": "Balloon Sleeves Shirt",
+          "image": "/products/balloon-sleeves-shirt.webp"
+        },
+        {
+          "name": "High Rise Wide Legged Jeans",
+          "image": "/products/high-rise-wide-legged-jeans.webp"
+        }
+      ]
+    },
+    {
+      "id": "outfit-92",
+      "name": "Outfit 92",
+      "date": "2026-04-07",
+      "frameCount": 242,
+      "folder": "outfit-92",
+      "prefix": "Yael_92_",
+      "frameExt": "webp",
+      "scale": 1,
+      "tags": [
+        "Streetwear",
+        "Spring"
+      ],
+      "activity": "Errands",
+      "weather": {
+        "tempF": 52,
+        "tempC": 11,
+        "condition": "Breezy"
+      },
+      "products": [
+        {
+          "name": "Relaxed Straight Jeans",
+          "image": "/products/relaxed-straight-jeans.webp"
+        },
+        {
+          "name": "Vintage 90's Shirt",
+          "image": "/products/vintage-90s-shirt.webp"
+        },
+        {
+          "name": "Vintage Trench Coat",
+          "image": "/products/vintage-trench-coat.webp"
+        },
+        {
+          "name": "Black Loafers",
+          "image": "/products/black-loafers.webp"
+        },
+        {
+          "name": "White Knit Sweater",
+          "image": "/products/white-knit-sweater.webp"
+        }
+      ]
+    },
+    {
+      "id": "outfit-93",
+      "name": "Outfit 93",
+      "date": "2026-03-22",
+      "frameCount": 242,
+      "folder": "outfit-93",
+      "prefix": "Yael_93_",
+      "frameExt": "webp",
+      "scale": 1,
+      "tags": [
+        "Minimal",
+        "Fall"
+      ],
+      "activity": "Coffee",
+      "weather": {
+        "tempF": 45,
+        "tempC": 7,
+        "condition": "Cloudy"
+      },
+      "products": [
+        {
+          "name": "Wide Legged Jeans",
+          "image": "/products/wide-legged-jeans.webp"
+        },
+        {
+          "name": "Striped Sweater",
+          "image": "/products/striped-sweater.webp"
+        }
+      ]
+    },
+    {
+      "id": "outfit-94",
+      "name": "Outfit 94",
+      "date": "2026-04-01",
+      "frameCount": 242,
+      "folder": "outfit-94",
+      "prefix": "Yael_94_",
+      "frameExt": "webp",
+      "scale": 1,
+      "tags": [
+        "Smart",
+        "Spring"
+      ],
+      "activity": "Meeting",
+      "weather": {
+        "tempF": 58,
+        "tempC": 14,
+        "condition": "Clear"
+      },
+      "products": [
+        {
+          "name": "Ankle Boots",
+          "image": "/products/ankle-boots.webp"
+        },
+        {
+          "name": "Low Rise Straight Jeans",
+          "image": "/products/low-rise-straight-jeans.webp"
+        },
+        {
+          "name": "Black Shoulder Pad Sweater",
+          "image": "/products/black-shoulder-pad-sweater.webp"
+        }
+      ]
+    },
+    {
+      "id": "outfit-95",
+      "name": "Outfit 95",
+      "date": "2026-03-15",
+      "frameCount": 242,
+      "folder": "outfit-95",
+      "prefix": "Yael_95_",
+      "frameExt": "webp",
+      "scale": 1,
+      "tags": [
+        "Cozy",
+        "Winter"
+      ],
+      "activity": "Home",
+      "weather": {
+        "tempF": 42,
+        "tempC": 6,
+        "condition": "Overcast"
+      },
+      "products": [
+        {
+          "name": "Ankle Boots",
+          "image": "/products/ankle-boots.webp",
+          "url": "https://www.vagabond.com/us/hedda-5002-001-20/"
+        },
+        {
+          "name": "Wide Legged Jeans",
+          "image": "/products/wide-legged-jeans.webp"
+        },
+        {
+          "name": "White Shoulder Pad Knit",
+          "image": "/products/white-shoulder-pad-knit.webp",
+          "url": "https://arakii.com/p/wool-shoulder-pad-cardigan-off-white"
+        }
+      ]
+    },
+    {
+      "id": "outfit-96",
+      "name": "Outfit 96",
+      "date": "2026-03-10",
+      "frameCount": 242,
+      "folder": "outfit-96",
+      "prefix": "Yael_96_",
+      "frameExt": "webp",
+      "scale": 1,
+      "tags": [
+        "Winter",
+        "Layered"
+      ],
+      "activity": "Work",
+      "weather": {
+        "tempF": 38,
+        "tempC": 3,
+        "condition": "Cold"
+      },
+      "products": [
+        {
+          "name": "Ankle Boots",
+          "image": "/products/ankle-boots.webp"
+        },
+        {
+          "name": "Check Suit Trousers",
+          "image": "/products/check-suit-trousers.webp"
+        },
+        {
+          "name": "Brown Turtleneck",
+          "image": "/products/brown-turtleneck.webp"
+        }
+      ]
+    },
+    {
+      "id": "outfit-97",
+      "name": "Outfit 97",
       "date": "2026-03-18",
       "frameCount": 242,
-      "folder": "outfit-53",
-      "prefix": "outfit-53_",
+      "folder": "outfit-97",
+      "prefix": "Yael_97_",
       "frameExt": "webp",
       "scale": 1,
-      "isRotationReversed": false,
-      "tags": [],
+      "tags": [
+        "Casual",
+        "Transitional"
+      ],
+      "activity": "Weekend",
       "weather": {
-        "tempF": 37,
-        "tempC": 3,
+        "tempF": 50,
+        "tempC": 10,
+        "condition": "Cloudy"
+      },
+      "products": [
+        {
+          "name": "Brown Suede Coat",
+          "image": "/products/brown-suede-coat.webp"
+        },
+        {
+          "name": "Brown Sweater Dress",
+          "image": "/products/brown-sweater-dress.webp"
+        },
+        {
+          "name": "Black Heel Boots",
+          "image": "/products/black-heel-boots.webp"
+        }
+      ]
+    },
+    {
+      "id": "outfit-98",
+      "name": "Outfit 98",
+      "date": "2026-04-05",
+      "frameCount": 242,
+      "folder": "outfit-98",
+      "prefix": "Yael_98_",
+      "frameExt": "webp",
+      "scale": 1,
+      "tags": [
+        "Chic",
+        "Spring"
+      ],
+      "activity": "Home",
+      "weather": {
+        "tempF": 60,
+        "tempC": 16,
+        "condition": "Clear"
+      },
+      "products": [
+        {
+          "name": "Low Rise Straight Jeans",
+          "image": "/products/low-rise-straight-jeans.webp"
+        }
+      ]
+    },
+    {
+      "id": "outfit-99",
+      "name": "Outfit 99",
+      "date": "2026-03-25",
+      "frameCount": 242,
+      "folder": "outfit-99",
+      "prefix": "Yael_99_",
+      "frameExt": "webp",
+      "scale": 1,
+      "tags": [
+        "Winter",
+        "Streetwear"
+      ],
+      "activity": "Work",
+      "weather": {
+        "tempF": 46,
+        "tempC": 8,
+        "condition": "Stormy"
+      },
+      "products": [
+        {
+          "name": "Wide Leg Pants",
+          "image": "/products/wide-leg-pants.webp"
+        },
+        {
+          "name": "Waterproof Platform Boots",
+          "image": "/products/platform-boots.webp"
+        },
+        {
+          "name": "White Turtleneck",
+          "image": "/products/white-turtleneck.webp"
+        },
+        {
+          "name": "INSULATED SHELL JACKET",
+          "image": "/products/tnf-jacket.webp"
+        }
+      ]
+    },
+    {
+      "id": "outfit-100",
+      "name": "Outfit 100",
+      "date": "2026-03-05",
+      "frameCount": 242,
+      "folder": "outfit-100",
+      "prefix": "Yael_100_",
+      "frameExt": "webp",
+      "scale": 1,
+      "tags": [
+        "Evening Wear",
+        "Black Tie"
+      ],
+      "activity": "Occasion",
+      "weather": {
+        "tempF": 35,
+        "tempC": 2,
+        "condition": "Cold"
+      },
+      "products": [
+        {
+          "name": "Studded Heels",
+          "image": "/products/studded-heels.webp"
+        },
+        {
+          "name": "Corset Dress",
+          "image": "/products/corset-dress.webp"
+        }
+      ]
+    },
+    {
+      "id": "outfit-101",
+      "name": "Outfit 101",
+      "date": "2026-03-12",
+      "frameCount": 242,
+      "folder": "outfit-101",
+      "prefix": "Yael_101_",
+      "frameExt": "webp",
+      "scale": 1,
+      "tags": [
+        "Evening Wear",
+        "Black Tie"
+      ],
+      "activity": "Occasion",
+      "weather": {
+        "tempF": 40,
+        "tempC": 4,
+        "condition": "Overcast"
+      },
+      "products": [
+        {
+          "name": "Studded Heels",
+          "image": "/products/studded-heels.webp"
+        },
+        {
+          "name": "Corset Dress",
+          "image": "/products/corset-dress.webp"
+        }
+      ]
+    },
+    {
+      "id": "outfit-102",
+      "name": "Outfit 102",
+      "date": "2026-04-09",
+      "frameCount": 242,
+      "folder": "outfit-102",
+      "prefix": "Yael_102_",
+      "frameExt": "webp",
+      "scale": 1,
+      "tags": [
+        "Casual",
+        "Spring"
+      ],
+      "activity": "Walking",
+      "weather": {
+        "tempF": 54,
+        "tempC": 12,
+        "condition": "Breezy"
+      },
+      "products": [
+        {
+          "name": "Mary Janes",
+          "image": "/products/mary-janes.webp"
+        },
+        {
+          "name": "Relaxed Straight Jeans",
+          "image": "/products/relaxed-straight-jeans.webp"
+        },
+        {
+          "name": "Cropped Jacket",
+          "image": "/products/cropped-jacket.webp"
+        }
+      ]
+    },
+    {
+      "id": "outfit-103",
+      "name": "Outfit 103",
+      "date": "2026-03-30",
+      "frameCount": 242,
+      "folder": "outfit-103",
+      "prefix": "Yael_103_",
+      "frameExt": "webp",
+      "scale": 1,
+      "tags": [
+        "Smart",
+        "Transitional"
+      ],
+      "activity": "Brunch",
+      "weather": {
+        "tempF": 52,
+        "tempC": 11,
+        "condition": "Cloudy"
+      },
+      "products": [
+        {
+          "name": "Wide Leg Pants",
+          "image": "/products/wide-leg-pants.webp",
+          "url": "https://www.rag-bone.com/p/rb-miramar-sofie-wide-leg-pants-RC5A25H7MPO.html"
+        },
+        {
+          "name": "Flint Knitted Sweater",
+          "image": "/products/flint-knitted-sweater.webp",
+          "url": "https://www.ennuestudio.com/products/women-flint-knitted-sweater-grey"
+        },
+        {
+          "name": "Waterproof Platform Boots",
+          "image": "/products/platform-boots.webp",
+          "url": "https://www.timberland.com/en-us/p/women/footwear-10096/womens-stone-street-6-inch-waterproof-platform-boot-TB1A5RH5015"
+        }
+      ]
+    },
+    {
+      "id": "outfit-104",
+      "name": "Outfit 104",
+      "date": "2026-04-08",
+      "frameCount": 242,
+      "folder": "outfit-104",
+      "prefix": "Yael_104_",
+      "frameExt": "webp",
+      "scale": 1,
+      "tags": [
+        "Sport",
+        "Pilates"
+      ],
+      "activity": "Sport",
+      "weather": {
+        "tempF": 56,
+        "tempC": 13,
+        "condition": "Clear"
+      },
+      "products": [
+        {
+          "name": "Black Leggings",
+          "image": "/products/black-leggings.webp"
+        },
+        {
+          "name": "Adidas Sneakers",
+          "image": "/products/adidas-sneakers.webp"
+        }
+      ]
+    },
+    {
+      "id": "outfit-105",
+      "name": "Outfit 105",
+      "date": "2026-03-20",
+      "frameCount": 242,
+      "folder": "outfit-105",
+      "prefix": "Yael_105_",
+      "frameExt": "webp",
+      "scale": 1,
+      "tags": [
+        "Cozy",
+        "Fall"
+      ],
+      "activity": "Coffee",
+      "weather": {
+        "tempF": 44,
+        "tempC": 7,
+        "condition": "Cold"
+      },
+      "products": [
+        {
+          "name": "Ankle Boots",
+          "image": "/products/ankle-boots.webp",
+          "url": "https://www.vagabond.com/us/hedda-5002-001-20/"
+        },
+        {
+          "name": "Low Rise Straight Jeans",
+          "image": "/products/low-rise-straight-jeans.webp",
+          "url": "https://www.rag-bone.com/p/saige-relaxed-straight-jeans-RJ4025H1RRO.html"
+        },
+        {
+          "name": "Carnot Coat",
+          "image": "/products/carnot-coat.webp",
+          "url": "https://mariadelaorden.com/en-us/products/carnot-coat-navy-velvet-1"
+        }
+      ]
+    },
+    {
+      "id": "outfit-106",
+      "name": "Outfit 106",
+      "date": "2026-04-02",
+      "frameCount": 242,
+      "folder": "outfit-106",
+      "prefix": "Yael_106_",
+      "frameExt": "webp",
+      "scale": 1,
+      "tags": [
+        "Evening Wear",
+        "Black Tie"
+      ],
+      "activity": "Occasion",
+      "weather": {
+        "tempF": 57,
+        "tempC": 14,
         "condition": "Sunny"
       },
       "products": []
     },
     {
-      "id": "outfit-64-public",
-      "name": "Outfit 64",
-      "date": "2026-03-25",
+      "id": "outfit-107",
+      "name": "Outfit 107",
+      "date": "2026-02-27",
       "frameCount": 242,
-      "folder": "outfit-64",
-      "prefix": "outfit-64_",
+      "folder": "outfit-107",
+      "prefix": "Yael_107_",
       "frameExt": "webp",
       "scale": 1,
-      "isRotationReversed": false,
-      "tags": [],
+      "tags": [
+        "Winter",
+        "Layered"
+      ],
+      "activity": "Errands",
       "weather": {
-        "tempF": 46,
-        "tempC": 8,
-        "condition": "Cloudy"
+        "tempF": 32,
+        "tempC": 0,
+        "condition": "Cold"
       },
-      "products": []
+      "products": [
+        {
+          "name": "Rubber Bridge Boots",
+          "image": "/products/rubber-bridge-boots.webp"
+        },
+        {
+          "name": "Kasia Dress",
+          "image": "/products/kasia-dress.webp"
+        }
+      ]
     },
     {
-      "id": "outfit-65-public",
-      "name": "Outfit 65",
-      "date": "2026-03-25",
+      "id": "outfit-108",
+      "name": "Outfit 108",
+      "date": "2026-02-28",
       "frameCount": 242,
-      "folder": "outfit-65",
-      "prefix": "outfit-65_",
+      "folder": "outfit-108",
+      "prefix": "Yael_108_",
       "frameExt": "webp",
       "scale": 1,
-      "isRotationReversed": true,
-      "tags": [],
+      "tags": [
+        "Minimal",
+        "Winter"
+      ],
+      "activity": "Work",
       "weather": {
-        "tempF": 44,
-        "tempC": 7,
+        "tempF": 34,
+        "tempC": 1,
+        "condition": "Overcast"
+      },
+      "products": [
+        {
+          "name": "Rubber Bridge Boots",
+          "image": "/products/rubber-bridge-boots.webp"
+        },
+        {
+          "name": "Kasia Dress",
+          "image": "/products/kasia-dress.webp"
+        }
+      ]
+    },
+    {
+      "id": "outfit-109",
+      "name": "Outfit 109",
+      "date": "2026-03-26",
+      "frameCount": 242,
+      "folder": "outfit-109",
+      "prefix": "Yael_109_",
+      "frameExt": "webp",
+      "scale": 1,
+      "tags": [
+        "Sport",
+        "Ice Skating"
+      ],
+      "activity": "Ice Skating",
+      "weather": {
+        "tempF": 48,
+        "tempC": 9,
         "condition": "Cloudy"
       },
-      "products": []
+      "products": [
+        {
+          "name": "Oversized Black Fleece",
+          "image": "/products/oversized-black-fleece.webp"
+        },
+        {
+          "name": "Black Leggings",
+          "image": "/products/black-leggings.webp"
+        },
+        {
+          "name": "Adidas Sneakers",
+          "image": "/products/adidas-sneakers.webp"
+        }
+      ]
+    },
+    {
+      "id": "outfit-110",
+      "name": "Outfit 110",
+      "date": "2026-02-23",
+      "frameCount": 242,
+      "folder": "outfit-110",
+      "prefix": "Yael_110_",
+      "frameExt": "webp",
+      "scale": 1,
+      "tags": [
+        "Ski",
+        "Winter"
+      ],
+      "activity": "Skiing",
+      "weather": {
+        "tempF": 62,
+        "tempC": 17,
+        "condition": "Snowy"
+      },
+      "products": [
+        {
+          "name": "Gore-Tex Ski Jacket",
+          "image": "/products/goretex-ski-jacket.webp"
+        },
+        {
+          "name": "Black Crows Skis",
+          "image": "/products/black-crows-skis.webp"
+        },
+        {
+          "name": "North Face Ski Pants",
+          "image": "/products/north-face-ski-pants.webp"
+        }
+      ]
+    },
+    {
+      "id": "outfit-111",
+      "name": "Outfit 111",
+      "date": "2026-03-08",
+      "frameCount": 242,
+      "folder": "outfit-111",
+      "prefix": "Yael_111_",
+      "frameExt": "webp",
+      "scale": 1,
+      "tags": [
+        "Casual",
+        "Fall"
+      ],
+      "activity": "Errands",
+      "weather": {
+        "tempF": 43,
+        "tempC": 6,
+        "condition": "Cloudy"
+      },
+      "products": [
+        {
+          "name": "Rubber Bridge Boots",
+          "image": "/products/rubber-bridge-boots.webp"
+        },
+        {
+          "name": "Mini Black Skirt",
+          "image": "/products/mini-black-skirt.webp"
+        },
+        {
+          "name": "Mini Black Jacket",
+          "image": "/products/mini-black-jacket.webp"
+        }
+      ]
     }
   ]
 }

@@ -57,6 +57,50 @@ final class PipelineJob: Identifiable, @unchecked Sendable {
     }
 }
 
+struct PersistedPipelineReview: Codable, Sendable {
+    let id: String
+    let outfitNum: Int
+    let stagedOutfit: Outfit
+    let uploadWeather: Weather?
+    let isRotationReversed: Bool
+    let prompt: String
+    let persistedAt: Date
+    let statusTitle: String
+    let statusDetail: String
+
+    init?(job: PipelineJob) {
+        guard let stagedOutfit = job.stagedOutfit,
+              job.step == .review,
+              job.resultOutfitId == nil else {
+            return nil
+        }
+
+        self.id = job.id
+        self.outfitNum = job.outfitNum
+        self.stagedOutfit = stagedOutfit
+        self.uploadWeather = job.uploadWeather
+        self.isRotationReversed = job.isRotationReversed
+        self.prompt = job.prompt
+        self.persistedAt = Date()
+        self.statusTitle = job.statusTitle
+        self.statusDetail = job.statusDetail
+    }
+
+    func makePipelineJob() -> PipelineJob {
+        let job = PipelineJob(outfitNum: outfitNum)
+        job.step = .review
+        job.loaderStage = .compressing
+        job.stagedOutfit = stagedOutfit
+        job.uploadWeather = uploadWeather
+        job.isRotationReversed = isRotationReversed
+        job.prompt = prompt
+        job.statusTitle = statusTitle
+        job.statusDetail = statusDetail
+        job.isProcessing = false
+        return job
+    }
+}
+
 enum UploadPipelineError: LocalizedError {
     case invalidImage
     case unsupportedCamera

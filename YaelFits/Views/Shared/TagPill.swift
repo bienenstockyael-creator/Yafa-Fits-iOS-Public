@@ -6,10 +6,10 @@ struct TagPill: View {
     var body: some View {
         Text(tag.uppercased())
             .font(.system(size: 10, weight: .semibold))
-            .tracking(1.1)
+            .tracking(1.2)
             .foregroundStyle(AppPalette.textMuted)
             .padding(.horizontal, LayoutMetrics.xSmall)
-            .padding(.vertical, 7)
+            .frame(height: 36)
             .appCapsule(shadowRadius: 0, shadowY: 0)
     }
 }

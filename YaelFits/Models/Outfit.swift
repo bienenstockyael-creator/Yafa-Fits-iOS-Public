@@ -32,7 +32,7 @@ struct Weather: Codable, Hashable, Sendable {
             return .clear
         case "partly cloudy":
             return .partlyCloudy
-        case "cloudy":
+        case "cloudy", "overcast":
             return .cloudy
         case "rainy":
             return .rainy
@@ -53,10 +53,14 @@ struct Weather: Codable, Hashable, Sendable {
 }
 
 struct Product: Codable, Hashable, Identifiable, Sendable {
-    var id: String { name }
+    /// Stable identity: prefer productId, fall back to name
+    var id: String { productId?.uuidString ?? name }
     let name: String
-    let price: String
+    let price: String?
     let image: String
+    var shopLink: String?
+    var productId: UUID?   // references products table
+    var tags: [String]?    // from products table
 
     var displayName: String {
         name.split(separator: " ")
@@ -95,12 +99,14 @@ struct Outfit: Codable, Identifiable, Hashable, Sendable {
     let folder: String
     let prefix: String
     var frameExt: String?
+    var remoteBaseURL: String?
     var scale: Double?
     var isRotationReversed: Bool?
     var tags: [String]?
     var activity: String?
     var weather: Weather?
     var products: [Product]?
+    var caption: String?
 
     var normalizedFrameExt: String {
         let ext = (frameExt ?? "webp").trimmingCharacters(in: .whitespaces).lowercased()
@@ -160,6 +166,15 @@ struct Outfit: Codable, Identifiable, Hashable, Sendable {
     func framePath(index: Int) -> String {
         let padded = String(format: "%05d", index)
         return "\(folder)/\(prefix)\(padded).\(normalizedFrameExt)"
+    }
+
+    var resolvedRemoteBaseURL: URL? {
+        if let remoteBaseURL,
+           let url = URL(string: remoteBaseURL),
+           url.scheme != nil {
+            return url
+        }
+        return AppConfig.remoteBaseURL
     }
 
     func frameURL(index: Int, baseURL: URL) -> URL {

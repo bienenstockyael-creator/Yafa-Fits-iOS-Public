@@ -6,17 +6,20 @@ class LocalOutfitStore {
     static let shared = LocalOutfitStore()
 
     private let previewFileName = "preview"
+    private let pendingReviewFileName = "pending-generation-review.json"
 
     private let fileManager = FileManager.default
     private let outfitsDir: URL
     private let metadataFile: URL
     private let feedMetadataFile: URL
+    private let pendingReviewFile: URL
 
     private init() {
         let docs = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
         outfitsDir = docs.appendingPathComponent("outfits", isDirectory: true)
         metadataFile = docs.appendingPathComponent("local-outfits.json")
         feedMetadataFile = docs.appendingPathComponent("local-feed.json")
+        pendingReviewFile = docs.appendingPathComponent(pendingReviewFileName)
         try? fileManager.createDirectory(at: outfitsDir, withIntermediateDirectories: true)
     }
 
@@ -38,6 +41,16 @@ class LocalOutfitStore {
 
     func previewURL(for outfit: Outfit) -> URL {
         outfitDirectory(for: outfit).appendingPathComponent("\(previewFileName).webp")
+    }
+
+    func hasAssets(for outfit: Outfit) -> Bool {
+        if outfit.resolvedRemoteBaseURL != nil {
+            return true
+        }
+        let dir = outfitDirectory(for: outfit)
+        guard fileManager.fileExists(atPath: dir.path) else { return false }
+        return fileManager.fileExists(atPath: previewURL(for: outfit).path) ||
+            fileManager.fileExists(atPath: frameURL(for: outfit, index: 0).path)
     }
 
     func saveFrame(_ imageData: Data, outfit: Outfit, index: Int) throws {
@@ -128,6 +141,29 @@ class LocalOutfitStore {
         if let encoded = try? JSONEncoder().encode(data) {
             try? encoded.write(to: feedMetadataFile)
         }
+    }
+
+    func savePendingReview(_ review: PersistedPipelineReview) {
+        guard let encoded = try? JSONEncoder().encode(review) else { return }
+        try? encoded.write(to: pendingReviewFile)
+    }
+
+    func loadPendingReview() -> PersistedPipelineReview? {
+        guard let data = try? Data(contentsOf: pendingReviewFile),
+              let review = try? JSONDecoder().decode(PersistedPipelineReview.self, from: data) else {
+            return nil
+        }
+
+        guard hasAssets(for: review.stagedOutfit) else {
+            clearPendingReview()
+            return nil
+        }
+
+        return review
+    }
+
+    func clearPendingReview() {
+        try? fileManager.removeItem(at: pendingReviewFile)
     }
 
     func storageUsed() -> Int64 {

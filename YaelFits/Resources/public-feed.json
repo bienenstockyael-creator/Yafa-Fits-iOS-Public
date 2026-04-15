@@ -4,23 +4,413 @@
       "id": "post-46",
       "authorName": "Melike",
       "outfitId": "outfit-46-public",
-      "profileImage": "melike-profile.png",
-      "caption": "Bored at work"
+      "profileImage": "/melike-profile.png",
+      "caption": "Bored at work",
+      "likes": 14,
+      "comments": [
+        {
+          "author": "Ella",
+          "text": "Love this look!"
+        },
+        {
+          "author": "Yael",
+          "text": "The blazer is everything"
+        }
+      ]
     },
     {
-      "id": "post-64",
-      "authorName": "Yael",
-      "outfitId": "outfit-64-public"
+      "id": "post-72",
+      "authorName": "Marvin",
+      "outfitId": "outfit-72-public",
+      "profileImage": "/marvin-profile.webp",
+      "likes": 19,
+      "comments": [
+        {
+          "author": "Jonathan",
+          "text": "Hard"
+        },
+        {
+          "author": "Clem",
+          "text": "The layers are perfect"
+        }
+      ]
     },
     {
-      "id": "post-53",
-      "authorName": "Yael",
-      "outfitId": "outfit-53-public"
+      "id": "post-69",
+      "authorName": "Ella",
+      "outfitId": "outfit-69-public",
+      "profileImage": "/ella-profile.webp",
+      "likes": 3
     },
     {
-      "id": "post-65",
+      "id": "post-yael-95",
       "authorName": "Yael",
-      "outfitId": "outfit-65-public"
+      "outfitId": "outfit-95",
+      "profileImage": "/yael-profile.webp",
+      "likes": 18,
+      "comments": [
+        {
+          "author": "Sab",
+          "text": "Cozy perfection"
+        }
+      ]
+    },
+    {
+      "id": "post-78",
+      "authorName": "Alexander",
+      "outfitId": "outfit-78-public",
+      "profileImage": "/alexander-profile.webp",
+      "likes": 25,
+      "comments": [
+        {
+          "author": "Marvin",
+          "text": "Fire"
+        },
+        {
+          "author": "Natalia",
+          "text": "Love the color combo"
+        }
+      ]
+    },
+    {
+      "id": "post-66",
+      "authorName": "Ella",
+      "outfitId": "outfit-66-public",
+      "profileImage": "/ella-profile.webp",
+      "likes": 8,
+      "comments": [
+        {
+          "author": "Marvin",
+          "text": "Clean fit"
+        }
+      ]
+    },
+    {
+      "id": "post-yael-105",
+      "authorName": "Yael",
+      "outfitId": "outfit-105",
+      "profileImage": "/yael-profile.webp",
+      "likes": 34,
+      "comments": [
+        {
+          "author": "Ella",
+          "text": "This coat is unreal"
+        },
+        {
+          "author": "Hazal",
+          "text": "Where is the coat from?"
+        },
+        {
+          "author": "Yael",
+          "text": "Maria de la Orden!"
+        },
+        {
+          "author": "Melike",
+          "text": "Adding to cart immediately"
+        }
+      ]
+    },
+    {
+      "id": "post-81",
+      "authorName": "Nico",
+      "outfitId": "outfit-81-public",
+      "profileImage": "/nico-profile.webp",
+      "likes": 18,
+      "comments": [
+        {
+          "author": "Hazal",
+          "text": "Effortlessly cool"
+        },
+        {
+          "author": "KJ",
+          "text": "W fit"
+        }
+      ]
+    },
+    {
+      "id": "post-74",
+      "authorName": "Marvin",
+      "outfitId": "outfit-74-public",
+      "profileImage": "/marvin-profile.webp",
+      "likes": 31,
+      "comments": [
+        {
+          "author": "Alexander",
+          "text": "This is insane"
+        },
+        {
+          "author": "Yael",
+          "text": "Best one yet"
+        },
+        {
+          "author": "Melike",
+          "text": "The coat!"
+        }
+      ]
+    },
+    {
+      "id": "post-87",
+      "authorName": "Lea",
+      "outfitId": "outfit-87-public",
+      "profileImage": "/lea-profile.webp",
+      "likes": 15,
+      "comments": [
+        {
+          "author": "Clem",
+          "text": "Gorgeous"
+        }
+      ]
+    },
+    {
+      "id": "post-68",
+      "authorName": "Ella",
+      "outfitId": "outfit-68-public",
+      "profileImage": "/ella-profile.webp",
+      "likes": 22,
+      "comments": [
+        {
+          "author": "Sab",
+          "text": "Where are these pants from??"
+        },
+        {
+          "author": "Ella",
+          "text": "Zara last season!"
+        },
+        {
+          "author": "Nao",
+          "text": "Need this whole outfit"
+        }
+      ]
+    },
+    {
+      "id": "post-85",
+      "authorName": "Nao",
+      "outfitId": "outfit-85-public",
+      "profileImage": "/nao-profile.webp",
+      "likes": 21,
+      "comments": [
+        {
+          "author": "Yael",
+          "text": "So good"
+        },
+        {
+          "author": "Sab",
+          "text": "Obsessed"
+        }
+      ]
+    },
+    {
+      "id": "post-76",
+      "authorName": "Clem",
+      "outfitId": "outfit-76-public",
+      "profileImage": "/clem-profile.webp",
+      "likes": 16,
+      "comments": [
+        {
+          "author": "Lea",
+          "text": "So chic"
+        }
+      ]
+    },
+    {
+      "id": "post-yael-21",
+      "authorName": "Yael",
+      "outfitId": "outfit-21",
+      "profileImage": "/yael-profile.webp",
+      "likes": 23,
+      "comments": [
+        {
+          "author": "Maya",
+          "text": "Office fit goals"
+        },
+        {
+          "author": "Natalia",
+          "text": "The vest!"
+        }
+      ]
+    },
+    {
+      "id": "post-88",
+      "authorName": "Jonathan",
+      "outfitId": "outfit-88-public",
+      "profileImage": "/jonathan-profile.webp",
+      "likes": 27,
+      "comments": [
+        {
+          "author": "Marvin",
+          "text": "Bro went off"
+        },
+        {
+          "author": "Alexander",
+          "text": "Hard to beat this one"
+        },
+        {
+          "author": "Yael",
+          "text": "The fit is perfect"
+        }
+      ]
+    },
+    {
+      "id": "post-82",
+      "authorName": "Natalia",
+      "outfitId": "outfit-82-public",
+      "profileImage": "/natalia-profile.webp",
+      "likes": 13,
+      "comments": [
+        {
+          "author": "Mclane",
+          "text": "Stealing this look"
+        }
+      ]
+    },
+    {
+      "id": "post-70",
+      "authorName": "Ella",
+      "outfitId": "outfit-70-public",
+      "profileImage": "/ella-profile.webp",
+      "likes": 11,
+      "comments": [
+        {
+          "author": "Maya",
+          "text": "Summer ready"
+        }
+      ]
+    },
+    {
+      "id": "post-112",
+      "authorName": "Hazal",
+      "outfitId": "outfit-112-public",
+      "profileImage": "/hazal-profile.webp",
+      "likes": 17,
+      "comments": [
+        {
+          "author": "Nao",
+          "text": "This silhouette is perfect"
+        }
+      ]
+    },
+    {
+      "id": "post-83",
+      "authorName": "Sab",
+      "outfitId": "outfit-83-public",
+      "profileImage": "/sab-profile.webp",
+      "likes": 10
+    },
+    {
+      "id": "post-73",
+      "authorName": "Marvin",
+      "outfitId": "outfit-73-public",
+      "profileImage": "/marvin-profile.webp",
+      "likes": 6
+    },
+    {
+      "id": "post-79",
+      "authorName": "Maya",
+      "outfitId": "outfit-79-public",
+      "profileImage": "/maya-profile.webp",
+      "likes": 12,
+      "comments": [
+        {
+          "author": "Nico",
+          "text": "This is giving main character energy"
+        }
+      ]
+    },
+    {
+      "id": "post-yael-103",
+      "authorName": "Yael",
+      "outfitId": "outfit-103",
+      "profileImage": "/yael-profile.webp",
+      "likes": 29,
+      "comments": [
+        {
+          "author": "Clem",
+          "text": "Love the sweater texture"
+        },
+        {
+          "author": "Jonathan",
+          "text": "Great proportions"
+        },
+        {
+          "author": "Lea",
+          "text": "This whole vibe"
+        }
+      ]
+    },
+    {
+      "id": "post-113",
+      "authorName": "KJ",
+      "outfitId": "outfit-113-public",
+      "profileImage": "/kj-profile.webp",
+      "likes": 9,
+      "comments": [
+        {
+          "author": "Nico",
+          "text": "Clean"
+        }
+      ]
+    },
+    {
+      "id": "post-84",
+      "authorName": "Sab",
+      "outfitId": "outfit-84-public",
+      "profileImage": "/sab-profile.webp",
+      "likes": 6,
+      "comments": [
+        {
+          "author": "Ella",
+          "text": "The accessories make this"
+        }
+      ]
+    },
+    {
+      "id": "post-67",
+      "authorName": "Ella",
+      "outfitId": "outfit-67-public",
+      "profileImage": "/ella-profile.webp",
+      "likes": 5
+    },
+    {
+      "id": "post-89",
+      "authorName": "Jonathan",
+      "outfitId": "outfit-89-public",
+      "profileImage": "/jonathan-profile.webp",
+      "likes": 5
+    },
+    {
+      "id": "post-75",
+      "authorName": "Marvin",
+      "outfitId": "outfit-75-public",
+      "profileImage": "/marvin-profile.webp",
+      "likes": 4
+    },
+    {
+      "id": "post-77",
+      "authorName": "Clem",
+      "outfitId": "outfit-77-public",
+      "profileImage": "/clem-profile.webp",
+      "likes": 9
+    },
+    {
+      "id": "post-86",
+      "authorName": "Mclane",
+      "outfitId": "outfit-86-public",
+      "profileImage": "/mclane-profile.webp",
+      "likes": 8
+    },
+    {
+      "id": "post-80",
+      "authorName": "Maya",
+      "outfitId": "outfit-80-public",
+      "profileImage": "/maya-profile.webp",
+      "likes": 7
+    },
+    {
+      "id": "post-71",
+      "authorName": "Ella",
+      "outfitId": "outfit-71-public",
+      "profileImage": "/ella-profile.webp",
+      "likes": 7
     }
   ]
 }

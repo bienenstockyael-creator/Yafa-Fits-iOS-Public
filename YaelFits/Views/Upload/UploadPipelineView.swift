@@ -1,5 +1,6 @@
 import AVFoundation
 import AVKit
+import UserNotifications
 import CoreLocation
 import PhotosUI
 import SwiftUI
@@ -33,7 +34,9 @@ struct UploadPipelineView: View {
                         errorBanner(error)
                     }
 
-                    stepContent
+                    if !showsPipelineLoader {
+                        stepContent
+                    }
 
                     if isInitialUploadState {
                         Spacer(minLength: 0)
@@ -50,6 +53,7 @@ struct UploadPipelineView: View {
                 .padding(.top, LayoutMetrics.uploadTopInset)
                 .padding(.bottom, LayoutMetrics.bottomOverlayInset)
             }
+            .scrollDisabled(true)
         }
         .fullScreenCover(isPresented: $showingCamera) {
             CameraCaptureView { image in
@@ -111,76 +115,65 @@ struct UploadPipelineView: View {
     }
 
     private var titleBlock: some View {
-        Text("Upload today's fit")
-            .font(.system(size: 30, weight: .bold))
-            .foregroundStyle(AppPalette.textStrong)
-            .multilineTextAlignment(.center)
+        Text("UPLOAD TODAY'S FIT")
+            .font(.system(size: 9, weight: .bold, design: .monospaced))
+            .tracking(2)
+            .foregroundStyle(AppPalette.textFaint)
             .frame(maxWidth: .infinity)
     }
 
     private var pipelineLoader: some View {
-        VStack(alignment: .leading, spacing: LayoutMetrics.xxSmall) {
-            ForEach(UploadLoaderStage.allCases, id: \.self) { stage in
-                loaderStageRow(stage)
+        GeometryReader { geo in
+            ZStack {
+                // Stars fill the whole stage
+                GenerationStarField()
+
+                // Stage label with shimmer — centred vertically and horizontally
+                VStack(spacing: LayoutMetrics.small) {
+                    Spacer()
+                    ShimmerText(
+                        text: currentStageLabel,
+                        font: .system(size: 9, weight: .bold, design: .monospaced),
+                        tracking: 2
+                    )
+                    .multilineTextAlignment(.center)
+
+                    Text(disclaimerText)
+                        .font(.system(size: 11))
+                        .foregroundStyle(AppPalette.textFaint)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, LayoutMetrics.xLarge)
+                        .animation(.easeInOut(duration: 0.4), value: currentStageLabel)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity)
             }
+            .frame(width: geo.size.width, height: geo.size.height)
         }
-        .frame(maxWidth: 300)
-        .frame(maxWidth: .infinity, alignment: .center)
-        .frame(maxWidth: .infinity)
-        .padding(.top, LayoutMetrics.small)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func loaderStageRow(_ stage: UploadLoaderStage) -> some View {
-        let activeStage = job?.loaderStage ?? .removingBackground
-        let isCompleted = stage.rawValue < activeStage.rawValue
-        let isActive = stage == activeStage
+    private var currentStageLabel: String {
+        let stage = job?.loaderStage ?? .removingBackground
+        switch stage {
+        case .removingBackground:
+            return "REMOVING BACKGROUND"
+        case .creatingInteractiveFit:
+            return "CREATING YOUR INTERACTIVE FIT"
+        case .compressing:
+            return "COMPRESSING"
+        }
+    }
 
-        return HStack(alignment: .top, spacing: LayoutMetrics.small) {
-            VStack(spacing: 0) {
-                ZStack {
-                    if isCompleted {
-                        AppIcon(
-                            glyph: .check,
-                            size: 10,
-                            color: AppPalette.uploadGlow.opacity(0.96)
-                        )
-                        .shadow(color: AppPalette.uploadGlow.opacity(0.5), radius: 5, y: 0)
-                    } else if isActive {
-                        ProgressView()
-                            .controlSize(.mini)
-                            .tint(AppPalette.uploadGlow)
-                            .shadow(color: AppPalette.uploadGlow.opacity(0.55), radius: 6, y: 0)
-                    } else {
-                        Circle()
-                            .fill(AppPalette.textMuted.opacity(0.35))
-                            .frame(width: 4, height: 4)
-                    }
-                }
-                .frame(width: 18, height: 18)
-
-                if stage != UploadLoaderStage.allCases.last {
-                    Group {
-                        if isCompleted {
-                            Rectangle()
-                                .fill(AppPalette.uploadGlow.opacity(0.92))
-                                .frame(width: 1.5, height: 28)
-                                .shadow(color: AppPalette.uploadGlow.opacity(0.38), radius: 6, y: 0)
-                        } else {
-                            Color.clear
-                                .frame(width: 1.5, height: 28)
-                        }
-                    }
-                }
-            }
-            .frame(width: 18)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(stage.title)
-                    .font(.system(size: 14, weight: isActive ? .semibold : .medium))
-                    .foregroundStyle(isCompleted || isActive ? AppPalette.textPrimary : AppPalette.textMuted)
-            }
-
-            Spacer(minLength: 0)
+    private var disclaimerText: String {
+        let stage = job?.loaderStage ?? .removingBackground
+        switch stage {
+        case .removingBackground:
+            return "Cutting you out of the background like the main character you are."
+        case .creatingInteractiveFit:
+            return "Good things take a few minutes. Sit tight — we'll notify you the second your fit is ready."
+        case .compressing:
+            return "Almost there. Squeezing your fit into its final form."
         }
     }
 
@@ -212,34 +205,22 @@ struct UploadPipelineView: View {
             .frame(maxWidth: 360)
             .frame(maxWidth: .infinity)
 
-            Text("Make sure your selfie is full body and properly centered")
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                .tracking(0.6)
+            Text("FULL BODY · CENTERED")
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .tracking(2)
                 .foregroundStyle(AppPalette.textFaint)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 320)
+                .frame(maxWidth: .infinity)
         }
     }
 
     private var generateStep: some View {
         Group {
-            if isAwaitingMaskSelection {
-                maskingVariantSelection
-            } else if job?.isProcessing == true {
+            if job?.isProcessing == true {
                 Color.clear.frame(height: 0)
             } else if job?.error != nil {
                 pipelineRecoveryCard
             }
         }
-    }
-
-    private var isAwaitingMaskSelection: Bool {
-        guard let job else { return false }
-        return job.step == .generate &&
-            !job.isProcessing &&
-            job.requestId == nil &&
-            job.videoURL == nil &&
-            !job.maskingVariants.isEmpty
     }
 
     private var reviewStep: some View {
@@ -423,83 +404,6 @@ struct UploadPipelineView: View {
         .appCard(cornerRadius: LayoutMetrics.cardCornerRadius, shadowRadius: 0, shadowY: 0)
     }
 
-    private func variantPreviewTile(_ variant: PreparedMaskingVariant) -> some View {
-        let isSelected = job?.maskingBackend == variant.backend
-
-        return Button {
-            selectMaskingVariant(variant.backend)
-        } label: {
-            VStack(alignment: .center, spacing: LayoutMetrics.xxSmall) {
-                Text(variant.backend.selectionTitle)
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                    .tracking(0.7)
-                    .foregroundStyle(AppPalette.textMuted)
-                    .frame(maxWidth: .infinity, alignment: .center)
-
-                if let image = UIImage(data: variant.greenScreenPNGData) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .interpolation(.high)
-                        .scaledToFit()
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 240)
-                        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                        .background(Color.white.opacity(0.22), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                }
-            }
-            .padding(LayoutMetrics.xSmall)
-            .frame(maxWidth: .infinity, alignment: .center)
-            .appCard(cornerRadius: LayoutMetrics.cardCornerRadius, shadowRadius: 0, shadowY: 0)
-            .overlay {
-                RoundedRectangle(cornerRadius: LayoutMetrics.cardCornerRadius, style: .continuous)
-                    .strokeBorder(
-                        isSelected ? AppPalette.textPrimary : Color.clear,
-                        lineWidth: 1.5
-                    )
-            }
-        }
-        .buttonStyle(.plain)
-        .disabled(!isAwaitingMaskSelection)
-    }
-
-    private var maskingVariantSelection: some View {
-        VStack(alignment: .center, spacing: LayoutMetrics.medium) {
-            VStack(spacing: LayoutMetrics.xxSmall) {
-                Text("Choose your green-screen.")
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .tracking(0.8)
-                    .foregroundStyle(AppPalette.textMuted)
-                    .frame(maxWidth: .infinity, alignment: .center)
-
-                Text("Pick the cleaner result.")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(AppPalette.textSecondary)
-                    .multilineTextAlignment(.center)
-            }
-
-            HStack(alignment: .top, spacing: LayoutMetrics.small) {
-                ForEach(job?.maskingVariants ?? []) { variant in
-                    variantPreviewTile(variant)
-                }
-            }
-            .frame(maxWidth: 360)
-            .frame(maxWidth: .infinity)
-
-            Button {
-                beginVideoGeneration()
-            } label: {
-                Text("Continue")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(AppPalette.textPrimary)
-                    .frame(maxWidth: .infinity)
-                    .frame(minHeight: 50)
-                    .appRoundedRect(cornerRadius: 18, shadowRadius: 0, shadowY: 0)
-            }
-            .buttonStyle(.plain)
-            .frame(maxWidth: 360)
-        }
-    }
-
     private var pipelineRecoveryCard: some View {
         VStack(alignment: .leading, spacing: LayoutMetrics.small) {
             Text("Something interrupted the generation.")
@@ -546,6 +450,7 @@ struct UploadPipelineView: View {
         store.cancelUploadTask()
         resetPreviewPlayer()
         discardUnacceptedStagedOutfitIfNeeded()
+        endGenerationBackgroundActivity()
 
         let newJob = PipelineJob(outfitNum: nextOutfitNumber())
         newJob.loaderStage = .removingBackground
@@ -568,6 +473,7 @@ struct UploadPipelineView: View {
             }
         }
 
+        beginGenerationBackgroundActivity()
         let task = Task {
             await processAndGenerate(job: newJob, imageData: imageData)
         }
@@ -582,6 +488,9 @@ struct UploadPipelineView: View {
 
         store.cancelUploadTask()
         resetPreviewPlayer()
+        LocalOutfitStore.shared.clearPendingReview()
+        endGenerationBackgroundActivity()
+
         if let stagedOutfit = job.stagedOutfit {
             LocalOutfitStore.shared.deleteOutfitData(for: stagedOutfit)
         }
@@ -598,33 +507,9 @@ struct UploadPipelineView: View {
         job.statusTitle = "Submitting to Kling 2.5"
         job.statusDetail = "Regenerating a 10-second orbit from the saved green-screen composite."
 
+        beginGenerationBackgroundActivity()
         let task = Task {
             await generateVideo(job: job, greenScreenData: greenScreenData)
-        }
-        store.replaceUploadTask(with: task)
-    }
-
-    private func beginVideoGeneration() {
-        guard let job,
-              let selectedVariant = selectedMaskingVariant(for: job.maskingBackend) else {
-            presentError(UploadPipelineError.invalidImage)
-            return
-        }
-
-        store.cancelUploadTask()
-        resetPreviewPlayer()
-        job.error = nil
-        job.loaderStage = .creatingInteractiveFit
-        job.isRotationReversed = false
-        job.isProcessing = true
-        job.requestId = nil
-        job.logLines = []
-        applyMaskingVariant(selectedVariant, to: job)
-        job.statusTitle = "Submitting to Kling 2.5"
-        job.statusDetail = "Sending the selected cutout to Kling 2.5 for a 10-second orbit."
-
-        let task = Task {
-            await generateVideo(job: job, greenScreenData: selectedVariant.greenScreenPNGData)
         }
         store.replaceUploadTask(with: task)
     }
@@ -656,6 +541,14 @@ struct UploadPipelineView: View {
             ? "The new outfit is now in your archive and public feed."
             : "The new outfit is now in the archive."
         store.cancelUploadTask()
+        LocalOutfitStore.shared.clearPendingReview()
+        endGenerationBackgroundActivity()
+
+        if let userId = store.userId {
+            Task {
+                try? await OutfitService.saveArchiveOutfit(finalizedOutfit, userId: userId, isPublic: publishToFeed)
+            }
+        }
 
         Task.detached(priority: .utility) {
             await FrameLoader.shared.preloadFirstFrames(outfits: [finalizedOutfit])
@@ -676,67 +569,42 @@ struct UploadPipelineView: View {
         job.isRotationReversed = newValue
         stagedOutfit.isRotationReversed = newValue
         job.stagedOutfit = stagedOutfit
+        persistPendingReviewIfNeeded(for: job)
     }
 
     private func processAndGenerate(job: PipelineJob, imageData: Data) async {
         do {
-            var preparedVariants: [PreparedMaskingVariant] = []
-            var nonBlockingErrors: [String] = []
-
-            for backend in UploadMaskingBackend.allCases {
-                do {
-                    let preparedAssets = try await ImageMaskingService.shared.prepareUploadAssets(
-                        from: imageData,
-                        using: backend
-                    ) { title, detail in
-                        await MainActor.run {
-                            job.statusTitle = title
-                            job.statusDetail = detail
-                        }
-                    }
-
-                    preparedVariants.append(
-                        PreparedMaskingVariant(
-                            backend: backend,
-                            cutoutPNGData: preparedAssets.cutoutPNGData,
-                            greenScreenPNGData: preparedAssets.greenScreenPNGData
-                        )
-                    )
-                } catch {
-                    if backend != .appleVision {
-                        nonBlockingErrors.append("\(backend.selectionTitle) preview unavailable: \(readableError(error))")
-                        continue
-                    }
-                    throw error
+            let preparedAssets = try await ImageMaskingService.shared.prepareUploadAssets(
+                from: imageData,
+                using: .falBria
+            ) { title, detail in
+                await MainActor.run {
+                    job.statusTitle = title
+                    job.statusDetail = detail
                 }
             }
 
-            guard !preparedVariants.isEmpty else {
-                throw UploadPipelineError.maskGenerationFailed
+            await MainActor.run {
+                job.cutoutImage = preparedAssets.cutoutPNGData
+                job.greenScreenImage = preparedAssets.greenScreenPNGData
+                job.maskingBackend = .falBria
+                job.loaderStage = .creatingInteractiveFit
+                job.statusTitle = "Submitting to Kling 2.5"
+                job.statusDetail = "Sending the cutout to Kling 2.5 for a 10-second orbit."
             }
 
-            await MainActor.run {
-                job.maskingVariants = preparedVariants
-                let preferredVariant =
-                    preparedVariants.first(where: { $0.backend == .falBria }) ??
-                    preparedVariants[0]
-                applyMaskingVariant(preferredVariant, to: job)
-                job.isProcessing = false
-                job.progress = nil
-                job.error = nonBlockingErrors.isEmpty ? nil : nonBlockingErrors.joined(separator: "\n")
-                job.statusTitle = preparedVariants.count > 1 ? "Choose background removal" : "Cutout ready"
-                job.statusDetail = preparedVariants.count > 1
-                    ? "Compare the cutouts, then choose the one that should go to Kling."
-                    : "The cutout is ready. Start the 10-second Kling generation when you are ready."
-                store.uploadTask = nil
-            }
+            await generateVideo(job: job, greenScreenData: preparedAssets.greenScreenPNGData)
         } catch is CancellationError {
+            await MainActor.run {
+                endGenerationBackgroundActivity()
+            }
             return
         } catch {
             await MainActor.run {
                 job.isProcessing = false
                 job.error = readableError(error)
                 store.uploadTask = nil
+                endGenerationBackgroundActivity()
             }
         }
     }
@@ -794,8 +662,15 @@ struct UploadPipelineView: View {
                 job.statusTitle = "Ready"
                 job.statusDetail = "Your interactive fit is ready."
                 store.uploadTask = nil
+                persistPendingReviewIfNeeded(for: job)
+                store.generationReadyForReview = true
+                endGenerationBackgroundActivity()
+                sendGenerationCompleteNotificationIfNeeded()
             }
         } catch is CancellationError {
+            await MainActor.run {
+                endGenerationBackgroundActivity()
+            }
             return
         } catch {
             await MainActor.run {
@@ -803,6 +678,7 @@ struct UploadPipelineView: View {
                 job.progress = nil
                 job.error = readableError(error)
                 store.uploadTask = nil
+                endGenerationBackgroundActivity()
             }
         }
     }
@@ -828,26 +704,8 @@ struct UploadPipelineView: View {
         discardUnacceptedStagedOutfitIfNeeded()
         selectedPhoto = nil
         store.uploadJob = nil
-    }
-
-    private func selectedMaskingVariant(for backend: UploadMaskingBackend) -> PreparedMaskingVariant? {
-        job?.maskingVariants.first(where: { $0.backend == backend })
-    }
-
-    private func selectMaskingVariant(_ backend: UploadMaskingBackend) {
-        guard let job,
-              let variant = selectedMaskingVariant(for: backend),
-              !job.isProcessing else {
-            return
-        }
-        applyMaskingVariant(variant, to: job)
-        job.error = nil
-    }
-
-    private func applyMaskingVariant(_ variant: PreparedMaskingVariant, to job: PipelineJob) {
-        job.maskingBackend = variant.backend
-        job.cutoutImage = variant.cutoutPNGData
-        job.greenScreenImage = variant.greenScreenPNGData
+        LocalOutfitStore.shared.clearPendingReview()
+        endGenerationBackgroundActivity()
     }
 
     private func discardUnacceptedStagedOutfitIfNeeded() {
@@ -857,11 +715,45 @@ struct UploadPipelineView: View {
         }
         job?.stagedOutfit = nil
         LocalOutfitStore.shared.deleteOutfitData(for: stagedOutfit)
+        LocalOutfitStore.shared.clearPendingReview()
     }
 
     private func nextOutfitNumber() -> Int {
         let maxExisting = store.outfits.compactMap(\.outfitNumber).max() ?? 0
         return max(maxExisting + 1, LocalOutfitStore.shared.nextOutfitNum())
+    }
+
+    private func persistPendingReviewIfNeeded(for job: PipelineJob) {
+        guard let review = PersistedPipelineReview(job: job) else {
+            LocalOutfitStore.shared.clearPendingReview()
+            return
+        }
+
+        LocalOutfitStore.shared.savePendingReview(review)
+    }
+
+    private func beginGenerationBackgroundActivity() {
+        GenerationBackgroundActivity.shared.begin()
+    }
+
+    private func endGenerationBackgroundActivity() {
+        GenerationBackgroundActivity.shared.end()
+    }
+
+    private func sendGenerationCompleteNotificationIfNeeded() {
+        guard UIApplication.shared.applicationState != .active else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = "Your interactive fit is ready ✨"
+        content.body = "Tap to review and add it to your archive."
+        content.sound = .default
+
+        let request = UNNotificationRequest(
+            identifier: "generation-complete-\(UUID().uuidString)",
+            content: content,
+            trigger: nil // deliver immediately
+        )
+        UNUserNotificationCenter.current().add(request)
     }
 
     private func presentError(_ error: Error) {
@@ -880,6 +772,28 @@ struct UploadPipelineView: View {
             return description
         }
         return error.localizedDescription
+    }
+}
+
+@MainActor
+private final class GenerationBackgroundActivity {
+    static let shared = GenerationBackgroundActivity()
+
+    private var taskIdentifier: UIBackgroundTaskIdentifier = .invalid
+
+    func begin() {
+        guard taskIdentifier == .invalid else { return }
+        taskIdentifier = UIApplication.shared.beginBackgroundTask(withName: "com.yafa.generation") { [weak self] in
+            Task { @MainActor in
+                self?.end()
+            }
+        }
+    }
+
+    func end() {
+        guard taskIdentifier != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(taskIdentifier)
+        taskIdentifier = .invalid
     }
 }
 
@@ -1768,7 +1682,7 @@ private final class CameraCaptureModel: NSObject, ObservableObject, AVCapturePho
     @Published var authorizationDenied = false
 
     private let photoOutput = AVCapturePhotoOutput()
-    private let sessionQueue = DispatchQueue(label: "com.yaelfits.camera.session")
+    private let sessionQueue = DispatchQueue(label: "com.yafa.camera.session")
     private var currentInput: AVCaptureDeviceInput?
     private var currentPosition: AVCaptureDevice.Position = .back
     private var isConfigured = false
@@ -2083,7 +1997,7 @@ private actor UploadWeatherService {
 }
 
 @MainActor
-private final class UploadLocationCoordinator: NSObject, CLLocationManagerDelegate {
+private final class UploadLocationCoordinator: NSObject, @preconcurrency CLLocationManagerDelegate {
     private let manager = CLLocationManager()
     private var continuation: CheckedContinuation<CLLocation, Error>?
 

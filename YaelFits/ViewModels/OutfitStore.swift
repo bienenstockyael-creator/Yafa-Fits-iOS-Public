@@ -1,36 +1,50 @@
 import SwiftUI
 
+enum ViewTransitionPhase: Equatable {
+    case idle
+    case sourceOut   // source view elements fading/blurring out
+    case targetIn    // target view elements fading/blurring in
+}
+
 enum AppView: String, CaseIterable {
     case list = "List"
     case calendar = "Calendar"
     case feed = "Feed"
     case upload = "Upload"
+    case profile = "Profile"
 }
 
 @Observable
 class OutfitStore {
+    var userId: UUID?
     var outfits: [Outfit] = []
     var feedPosts: [FeedPost] = []
     var uploadJob: PipelineJob?
     var currentView: AppView = .list
     var useFahrenheit: Bool = true
     var likedIds: Set<String> = []
-    var feedLikedPostIds: Set<String> = []
-    var feedSavedPostIds: Set<String> = []
-    var feedCommentedPostIds: Set<String> = []
+    var savedIds: Set<String> = []
+    var followingIds: Set<UUID> = []
     var isLoading: Bool = true
     var selectedOutfitId: String?
     var centeredListOutfitId: String?
     var pendingCalendarScrollOutfitId: String?
+    var listOutfitFrames: [String: CGRect] = [:]
+    var calendarOutfitFrames: [String: CGRect] = [:]
+    var listOutfitFrameIndices: [String: Int] = [:]
+    var heroAnchorOutfitId: String?
+    var viewTransitionPhase: ViewTransitionPhase = .idle
+    var generationReadyForReview = false
     var hasPlayedInitialListEntrance = false
     var uploadTask: Task<Void, Never>?
+    var currentProfile: Profile?
 
     var outfitById: [String: Outfit] {
         Dictionary(uniqueKeysWithValues: outfits.map { ($0.id, $0) })
     }
 
     var archiveOutfits: [Outfit] {
-        outfits.filter { !AppConfig.publicOnlyOutfitIDs.contains($0.id) }
+        outfits.filter { !$0.id.hasSuffix("-public") }
     }
 
     var sortedOutfits: [Outfit] {
@@ -40,8 +54,7 @@ class OutfitStore {
     }
 
     var isUploadInProgress: Bool {
-        guard let uploadJob else { return false }
-        return uploadJob.isProcessing && uploadJob.loaderStage != .removingBackground
+        uploadJob?.isProcessing == true
     }
 
     var uploadIndicatorProgress: Double {
@@ -49,75 +62,209 @@ class OutfitStore {
 
         switch uploadJob.loaderStage {
         case .removingBackground:
-            return 0
+            return 0.12
         case .creatingInteractiveFit:
-            return 0.34
+            return 0.42
         case .compressing:
-            return min(0.96, 0.42 + (uploadJob.progress ?? 0) * 0.54)
+            return min(0.96, 0.5 + (uploadJob.progress ?? 0) * 0.46)
         }
     }
 
     func loadData() async {
-        let loadStartedAt = Date()
-        async let outfitsTask = ContentSource.getAllOutfits()
-        async let feedTask = ContentSource.getPublicFeed()
-        let allOutfits = await outfitsTask
-        let feed = await feedTask
-        let prioritizedOutfits = allOutfits.sorted { a, b in
-            (a.outfitNumber ?? 0) < (b.outfitNumber ?? 0)
-        }
-        async let initialSequencePreload: Void =
-            FrameLoader.shared.preloadFullSequences(for: Array(prioritizedOutfits.prefix(9)))
-        let minimumLoaderDuration: TimeInterval = 1.5
-        let remainingLoaderTime = minimumLoaderDuration - Date().timeIntervalSince(loadStartedAt)
-
-        if remainingLoaderTime > 0 {
-            try? await Task.sleep(for: .seconds(remainingLoaderTime))
+        guard let userId else {
+            isLoading = false
+            return
         }
 
-        _ = await initialSequencePreload
+        // Load from cache or bundled + local outfits — instant, no network
+        let cached = LocalCache.loadOutfits(userId: userId)
+        let cachedFeed = LocalCache.loadFeedPosts(userId: userId)
+
+        // Bundled outfits belong to Yael's account only.
+        // Other users start with an empty archive and upload their own.
+        let isOwnerAccount = userId.uuidString.lowercased() == AppConfig.archiveOwnerUserId
+        let bundled = isOwnerAccount ? ContentSource.getBundledOutfits() : []
+
+        let base: [Outfit]
+        if let cached {
+            let cachedIds = Set(cached.map(\.id))
+            let newFromBundled = bundled.filter { !cachedIds.contains($0.id) }
+            base = cached + newFromBundled
+        } else {
+            base = bundled
+        }
+        let local = ContentSource.getLocalOutfits()
+        let baseIds = Set(base.map(\.id))
+        let uniqueLocal = local.filter { !baseIds.contains($0.id) }
+        let instant = base + uniqueLocal
+        let instantFeed = cachedFeed ?? ContentSource.getBundledFeed()
+        let sorted = instant.sorted { ($0.outfitNumber ?? 0) < ($1.outfitNumber ?? 0) }
+
+        if !sorted.isEmpty {
+            await FrameLoader.shared.preloadFullSequences(for: Array(sorted.prefix(9)))
+        }
 
         await MainActor.run {
-            self.outfits = allOutfits
-            self.feedPosts = feed
+            self.outfits = instant
+            self.feedPosts = instantFeed
             self.isLoading = false
         }
 
-        // Preload first frames in background (non-blocking)
+        if !sorted.isEmpty {
+            Task.detached(priority: .utility) {
+                await FrameLoader.shared.preloadFirstFrames(outfits: Array(sorted.prefix(12)))
+            }
+        }
+
+        // Refresh feed in background — includes user's own public outfits + followed users
         Task.detached(priority: .utility) {
-            await FrameLoader.shared.preloadFirstFrames(outfits: Array(prioritizedOutfits.prefix(12)))
+            await self.refreshFeed()
+        }
+
+        // Save fresh Supabase data to cache for next launch — don't update live UI.
+        // For bundled outfits (not in Supabase), preserve the cached version so
+        // user-tagged products and tags aren't lost when the refresh runs.
+        Task.detached(priority: .utility) {
+            let fresh = await ContentSource.getAllOutfits(userId: userId)
+            if !fresh.isEmpty {
+                let existing = LocalCache.loadOutfits(userId: userId) ?? []
+                let existingById = Dictionary(existing.map { ($0.id, $0) },
+                                              uniquingKeysWith: { a, _ in a })
+                let bundledIds = Set(ContentSource.getBundledOutfits().map(\.id))
+                let merged = fresh.map { outfit -> Outfit in
+                    // For bundled outfits, keep the cached copy (has user products/tags)
+                    if bundledIds.contains(outfit.id), let cached = existingById[outfit.id] {
+                        return cached
+                    }
+                    return outfit
+                }
+                LocalCache.saveOutfits(merged, userId: userId)
+            }
+        }
+    }
+
+    func loadSocialData(userId: UUID) async {
+        // Load from disk cache — one single update
+        let cachedLikes = LocalCache.loadLikedIds(userId: userId) ?? []
+        let cachedSaves = LocalCache.loadSavedIds(userId: userId) ?? []
+        let cachedProfile = LocalCache.loadProfile(userId: userId)
+        let cachedFollowing = LocalCache.loadFollowingIds(userId: userId) ?? []
+
+        await MainActor.run {
+            self.likedIds = cachedLikes
+            self.savedIds = cachedSaves
+            self.followingIds = cachedFollowing
+            self.currentProfile = cachedProfile
+        }
+
+        // Refresh from Supabase — save to cache only, don't update live UI
+        Task.detached(priority: .utility) {
+            async let likedTask = try? SocialService.getLikedOutfitIds(userId: userId)
+            async let savedTask = try? SocialService.getSavedOutfitIds(userId: userId)
+            async let profileTask = try? SocialService.getProfile(userId: userId)
+            async let followingTask = try? SocialService.getFollowingIds(userId: userId)
+
+            let liked = await likedTask ?? []
+            let saved = await savedTask ?? []
+            let profile = await profileTask
+            let following = await followingTask ?? []
+
+            LocalCache.saveLikedIds(liked, userId: userId)
+            LocalCache.saveSavedIds(saved, userId: userId)
+            if let profile { LocalCache.saveProfile(profile, userId: userId) }
+            LocalCache.saveFollowingIds(following, userId: userId)
+        }
+    }
+
+    /// Updates an outfit's caption and products locally after publishing.
+    func updateOutfit(_ outfitId: String, caption: String?, products: [Product]) {
+        guard let index = outfits.firstIndex(where: { $0.id == outfitId }) else { return }
+        outfits[index].caption = caption
+        outfits[index].products = products.isEmpty ? outfits[index].products : products
+        persistCache()
+    }
+
+    func updateOutfitTags(outfitId: String, tags: [String]) {
+        guard let index = outfits.firstIndex(where: { $0.id == outfitId }) else { return }
+        outfits[index].tags = tags
+        persistCache()
+    }
+
+    func removeProduct(_ product: Product, fromOutfitId outfitId: String) {
+        guard let index = outfits.firstIndex(where: { $0.id == outfitId }) else { return }
+        outfits[index].products?.removeAll { $0.id == product.id }
+        persistCache()
+    }
+
+    /// All unique tags used across the user's archive outfits — for autocomplete.
+    var allOutfitTags: [String] {
+        var seen = Set<String>()
+        return archiveOutfits
+            .flatMap { $0.tags ?? [] }
+            .filter { seen.insert($0).inserted }
+    }
+
+    private func persistCache() {
+        guard let userId else { return }
+        // Snapshot on main actor before dispatching to avoid race with further mutations
+        let snapshot = outfits
+        let uid = userId
+        Task.detached(priority: .utility) {
+            LocalCache.saveOutfits(snapshot, userId: uid)
+        }
+    }
+
+    func toggleFollow(_ targetUserId: UUID) {
+        guard let userId else { return }
+        if followingIds.contains(targetUserId) {
+            followingIds.remove(targetUserId)
+        } else {
+            followingIds.insert(targetUserId)
+        }
+        LocalCache.saveFollowingIds(followingIds, userId: userId)
+        let isFollowing = followingIds.contains(targetUserId)
+        Task {
+            if isFollowing {
+                try? await SocialService.follow(followerId: userId, followingId: targetUserId)
+            } else {
+                try? await SocialService.unfollow(followerId: userId, followingId: targetUserId)
+            }
         }
     }
 
     func toggleLike(_ outfitId: String) {
+        guard let userId else { return }
         if likedIds.contains(outfitId) {
             likedIds.remove(outfitId)
         } else {
             likedIds.insert(outfitId)
         }
-    }
-
-    func toggleFeedLike(_ postId: String) {
-        if feedLikedPostIds.contains(postId) {
-            feedLikedPostIds.remove(postId)
-        } else {
-            feedLikedPostIds.insert(postId)
+        LocalCache.saveLikedIds(likedIds, userId: userId)
+        let isLiked = likedIds.contains(outfitId)
+        Task {
+            if isLiked {
+                try? await SocialService.likeOutfit(userId: userId, outfitId: outfitId)
+            } else {
+                try? await SocialService.unlikeOutfit(userId: userId, outfitId: outfitId)
+            }
         }
     }
 
-    func toggleFeedSave(_ postId: String) {
-        if feedSavedPostIds.contains(postId) {
-            feedSavedPostIds.remove(postId)
+    func toggleSave(_ outfitId: String) {
+        guard let userId else { return }
+        if savedIds.contains(outfitId) {
+            savedIds.remove(outfitId)
         } else {
-            feedSavedPostIds.insert(postId)
+            savedIds.insert(outfitId)
         }
-    }
-
-    func toggleFeedComment(_ postId: String) {
-        if feedCommentedPostIds.contains(postId) {
-            feedCommentedPostIds.remove(postId)
-        } else {
-            feedCommentedPostIds.insert(postId)
+        LocalCache.saveSavedIds(savedIds, userId: userId)
+        let isSaved = savedIds.contains(outfitId)
+        Task {
+            if isSaved {
+                try? await SocialService.saveOutfit(userId: userId, outfitId: outfitId)
+            } else {
+                try? await SocialService.unsaveOutfit(userId: userId, outfitId: outfitId)
+            }
         }
     }
 
@@ -152,6 +299,16 @@ class OutfitStore {
         uploadTask = nil
     }
 
+    func restorePersistedPendingReviewIfNeeded() {
+        guard uploadJob == nil,
+              let review = LocalOutfitStore.shared.loadPendingReview() else {
+            return
+        }
+
+        uploadJob = review.makePipelineJob()
+        generationReadyForReview = true
+    }
+
     func isLocalOutfit(_ outfit: Outfit) -> Bool {
         LocalOutfitStore.shared.loadOutfits().contains { $0.id == outfit.id }
     }
@@ -165,6 +322,7 @@ class OutfitStore {
 
         outfits.removeAll { $0.id == outfit.id }
         likedIds.remove(outfit.id)
+        savedIds.remove(outfit.id)
         feedPosts.removeAll { $0.outfitId == outfit.id }
 
         if selectedOutfitId == outfit.id {
@@ -178,12 +336,34 @@ class OutfitStore {
         }
 
         LocalOutfitStore.shared.deleteOutfitData(for: outfit)
+        persistCache()
+        // Also delete from Supabase (handles both uploaded and bundled outfits)
+        Task.detached(priority: .utility) {
+            try? await OutfitService.deleteOutfit(outfit.id)
+        }
     }
 
     func refreshOutfits() async {
-        let allOutfits = await ContentSource.getAllOutfits()
+        guard let userId else { return }
+        let allOutfits = await ContentSource.getAllOutfits(userId: userId)
         await MainActor.run {
             self.outfits = allOutfits
+        }
+    }
+
+    func refreshFeed() async {
+        guard let userId else { return }
+        var feedUserIds = followingIds
+        feedUserIds.insert(userId)
+        let freshFeed = await ContentSource.getFollowedFeed(followingIds: feedUserIds)
+        LocalCache.saveFeedPosts(freshFeed, userId: userId)
+
+        let currentIds = Set(feedPosts.map(\.id))
+        let freshIds = Set(freshFeed.map(\.id))
+        guard currentIds != freshIds else { return }
+
+        await MainActor.run {
+            self.feedPosts = freshFeed
         }
     }
 }

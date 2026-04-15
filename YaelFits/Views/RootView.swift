@@ -11,6 +11,19 @@ struct RootView: View {
     @State private var loaderDismissTask: Task<Void, Never>?
     @State private var showsFavoritesSheet = false
 
+    // In-app notification banner
+    @State private var showReviewBanner = false
+    @State private var bannerDismissTask: Task<Void, Never>?
+
+    // Hero transition state
+    @State private var heroTransitioning = false
+    @State private var heroOutfit: Outfit?
+    @State private var heroImage: UIImage?
+    @State private var heroFrame: CGRect = .zero
+    @State private var heroOpacity: Double = 0
+    @State private var heroFrameIndex: Int = 0
+    @State private var viewTransitionTask: Task<Void, Never>?
+
     var body: some View {
         @Bindable var store = store
 
@@ -19,32 +32,48 @@ struct RootView: View {
 
             VStack(spacing: 0) {
                 switch store.currentView {
-                case .list:
-                    OutfitGridView()
-                case .calendar:
-                    CalendarMonthView()
+                case .list, .calendar:
+                    ZStack {
+                        OutfitGridView()
+                            .opacity(listViewOpacity)
+                            .blur(radius: listViewBlur)
+                            .allowsHitTesting(store.currentView == .list && !heroTransitioning)
+
+                        CalendarMonthView()
+                            .opacity(calendarViewOpacity)
+                            .blur(radius: calendarViewBlur)
+                            .allowsHitTesting(store.currentView == .calendar && !heroTransitioning)
+                    }
                 case .feed:
                     PublicFeedListView()
                 case .upload:
                     UploadPipelineView()
+                case .profile:
+                    ProfileView()
                 }
             }
             .padding(.top, headerContentInset)
 
-            VStack(spacing: 0) {
-                topBar
-                Spacer(minLength: 0)
+            if store.currentView != .feed {
+                VStack(spacing: 0) {
+                    topBar
+                    Spacer(minLength: 0)
+                }
+                .zIndex(90)
             }
-            .zIndex(90)
 
             CalendarDetailOverlayHost()
                 .zIndex(140)
+
+            if let heroOutfit, heroTransitioning {
+                viewTransitionHero(outfit: heroOutfit)
+                    .zIndex(200)
+            }
 
             if showsFloatingButtons {
                 VStack {
                     Spacer()
                     HStack(alignment: .bottom) {
-                        floatingWaitlistButton
                         Spacer()
                         floatingFavoritesButton
                     }
@@ -65,18 +94,35 @@ struct RootView: View {
                 loadingOverlay
                     .zIndex(999)
             }
-        }
-        .task {
-            await store.loadData()
+
+            // In-app review notification banner
+            if showReviewBanner {
+                VStack {
+                    reviewBanner
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                    Spacer()
+                }
+                .zIndex(500)
+            }
         }
         .onAppear {
+            store.restorePersistedPendingReviewIfNeeded()
             syncLoadingOverlay(isLoading: store.isLoading)
         }
         .onChange(of: store.isLoading) { _, isLoading in
             syncLoadingOverlay(isLoading: isLoading)
         }
+        .onChange(of: store.generationReadyForReview) { _, ready in
+            guard ready else { return }
+            store.generationReadyForReview = false
+            if store.currentView != .upload {
+                presentReviewBanner()
+            }
+        }
         .onDisappear {
             loaderDismissTask?.cancel()
+            viewTransitionTask?.cancel()
+            bannerDismissTask?.cancel()
         }
         .sheet(isPresented: $showsFavoritesSheet) {
             FavoritesSheetView()
@@ -94,11 +140,274 @@ struct RootView: View {
         HStack {
             logoView
             Spacer()
-            tempToggle
+            HStack(spacing: 8) {
+                if store.currentView == .list || store.currentView == .calendar {
+                    calendarToggle
+                }
+                tempToggle
+            }
         }
         .padding(.horizontal, LayoutMetrics.screenPadding)
         .padding(.top, 8)
         .padding(.bottom, LayoutMetrics.xSmall)
+    }
+
+    private var isCalendarActive: Bool {
+        store.currentView == .calendar
+    }
+
+    // Cinematic crossfade: source blurs out, target blurs in
+    private var listViewOpacity: Double {
+        switch store.viewTransitionPhase {
+        case .idle: return store.currentView == .list ? 1 : 0
+        case .sourceOut: return store.currentView == .list ? 0 : 0  // source fading out, target not yet in
+        case .targetIn: return store.currentView == .list ? 1 : 0   // target fading in
+        }
+    }
+
+    private var listViewBlur: CGFloat {
+        switch store.viewTransitionPhase {
+        case .idle: return 0
+        case .sourceOut: return store.currentView == .list ? 8 : 0
+        case .targetIn: return store.currentView == .list ? 0 : 0
+        }
+    }
+
+    private var calendarViewOpacity: Double {
+        switch store.viewTransitionPhase {
+        case .idle: return store.currentView == .calendar ? 1 : 0
+        case .sourceOut: return store.currentView == .calendar ? 0 : 0
+        case .targetIn: return store.currentView == .calendar ? 1 : 0
+        }
+    }
+
+    private var calendarViewBlur: CGFloat {
+        switch store.viewTransitionPhase {
+        case .idle: return 0
+        case .sourceOut: return store.currentView == .calendar ? 8 : 0
+        case .targetIn: return store.currentView == .calendar ? 0 : 0
+        }
+    }
+
+    private var calendarToggle: some View {
+        Button {
+            guard !heroTransitioning else { return }
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+            performViewTransition()
+        } label: {
+            AppIcon(glyph: .calendar, size: 14, color: isCalendarActive ? .white : AppPalette.textFaint)
+                .frame(width: 30, height: 30)
+                .background {
+                    if isCalendarActive {
+                        Circle()
+                            .fill(Color(red: 0.11, green: 0.11, blue: 0.12))
+                            .shadow(color: Color.black.opacity(0.08), radius: 3, y: 1)
+                    } else {
+                        Circle()
+                            .fill(Color.white.opacity(0.5))
+                    }
+                }
+                .overlay(
+                    Circle()
+                        .strokeBorder(
+                            isCalendarActive
+                                ? Color(red: 0.11, green: 0.11, blue: 0.12)
+                                : Color(red: 0.88, green: 0.89, blue: 0.91).opacity(0.5),
+                            lineWidth: 0.8
+                        )
+                )
+        }
+        .buttonStyle(.plain)
+        .animation(.easeOut(duration: 0.2), value: isCalendarActive)
+    }
+
+    // MARK: - Hero View Transition
+
+    private func performViewTransition() {
+        viewTransitionTask?.cancel()
+
+        let goingToCalendar = !isCalendarActive
+        let anchorId = store.centeredListOutfitId ?? store.sortedOutfits.first?.id
+
+        // Find anchor outfit and its source frame
+        let sourceFrames = goingToCalendar ? store.listOutfitFrames : store.calendarOutfitFrames
+        guard let anchorId,
+              let outfit = store.outfitById[anchorId]
+        else {
+            // No anchor — just switch view instantly
+            store.selectedOutfitId = nil
+            if goingToCalendar {
+                store.pendingCalendarScrollOutfitId = anchorId
+            }
+            store.currentView = goingToCalendar ? .calendar : .list
+            return
+        }
+
+        let sourceFrame = sourceFrames[anchorId]
+        let frameIndex = store.listOutfitFrameIndices[anchorId] ?? 0
+
+        viewTransitionTask = Task { @MainActor in
+            // Step 1: Load hero image, hide anchor outfit
+            heroOutfit = outfit
+            heroFrameIndex = frameIndex
+            heroImage = await FrameLoader.shared.frame(for: outfit, index: frameIndex)
+            guard !Task.isCancelled else { return }
+
+            let screenBounds = UIScreen.main.bounds
+            let fallbackFrame = CGRect(
+                x: screenBounds.midX - 50,
+                y: screenBounds.midY - 85,
+                width: 100,
+                height: 170
+            )
+            heroFrame = sourceFrame ?? fallbackFrame
+            store.heroAnchorOutfitId = anchorId
+            heroOpacity = 1
+            heroTransitioning = true
+
+            // Step 2: Cinematic blur-out of the source view
+            withAnimation(.timingCurve(0.4, 0, 0.2, 1, duration: 0.5)) {
+                store.viewTransitionPhase = .sourceOut
+            }
+
+            // Wait for source to blur away
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { cleanupHero(); return }
+
+            // Step 3: Switch the underlying view (hidden by blur + hero on top)
+            store.selectedOutfitId = nil
+            if goingToCalendar {
+                store.pendingCalendarScrollOutfitId = anchorId
+            }
+            store.currentView = goingToCalendar ? .calendar : .list
+
+            // Step 4: Wait for scroll + layout
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled else { cleanupHero(); return }
+
+            // Step 5: Find target frame
+            var targetFrame: CGRect?
+            for _ in 0..<20 {
+                let frames = goingToCalendar ? store.calendarOutfitFrames : store.listOutfitFrames
+                if let frame = frames[anchorId], frame.width > 0, frame.height > 0 {
+                    targetFrame = frame
+                    break
+                }
+                try? await Task.sleep(for: .milliseconds(40))
+                guard !Task.isCancelled else { cleanupHero(); return }
+            }
+
+            guard !Task.isCancelled else { cleanupHero(); return }
+
+            // Step 6: Start hero flight
+            if let targetFrame {
+                startHeroRotation(outfit: outfit, startFrame: frameIndex)
+                withAnimation(.timingCurve(0.45, 0, 0.22, 1, duration: 1.0)) {
+                    heroFrame = targetFrame
+                }
+            }
+
+            // Step 7: Cinematic reveal of the target view (staggered, while hero is mid-flight)
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled else { cleanupHero(); return }
+
+            withAnimation(.timingCurve(0.16, 1, 0.3, 1, duration: 0.7)) {
+                store.viewTransitionPhase = .targetIn
+            }
+
+            // Wait for hero to finish landing
+            let remainingFlight: Int = targetFrame != nil ? 650 : 0
+            if remainingFlight > 0 {
+                try? await Task.sleep(for: .milliseconds(remainingFlight))
+            }
+            guard !Task.isCancelled else { cleanupHero(); return }
+
+            // Step 8: Reveal real outfit, fade out hero
+            store.heroAnchorOutfitId = nil
+
+            withAnimation(.easeOut(duration: 0.12)) {
+                heroOpacity = 0
+            }
+
+            try? await Task.sleep(for: .milliseconds(150))
+
+            // Step 9: Settle to idle
+            withAnimation(.easeOut(duration: 0.2)) {
+                store.viewTransitionPhase = .idle
+            }
+            cleanupHero()
+        }
+    }
+
+    private func startHeroRotation(outfit: Outfit, startFrame: Int) {
+        let frameCount = outfit.frameCount
+        guard frameCount > 1 else { return }
+
+        Task { @MainActor in
+            let startTime = CACurrentMediaTime()
+            let duration: Double = 0.9
+
+            while heroTransitioning {
+                let elapsed = CACurrentMediaTime() - startTime
+                let progress = min(elapsed / duration, 1.0)
+
+                // Smoothstep easing: 65% linear + 35% hermite
+                let smoothStep = progress * progress * (3 - 2 * progress)
+                let eased = progress + (smoothStep - progress) * 0.35
+
+                let frameOffset = Int(eased * Double(frameCount))
+                let newIndex = ((startFrame + frameOffset) % frameCount + frameCount) % frameCount
+
+                if newIndex != heroFrameIndex {
+                    heroFrameIndex = newIndex
+                    heroImage = await FrameLoader.shared.frame(for: outfit, index: newIndex)
+                }
+
+                if progress >= 1.0 { break }
+                try? await Task.sleep(for: .milliseconds(16))
+            }
+        }
+    }
+
+    private func cleanupHero() {
+        heroTransitioning = false
+        heroOutfit = nil
+        heroImage = nil
+        heroOpacity = 0
+        heroFrame = .zero
+        heroFrameIndex = 0
+        store.heroAnchorOutfitId = nil
+        if store.viewTransitionPhase != .idle {
+            store.viewTransitionPhase = .idle
+        }
+    }
+
+    private func viewTransitionHero(outfit: Outfit) -> some View {
+        GeometryReader { geometry in
+            let viewportFrame = geometry.frame(in: .global)
+            let displayFrame = CGRect(
+                x: heroFrame.minX - viewportFrame.minX,
+                y: heroFrame.minY - viewportFrame.minY,
+                width: heroFrame.width,
+                height: heroFrame.height
+            )
+
+            Group {
+                if let heroImage {
+                    Image(uiImage: heroImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                } else {
+                    Color.clear
+                }
+            }
+            .frame(width: displayFrame.width, height: displayFrame.height)
+            .position(x: displayFrame.midX, y: displayFrame.midY)
+            .opacity(heroOpacity)
+            .allowsHitTesting(false)
+        }
+        .ignoresSafeArea()
     }
 
     private var logoView: some View {
@@ -119,7 +428,7 @@ struct RootView: View {
                         .colorMultiply(.black)
                         .opacity(0.82)
                 } else {
-                    Text("YAEL FITS")
+                    Text("YAFA")
                         .font(.system(size: 14, weight: .bold, design: .monospaced))
                         .tracking(2)
                         .foregroundStyle(AppPalette.textPrimary.opacity(0.82))
@@ -137,9 +446,9 @@ struct RootView: View {
 
             HStack(spacing: 0) {
                 tabItem(icon: .grid, label: "Home", tab: .list)
-                tabItem(icon: .calendar, label: "Calendar", tab: .calendar)
                 tabItem(icon: .plusCircle, label: "Upload", tab: .upload)
                 tabItem(icon: .globe, label: "Public", tab: .feed)
+                tabItem(icon: .person, label: "Profile", tab: .profile)
             }
             .padding(.horizontal, LayoutMetrics.xxSmall)
             .padding(.top, LayoutMetrics.xSmall)
@@ -152,19 +461,16 @@ struct RootView: View {
     }
 
     private func tabItem(icon: AppIconGlyph, label: String, tab: AppView) -> some View {
-        let isActive = store.currentView == tab
+        let isActive = store.currentView == tab || (tab == .list && store.currentView == .calendar)
         let showsUploadActivity = tab == .upload && store.isUploadInProgress
         return Button {
-            guard store.currentView != tab else { return }
+            let targetTab = (tab == .list && store.currentView == .calendar) ? AppView.list : tab
+            guard store.currentView != targetTab else { return }
             let impact = UIImpactFeedbackGenerator(style: .light)
             impact.impactOccurred()
 
-            if tab == .calendar, store.currentView == .list {
-                store.pendingCalendarScrollOutfitId = store.centeredListOutfitId ?? store.sortedOutfits.first?.id
-            }
-
             store.selectedOutfitId = nil
-            store.currentView = tab
+            store.currentView = targetTab
         } label: {
             VStack(spacing: LayoutMetrics.xxxSmall) {
                 ZStack(alignment: .topTrailing) {
@@ -186,7 +492,7 @@ struct RootView: View {
                     if showsUploadActivity {
                         Text("1")
                             .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(Color(red: 0.58, green: 0.28, blue: 0.46))
+                            .foregroundStyle(AppPalette.uploadGlow)
                             .frame(width: 18, height: 18)
                             .background {
                                 LightBlurView(style: .systemThinMaterialLight)
@@ -266,21 +572,6 @@ struct RootView: View {
         }
     }
 
-    private var floatingWaitlistButton: some View {
-        Button {} label: {
-            Text("GET ON THE WAITLIST")
-                .font(.system(size: 11, weight: .medium))
-                .tracking(1.2)
-                .textCase(.uppercase)
-                .lineLimit(1)
-                .fixedSize()
-                .foregroundStyle(AppPalette.textMuted)
-                .padding(.horizontal, 16)
-                .frame(minHeight: LayoutMetrics.touchTarget)
-                .appCapsule()
-        }
-        .buttonStyle(.plain)
-    }
 
     private var floatingFavoritesButton: some View {
         Button {
@@ -357,6 +648,50 @@ struct RootView: View {
         }
     }
 
+    // MARK: - Review Notification Banner
+
+    private var reviewBanner: some View {
+        Button {
+            dismissReviewBanner()
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+            store.currentView = .upload
+        } label: {
+            HStack(spacing: 6) {
+                AppIcon(glyph: .check, size: 12, color: AppPalette.uploadGlow)
+                Text("Your fit is ready")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(AppPalette.uploadGlow)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .appCapsule()
+            .shadow(color: AppPalette.uploadGlow.opacity(0.2), radius: 8, y: 2)
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 54)
+        .scaleEffect(showReviewBanner ? 1 : 0.85)
+    }
+
+    private func presentReviewBanner() {
+        bannerDismissTask?.cancel()
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+            showReviewBanner = true
+        }
+        bannerDismissTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(5))
+            guard !Task.isCancelled else { return }
+            dismissReviewBanner()
+        }
+    }
+
+    private func dismissReviewBanner() {
+        bannerDismissTask?.cancel()
+        withAnimation(.timingCurve(0.4, 0, 0.2, 1, duration: 0.3)) {
+            showReviewBanner = false
+        }
+    }
+
     private var backgroundColor: Color {
         store.currentView == .feed ? AppPalette.groupedBackground : AppPalette.pageBackground
     }
@@ -370,27 +705,31 @@ private struct UploadTabIconView: View {
     var body: some View {
         ZStack {
             if isAnimating {
-                Circle()
-                    .trim(from: 0, to: max(0.06, min(progress, 0.98)))
-                    .stroke(
-                        AppPalette.uploadGlow.opacity(0.96),
-                        style: StrokeStyle(lineWidth: 1.6, lineCap: .round)
-                    )
-                    .frame(width: 28, height: 28)
-                    .rotationEffect(.degrees(-90))
-                    .shadow(color: AppPalette.uploadGlow.opacity(0.55), radius: 5, y: 0)
-                    .overlay {
-                        Circle()
-                            .trim(from: 0, to: max(0.06, min(progress, 0.98)))
-                            .stroke(
-                                AppPalette.uploadGlow.opacity(0.28),
-                                style: StrokeStyle(lineWidth: 5.5, lineCap: .round)
-                            )
-                            .frame(width: 28, height: 28)
-                            .rotationEffect(.degrees(-90))
-                            .blur(radius: 4)
-                    }
-                    .animation(.easeInOut(duration: 1.1), value: progress)
+                ZStack {
+                    // Outer halo — wide soft diffuse glow
+                    Circle()
+                        .trim(from: 0, to: max(0.06, min(progress, 0.98)))
+                        .stroke(AppPalette.uploadGlow.opacity(0.18), style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                        .blur(radius: 5)
+                        .rotationEffect(.degrees(-90))
+
+                    // Mid glow
+                    Circle()
+                        .trim(from: 0, to: max(0.06, min(progress, 0.98)))
+                        .stroke(AppPalette.uploadGlow.opacity(0.35), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                        .blur(radius: 1.5)
+                        .rotationEffect(.degrees(-90))
+
+                    // Soft white core
+                    Circle()
+                        .trim(from: 0, to: max(0.06, min(progress, 0.98)))
+                        .stroke(Color.white.opacity(0.75), style: StrokeStyle(lineWidth: 0.7, lineCap: .round))
+                        .blur(radius: 0.2)
+                        .rotationEffect(.degrees(-90))
+                        .shadow(color: AppPalette.uploadGlow.opacity(0.45), radius: 1.2, y: 0)
+                }
+                .frame(width: 28, height: 28)
+                .animation(.easeInOut(duration: 1.1), value: progress)
             }
 
             AppIcon(

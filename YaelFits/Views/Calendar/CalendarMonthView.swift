@@ -7,7 +7,10 @@ struct CalendarMonthView: View {
     private let activeDayColor = AppPalette.textPrimary
     private let inactiveDayColor = AppPalette.textFaint.opacity(0.48)
 
-    @State private var contentVisible = false
+    // Header fade zone: items fade out when their top edge is within this range of the header bottom
+    private let headerBottom: CGFloat = 68
+    private let fadeZone: CGFloat = 80
+
     @State private var isScrubbing = false
 
     private let columns = [
@@ -18,9 +21,9 @@ struct CalendarMonthView: View {
     var body: some View {
         ScrollViewReader { reader in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 34) {
+                VStack(alignment: .leading, spacing: 34) {
                     ForEach(Array(monthSections.enumerated()), id: \.element.id) { sectionIndex, section in
-                        monthSection(section, sectionIndex: sectionIndex)
+                        monthSection(section, sectionIndex: sectionIndex, globalStaggerBase: sectionIndex * 6)
                     }
 
                     Color.clear
@@ -30,43 +33,52 @@ struct CalendarMonthView: View {
                 .padding(.top, LayoutMetrics.calendarTopInset)
             }
             .scrollDisabled(isScrubbing || store.selectedOutfitId != nil)
+            .onPreferenceChange(CalendarOutfitFramePreferenceKey.self) { frames in
+                store.calendarOutfitFrames = frames
+            }
             .onAppear {
-                contentVisible = false
-                store.selectedOutfitId = nil
-                Task { @MainActor in
-                    await Task.yield()
-                    contentVisible = true
-                }
                 scrollToPendingTarget(using: reader, animated: false)
             }
-            .onChange(of: store.currentView) { _, currentView in
-                guard currentView == .calendar else { return }
-                scrollToPendingTarget(using: reader)
-            }
-            .onChange(of: store.pendingCalendarScrollOutfitId) { _, _ in
-                guard store.currentView == .calendar else { return }
-                scrollToPendingTarget(using: reader)
+            .onChange(of: store.pendingCalendarScrollOutfitId) { _, newId in
+                guard newId != nil else { return }
+                scrollToPendingTarget(using: reader, animated: false)
             }
         }
     }
 
-    private func monthSection(_ section: MonthSection, sectionIndex: Int) -> some View {
+    // MARK: - Stagger delay for cinematic transition reveals
+
+    private func transitionStagger(for index: Int) -> Double {
+        Double(index) * 0.04
+    }
+
+    private var isTransitionRevealing: Bool {
+        store.viewTransitionPhase == .targetIn && store.currentView == .calendar
+    }
+
+    // MARK: - Month & Day rendering
+
+    private func monthSection(_ section: MonthSection, sectionIndex: Int, globalStaggerBase: Int) -> some View {
         VStack(alignment: .leading, spacing: 22) {
             Text(section.title)
                 .font(.system(size: 24, weight: .bold))
                 .foregroundStyle(monthTitleColor)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .blurFadeReveal(active: contentVisible, delay: monthDelay(for: sectionIndex))
-                .viewportBlurFade()
+                .headerProximityFade(headerBottom: headerBottom, fadeZone: fadeZone)
+                .calendarTransitionReveal(
+                    phase: store.viewTransitionPhase,
+                    isCalendar: store.currentView == .calendar,
+                    staggerIndex: globalStaggerBase
+                )
 
             LazyVGrid(columns: columns, spacing: 34) {
                 ForEach(Array(section.days.enumerated()), id: \.element.id) { dayIndex, day in
                     calendarDay(day)
-                        .blurFadeReveal(
-                            active: contentVisible,
-                            delay: monthDelay(for: sectionIndex) + Double(dayIndex) * 0.012
+                        .calendarTransitionReveal(
+                            phase: store.viewTransitionPhase,
+                            isCalendar: store.currentView == .calendar,
+                            staggerIndex: globalStaggerBase + 1 + dayIndex
                         )
-                        .viewportBlurFade()
                 }
             }
         }
@@ -97,12 +109,22 @@ struct CalendarMonthView: View {
                         }
                     )
                     .frame(maxWidth: .infinity)
+                    .opacity(store.heroAnchorOutfitId == outfit.id ? 0 : 1)
+                    .background {
+                        GeometryReader { proxy in
+                            Color.clear.preference(
+                                key: CalendarOutfitFramePreferenceKey.self,
+                                value: [outfit.id: proxy.frame(in: .global)]
+                            )
+                        }
+                    }
                 } else {
                     Color.clear
                         .frame(height: 156)
                 }
             }
         }
+        .headerProximityFade(headerBottom: headerBottom, fadeZone: fadeZone)
         .id(day.scrollID)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -134,18 +156,13 @@ struct CalendarMonthView: View {
         }
     }
 
-    private func monthDelay(for sectionIndex: Int) -> Double {
-        Double(sectionIndex) * 0.04
-    }
-
     private func scrollToPendingTarget(using reader: ScrollViewProxy, animated: Bool = true) {
         guard let targetOutfitId = store.pendingCalendarScrollOutfitId else { return }
 
         Task { @MainActor in
+            // Yield to let VStack render all content
             await Task.yield()
             await Task.yield()
-
-            guard store.currentView == .calendar else { return }
 
             if animated {
                 withAnimation(.timingCurve(0.16, 1, 0.3, 1, duration: 0.55)) {
@@ -155,6 +172,7 @@ struct CalendarMonthView: View {
                 reader.scrollTo(targetOutfitId, anchor: .center)
             }
 
+            try? await Task.sleep(for: .milliseconds(100))
             store.pendingCalendarScrollOutfitId = nil
         }
     }
@@ -268,6 +286,15 @@ struct CalendarDetailSheet: View {
     @Environment(OutfitStore.self) private var store
     @State private var showDeleteConfirmation = false
     @State private var selectedLinkedProduct: Product?
+    @State private var isPublished: Bool?
+    @State private var isTogglingPublish = false
+    @State private var showShareComposer = false
+    @State private var showAddProduct = false
+    @State private var isEditing = false
+    @State private var editableTags: [String] = []
+    @State private var showingTagInput = false
+    @State private var newTagText = ""
+    @State private var keyboardHeight: CGFloat = 0
 
     var body: some View {
         ZStack {
@@ -279,18 +306,20 @@ struct CalendarDetailSheet: View {
 
             GeometryReader { geometry in
                 let width = min(max(geometry.size.width - (LayoutMetrics.screenPadding * 2), 0), 600)
-                let cardHeight = min(max(geometry.size.height - 194, 0), 620)
-                let stageHeight = min(max(cardHeight * 0.58, 300), 420)
+                // Stage height is fixed — card grows dynamically to fit all content
+                let stageHeight: CGFloat = min(geometry.size.height * 0.34, 320)
 
                 VStack(spacing: 0) {
                     header
                     heroStage(stageHeight: stageHeight)
+                        .scaleEffect(keyboardHeight > 0 ? 0.78 : 1.0, anchor: .top)
+                        .padding(.bottom, keyboardHeight > 0 ? -66 : 0)
                     footer
                 }
                 .padding(.horizontal, LayoutMetrics.medium)
                 .padding(.top, LayoutMetrics.medium)
-                .padding(.bottom, LayoutMetrics.small)
-                .frame(width: width, height: cardHeight, alignment: .top)
+                .padding(.bottom, LayoutMetrics.medium)
+                .frame(width: width)  // height is automatic — card scales with content
                 .background {
                     LightBlurView(style: .systemThinMaterialLight)
                         .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
@@ -306,6 +335,7 @@ struct CalendarDetailSheet: View {
                 .shadow(color: AppPalette.cardShadow.opacity(0.72), radius: 26, y: 12)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .padding(.top, 76)
+                .offset(y: -keyboardHeight * 0.5)
                 .scaleEffect(isVisible ? 1 : 0.985)
                 .offset(y: isVisible ? 0 : 22)
                 .opacity(isVisible ? 1 : 0)
@@ -314,6 +344,22 @@ struct CalendarDetailSheet: View {
         }
         .sheet(item: $selectedLinkedProduct) { product in
             LinkedProductOutfitsSheet(product: product, sourceOutfit: outfit)
+        }
+        .task {
+            let published = await OutfitService.isPublished(outfitId: outfit.id)
+            await MainActor.run { isPublished = published }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { n in
+            if let frame = n.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
+                withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+                    keyboardHeight = frame.height
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+                keyboardHeight = 0
+            }
         }
     }
 
@@ -364,36 +410,244 @@ struct CalendarDetailSheet: View {
     }
 
     private var footer: some View {
-        VStack(spacing: 18) {
-            FlowLayout(spacing: 8) {
-                if let tags = outfit.tags, !tags.isEmpty {
-                    ForEach(tags, id: \.self) { tag in
-                        TagPill(tag: tag)
+        VStack(spacing: 14) {
+            // Header row: date + edit toggle
+            HStack {
+                Text(outfit.numericDateLabel(useFahrenheit: useFahrenheit))
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .tracking(1.8)
+                    .foregroundStyle(AppPalette.textFaint)
+                Spacer(minLength: 0)
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        if isEditing { saveCalendarEdits() }
+                        else { editableTags = outfit.tags ?? [] }
+                        isEditing.toggle()
                     }
+                } label: {
+                    Text(isEditing ? "DONE" : "EDIT")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .tracking(1.5)
+                        .foregroundStyle(isEditing ? AppPalette.textSecondary : AppPalette.textFaint)
                 }
-
-                if showsDeleteAction {
-                    deleteButton
-                }
-
-                likeButton
+                .buttonStyle(.plain)
             }
-            .frame(maxWidth: .infinity)
 
-            if let products = outfit.products, !products.isEmpty {
+            // Products
+            if isEditing {
+                calEditableProductRow
+            } else if let products = outfit.products, !products.isEmpty {
                 productRow(products)
             } else {
                 emptyProductRow
             }
+
+            // Tags
+            if isEditing {
+                calEditableTagRow
+            } else if let tags = outfit.tags, !tags.isEmpty {
+                FlowLayout(spacing: 8) {
+                    ForEach(tags, id: \.self) { tag in TagPill(tag: tag) }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                calEmptyTagRow
+            }
+
+            // Action bar
+            HStack(spacing: 8) {
+                publishButton
+                Spacer(minLength: 0)
+                deleteButton
+                likeButton
+                calShareButton
+            }
         }
         .padding(.top, 10)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, alignment: .top)
         .alert("Delete outfit?", isPresented: $showDeleteConfirmation) {
-            Button("Delete", role: .destructive, action: onDelete)
+            Button("Delete", role: .destructive) {
+                store.deleteOutfit(outfit)
+                onDelete()
+            }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This removes the outfit and its saved frames from your archive.")
+            Text("This removes the outfit from your archive. Products and tags on other outfits are not affected.")
         }
+        .fullScreenCover(isPresented: $showShareComposer) {
+            ShareCardComposer(outfit: outfit).environment(store)
+        }
+        .sheet(isPresented: $showAddProduct) {
+            if let userId = store.userId {
+                AddProductSheet(userId: userId, outfitId: outfit.id) { product in
+                    let p = Product(name: product.name, price: nil, image: product.imageURL,
+                                    productId: product.id, tags: product.tags)
+                    store.updateOutfit(outfit.id, caption: outfit.caption,
+                                       products: (outfit.products ?? []) + [p])
+                }
+            }
+        }
+    }
+
+    private var calEmptyTagRow: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            withAnimation { editableTags = outfit.tags ?? []; isEditing = true }
+        } label: {
+            HStack(spacing: 6) {
+                AppIcon(glyph: .plusCircle, size: 14, color: AppPalette.textFaint)
+                Text("Add a tag")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(AppPalette.textMuted)
+            }
+            .frame(height: 36)
+            .padding(.horizontal, LayoutMetrics.xSmall)
+            .appCapsule(shadowRadius: 0, shadowY: 0)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var calEditableProductRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    showAddProduct = true
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 24))
+                        .foregroundStyle(AppPalette.textFaint)
+                }
+                .buttonStyle(.plain)
+
+                ForEach(outfit.products ?? [], id: \.id) { product in
+                    ZStack(alignment: .topTrailing) {
+                        VStack(spacing: 4) {
+                            calendarProductImage(product)
+                            Text(product.displayName)
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundStyle(AppPalette.textMuted)
+                                .lineLimit(1)
+                                .frame(width: 64)
+                        }
+                        Button {
+                            store.removeProduct(product, fromOutfitId: outfit.id)
+                            Task { try? await ProductLibraryService.removeProductFromOutfit(outfitId: outfit.id, product: product) }
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 18))
+                                .foregroundStyle(.white)
+                                .background(Color(red: 0.85, green: 0.25, blue: 0.25).clipShape(Circle()))
+                        }
+                        .buttonStyle(.plain)
+                        .offset(x: 6, y: -6)
+                    }
+                }
+            }
+            .padding(.horizontal, 2).padding(.vertical, 8)
+        }
+    }
+
+    private var calEditableTagRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    Button {
+                        withAnimation { showingTagInput.toggle() }
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 24))
+                            .foregroundStyle(AppPalette.textFaint)
+                    }
+                    .buttonStyle(.plain)
+
+                    ForEach(editableTags, id: \.self) { tag in
+                        HStack(spacing: 4) {
+                            Text(tag.uppercased())
+                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                .tracking(1.2)
+                                .foregroundStyle(AppPalette.textSecondary)
+                            Button {
+                                editableTags.removeAll { $0 == tag }
+                            } label: {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 8, weight: .bold))
+                                    .foregroundStyle(AppPalette.textFaint)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.horizontal, 10)
+                        .frame(height: 30)
+                        .appCapsule(shadowRadius: 0, shadowY: 0)
+                    }
+                }
+                .padding(.horizontal, 2)
+            }
+
+            if showingTagInput {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 8) {
+                        TextField("", text: $newTagText, prompt:
+                            Text("New tag…").foregroundColor(AppPalette.textSecondary)
+                        )
+                        .font(.system(size: 13))
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                        .onSubmit { commitCalTag() }
+                        if !newTagText.isEmpty {
+                            Button("Add") { commitCalTag() }
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(AppPalette.textSecondary)
+                        }
+                    }
+                    .padding(LayoutMetrics.xSmall)
+                    .background(AppPalette.pageBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(AppPalette.cardBorder, lineWidth: 1))
+
+                    let suggestions = store.allOutfitTags
+                        .filter { $0.lowercased().hasPrefix(newTagText.lowercased()) && !editableTags.contains($0) }
+                        .prefix(5)
+                        .map { $0 }
+                    if !suggestions.isEmpty && !newTagText.isEmpty {
+                        VStack(spacing: 0) {
+                            ForEach(suggestions, id: \.self) { s in
+                                Button {
+                                    newTagText = s; commitCalTag()
+                                } label: {
+                                    Text(s)
+                                        .font(.system(size: 13))
+                                        .foregroundStyle(AppPalette.textPrimary)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(.horizontal, LayoutMetrics.xSmall)
+                                        .padding(.vertical, 9)
+                                }
+                                .buttonStyle(.plain)
+                                if s != suggestions.last { Divider().opacity(0.5) }
+                            }
+                        }
+                        .background(AppPalette.pageBackground)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .shadow(color: AppPalette.cardShadow, radius: 6, y: 3)
+                    }
+                }
+            }
+        }
+    }
+
+    private func saveCalendarEdits() {
+        showingTagInput = false
+        let tags = editableTags
+        let outfitId = outfit.id
+        store.updateOutfitTags(outfitId: outfitId, tags: tags)
+        Task { try? await ProductLibraryService.updateOutfitTags(outfitId: outfitId, tags: tags) }
+    }
+
+    private func commitCalTag() {
+        let t = newTagText.trimmingCharacters(in: .whitespaces)
+        guard !t.isEmpty, !editableTags.contains(t) else { return }
+        editableTags.append(t); newTagText = ""
     }
 
     private var likeButton: some View {
@@ -408,6 +662,59 @@ struct CalendarDetailSheet: View {
                 .appCircle(shadowRadius: 0, shadowY: 0)
         }
         .buttonStyle(.plain)
+    }
+
+    private var calShareButton: some View {
+        Button {
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+            showShareComposer = true
+        } label: {
+            AppIcon(glyph: .share, size: 14, color: AppPalette.iconPrimary)
+                .frame(width: 36, height: 36)
+                .appCircle(shadowRadius: 0, shadowY: 0)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var publishButton: some View {
+        Button {
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+            togglePublish()
+        } label: {
+            if isTogglingPublish {
+                ProgressView()
+                    .tint(AppPalette.textMuted)
+                    .frame(height: 36)
+                    .padding(.horizontal, 12)
+                    .appCapsule(shadowRadius: 0, shadowY: 0)
+            } else {
+                Text(isPublished == true ? "UNPUBLISH" : "PUBLISH TO FEED")
+                    .font(.system(size: 10, weight: .semibold))
+                    .tracking(1)
+                    .foregroundStyle(isPublished == true ? AppPalette.textMuted : AppPalette.textPrimary)
+                    .padding(.horizontal, 14)
+                    .frame(height: 36)
+                    .appCapsule(shadowRadius: 0, shadowY: 0)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(isTogglingPublish || isPublished == nil)
+    }
+
+    private func togglePublish() {
+        let newValue = !(isPublished ?? false)
+        isTogglingPublish = true
+        isPublished = newValue
+        Task {
+            do {
+                try await OutfitService.setPublished(newValue, outfitId: outfit.id)
+            } catch {
+                await MainActor.run { isPublished = !newValue }
+            }
+            await MainActor.run { isTogglingPublish = false }
+        }
     }
 
     private var deleteButton: some View {
@@ -446,10 +753,14 @@ struct CalendarDetailSheet: View {
     }
 
     private var emptyProductRow: some View {
-        HStack {
-            EmptyProductCard()
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            showAddProduct = true
+        } label: {
+            HStack { EmptyProductCard() }
+                .frame(maxWidth: .infinity, alignment: .center)
         }
-        .frame(maxWidth: .infinity, alignment: .center)
+        .buttonStyle(.plain)
     }
 
     private func productCell(_ product: Product) -> some View {
@@ -473,21 +784,24 @@ struct CalendarDetailSheet: View {
         .buttonStyle(.plain)
     }
 
+    private func hasLinkedOutfits(for product: Product) -> Bool {
+        store.sortedOutfits.contains { linkedOutfit in
+            linkedOutfit.id != outfit.id &&
+            (linkedOutfit.products ?? []).contains(where: { $0.id == product.id })
+        }
+    }
+
     private func calendarProductImage(_ product: Product) -> some View {
         Group {
             if let imageURL = product.resolvedImageURL {
                 AsyncImage(url: imageURL, transaction: Transaction(animation: .easeOut(duration: 0.2))) { phase in
                     switch phase {
                     case let .success(image):
-                        image
-                            .resizable()
-                            .scaledToFit()
-                            .opacity(0.94)
+                        image.resizable().scaledToFit()
                     case .failure:
                         placeholderProductImage
                     case .empty:
-                        ProgressView()
-                            .tint(AppPalette.textPrimary)
+                        ProgressView().tint(AppPalette.textMuted)
                     @unknown default:
                         placeholderProductImage
                     }
@@ -496,7 +810,7 @@ struct CalendarDetailSheet: View {
                 placeholderProductImage
             }
         }
-        .frame(width: 64, height: 64)
+        .frame(width: 80, height: 80)
     }
 
     private var placeholderProductImage: some View {
@@ -509,12 +823,62 @@ struct CalendarDetailSheet: View {
                     .foregroundStyle(AppPalette.textMuted.opacity(0.9))
             }
     }
+}
 
-    private func hasLinkedOutfits(for product: Product) -> Bool {
-        store.sortedOutfits.contains { linkedOutfit in
-            linkedOutfit.id != outfit.id &&
-            (linkedOutfit.products ?? []).contains(where: { $0.id == product.id })
-        }
+
+// MARK: - Calendar Transition Reveal (staggered per element)
+
+private struct CalendarTransitionRevealModifier: ViewModifier {
+    let phase: ViewTransitionPhase
+    let isCalendar: Bool
+    let staggerIndex: Int
+
+    private var isRevealing: Bool {
+        phase == .targetIn && isCalendar
+    }
+
+    private var isHidden: Bool {
+        phase == .sourceOut && isCalendar
+    }
+
+    private var targetOpacity: Double {
+        if isHidden { return 0 }
+        if phase == .targetIn && isCalendar { return 1 }
+        if phase == .idle { return 1 }
+        return 1
+    }
+
+    private var targetBlur: CGFloat {
+        if isHidden { return 6 }
+        return 0
+    }
+
+    private var staggerDelay: Double {
+        isRevealing ? Double(staggerIndex) * 0.03 : 0
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(targetOpacity)
+            .blur(radius: targetBlur)
+            .animation(
+                .timingCurve(0.16, 1, 0.3, 1, duration: 0.65).delay(staggerDelay),
+                value: phase
+            )
+    }
+}
+
+extension View {
+    func calendarTransitionReveal(phase: ViewTransitionPhase, isCalendar: Bool, staggerIndex: Int) -> some View {
+        modifier(CalendarTransitionRevealModifier(phase: phase, isCalendar: isCalendar, staggerIndex: staggerIndex))
+    }
+}
+
+struct CalendarOutfitFramePreferenceKey: PreferenceKey {
+    static var defaultValue: [String: CGRect] = [:]
+
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, new in new })
     }
 }
 

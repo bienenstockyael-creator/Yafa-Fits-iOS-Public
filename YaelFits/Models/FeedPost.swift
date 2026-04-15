@@ -8,6 +8,9 @@ struct FeedPost: Codable, Identifiable {
     var height: String?
     var size: String?
     var profileImage: String?
+    var avatarUrl: String?
+    var authorId: UUID?
+    var isAuthorPro: Bool?
 
     var profileImageURL: URL? {
         guard let profileImage else { return nil }

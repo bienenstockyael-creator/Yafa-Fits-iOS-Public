@@ -236,6 +236,7 @@ actor VideoFrameSequenceExporter {
             folder: outfitId,
             prefix: "\(outfitId)_",
             frameExt: "webp",
+            remoteBaseURL: nil,
             scale: nil,
             isRotationReversed: false,
             tags: [],

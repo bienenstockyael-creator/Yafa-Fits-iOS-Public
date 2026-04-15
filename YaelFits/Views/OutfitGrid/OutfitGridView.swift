@@ -42,13 +42,6 @@ struct OutfitGridView: View {
         GridItem(.flexible(), spacing: 24, alignment: .top),
     ]
 
-    private var viewportBlurEnabled: Bool {
-        heroTransition == nil
-            && !showCarousel
-            && !carouselBackdropVisible
-            && !carouselChromeVisible
-    }
-
     var body: some View {
         ScrollViewReader { reader in
             GeometryReader { geometry in
@@ -61,11 +54,12 @@ struct OutfitGridView: View {
                             Color.clear
                                 .frame(height: LayoutMetrics.listTopInset)
 
-                            dragHint
-                                .padding(.top, 28)
-                                .padding(.bottom, 34)
-                                .blurFadeReveal(active: contentVisible, delay: 0.06, blurRadius: 10)
-                                .viewportBlurFade(appliesBlur: viewportBlurEnabled)
+                            if !store.sortedOutfits.isEmpty {
+                                dragHint
+                                    .padding(.top, 28)
+                                    .padding(.bottom, 34)
+                                    .blurFadeReveal(active: contentVisible, delay: 0.06, blurRadius: 10)
+                            }
 
                             outfitsGrid
 
@@ -77,6 +71,12 @@ struct OutfitGridView: View {
                     .compositingGroup()
                     .scrollDisabled(isScrubbing || showCarousel)
                     .allowsHitTesting(!showCarousel)
+                    .overlay {
+                        if store.sortedOutfits.isEmpty {
+                            emptyStatePrompt
+                                .blurFadeReveal(active: contentVisible, delay: 0.06, blurRadius: 10)
+                        }
+                    }
 
                     if showCarousel {
                         CarouselView(
@@ -131,6 +131,7 @@ struct OutfitGridView: View {
                 }
                 .onPreferenceChange(ListOutfitFramePreferenceKey.self) { frames in
                     outfitFrames = frames
+                    store.listOutfitFrames = frames
                     updateCenteredOutfit(from: frames, viewportFrame: viewportFrame)
                 }
             }
@@ -164,12 +165,35 @@ struct OutfitGridView: View {
         }
     }
 
+    /// Fixed pattern: [1, 3, 2, 2, 1, 3, 3, 2, 1] — looks random but is stable
+    private static let placeholderPattern = [1, 3, 2, 2, 1, 3, 3, 2, 1]
+
     private var outfitsGrid: some View {
         LazyVGrid(columns: columns, spacing: 42) {
             ForEach(Array(store.sortedOutfits.enumerated()), id: \.element.id) { index, outfit in
                 gridItem(outfit: outfit, index: index)
             }
         }
+    }
+
+    private func placeholderCard(index: Int) -> some View {
+        let imageNumber = Self.placeholderPattern[index % Self.placeholderPattern.count]
+        let resourceName = "placeholder-\(imageNumber)"
+
+        return Group {
+            if let url = Bundle.main.url(forResource: resourceName, withExtension: "webp"),
+               let data = try? Data(contentsOf: url),
+               let uiImage = UIImage(data: data) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+            } else {
+                Color.clear
+                    .aspectRatio(FrameConfig.dimensions.width / FrameConfig.dimensions.height, contentMode: .fit)
+            }
+        }
+        .opacity(0.03)
+        .blurFadeReveal(active: contentVisible, delay: revealDelay(for: index))
     }
 
     private func gridItem(outfit: Outfit, index: Int) -> some View {
@@ -192,15 +216,24 @@ struct OutfitGridView: View {
                     dragHintVisible = false
                 }
             },
-            onFrameChange: { frameIndex in
-                outfitFrameIndices[outfit.id] = frameIndex
+            onFrameChange: { _ in
+                // Intentionally not tracking frame index during rotation —
+                // doing so triggers a grid re-render per frame across all
+                // visible cards, causing jitter when many outfits are visible.
+                // The carousel receives the correct frame via onTap.
             }
         )
         .blurFadeReveal(active: contentVisible, delay: revealDelay(for: index))
-        .viewportBlurFade(appliesBlur: viewportBlurEnabled)
+        .headerProximityFade(headerBottom: 68, fadeZone: 80)
+        .gridTransitionReveal(
+            phase: store.viewTransitionPhase,
+            isList: store.currentView == .list,
+            staggerIndex: index
+        )
         .id(outfit.id)
         .opacity(
-            heroTransition?.outfit.id == outfit.id && revealGridOutfitIdDuringHero != outfit.id
+            (heroTransition?.outfit.id == outfit.id && revealGridOutfitIdDuringHero != outfit.id)
+                || store.heroAnchorOutfitId == outfit.id
                 ? 0.001
                 : 1
         )
@@ -212,6 +245,26 @@ struct OutfitGridView: View {
                 )
             }
         }
+    }
+
+    private var emptyStatePrompt: some View {
+        Button {
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+            store.currentView = .upload
+        } label: {
+            HStack(spacing: 6) {
+                AppIcon(glyph: .plusCircle, size: 14, color: AppPalette.textPrimary)
+                Text("CREATE YOUR FIRST OUTFIT")
+                    .font(.system(size: 12, weight: .semibold))
+                    .tracking(1.5)
+                    .foregroundStyle(AppPalette.textPrimary)
+            }
+            .frame(height: 48)
+            .padding(.horizontal, 28)
+            .appCapsule(shadowRadius: 8, shadowY: 4)
+        }
+        .buttonStyle(.plain)
     }
 
     private var dragHint: some View {
@@ -595,9 +648,6 @@ private struct HeroOutfitImageView: View {
 
         if let initialImage {
             _image = State(initialValue: initialImage)
-        } else if frameIndex == 0,
-                  let uiImage = BundledOutfitResources.previewImage(for: outfit) {
-            _image = State(initialValue: uiImage)
         } else {
             _image = State(initialValue: nil)
         }

@@ -1,6 +1,6 @@
-name: YaelFits
+name: Yafa
 options:
-  bundleIdPrefix: com.yaelfits
+  bundleIdPrefix: com.yafa
   deploymentTarget:
     iOS: "17.0"
   xcodeVersion: "15.0"
@@ -10,8 +10,8 @@ settings:
   base:
     SWIFT_VERSION: "5.9"
     MARKETING_VERSION: "1.0.0"
-    CURRENT_PROJECT_VERSION: "1"
-    DEVELOPMENT_TEAM: ""
+    CURRENT_PROJECT_VERSION: "3"
+    DEVELOPMENT_TEAM: "P5KZPUFLKJ"
 
 packages:
   Lottie:
@@ -20,14 +20,19 @@ packages:
   WebP:
     url: https://github.com/ainame/Swift-WebP.git
     from: 0.5.0
+  Supabase:
+    url: https://github.com/supabase/supabase-swift.git
+    from: 2.0.0
 
 targets:
-  YaelFits:
+  Yafa:
     type: application
     platform: iOS
     dependencies:
       - package: Lottie
       - package: WebP
+      - package: Supabase
+        product: Supabase
     sources:
       - YaelFits
     resources:
@@ -36,13 +41,25 @@ targets:
     info:
       path: YaelFits/Info.plist
       properties:
+        CFBundleDisplayName: "Yafa"
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        UIAppFonts:
+          - PlayfairDisplay-Italic.otf
+          - Inter_28pt-MediumItalic.ttf
+          - Inter_28pt-SemiBold.ttf
         FALAPIKey: "$(FALAPIKey)"
         NSCameraUsageDescription: "Use the camera to capture a full-body mirror selfie for outfit generation."
+        NSUserNotificationsUsageDescription: "Get notified when your interactive fit is ready."
         NSLocationWhenInUseUsageDescription: "Use your location to attach the current weather to uploaded outfits."
         UILaunchScreen: {}
         UIRequiresFullScreen: true
+        UIBackgroundModes:
+          - remote-notification
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+        LSApplicationQueriesSchemes:
+          - instagram-stories
     configFiles:
       Debug: Config/App.xcconfig
       Release: Config/App.xcconfig
@@ -52,3 +69,5 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        PRODUCT_NAME: Yafa
+        CODE_SIGN_ENTITLEMENTS: YaelFits/YaelFits.entitlements

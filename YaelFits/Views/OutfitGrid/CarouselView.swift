@@ -19,7 +19,10 @@ struct CarouselView: View {
     @Environment(OutfitStore.self) private var store
     @State private var dragOffset: CGFloat = 0
     @State private var verticalNudge: CGFloat = 0
+    @State private var verticalDismissOffset: CGFloat = 0
     @State private var isScrubbingCurrentOutfit = false
+    @State private var isDismissing = false
+    @State private var keyboardHeight: CGFloat = 0
 
     private var slideWidth: CGFloat {
         max(220, min(UIScreen.main.bounds.width * 0.78, 320))
@@ -62,6 +65,9 @@ struct CarouselView: View {
                         .allowsHitTesting(showsChrome)
                 }
                 .frame(height: 318)
+                // Scale outfit down slightly when keyboard is open
+                .scaleEffect(keyboardHeight > 0 ? 0.78 : 1.0, anchor: .top)
+                .padding(.bottom, keyboardHeight > 0 ? -66 : 0)
 
                 if let outfit = currentOutfit {
                     CarouselDetailCard(
@@ -79,7 +85,22 @@ struct CarouselView: View {
             }
             .padding(.top, LayoutMetrics.carouselTopInset)
             .padding(.bottom, LayoutMetrics.xLarge)
+            .offset(y: verticalDismissOffset - keyboardHeight)
+            .opacity(isDismissing ? max(0.0, 1.0 - (verticalDismissOffset / 300.0)) : 1.0)
+            .scaleEffect(isDismissing ? max(0.9, 1.0 - (verticalDismissOffset / 1500.0)) : 1.0, anchor: .top)
             .compositingGroup()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { n in
+            if let frame = n.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
+                withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+                    keyboardHeight = frame.height
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+                keyboardHeight = 0
+            }
         }
     }
 
@@ -182,8 +203,20 @@ struct CarouselView: View {
         DragGesture(minimumDistance: 10)
             .onChanged { value in
                 guard !isScrubbingCurrentOutfit else { return }
-                dragOffset = value.translation.width
-                verticalNudge = max(-18, min(18, value.translation.height * 0.16))
+                let horizontal = value.translation.width
+                let vertical = value.translation.height
+
+                // Only enter dismiss mode on a clear downward drag
+                if !isDismissing && vertical > 50 && abs(vertical) > abs(horizontal) * 2.0 {
+                    isDismissing = true
+                }
+
+                if isDismissing {
+                    verticalDismissOffset = max(0, vertical * 0.6)
+                } else {
+                    dragOffset = horizontal
+                    verticalNudge = max(-18, min(18, vertical * 0.16))
+                }
             }
             .onEnded { value in
                 guard !isScrubbingCurrentOutfit else {
@@ -191,6 +224,21 @@ struct CarouselView: View {
                     verticalNudge = 0
                     return
                 }
+
+                if isDismissing {
+                    let velocity = value.predictedEndTranslation.height
+                    if verticalDismissOffset > 80 || velocity > 400 {
+                        let impact = UIImpactFeedbackGenerator(style: .light)
+                        impact.impactOccurred()
+                        onDismiss()
+                    }
+                    withAnimation(.timingCurve(0.32, 0.72, 0, 1, duration: 0.32)) {
+                        verticalDismissOffset = 0
+                        isDismissing = false
+                    }
+                    return
+                }
+
                 let threshold = max(48, step * 0.18)
                 var changed = false
 
@@ -262,9 +310,21 @@ struct CarouselDetailCard: View {
     @Environment(OutfitStore.self) private var store
     @State private var showDeleteConfirmation = false
     @State private var selectedLinkedProduct: Product?
+    @State private var isPublished: Bool?
+    @State private var isLoadingPublishState = false
+    @State private var isTogglingPublish = false
+    @State private var showShareComposer = false
+    @State private var showPublishSheet = false
+    @State private var showAddProduct = false
+    // Edit mode
+    @State private var isEditing = false
+    @State private var editableTags: [String] = []
+    @State private var showingTagInput = false
+    @State private var newTagText = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 14) {
+            // Date + outfit counter + edit toggle
             HStack(alignment: .firstTextBaseline, spacing: LayoutMetrics.small) {
                 Text(outfit.numericDateLabel(useFahrenheit: store.useFahrenheit))
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
@@ -279,39 +339,102 @@ struct CarouselDetailCard: View {
                         .tracking(1.8)
                         .foregroundStyle(AppPalette.textFaint)
                 }
+
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        if isEditing { saveEdits() }
+                        else { enterEditMode() }
+                        isEditing.toggle()
+                    }
+                } label: {
+                    Text(isEditing ? "DONE" : "EDIT")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .tracking(1.5)
+                        .foregroundStyle(isEditing ? AppPalette.textSecondary : AppPalette.textFaint)
+                }
+                .buttonStyle(.plain)
             }
 
-            if let products = outfit.products, !products.isEmpty {
+            // Products
+            if isEditing {
+                editableProductRow
+            } else if let products = outfit.products, !products.isEmpty {
                 productRow(products)
             } else {
                 emptyProductRow
             }
 
-            FlowLayout(spacing: 8) {
-                if let tags = outfit.tags, !tags.isEmpty {
-                    ForEach(tags, id: \.self) { tag in
-                        TagPill(tag: tag)
-                    }
+            // Tags
+            if isEditing {
+                editableTagRow
+            } else if let tags = outfit.tags, !tags.isEmpty {
+                FlowLayout(spacing: 8) {
+                    ForEach(tags, id: \.self) { tag in TagPill(tag: tag) }
                 }
-
-                if store.isLocalOutfit(outfit) {
-                    deleteButton
-                }
-
-                likeButton
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                emptyTagRow
             }
-            .frame(maxWidth: .infinity)
+
+            // Action bar
+            HStack(spacing: 8) {
+                publishButton
+                Spacer(minLength: 0)
+                deleteButton
+                likeButton
+                shareButton
+            }
         }
         .padding(LayoutMetrics.medium)
-        .appCard(cornerRadius: 26)
+        .appCard(cornerRadius: LayoutMetrics.cardCornerRadius)
         .alert("Delete outfit?", isPresented: $showDeleteConfirmation) {
-            Button("Delete", role: .destructive, action: onDelete)
+            Button("Delete", role: .destructive) {
+                store.deleteOutfit(outfit)
+                onDelete()
+            }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This removes the outfit and its saved frames from your archive.")
+            Text("This removes the outfit from your archive. Products and tags on other outfits are not affected.")
         }
         .sheet(item: $selectedLinkedProduct) { product in
             LinkedProductOutfitsSheet(product: product, sourceOutfit: outfit)
+        }
+        .sheet(isPresented: $showPublishSheet) {
+            PublishSheet(outfit: outfit) { caption, products in
+                isPublished = true
+                store.updateOutfit(outfit.id, caption: caption, products: products)
+            }
+        }
+        .sheet(isPresented: $showAddProduct) {
+            if let userId = store.userId {
+                AddProductSheet(userId: userId, outfitId: outfit.id) { product in
+                    let newProduct = Product(
+                        name: product.name,
+                        price: nil,
+                        image: product.imageURL,
+                        productId: product.id,
+                        tags: product.tags
+                    )
+                    store.updateOutfit(outfit.id, caption: outfit.caption,
+                                       products: (outfit.products ?? []) + [newProduct])
+                }
+            }
+        }
+        .fullScreenCover(isPresented: $showShareComposer) {
+            ShareCardComposer(outfit: outfit)
+                .environment(store)
+        }
+        .task(id: outfit.id) {
+            await loadPublishState()
+        }
+    }
+
+    private func loadPublishState() async {
+        isLoadingPublishState = true
+        let published = await OutfitService.isPublished(outfitId: outfit.id)
+        await MainActor.run {
+            isPublished = published
+            isLoadingPublishState = false
         }
     }
 
@@ -340,10 +463,222 @@ struct CarouselDetailCard: View {
     }
 
     private var emptyProductRow: some View {
-        HStack {
-            EmptyProductCard()
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            showAddProduct = true
+        } label: {
+            HStack {
+                EmptyProductCard()
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
         }
+        .buttonStyle(.plain)
+    }
+
+    private var emptyTagRow: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            withAnimation(.easeInOut(duration: 0.2)) {
+                enterEditMode()
+                isEditing = true
+            }
+        } label: {
+            HStack(spacing: 6) {
+                AppIcon(glyph: .plusCircle, size: 14, color: AppPalette.textFaint)
+                Text("Add a tag")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(AppPalette.textMuted)
+            }
+            .frame(height: 36)
+            .padding(.horizontal, LayoutMetrics.xSmall)
+            .appCapsule(shadowRadius: 0, shadowY: 0)
+        }
+        .buttonStyle(.plain)
         .frame(maxWidth: .infinity, alignment: .center)
+    }
+
+    // MARK: - Editable product row
+
+    private var editableProductRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                // + always anchored at left
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    showAddProduct = true
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 24))
+                        .foregroundStyle(AppPalette.textFaint)
+                }
+                .buttonStyle(.plain)
+
+                ForEach(outfit.products ?? [], id: \.id) { product in
+                    ZStack(alignment: .topTrailing) {
+                        VStack(spacing: 4) {
+                            archiveProductImage(product)
+                            Text(product.displayName)
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundStyle(AppPalette.textMuted)
+                                .lineLimit(1)
+                                .frame(width: 64)
+                        }
+
+                        Button {
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            removeProduct(product)
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 18))
+                                .foregroundStyle(.white)
+                                .background(Color(red: 0.85, green: 0.25, blue: 0.25).clipShape(Circle()))
+                        }
+                        .buttonStyle(.plain)
+                        .offset(x: 6, y: -6)
+                    }
+                }
+            }
+            .padding(.horizontal, 2)
+            .padding(.vertical, 8)
+        }
+    }
+
+    // MARK: - Editable tag row
+
+    private var editableTagRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    // + always anchored at left
+                    Button {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        withAnimation { showingTagInput.toggle() }
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 24))
+                            .foregroundStyle(AppPalette.textFaint)
+                    }
+                    .buttonStyle(.plain)
+
+                    ForEach(editableTags, id: \.self) { tag in
+                        HStack(spacing: 4) {
+                            Text(tag.uppercased())
+                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                .tracking(1.2)
+                                .foregroundStyle(AppPalette.textSecondary)
+                            Button {
+                                removeTag(tag)
+                            } label: {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 8, weight: .bold))
+                                    .foregroundStyle(AppPalette.textFaint)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.horizontal, 10)
+                        .frame(height: 30)
+                        .appCapsule(shadowRadius: 0, shadowY: 0)
+                    }
+                }
+                .padding(.horizontal, 2)
+            }
+
+            if showingTagInput {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 8) {
+                        TextField("", text: $newTagText, prompt:
+                            Text("New tag…").foregroundColor(AppPalette.textSecondary)
+                        )
+                        .font(.system(size: 13))
+                        .foregroundStyle(AppPalette.textPrimary)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                        .onSubmit { commitNewTag() }
+                        if !newTagText.isEmpty {
+                            Button("Add") { commitNewTag() }
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(AppPalette.textSecondary)
+                        }
+                    }
+                    .padding(LayoutMetrics.xSmall)
+                    .background(AppPalette.pageBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(AppPalette.cardBorder, lineWidth: 1))
+
+                    // Suggestions dropdown
+                    if !tagSuggestions.isEmpty {
+                        VStack(spacing: 0) {
+                            ForEach(tagSuggestions, id: \.self) { suggestion in
+                                Button {
+                                    newTagText = suggestion
+                                    commitNewTag()
+                                } label: {
+                                    Text(suggestion)
+                                        .font(.system(size: 13))
+                                        .foregroundStyle(AppPalette.textPrimary)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(.horizontal, LayoutMetrics.xSmall)
+                                        .padding(.vertical, 9)
+                                }
+                                .buttonStyle(.plain)
+                                if suggestion != tagSuggestions.last {
+                                    Divider().opacity(0.5)
+                                }
+                            }
+                        }
+                        .background(AppPalette.pageBackground)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .shadow(color: AppPalette.cardShadow, radius: 6, y: 3)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Tag suggestions
+
+    private var tagSuggestions: [String] {
+        let trimmed = newTagText.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !trimmed.isEmpty else { return [] }
+        return store.allOutfitTags
+            .filter { $0.lowercased().hasPrefix(trimmed) && !editableTags.contains($0) }
+            .prefix(5)
+            .map { $0 }
+    }
+
+    // MARK: - Edit mode logic
+
+    private func enterEditMode() {
+        editableTags = outfit.tags ?? []
+    }
+
+    private func saveEdits() {
+        showingTagInput = false
+        guard let userId = store.userId else { return }
+        let tagsToSave = editableTags
+        let outfitId = outfit.id
+        store.updateOutfitTags(outfitId: outfitId, tags: tagsToSave)
+        Task {
+            try? await ProductLibraryService.updateOutfitTags(outfitId: outfitId, tags: tagsToSave)
+        }
+        _ = userId
+    }
+
+    private func removeProduct(_ product: Product) {
+        store.removeProduct(product, fromOutfitId: outfit.id)
+        Task { try? await ProductLibraryService.removeProductFromOutfit(outfitId: outfit.id, product: product) }
+    }
+
+    private func removeTag(_ tag: String) {
+        editableTags.removeAll { $0 == tag }
+    }
+
+    private func commitNewTag() {
+        let trimmed = newTagText.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty, !editableTags.contains(trimmed) else { return }
+        editableTags.append(trimmed)
+        newTagText = ""
     }
 
     private func productCell(_ product: Product) -> some View {
@@ -361,10 +696,17 @@ struct CarouselDetailCard: View {
                     .foregroundStyle(AppPalette.textMuted)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
-                    .frame(width: 88)
+                    .frame(width: 80)
             }
         }
         .buttonStyle(.plain)
+    }
+
+    private func hasLinkedOutfits(for product: Product) -> Bool {
+        store.sortedOutfits.contains { linkedOutfit in
+            linkedOutfit.id != outfit.id &&
+            (linkedOutfit.products ?? []).contains(where: { $0.id == product.id })
+        }
     }
 
     private func archiveProductImage(_ product: Product) -> some View {
@@ -373,15 +715,11 @@ struct CarouselDetailCard: View {
                 AsyncImage(url: imageURL, transaction: Transaction(animation: .easeOut(duration: 0.2))) { phase in
                     switch phase {
                     case let .success(image):
-                        image
-                            .resizable()
-                            .scaledToFit()
-                            .opacity(0.94)
+                        image.resizable().scaledToFit()
                     case .failure:
                         placeholderProductImage
                     case .empty:
-                        ProgressView()
-                            .tint(AppPalette.textPrimary)
+                        ProgressView().tint(AppPalette.textMuted)
                     @unknown default:
                         placeholderProductImage
                     }
@@ -390,7 +728,7 @@ struct CarouselDetailCard: View {
                 placeholderProductImage
             }
         }
-        .frame(width: 64, height: 64)
+        .frame(width: 80, height: 80)
     }
 
     private var placeholderProductImage: some View {
@@ -402,13 +740,6 @@ struct CarouselDetailCard: View {
                     .tracking(0.6)
                     .foregroundStyle(AppPalette.textMuted.opacity(0.9))
             }
-    }
-
-    private func hasLinkedOutfits(for product: Product) -> Bool {
-        store.sortedOutfits.contains { linkedOutfit in
-            linkedOutfit.id != outfit.id &&
-            (linkedOutfit.products ?? []).contains(where: { $0.id == product.id })
-        }
     }
 
     private var likeButton: some View {
@@ -433,11 +764,68 @@ struct CarouselDetailCard: View {
         .buttonStyle(.plain)
     }
 
+    private var publishButton: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            if isPublished == true {
+                // Unpublish directly
+                unpublish()
+            } else {
+                // Open publish sheet for caption + products
+                showPublishSheet = true
+            }
+        } label: {
+            Group {
+                if isLoadingPublishState || isTogglingPublish {
+                    ProgressView()
+                        .tint(AppPalette.textMuted)
+                        .padding(.horizontal, 12)
+                } else {
+                    Text(isPublished == true ? "UNPUBLISH" : "PUBLISH TO FEED")
+                        .font(.system(size: 10, weight: .semibold))
+                        .tracking(1.2)
+                        .foregroundStyle(isPublished == true ? AppPalette.textMuted : AppPalette.textPrimary)
+                        .padding(.horizontal, LayoutMetrics.xSmall)
+                }
+            }
+            .frame(height: 36)
+            .appCapsule(shadowRadius: 0, shadowY: 0)
+        }
+        .buttonStyle(.plain)
+        .disabled(isLoadingPublishState || isTogglingPublish)
+    }
+
+    private func unpublish() {
+        isTogglingPublish = true
+        isPublished = false
+        Task {
+            do {
+                try await OutfitService.setPublished(false, outfitId: outfit.id)
+            } catch {
+                await MainActor.run { isPublished = true }
+            }
+            await MainActor.run { isTogglingPublish = false }
+        }
+    }
+
     private var deleteButton: some View {
         Button {
             showDeleteConfirmation = true
         } label: {
             AppIcon(glyph: .trash, size: 14, color: AppPalette.iconPrimary)
+                .frame(width: 36, height: 36)
+                .appCircle(shadowRadius: 0, shadowY: 0)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var shareButton: some View {
+        Button {
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+            showShareComposer = true
+        } label: {
+            AppIcon(glyph: .share, size: 14, color: AppPalette.iconPrimary)
                 .frame(width: 36, height: 36)
                 .appCircle(shadowRadius: 0, shadowY: 0)
         }

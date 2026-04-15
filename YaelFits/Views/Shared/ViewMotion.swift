@@ -37,6 +37,71 @@ private struct ViewportBlurFadeModifier: ViewModifier {
     }
 }
 
+// MARK: - Header Proximity Fade
+
+private struct HeaderProximityFadeModifier: ViewModifier {
+    let headerBottom: CGFloat
+    let fadeZone: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .visualEffect { effect, proxy in
+                let globalTop = proxy.frame(in: .global).minY
+                let fadeStart = headerBottom + fadeZone
+                let progress = globalTop < fadeStart
+                    ? max(0, min(1, (fadeStart - globalTop) / fadeZone))
+                    : 0
+                return effect
+                    .opacity(1 - Double(progress))
+                    .blur(radius: progress * 6)
+            }
+    }
+}
+
+// MARK: - Grid Transition Reveal
+
+private struct GridTransitionRevealModifier: ViewModifier {
+    let phase: ViewTransitionPhase
+    let isList: Bool
+    let staggerIndex: Int
+
+    private var isRevealing: Bool {
+        phase == .targetIn && isList
+    }
+
+    private var isHiding: Bool {
+        phase == .sourceOut && isList
+    }
+
+    private var targetOpacity: Double {
+        if isHiding { return 0 }
+        return 1
+    }
+
+    private var targetBlur: CGFloat {
+        if isHiding { return 8 }
+        return 0
+    }
+
+    private var staggerDelay: Double {
+        if isRevealing { return Double(staggerIndex) * 0.035 }
+        if isHiding { return Double(staggerIndex) * 0.015 }
+        return 0
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(targetOpacity)
+            .blur(radius: targetBlur)
+            .animation(
+                isRevealing
+                    ? .timingCurve(0.16, 1, 0.3, 1, duration: 0.7).delay(staggerDelay)
+                    : .timingCurve(0.4, 0, 0.2, 1, duration: 0.4).delay(staggerDelay),
+                value: phase
+            )
+    }
+}
+
 extension View {
     func blurFadeReveal(active: Bool, delay: Double = 0, blurRadius: CGFloat = 12) -> some View {
         modifier(BlurFadeRevealModifier(active: active, delay: delay, blurRadius: blurRadius))
@@ -56,5 +121,13 @@ extension View {
                 appliesBlur: appliesBlur
             )
         )
+    }
+
+    func gridTransitionReveal(phase: ViewTransitionPhase, isList: Bool, staggerIndex: Int) -> some View {
+        modifier(GridTransitionRevealModifier(phase: phase, isList: isList, staggerIndex: staggerIndex))
+    }
+
+    func headerProximityFade(headerBottom: CGFloat, fadeZone: CGFloat) -> some View {
+        modifier(HeaderProximityFadeModifier(headerBottom: headerBottom, fadeZone: fadeZone))
     }
 }
