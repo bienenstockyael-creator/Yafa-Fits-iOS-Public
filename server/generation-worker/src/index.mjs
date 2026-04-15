@@ -453,18 +453,66 @@ async function extractAndProcessFrames(videoPath, tmpDir, outfitId, onProgress) 
 
   await onProgress(0.05);
 
-  // Convert each PNG → WebP using Sharp (Sharp can always read PNGs it originated)
+  // Detect subject bounds across sampled frames using Sharp on the RGBA PNGs.
+  // Sharp CAN read these (proven: WebP conversion works). JPEG was the problem, not PNG.
+  let unionMinX = Infinity, unionMinY = Infinity, unionMaxX = -Infinity, unionMaxY = -Infinity;
+  const sampleStep = 8;
+  for (let i = 0; i < rawFiles.length; i += sampleStep) {
+    try {
+      const pngPath = path.join(framesDir, rawFiles[i]);
+      const { data } = await sharp(pngPath).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      for (let y = 0; y < FRAME_HEIGHT; y++) {
+        for (let x = 0; x < FRAME_WIDTH; x++) {
+          const alpha = data[(y * FRAME_WIDTH + x) * 4 + 3];
+          if (alpha > 40) {
+            if (x < unionMinX) unionMinX = x;
+            if (y < unionMinY) unionMinY = y;
+            if (x > unionMaxX) unionMaxX = x;
+            if (y > unionMaxY) unionMaxY = y;
+          }
+        }
+      }
+    } catch (e) { console.warn('bounds sample error frame', i, e.message); }
+  }
+
+  // Compute stable layout: scale so subject fills 92% of frame height, bottom-aligned
+  const TARGET_SUBJECT_H = FRAME_HEIGHT * 0.92;  // 506px
+  const BOTTOM_MARGIN    = FRAME_HEIGHT * 0.02;  // 11px
+  let layoutScale = 1, cropLeft = 0, cropTop = 0;
+
+  if (unionMaxX >= unionMinX) {
+    const personH   = unionMaxY - unionMinY + 1;
+    const personMidX = (unionMinX + unionMaxX) / 2;
+    layoutScale = TARGET_SUBJECT_H / personH;
+
+    cropLeft = personMidX * layoutScale - FRAME_WIDTH / 2;
+    cropTop  = unionMaxY * layoutScale - (FRAME_HEIGHT - BOTTOM_MARGIN);
+    console.log(`Subject ${personH}px tall → scale ${layoutScale.toFixed(3)}, crop (${Math.round(cropLeft)}, ${Math.round(cropTop)})`);
+  } else {
+    console.warn('Could not detect subject bounds — using default scale');
+  }
+
+  // Convert each PNG → WebP with stable layout applied
   const webpPaths = [];
   for (let i = 0; i < Math.min(rawFiles.length, FRAMES_EXTRACT); i++) {
     const pngPath = path.join(framesDir, rawFiles[i]);
     const webpName = `${outfitId}_${String(i).padStart(5, '0')}.webp`;
     const webpPath = path.join(framesDir, webpName);
 
-    await sharp(pngPath)
-      .webp({ quality: WEBP_QUALITY })
-      .toFile(webpPath);
+    const scaledW = Math.max(FRAME_WIDTH,  Math.round(FRAME_WIDTH  * layoutScale));
+    const scaledH = Math.max(FRAME_HEIGHT, Math.round(FRAME_HEIGHT * layoutScale));
+    const left    = Math.max(0, Math.min(Math.round(cropLeft), scaledW - FRAME_WIDTH));
+    const top     = Math.max(0, Math.min(Math.round(cropTop),  scaledH - FRAME_HEIGHT));
 
-    await fs.promises.unlink(pngPath).catch(() => {}); // free disk immediately
+    let pipeline = sharp(pngPath).ensureAlpha();
+    if (layoutScale > 1.05) {
+      pipeline = pipeline
+        .resize(scaledW, scaledH, { kernel: 'lanczos3' })
+        .extract({ left, top, width: FRAME_WIDTH, height: FRAME_HEIGHT });
+    }
+    await pipeline.webp({ quality: WEBP_QUALITY }).toFile(webpPath);
+
+    await fs.promises.unlink(pngPath).catch(() => {});
     webpPaths.push(webpPath);
     if (i % 20 === 0) await onProgress(0.05 + (i / FRAMES_EXTRACT) * 0.6);
   }
