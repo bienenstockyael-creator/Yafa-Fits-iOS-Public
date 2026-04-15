@@ -112,10 +112,9 @@ async function processJob(job) {
 
   try {
     const sourceImageData = await downloadInput(job.source_image_path);
-    const sourceImageDataUri = toDataUri(sourceImageData, "image/jpeg");
-
-    const cutoutPngData = await runFalBria(job.id, sourceImageDataUri);
-    const klingInputPngData = await prepareKlingInputImage(cutoutPngData, workDir);
+    const klingInputPngData = isPreparedKlingInputPath(job.source_image_path)
+      ? sourceImageData
+      : await buildKlingInputFromSource(job.id, sourceImageData, workDir);
     const klingInputDataUri = toDataUri(klingInputPngData, "image/png");
     const videoUrl = await runKling(job.id, klingInputDataUri, job.prompt);
 
@@ -146,6 +145,16 @@ async function processJob(job) {
   } finally {
     await rm(workDir, { recursive: true, force: true });
   }
+}
+
+function isPreparedKlingInputPath(sourceImagePath) {
+  return String(sourceImagePath || "").toLowerCase().endsWith(".png");
+}
+
+async function buildKlingInputFromSource(jobId, sourceImageData, workDir) {
+  const sourceImageDataUri = toDataUri(sourceImageData, "image/jpeg");
+  const cutoutPngData = await runFalBria(jobId, sourceImageDataUri);
+  return prepareKlingInputImage(cutoutPngData, workDir);
 }
 
 async function downloadInput(sourceImagePath) {
@@ -338,8 +347,9 @@ async function prepareKlingInputImage(cutoutPngData, workDir) {
 
 async function uploadGeneratedOutfit(job, framesDir) {
   const outfitId = `outfit-${job.outfit_num}`;
-  const folder = `${job.user_id}/${outfitId}`;
-  const prefix = `${outfitId}_`;
+  const assetVersion = `${outfitId}-${job.id}`;
+  const folder = `${job.user_id}/${assetVersion}`;
+  const prefix = `${assetVersion}_`;
 
   for (let index = 1; index <= FRAME_COUNT; index += 1) {
     const frameName = `outfit-${String(index).padStart(5, "0")}.webp`;
