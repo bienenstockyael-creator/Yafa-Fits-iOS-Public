@@ -419,22 +419,21 @@ async function extractAndProcessFrames(videoPath, tmpDir, outfitId, onProgress) 
   const framesDir = path.join(tmpDir, 'frames');
   await fs.promises.mkdir(framesDir, { recursive: true });
 
-  // Extract FRAMES_EXTRACT evenly-spaced frames in one ffmpeg pass.
-  // Force rgb24 so Sharp can read the PNGs regardless of the video's
-  // internal pixel format (yuv420p, yuv444p, etc.).
+  // Extract FRAMES_EXTRACT evenly-spaced frames as JPEG.
+  // JPEG keeps temp disk usage ~24MB vs ~665MB for rgb24 PNG,
+  // which is critical on Render's tmpfs-backed /tmp.
   const fpsNum = FRAMES_EXTRACT;
   const fpsDen = duration;
   await execFileAsync(FFMPEG, [
     '-i', videoPath,
     '-vf', `fps=${fpsNum}/${fpsDen}`,
     '-vsync', 'vfr',
-    '-pix_fmt', 'rgb24',
-    '-f', 'image2',
-    path.join(framesDir, 'raw_%05d.png'),
+    '-q:v', '2',       // near-lossless JPEG quality
+    path.join(framesDir, 'raw_%05d.jpg'),
   ]);
 
   const rawFiles = (await fs.promises.readdir(framesDir))
-    .filter(f => f.startsWith('raw_') && f.endsWith('.png'))
+    .filter(f => f.startsWith('raw_') && f.endsWith('.jpg'))
     .sort();
 
   console.log(`Extracted ${rawFiles.length} raw frames`);
@@ -445,13 +444,14 @@ async function extractAndProcessFrames(videoPath, tmpDir, outfitId, onProgress) 
   await onProgress(0.05);
   const layout = await buildStableLayout(framesDir, rawFiles);
 
-  // Render each frame to WebP
+  // Render each frame to WebP, deleting the source JPEG after to save disk
   const webpPaths = [];
   for (let i = 0; i < Math.min(rawFiles.length, FRAMES_EXTRACT); i++) {
-    const framePNG = path.join(framesDir, rawFiles[i]);
+    const frameJPG = path.join(framesDir, rawFiles[i]);
     const webpName = `${outfitId}_${String(i).padStart(5, '0')}.webp`;
     const webpPath = path.join(framesDir, webpName);
-    await renderFrame(framePNG, layout, webpPath);
+    await renderFrame(frameJPG, layout, webpPath);
+    await fs.promises.unlink(frameJPG).catch(() => {}); // free disk immediately
     webpPaths.push(webpPath);
     if (i % 10 === 0) await onProgress(0.05 + (i / FRAMES_EXTRACT) * 0.6);
   }
