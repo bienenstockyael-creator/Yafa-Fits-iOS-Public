@@ -424,12 +424,11 @@ async function extractAndProcessFrames(videoPath, tmpDir, outfitId, onProgress) 
   // Green screen color: 0x17EB4F = RGB(23,235,79)
   const vf = [
     `fps=${FRAMES_EXTRACT}/${duration}`,
-    // Expand limited-range YUV (16-235) to full-range RGB (0-255) before any processing.
-    // Without this, colors look faded/washed out in the output frames.
-    `scale=iw:ih:flags=lanczos,format=rgb24`,
-    `colorlevels=rimin=0.0627:gimin=0.0627:bimin=0.0627:rimax=0.9216:gimax=0.9216:bimax=0.9216`,
     // Remove green background
-    `chromakey=color=0x17EB4F:similarity=0.08:blend=0.02`,
+    `chromakey=color=0x17EB4F:similarity=0.10:blend=0.00`,
+    // Spill suppression: clamp the green channel to max(red, blue) in every pixel.
+    // Kills the green tint on edges left behind by green-screen spill in the Kling video.
+    `geq=r='r(X,Y)':g='min(g(X,Y),max(r(X,Y),b(X,Y)))':b='b(X,Y)':a='alpha(X,Y)'`,
     // Scale to fit within 323x550 preserving aspect ratio
     `scale=w=${FRAME_WIDTH}:h=${FRAME_HEIGHT}:force_original_aspect_ratio=decrease`,
     // Pad to exactly 323x550 with transparent background, centered

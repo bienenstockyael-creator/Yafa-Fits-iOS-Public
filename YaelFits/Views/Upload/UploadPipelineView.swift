@@ -28,6 +28,15 @@ struct UploadPipelineView: View {
 
                     if showsPipelineLoader {
                         pipelineLoader
+                        Button {
+                            resetPipeline()
+                        } label: {
+                            Text("Cancel")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(AppPalette.textFaint)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.bottom, LayoutMetrics.small)
                     }
 
                     if let error = job?.error {
