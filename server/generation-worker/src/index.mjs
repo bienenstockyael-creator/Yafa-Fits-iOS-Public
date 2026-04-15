@@ -70,14 +70,30 @@ const apnProvider = new apn.Provider({
   },
   production: process.env.APNS_ENV === 'production',
 });
+apnProvider.on('error', (err) => console.error('APNs provider error:', err));
 const APNS_TOPIC = process.env.APNS_TOPIC || 'com.yafa.Yafa';
 
 // ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
+process.on('uncaughtException',  (err) => console.error('Uncaught exception:', err));
+process.on('unhandledRejection', (reason) => console.error('Unhandled rejection:', reason));
+
 console.log('Yafa generation worker starting…');
-await resetStalledJobs();
-await pollLoop();
+console.log('  SUPABASE_URL:', SUPABASE_URL ? 'set' : 'MISSING');
+console.log('  SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'set' : 'MISSING');
+console.log('  FAL_API_KEY:', FAL_API_KEY ? 'set' : 'MISSING');
+console.log('  APNS_KEY_ID:', process.env.APNS_KEY_ID || 'MISSING');
+console.log('  APNS_ENV:', process.env.APNS_ENV || 'MISSING');
+console.log('  FFMPEG:', FFMPEG);
+
+try {
+  await resetStalledJobs();
+  await pollLoop();
+} catch (err) {
+  console.error('Fatal error in main loop:', err);
+  process.exit(1);
+}
 
 // ---------------------------------------------------------------------------
 // Poll loop
