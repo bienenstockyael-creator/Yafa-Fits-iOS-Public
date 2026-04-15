@@ -152,7 +152,7 @@ async function runFalBria(jobId, imageUrl) {
     status_detail: "Submitting the source image to fal Bria."
   });
 
-  const submit = await falJsonRequest(`${FAL_QUEUE_BASE_URL}/${FAL_BRIA_MODEL}`, {
+  const submit = await falJsonRequest(`/${FAL_BRIA_MODEL}`, {
     method: "POST",
     body: { image_url: imageUrl }
   });
@@ -184,7 +184,7 @@ async function runKling(jobId, imageUrl, prompt) {
     status_detail: "Submitting the cutout to Kling."
   });
 
-  const submit = await falJsonRequest(`${FAL_QUEUE_BASE_URL}/${FAL_KLING_MODEL}`, {
+  const submit = await falJsonRequest(`/${FAL_KLING_MODEL}`, {
     method: "POST",
     body: {
       prompt,
