@@ -393,13 +393,16 @@ async function extractAndProcessFrames(videoPath, tmpDir, outfitId, onProgress) 
   const framesDir = path.join(tmpDir, 'frames');
   await fs.promises.mkdir(framesDir, { recursive: true });
 
-  // Extract FRAMES_EXTRACT evenly-spaced frames in one ffmpeg pass
+  // Extract FRAMES_EXTRACT evenly-spaced frames in one ffmpeg pass.
+  // Force rgb24 so Sharp can read the PNGs regardless of the video's
+  // internal pixel format (yuv420p, yuv444p, etc.).
   const fpsNum = FRAMES_EXTRACT;
   const fpsDen = duration;
   await execFileAsync(FFMPEG, [
     '-i', videoPath,
     '-vf', `fps=${fpsNum}/${fpsDen}`,
     '-vsync', 'vfr',
+    '-pix_fmt', 'rgb24',
     '-f', 'image2',
     path.join(framesDir, 'raw_%05d.png'),
   ]);
@@ -408,6 +411,7 @@ async function extractAndProcessFrames(videoPath, tmpDir, outfitId, onProgress) 
     .filter(f => f.startsWith('raw_') && f.endsWith('.png'))
     .sort();
 
+  console.log(`Extracted ${rawFiles.length} raw frames`);
   if (rawFiles.length === 0) throw new Error('ffmpeg extracted no frames');
 
   // Compute stable layout from union of all frame bounds
