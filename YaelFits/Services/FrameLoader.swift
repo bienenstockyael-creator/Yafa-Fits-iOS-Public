@@ -80,22 +80,19 @@ actor FrameLoader {
         if let pending = pendingTasks[cacheKey as String] { return await pending.value }
 
         let task = Task<UIImage?, Never> {
-            // Local storage — user-generated outfits stored on device
+            // Local storage — user-generated outfits saved to device Documents
             if index == 0,
-               outfit.resolvedRemoteBaseURL == nil,
                let preview = LocalOutfitStore.shared.previewImage(for: outfit) {
                 cache.setObject(preview, forKey: cacheKey)
                 return preview
             }
 
-            if outfit.resolvedRemoteBaseURL == nil {
-                let localURL = LocalOutfitStore.shared.frameURL(for: outfit, index: index)
-                if FileManager.default.fileExists(atPath: localURL.path),
-                   let data = try? Data(contentsOf: localURL),
-                   let image = UIImage(data: data) {
-                    cache.setObject(image, forKey: cacheKey, cost: data.count)
-                    return image
-                }
+            let localURL = LocalOutfitStore.shared.frameURL(for: outfit, index: index)
+            if FileManager.default.fileExists(atPath: localURL.path),
+               let data = try? Data(contentsOf: localURL),
+               let image = UIImage(data: data) {
+                cache.setObject(image, forKey: cacheKey, cost: data.count)
+                return image
             }
 
             // Bundled thumbnail — small webp files in app bundle (frame 0 only)
