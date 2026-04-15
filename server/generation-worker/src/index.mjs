@@ -164,11 +164,14 @@ async function processJob(job) {
 
     // 2. FAL Bria background removal
     await updateJob(job.id, { stage: 'removing_background', status_title: 'Removing background', status_detail: 'Running FAL Bria background removal.' });
+    console.log(`Job ${job.id}: source image ${sourceBuffer.length} bytes`);
     const transparentPNG = await falBriaRemoveBackground(sourceBuffer);
+    console.log(`Job ${job.id}: bria result ${transparentPNG.length} bytes, first bytes: ${transparentPNG.slice(0,4).toString('hex')}`);
 
     // 3. Green-screen composite for Kling
     await updateJob(job.id, { status_title: 'Preparing canvas', status_detail: 'Compositing onto green-screen canvas.' });
     const greenScreenPNG = await composeForKling(transparentPNG);
+    console.log(`Job ${job.id}: green screen ${greenScreenPNG.length} bytes`);
 
     // 4. FAL Kling video generation
     await updateJob(job.id, { stage: 'creating_interactive_fit', status_title: 'Submitting to Kling 2.5', status_detail: 'Sending green-screen to Kling for a 10-second orbit.' });
@@ -244,10 +247,15 @@ async function falBriaRemoveBackground(imageBuffer) {
 
   const submitRes = await falPost(FAL_BRIA_URL, { image_url: dataURI });
   const transparentBuffer = await falPollForResult(submitRes, async (result) => {
-    const url = result?.image?.url;
-    if (!url) throw new Error('No image URL in Bria result');
+    // Handle different FAL response shapes
+    const url = result?.image?.url ?? result?.images?.[0]?.url ?? result?.output?.image?.url;
+    console.log('Bria result keys:', Object.keys(result || {}));
+    if (!url) throw new Error(`No image URL in Bria result: ${JSON.stringify(result).slice(0, 200)}`);
     const res = await fetch(url);
-    return Buffer.from(await res.arrayBuffer());
+    if (!res.ok) throw new Error(`Bria image fetch failed: ${res.status} ${res.statusText}`);
+    const buf = Buffer.from(await res.arrayBuffer());
+    console.log(`Bria image fetched: ${buf.length} bytes, content-type: ${res.headers.get('content-type')}`);
+    return buf;
   });
 
   return transparentBuffer;
