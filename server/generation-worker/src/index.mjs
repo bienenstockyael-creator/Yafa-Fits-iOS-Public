@@ -5,6 +5,7 @@ import { mkdtemp, mkdir, copyFile, readFile, readdir, rm, writeFile } from "node
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
+import sharp from "sharp";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -32,8 +33,13 @@ const FRAME_WIDTH = 323;
 const FRAME_HEIGHT = 550;
 const COMPOSITION_WIDTH = FRAME_WIDTH * 2;
 const COMPOSITION_HEIGHT = FRAME_HEIGHT * 2;
-const COMPOSITION_SUBJECT_MAX_WIDTH = Math.round(COMPOSITION_WIDTH * 0.70);
-const COMPOSITION_SUBJECT_MAX_HEIGHT = Math.round(COMPOSITION_HEIGHT * 0.88);
+const GREEN_SCREEN_RGB = { r: 23, g: 235, b: 79, alpha: 1 };
+const COMPOSITION_WIDTH_RATIO = 0.70;
+const COMPOSITION_HEIGHT_RATIO = 0.88;
+const COMPOSITION_WIDTH_SAFETY_RATIO = 1.08;
+const COMPOSITION_HEIGHT_SAFETY_RATIO = 1.08;
+const COMPOSITION_BOUNDS_ALPHA_THRESHOLD = 1;
+const COMPOSITION_BOUNDS_EXPANSION_RADIUS = 4;
 const POLL_INTERVAL_MS = 3000;
 const WORKER_IDLE_MS = 4000;
 const FAL_QUEUE_BASE_URL = "https://queue.fal.run";
@@ -262,26 +268,72 @@ async function extractFrames(videoPath, framesDir) {
 }
 
 async function prepareKlingInputImage(cutoutPngData, workDir) {
-  const cutoutPath = path.join(workDir, "cutout.png");
+  const source = sharp(cutoutPngData, { limitInputPixels: false }).ensureAlpha();
+  const { data, info } = await source.raw().toBuffer({ resolveWithObject: true });
+  const subjectBounds = expandedAlphaBounds(
+    data,
+    info.width,
+    info.height,
+    info.channels,
+    COMPOSITION_BOUNDS_ALPHA_THRESHOLD,
+    COMPOSITION_BOUNDS_EXPANSION_RADIUS
+  );
+
+  if (!subjectBounds) {
+    return source.png().toBuffer();
+  }
+
+  const scale = Math.min(
+    (COMPOSITION_WIDTH * COMPOSITION_WIDTH_RATIO) / (subjectBounds.width * COMPOSITION_WIDTH_SAFETY_RATIO),
+    (COMPOSITION_HEIGHT * COMPOSITION_HEIGHT_RATIO) / (subjectBounds.height * COMPOSITION_HEIGHT_SAFETY_RATIO)
+  );
+
+  const scaledWidth = Math.max(1, Math.round(info.width * scale));
+  const scaledHeight = Math.max(1, Math.round(info.height * scale));
+  const resizedBuffer = await source
+    .resize(scaledWidth, scaledHeight, { fit: "fill", kernel: sharp.kernel.lanczos3 })
+    .png()
+    .toBuffer();
+
+  const targetLeft = Math.round((COMPOSITION_WIDTH / 2) - (subjectBounds.midX * scale));
+  const targetTop = Math.round((COMPOSITION_HEIGHT / 2) - (subjectBounds.midY * scale));
+
+  const sourceCropLeft = Math.max(0, -targetLeft);
+  const sourceCropTop = Math.max(0, -targetTop);
+  const outputLeft = Math.max(0, targetLeft);
+  const outputTop = Math.max(0, targetTop);
+  const cropWidth = Math.min(scaledWidth - sourceCropLeft, COMPOSITION_WIDTH - outputLeft);
+  const cropHeight = Math.min(scaledHeight - sourceCropTop, COMPOSITION_HEIGHT - outputTop);
+
+  if (cropWidth <= 0 || cropHeight <= 0) {
+    throw new Error("Prepared Kling subject placement fell outside the composition canvas.");
+  }
+
+  const compositeInput = await sharp(resizedBuffer)
+    .extract({
+      left: sourceCropLeft,
+      top: sourceCropTop,
+      width: cropWidth,
+      height: cropHeight
+    })
+    .png()
+    .toBuffer();
+
   const preparedPath = path.join(workDir, "kling-input.png");
-  await writeFile(cutoutPath, cutoutPngData);
+  const preparedBuffer = await sharp({
+    create: {
+      width: COMPOSITION_WIDTH,
+      height: COMPOSITION_HEIGHT,
+      channels: 4,
+      background: GREEN_SCREEN_RGB
+    }
+  })
+    .composite([{ input: compositeInput, left: outputLeft, top: outputTop }])
+    .png()
+    .toBuffer();
 
-  await runCommand(FFMPEG_BIN, [
-    "-y",
-    "-i",
-    cutoutPath,
-    "-filter_complex",
-    [
-      `color=c=0x17EA4F:s=${COMPOSITION_WIDTH}x${COMPOSITION_HEIGHT}[bg]`,
-      `[0:v]scale=${COMPOSITION_SUBJECT_MAX_WIDTH}:${COMPOSITION_SUBJECT_MAX_HEIGHT}:force_original_aspect_ratio=decrease[fg]`,
-      "[bg][fg]overlay=(W-w)/2:(H-h)/2:format=auto"
-    ].join(";"),
-    "-frames:v",
-    "1",
-    preparedPath
-  ]);
-
-  return readFile(preparedPath);
+  await writeFile(preparedPath, preparedBuffer);
+  return preparedBuffer;
 }
 
 async function uploadGeneratedOutfit(job, framesDir) {
@@ -517,6 +569,47 @@ function normalizePrivateKey(key) {
     return null;
   }
   return key.includes("\\n") ? key.replace(/\\n/g, "\n") : key;
+}
+
+function expandedAlphaBounds(rgbaData, width, height, channels, alphaThreshold, expansionRadius) {
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const alpha = rgbaData[(y * width + x) * channels + 3];
+      if (alpha <= alphaThreshold) {
+        continue;
+      }
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    }
+  }
+
+  if (maxX < minX || maxY < minY) {
+    return null;
+  }
+
+  minX = Math.max(0, minX - expansionRadius);
+  minY = Math.max(0, minY - expansionRadius);
+  maxX = Math.min(width - 1, maxX + expansionRadius);
+  maxY = Math.min(height - 1, maxY + expansionRadius);
+
+  const boundsWidth = maxX - minX + 1;
+  const boundsHeight = maxY - minY + 1;
+
+  return {
+    x: minX,
+    y: minY,
+    width: boundsWidth,
+    height: boundsHeight,
+    midX: minX + boundsWidth / 2,
+    midY: minY + boundsHeight / 2
+  };
 }
 
 function sleep(ms) {
