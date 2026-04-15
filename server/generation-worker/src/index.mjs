@@ -422,15 +422,30 @@ async function extractAndProcessFrames(videoPath, tmpDir, outfitId, onProgress) 
   // Extract FRAMES_EXTRACT evenly-spaced frames as JPEG.
   // JPEG keeps temp disk usage ~24MB vs ~665MB for rgb24 PNG,
   // which is critical on Render's tmpfs-backed /tmp.
+  // Log video codec info before extraction
+  try {
+    const { stdout: probeOut } = await execFileAsync(FFPROBE, [
+      '-v', 'error', '-select_streams', 'v:0',
+      '-show_entries', 'stream=codec_name,width,height,pix_fmt',
+      '-of', 'csv=p=0', videoPath,
+    ]);
+    console.log('Video stream:', probeOut.trim());
+  } catch (e) { console.warn('ffprobe error:', e.message); }
+
   const fpsNum = FRAMES_EXTRACT;
   const fpsDen = duration;
-  await execFileAsync(FFMPEG, [
-    '-i', videoPath,
-    '-vf', `fps=${fpsNum}/${fpsDen}`,
-    '-vsync', 'vfr',
-    '-q:v', '2',       // near-lossless JPEG quality
-    path.join(framesDir, 'raw_%05d.jpg'),
-  ]);
+  try {
+    await execFileAsync(FFMPEG, [
+      '-i', videoPath,
+      '-vf', `fps=${fpsNum}/${fpsDen}`,
+      '-vsync', 'vfr',
+      '-q:v', '2',
+      path.join(framesDir, 'raw_%05d.jpg'),
+    ]);
+  } catch (e) {
+    console.error('ffmpeg extraction error:', e.message);
+    throw e;
+  }
 
   const rawFiles = (await fs.promises.readdir(framesDir))
     .filter(f => f.startsWith('raw_') && f.endsWith('.jpg'))
@@ -438,6 +453,14 @@ async function extractAndProcessFrames(videoPath, tmpDir, outfitId, onProgress) 
 
   console.log(`Extracted ${rawFiles.length} raw frames`);
   if (rawFiles.length === 0) throw new Error('ffmpeg extracted no frames');
+
+  // Log first frame details so we know what Sharp will receive
+  if (rawFiles.length > 0) {
+    const firstPath = path.join(framesDir, rawFiles[0]);
+    const stat = await fs.promises.stat(firstPath);
+    const header = (await fs.promises.readFile(firstPath)).slice(0, 4);
+    console.log(`First frame: ${stat.size} bytes, header: ${header.toString('hex')}`);
+  }
 
   // Compute stable layout from union of all frame bounds
   // (mirrors VideoFrameSequenceExporter.buildLayout)
