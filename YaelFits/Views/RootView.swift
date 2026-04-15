@@ -108,6 +108,10 @@ struct RootView: View {
         .onAppear {
             store.restorePersistedPendingReviewIfNeeded()
             syncLoadingOverlay(isLoading: store.isLoading)
+            Task {
+                print("=== RootView appeared — requesting push permission ===")
+                await PushNotificationCoordinator.shared.requestAuthorization()
+            }
         }
         .onChange(of: store.isLoading) { _, isLoading in
             syncLoadingOverlay(isLoading: isLoading)

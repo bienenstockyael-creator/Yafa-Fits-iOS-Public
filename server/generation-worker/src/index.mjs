@@ -606,11 +606,14 @@ async function falPost(url, body) {
   return res.json();
 }
 
-async function falPollForResult(submitResponse, onComplete, onProgress) {
+async function falPollForResult(submitResponse, onComplete, onProgress, timeoutMs = 10 * 60 * 1000) {
+  const deadline = Date.now() + timeoutMs;
   while (true) {
+    if (Date.now() > deadline) throw new Error(`FAL job timed out after ${timeoutMs/60000} minutes`);
     await sleep(3_000);
     const statusRes = await fetch(submitResponse.status_url, {
       headers: { 'Authorization': `Key ${FAL_API_KEY}` },
+      signal: AbortSignal.timeout(30_000),
     });
     const status = await statusRes.json();
     const s = (status.status || '').toLowerCase();

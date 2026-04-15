@@ -277,6 +277,17 @@ struct UploadPipelineView: View {
                         .frame(minHeight: 36)
                 }
                 .buttonStyle(.plain)
+
+                Button {
+                    resetPipeline()
+                } label: {
+                    Text("Start Fresh")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppPalette.textFaint)
+                        .frame(maxWidth: .infinity)
+                        .frame(minHeight: 30)
+                }
+                .buttonStyle(.plain)
             }
         }
         .padding(LayoutMetrics.small)

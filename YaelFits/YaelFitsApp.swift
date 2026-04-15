@@ -56,7 +56,6 @@ struct YaelFitsApp: App {
             }
             .task {
                 await authManager.initialize()
-                await requestNotificationPermission()
             }
         }
     }
