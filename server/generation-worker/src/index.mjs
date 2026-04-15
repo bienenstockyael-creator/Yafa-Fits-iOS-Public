@@ -534,14 +534,20 @@ async function extractAndProcessFrames(videoPath, tmpDir, outfitId, onProgress) 
 async function uploadFrames(webpPaths, outfitId, storagePrefix, onProgress) {
   for (let i = 0; i < webpPaths.length; i++) {
     const frameData = await fs.promises.readFile(webpPaths[i]);
-    // Path: {job-id}/outfit-N/outfit-N_00000.webp — unique per job to bust app cache
     const remotePath = `${storagePrefix}/${outfitId}/${path.basename(webpPaths[i])}`;
 
-    const { error } = await supabase.storage
-      .from('generated-outfits')
-      .upload(remotePath, frameData, { contentType: 'image/webp', upsert: true });
-
-    if (error) throw new Error(`Upload failed for ${remotePath}: ${error.message}`);
+    // Retry up to 4 times with backoff — Supabase occasionally returns Gateway Timeout
+    let lastError;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      if (attempt > 0) await sleep(1000 * attempt);
+      const { error } = await supabase.storage
+        .from('generated-outfits')
+        .upload(remotePath, frameData, { contentType: 'image/webp', upsert: true });
+      if (!error) { lastError = null; break; }
+      lastError = error;
+      console.warn(`Upload attempt ${attempt + 1} failed for frame ${i}: ${error.message}`);
+    }
+    if (lastError) throw new Error(`Upload failed for ${remotePath}: ${lastError.message}`);
     if (i % 20 === 0) await onProgress(i / webpPaths.length);
   }
   await onProgress(1);
