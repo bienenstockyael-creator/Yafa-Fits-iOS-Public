@@ -302,10 +302,39 @@ async function composeForKling(transparentPNGBuffer) {
     .resize(scaledW, scaledH, { fit: 'fill', kernel: 'lanczos3' })
     .toBuffer();
 
+  // Sharp requires composite input ≤ base canvas dimensions.
+  // Clip the scaled image to only the portion visible on the canvas
+  // (iOS CIImage does this automatically via .cropped(to: canvasRect)).
+  let compositeLeft = left;
+  let compositeTop  = top;
+  let extractLeft   = 0;
+  let extractTop    = 0;
+  let clipW         = scaledW;
+  let clipH         = scaledH;
+
+  if (compositeLeft < 0) { extractLeft = -compositeLeft; clipW += compositeLeft; compositeLeft = 0; }
+  if (compositeTop  < 0) { extractTop  = -compositeTop;  clipH += compositeTop;  compositeTop  = 0; }
+  if (compositeLeft + clipW > CANVAS_WIDTH)  clipW = CANVAS_WIDTH  - compositeLeft;
+  if (compositeTop  + clipH > CANVAS_HEIGHT) clipH = CANVAS_HEIGHT - compositeTop;
+
+  // Nothing visible — return plain green canvas
+  if (clipW <= 0 || clipH <= 0) {
+    return sharp({ create: { width: CANVAS_WIDTH, height: CANVAS_HEIGHT, channels: 3, background: { r: GREEN_R, g: GREEN_G, b: GREEN_B } } })
+      .png().toBuffer();
+  }
+
+  // Extract only the visible slice if needed
+  let visibleSubject = scaledSubject;
+  if (extractLeft > 0 || extractTop > 0 || clipW < scaledW || clipH < scaledH) {
+    visibleSubject = await sharp(scaledSubject)
+      .extract({ left: extractLeft, top: extractTop, width: clipW, height: clipH })
+      .toBuffer();
+  }
+
   return sharp({
     create: { width: CANVAS_WIDTH, height: CANVAS_HEIGHT, channels: 3, background: { r: GREEN_R, g: GREEN_G, b: GREEN_B } },
   })
-    .composite([{ input: scaledSubject, top, left, blend: 'over' }])
+    .composite([{ input: visibleSubject, top: compositeTop, left: compositeLeft, blend: 'over' }])
     .png()
     .toBuffer();
 }
