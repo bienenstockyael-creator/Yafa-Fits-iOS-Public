@@ -424,8 +424,8 @@ async function extractAndProcessFrames(videoPath, tmpDir, outfitId, onProgress) 
   // Green screen color: 0x17EB4F = RGB(23,235,79)
   const vf = [
     `fps=${FRAMES_EXTRACT}/${duration}`,
-    // Remove green background
-    `chromakey=color=0x17EB4F:similarity=0.30:blend=0.08`,
+    // Remove green background — tight threshold to avoid desaturating outfit colors
+    `chromakey=color=0x17EB4F:similarity=0.08:blend=0.02`,
     // Scale to fit within 323x550 preserving aspect ratio
     `scale=w=${FRAME_WIDTH}:h=${FRAME_HEIGHT}:force_original_aspect_ratio=decrease`,
     // Pad to exactly 323x550 with transparent background, centered
