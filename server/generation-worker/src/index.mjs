@@ -1,7 +1,7 @@
 import http2 from "node:http2";
 import { spawn } from "node:child_process";
 import { createSign } from "node:crypto";
-import { mkdtemp, mkdir, copyFile, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, copyFile, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
@@ -233,9 +233,27 @@ async function extractFrames(videoPath, framesDir) {
     outputPattern
   ]);
 
-  const firstFramePath = path.join(framesDir, "outfit-00001.webp");
+  const extractedFrames = (await readdir(framesDir))
+    .filter(name => /^outfit-\d{5}\.webp$/.test(name))
+    .sort();
+
+  if (extractedFrames.length === 0) {
+    throw new Error("ffmpeg did not produce any frame images.");
+  }
+
+  const firstExistingFrame = extractedFrames[0];
+  const lastExistingFrame = extractedFrames[extractedFrames.length - 1];
+
+  for (let index = extractedFrames.length + 1; index <= EXTRACTED_FRAME_COUNT; index += 1) {
+    const targetName = `outfit-${String(index).padStart(5, "0")}.webp`;
+    await copyFile(
+      path.join(framesDir, lastExistingFrame),
+      path.join(framesDir, targetName)
+    );
+  }
+
   const lastFramePath = path.join(framesDir, `outfit-${String(FRAME_COUNT).padStart(5, "0")}.webp`);
-  await copyFile(firstFramePath, lastFramePath);
+  await copyFile(path.join(framesDir, firstExistingFrame), lastFramePath);
 }
 
 async function uploadGeneratedOutfit(job, framesDir) {
