@@ -404,10 +404,10 @@ async function falKlingGenerateVideo(greenScreenPNGBuffer, prompt, outputPath, o
 }
 
 // ---------------------------------------------------------------------------
-// Frame extraction — mirrors VideoFrameSequenceExporter
+// Frame extraction — ffmpeg handles chromakey + scale + pad, Sharp converts to WebP
+// (Avoids the Sharp-reads-JPEG issue: Sharp only touches small RGBA PNGs it wrote itself)
 // ---------------------------------------------------------------------------
 async function extractAndProcessFrames(videoPath, tmpDir, outfitId, onProgress) {
-  // Get actual video duration for accurate frame timing
   let duration = 10;
   try {
     const { stdout } = await execFileAsync(FFPROBE, [
@@ -419,64 +419,52 @@ async function extractAndProcessFrames(videoPath, tmpDir, outfitId, onProgress) 
   const framesDir = path.join(tmpDir, 'frames');
   await fs.promises.mkdir(framesDir, { recursive: true });
 
-  // Extract FRAMES_EXTRACT evenly-spaced frames as JPEG.
-  // JPEG keeps temp disk usage ~24MB vs ~665MB for rgb24 PNG,
-  // which is critical on Render's tmpfs-backed /tmp.
-  // Log video codec info before extraction
-  try {
-    const { stdout: probeOut } = await execFileAsync(FFPROBE, [
-      '-v', 'error', '-select_streams', 'v:0',
-      '-show_entries', 'stream=codec_name,width,height,pix_fmt',
-      '-of', 'csv=p=0', videoPath,
-    ]);
-    console.log('Video stream:', probeOut.trim());
-  } catch (e) { console.warn('ffprobe error:', e.message); }
+  // Single ffmpeg pass: extract frames + chromakey + scale + pad → small RGBA PNGs (323x550)
+  // Each PNG is ~700KB raw but PNG-compressed to ~50-100KB. 241 frames ≈ 15-25MB total.
+  // Green screen color: 0x17EB4F = RGB(23,235,79)
+  const vf = [
+    `fps=${FRAMES_EXTRACT}/${duration}`,
+    // Remove green background
+    `chromakey=color=0x17EB4F:similarity=0.30:blend=0.08`,
+    // Scale to fit within 323x550 preserving aspect ratio
+    `scale=w=${FRAME_WIDTH}:h=${FRAME_HEIGHT}:force_original_aspect_ratio=decrease`,
+    // Pad to exactly 323x550 with transparent background, centered
+    `pad=w=${FRAME_WIDTH}:h=${FRAME_HEIGHT}:x=(ow-iw)/2:y=(oh-ih)/2:color=0x00000000`,
+    // Ensure RGBA output
+    `format=rgba`,
+  ].join(',');
 
-  const fpsNum = FRAMES_EXTRACT;
-  const fpsDen = duration;
-  try {
-    await execFileAsync(FFMPEG, [
-      '-i', videoPath,
-      '-vf', `fps=${fpsNum}/${fpsDen}`,
-      '-vsync', 'vfr',
-      '-q:v', '2',
-      path.join(framesDir, 'raw_%05d.jpg'),
-    ]);
-  } catch (e) {
-    console.error('ffmpeg extraction error:', e.message);
-    throw e;
-  }
+  await execFileAsync(FFMPEG, [
+    '-i', videoPath,
+    '-vf', vf,
+    '-vsync', 'vfr',
+    '-f', 'image2',
+    path.join(framesDir, 'raw_%05d.png'),
+  ]);
 
   const rawFiles = (await fs.promises.readdir(framesDir))
-    .filter(f => f.startsWith('raw_') && f.endsWith('.jpg'))
+    .filter(f => f.startsWith('raw_') && f.endsWith('.png'))
     .sort();
 
-  console.log(`Extracted ${rawFiles.length} raw frames`);
+  console.log(`Extracted ${rawFiles.length} RGBA frames at ${FRAME_WIDTH}x${FRAME_HEIGHT}`);
   if (rawFiles.length === 0) throw new Error('ffmpeg extracted no frames');
 
-  // Log first frame details so we know what Sharp will receive
-  if (rawFiles.length > 0) {
-    const firstPath = path.join(framesDir, rawFiles[0]);
-    const stat = await fs.promises.stat(firstPath);
-    const header = (await fs.promises.readFile(firstPath)).slice(0, 4);
-    console.log(`First frame: ${stat.size} bytes, header: ${header.toString('hex')}`);
-  }
-
-  // Compute stable layout from union of all frame bounds
-  // (mirrors VideoFrameSequenceExporter.buildLayout)
   await onProgress(0.05);
-  const layout = await buildStableLayout(framesDir, rawFiles);
 
-  // Render each frame to WebP, deleting the source JPEG after to save disk
+  // Convert each PNG → WebP using Sharp (Sharp can always read PNGs it originated)
   const webpPaths = [];
   for (let i = 0; i < Math.min(rawFiles.length, FRAMES_EXTRACT); i++) {
-    const frameJPG = path.join(framesDir, rawFiles[i]);
+    const pngPath = path.join(framesDir, rawFiles[i]);
     const webpName = `${outfitId}_${String(i).padStart(5, '0')}.webp`;
     const webpPath = path.join(framesDir, webpName);
-    await renderFrame(frameJPG, layout, webpPath);
-    await fs.promises.unlink(frameJPG).catch(() => {}); // free disk immediately
+
+    await sharp(pngPath)
+      .webp({ quality: WEBP_QUALITY })
+      .toFile(webpPath);
+
+    await fs.promises.unlink(pngPath).catch(() => {}); // free disk immediately
     webpPaths.push(webpPath);
-    if (i % 10 === 0) await onProgress(0.05 + (i / FRAMES_EXTRACT) * 0.6);
+    if (i % 20 === 0) await onProgress(0.05 + (i / FRAMES_EXTRACT) * 0.6);
   }
 
   // Frame 241 = duplicate of frame 0 for seamless loop (matches iOS)
@@ -485,127 +473,6 @@ async function extractAndProcessFrames(videoPath, tmpDir, outfitId, onProgress) 
   webpPaths.push(loopFrame);
 
   return webpPaths;
-}
-
-async function buildStableLayout(framesDir, rawFiles) {
-  // Union of non-transparent bounds across all frames (after chroma key)
-  let unionMinX = Infinity, unionMinY = Infinity, unionMaxX = -Infinity, unionMaxY = -Infinity;
-  let sourceW = 0, sourceH = 0;
-
-  // Sample every 8th frame for speed (sufficient for union bounds)
-  const sampleIndices = rawFiles.reduce((acc, _, i) => { if (i % 8 === 0) acc.push(i); return acc; }, []);
-  // Always include first and last
-  if (!sampleIndices.includes(rawFiles.length - 1)) sampleIndices.push(rawFiles.length - 1);
-
-  for (const idx of sampleIndices) {
-    const framePNG = path.join(framesDir, rawFiles[idx]);
-    const { data: pixels, info } = await sharp(framePNG).raw().toBuffer({ resolveWithObject: true });
-    sourceW = info.width;
-    sourceH = info.height;
-    const channels = info.channels; // 3 for RGB from ffmpeg
-
-    const bounds = findChromaKeyedBounds(pixels, sourceW, sourceH, channels);
-    if (bounds) {
-      unionMinX = Math.min(unionMinX, bounds.minX);
-      unionMinY = Math.min(unionMinY, bounds.minY);
-      unionMaxX = Math.max(unionMaxX, bounds.maxX);
-      unionMaxY = Math.max(unionMaxY, bounds.maxY);
-    }
-  }
-
-  if (unionMaxX < unionMinX) throw new Error('Could not detect subject bounds in any frame');
-
-  const boundsH = unionMaxY - unionMinY + 1;
-  const scale   = TARGET_SUBJECT_HEIGHT / Math.max(boundsH, 1);
-
-  // X: center subject horizontally (same in y-down)
-  const xOffset = FRAME_WIDTH  / 2 - ((unionMinX + unionMaxX) / 2) * scale;
-
-  // Y: bottom-align with small margin
-  // In y-down: want feet (maxY) at frameHeight - bottomMargin
-  const bottomMargin = FRAME_HEIGHT * BOTTOM_MARGIN_RATIO; // 11px
-  const yOffset = (FRAME_HEIGHT - bottomMargin) - unionMaxY * scale;
-
-  return { sourceW, sourceH, scale, xOffset, yOffset };
-}
-
-function findChromaKeyedBounds(pixels, width, height, channels) {
-  let minX = width, minY = height, maxX = -1, maxY = -1;
-  const stride = channels;
-
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const offset = (y * width + x) * stride;
-      const r = pixels[offset] / 255;
-      const g = pixels[offset + 1] / 255;
-      const b = pixels[offset + 2] / 255;
-      const alpha = chromaKeyAlpha(r, g, b);
-      if (alpha * 255 > BOUNDS_ALPHA_THRESHOLD) {
-        if (x < minX) minX = x;
-        if (y < minY) minY = y;
-        if (x > maxX) maxX = x;
-        if (y > maxY) maxY = y;
-      }
-    }
-  }
-  return maxX >= minX ? { minX, minY, maxX, maxY } : null;
-}
-
-async function renderFrame(framePNG, layout, outputWebP) {
-  const { data: rawPixels, info } = await sharp(framePNG).raw().toBuffer({ resolveWithObject: true });
-  const { width, height, channels } = info;
-
-  // Apply chroma key: output RGBA
-  const rgba = Buffer.alloc(width * height * 4);
-  for (let i = 0; i < width * height; i++) {
-    const src = i * channels;
-    const r = rawPixels[src] / 255;
-    const g = rawPixels[src + 1] / 255;
-    const b = rawPixels[src + 2] / 255;
-    const alpha = chromaKeyAlpha(r, g, b);
-
-    const dst = i * 4;
-    rgba[dst]     = rawPixels[src];
-    // Reduce green fringing on semi-transparent edges (matches iOS color cube)
-    rgba[dst + 1] = alpha < 1 ? Math.min(rawPixels[src + 1], Math.round(Math.max(rawPixels[src], rawPixels[src + 2]) * 1.08)) : rawPixels[src + 1];
-    rgba[dst + 2] = rawPixels[src + 2];
-    rgba[dst + 3] = Math.round(alpha * 255);
-  }
-
-  const keyedImg = sharp(rgba, { raw: { width, height, channels: 4 } });
-
-  // Scale and position onto output canvas (323x550, transparent background)
-  const scaledW = Math.max(1, Math.round(width  * layout.scale));
-  const scaledH = Math.max(1, Math.round(height * layout.scale));
-
-  const scaledBuf = await keyedImg
-    .resize(scaledW, scaledH, { fit: 'fill', kernel: 'lanczos3' })
-    .toBuffer();
-
-  const left = Math.round(layout.xOffset);
-  const top  = Math.round(layout.yOffset);
-
-  await sharp({
-    create: { width: FRAME_WIDTH, height: FRAME_HEIGHT, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
-  })
-    .composite([{ input: scaledBuf, top, left, blend: 'over' }])
-    .webp({ quality: WEBP_QUALITY })
-    .toFile(outputWebP);
-}
-
-// Mirrors iOS VideoFrameSequenceExporter.smoothstep + chroma key LUT
-function smoothstep(edge0, edge1, value) {
-  if (edge0 === edge1) return value < edge0 ? 0 : 1;
-  const t = Math.min(Math.max((value - edge0) / (edge1 - edge0), 0), 1);
-  return t * t * (3 - 2 * t);
-}
-
-function chromaKeyAlpha(r, g, b) {
-  const maxRB      = Math.max(r, b);
-  const greenBias  = g - maxRB;
-  const saturation = Math.max(r, g, b) - Math.min(r, g, b);
-  const keyStrength = smoothstep(0.02, 0.24, greenBias) * smoothstep(0.02, 0.18, saturation);
-  return Math.max(0, 1 - keyStrength);
 }
 
 // ---------------------------------------------------------------------------
