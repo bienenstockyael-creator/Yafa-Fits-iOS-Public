@@ -42,6 +42,9 @@ const COMPOSITION_BOUNDS_ALPHA_THRESHOLD = 1;
 const COMPOSITION_BOUNDS_EXPANSION_RADIUS = 4;
 const POLL_INTERVAL_MS = 3000;
 const WORKER_IDLE_MS = 4000;
+const FETCH_TIMEOUT_MS = 30_000;
+const BRIA_TIMEOUT_MS = 5 * 60_000;
+const KLING_TIMEOUT_MS = 15 * 60_000;
 const FAL_QUEUE_BASE_URL = "https://queue.fal.run";
 const FAL_KLING_MODEL = "fal-ai/kling-video/v2.5-turbo/pro/image-to-video";
 const FAL_BRIA_MODEL = "fal-ai/bria/background/remove";
@@ -176,8 +179,13 @@ async function runFalBria(jobId, imageUrl) {
     method: "POST",
     body: { image_url: imageUrl }
   });
+  const startedAt = Date.now();
 
   for (;;) {
+    if (Date.now() - startedAt > BRIA_TIMEOUT_MS) {
+      throw new Error("fal Bria timed out while removing the background.");
+    }
+
     const status = await falJsonRequest(submit.status_url, { method: "GET", absolute: true });
     const normalized = String(status.status || "").toLowerCase();
     if (normalized === "completed") {
@@ -186,12 +194,22 @@ async function runFalBria(jobId, imageUrl) {
       if (!imageUrl) {
         throw new Error("fal Bria finished without an image URL.");
       }
-      return Buffer.from(await (await fetch(imageUrl)).arrayBuffer());
+      return Buffer.from(await (await fetchWithTimeout(imageUrl)).arrayBuffer());
     }
 
     if (normalized === "failed" || normalized === "error") {
       throw new Error(status.error?.message || "fal Bria failed.");
     }
+
+    await updateJob(jobId, {
+      stage: "removing_background",
+      status_title: normalized === "in_progress" || normalized === "running"
+        ? "Removing background"
+        : "Queued for background removal",
+      status_detail: normalized === "in_queue" || normalized === "queued"
+        ? queueDetail("Waiting for fal Bria", status.queue_position)
+        : latestStatusMessage(status, "fal Bria is preparing the cutout.")
+    });
 
     await sleep(POLL_INTERVAL_MS);
   }
@@ -213,8 +231,13 @@ async function runKling(jobId, imageUrl, prompt) {
       duration: "10"
     }
   });
+  const startedAt = Date.now();
 
   for (;;) {
+    if (Date.now() - startedAt > KLING_TIMEOUT_MS) {
+      throw new Error("Kling timed out while generating the interactive fit.");
+    }
+
     const status = await falJsonRequest(submit.status_url, { method: "GET", absolute: true });
     const normalized = String(status.status || "").toLowerCase();
 
@@ -230,6 +253,16 @@ async function runKling(jobId, imageUrl, prompt) {
     if (normalized === "failed" || normalized === "error") {
       throw new Error(status.error?.message || "Kling generation failed.");
     }
+
+    await updateJob(jobId, {
+      stage: "creating_interactive_fit",
+      status_title: normalized === "in_progress" || normalized === "running"
+        ? "Creating your interactive fit"
+        : "Queued for Kling",
+      status_detail: normalized === "in_queue" || normalized === "queued"
+        ? queueDetail("Waiting for Kling", status.queue_position)
+        : latestStatusMessage(status, "Kling is generating the 10-second orbit.")
+    });
 
     await sleep(POLL_INTERVAL_MS);
   }
@@ -514,7 +547,7 @@ function createApnsJwt() {
 
 async function falJsonRequest(url, { method, body = undefined, absolute = false }) {
   const targetUrl = absolute ? url : `${FAL_QUEUE_BASE_URL}${url.startsWith("/") ? "" : "/"}${url}`;
-  const response = await fetch(targetUrl, {
+  const response = await fetchWithTimeout(targetUrl, {
     method,
     headers: {
       Authorization: `Key ${FAL_API_KEY}`,
@@ -532,13 +565,45 @@ async function falJsonRequest(url, { method, body = undefined, absolute = false 
 }
 
 async function downloadFile(url, filePath) {
-  const response = await fetch(url);
+  const response = await fetchWithTimeout(url);
   if (!response.ok) {
     throw new Error(`Failed to download ${url}: ${response.status}`);
   }
 
   const data = Buffer.from(await response.arrayBuffer());
   await writeFile(filePath, data);
+}
+
+async function fetchWithTimeout(url, options = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error(`Request timed out after ${FETCH_TIMEOUT_MS / 1000} seconds.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function queueDetail(prefix, queuePosition) {
+  return Number.isFinite(queuePosition)
+    ? `${prefix}. Queue position: ${queuePosition}.`
+    : `${prefix}.`;
+}
+
+function latestStatusMessage(status, fallback) {
+  const messages = Array.isArray(status.logs)
+    ? status.logs.map(log => log?.message).filter(Boolean)
+    : [];
+  return messages.at(-1) || fallback;
 }
 
 async function runCommand(command, args) {
