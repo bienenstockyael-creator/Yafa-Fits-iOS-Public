@@ -30,10 +30,6 @@ const FRAME_COUNT = 242;
 const EXTRACTED_FRAME_COUNT = FRAME_COUNT - 1;
 const FRAME_WIDTH = 323;
 const FRAME_HEIGHT = 550;
-const COMPOSITION_WIDTH = FRAME_WIDTH * 2;
-const COMPOSITION_HEIGHT = FRAME_HEIGHT * 2;
-const COMPOSITION_SUBJECT_MAX_WIDTH = Math.round(COMPOSITION_WIDTH * 0.70);
-const COMPOSITION_SUBJECT_MAX_HEIGHT = Math.round(COMPOSITION_HEIGHT * 0.88);
 const POLL_INTERVAL_MS = 3000;
 const WORKER_IDLE_MS = 4000;
 const FAL_QUEUE_BASE_URL = "https://queue.fal.run";
@@ -109,9 +105,8 @@ async function processJob(job) {
     const sourceImageDataUri = toDataUri(sourceImageData, "image/jpeg");
 
     const cutoutPngData = await runFalBria(job.id, sourceImageDataUri);
-    const klingInputPngData = await prepareKlingInputImage(cutoutPngData, workDir);
-    const klingInputDataUri = toDataUri(klingInputPngData, "image/png");
-    const videoUrl = await runKling(job.id, klingInputDataUri, job.prompt);
+    const cutoutDataUri = toDataUri(cutoutPngData, "image/png");
+    const videoUrl = await runKling(job.id, cutoutDataUri, job.prompt);
 
     await updateJob(job.id, {
       stage: "compressing",
@@ -259,29 +254,6 @@ async function extractFrames(videoPath, framesDir) {
 
   const lastFramePath = path.join(framesDir, `outfit-${String(FRAME_COUNT).padStart(5, "0")}.webp`);
   await copyFile(path.join(framesDir, firstExistingFrame), lastFramePath);
-}
-
-async function prepareKlingInputImage(cutoutPngData, workDir) {
-  const cutoutPath = path.join(workDir, "cutout.png");
-  const preparedPath = path.join(workDir, "kling-input.png");
-  await writeFile(cutoutPath, cutoutPngData);
-
-  await runCommand(FFMPEG_BIN, [
-    "-y",
-    "-i",
-    cutoutPath,
-    "-filter_complex",
-    [
-      `color=c=0x17EA4F:s=${COMPOSITION_WIDTH}x${COMPOSITION_HEIGHT}[bg]`,
-      `[0:v]scale=${COMPOSITION_SUBJECT_MAX_WIDTH}:${COMPOSITION_SUBJECT_MAX_HEIGHT}:force_original_aspect_ratio=decrease[fg]`,
-      "[bg][fg]overlay=(W-w)/2:(H-h)/2:format=auto"
-    ].join(";"),
-    "-frames:v",
-    "1",
-    preparedPath
-  ]);
-
-  return readFile(preparedPath);
 }
 
 async function uploadGeneratedOutfit(job, framesDir) {
