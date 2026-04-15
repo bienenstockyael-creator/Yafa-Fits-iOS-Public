@@ -9,6 +9,7 @@ final class PushNotificationAppDelegate: NSObject, UIApplicationDelegate {
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
         let tokenString = deviceToken.map { String(format: "%02x", $0) }.joined()
+        print("[APNs] Registered device token: \(tokenString.prefix(20))...")
         Task {
             await PushNotificationCoordinator.shared.didReceiveToken(tokenString)
         }
@@ -18,7 +19,7 @@ final class PushNotificationAppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFailToRegisterForRemoteNotificationsWithError error: Error
     ) {
-        // Silently ignore — push is best-effort
+        print("[APNs] Failed to register: \(error.localizedDescription)")
     }
 }
 
@@ -40,8 +41,23 @@ actor PushNotificationCoordinator {
 
     func requestAuthorization() async {
         let center = UNUserNotificationCenter.current()
-        let granted = (try? await center.requestAuthorization(options: [.alert, .sound, .badge])) ?? false
-        guard granted else { return }
+
+        // Check current status — if previously denied, skip (user must enable in Settings)
+        let settings = await center.notificationSettings()
+        print("[APNs] Current notification status: \(settings.authorizationStatus.rawValue)")
+
+        switch settings.authorizationStatus {
+        case .notDetermined:
+            let granted = (try? await center.requestAuthorization(options: [.alert, .sound, .badge])) ?? false
+            print("[APNs] Permission granted: \(granted)")
+            guard granted else { return }
+        case .authorized, .provisional, .ephemeral:
+            break // already granted
+        default:
+            print("[APNs] Permission denied — user must enable in Settings")
+            return
+        }
+
         await MainActor.run {
             UIApplication.shared.registerForRemoteNotifications()
         }
@@ -66,16 +82,28 @@ actor PushNotificationCoordinator {
     }
 
     private func upsertToken(_ token: String, userId: UUID) async {
+        // Use development for debug builds, production for release/TestFlight
+        #if DEBUG
+        let environment = "development"
+        #else
+        let environment = "production"
+        #endif
+
         let row = TokenRow(
             token: token,
             user_id: userId.uuidString,
             platform: "ios",
-            environment: "development",
+            environment: environment,
             bundle_identifier: Bundle.main.bundleIdentifier ?? "com.yafa.Yafa"
         )
-        _ = try? await supabase
-            .from("device_push_tokens")
-            .upsert(row)
-            .execute()
+        do {
+            try await supabase
+                .from("device_push_tokens")
+                .upsert(row)
+                .execute()
+            print("[APNs] Token upserted for env: \(environment)")
+        } catch {
+            print("[APNs] Token upsert failed: \(error)")
+        }
     }
 }

@@ -62,15 +62,17 @@ const supabase = createClient(SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KE
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
-const apnProvider = new apn.Provider({
-  token: {
-    key:    process.env.APNS_PRIVATE_KEY,
-    keyId:  process.env.APNS_KEY_ID,
-    teamId: process.env.APNS_TEAM_ID,
-  },
-  production: process.env.APNS_ENV === 'production',
-});
-apnProvider.on('error', (err) => console.error('APNs provider error:', err));
+// Two providers: one for development, one for production.
+// Tokens store their environment; we pick the right provider per token.
+const apnTokenConfig = {
+  key:    process.env.APNS_PRIVATE_KEY,
+  keyId:  process.env.APNS_KEY_ID,
+  teamId: process.env.APNS_TEAM_ID,
+};
+const apnProviderDev  = new apn.Provider({ token: apnTokenConfig, production: false });
+const apnProviderProd = new apn.Provider({ token: apnTokenConfig, production: true  });
+apnProviderDev.on('error',  (err) => console.error('APNs dev provider error:', err));
+apnProviderProd.on('error', (err) => console.error('APNs prod provider error:', err));
 const APNS_TOPIC = process.env.APNS_TOPIC || 'com.yafa.Yafa';
 
 // ---------------------------------------------------------------------------
@@ -559,7 +561,7 @@ async function uploadFrames(webpPaths, outfitId, storagePrefix, onProgress) {
 async function sendPushNotification(userId) {
   const { data: tokens } = await supabase
     .from('device_push_tokens')
-    .select('token')
+    .select('token,environment')
     .eq('user_id', userId)
     .eq('platform', 'ios');
 
@@ -568,7 +570,7 @@ async function sendPushNotification(userId) {
     return;
   }
 
-  for (const { token } of tokens) {
+  for (const { token, environment } of tokens) {
     const note = new apn.Notification();
     note.expiry   = Math.floor(Date.now() / 1000) + 3600;
     note.badge    = 1;
@@ -577,11 +579,13 @@ async function sendPushNotification(userId) {
     note.payload  = { route: 'upload' };
     note.topic    = APNS_TOPIC;
 
-    const result = await apnProvider.send(note, token);
+    const provider = environment === 'production' ? apnProviderProd : apnProviderDev;
+    console.log(`Sending push via ${environment} APNs to ${token.slice(0,20)}...`);
+    const result = await provider.send(note, token);
     if (result.failed.length > 0) {
-      console.warn(`APNs failed for token ${token}:`, result.failed[0].response);
+      console.warn(`APNs failed:`, result.failed[0].response);
     } else {
-      console.log(`Push sent to ${token}`);
+      console.log(`Push sent successfully`);
     }
   }
 }
