@@ -424,13 +424,16 @@ async function extractAndProcessFrames(videoPath, tmpDir, outfitId, onProgress) 
   // Green screen color: 0x17EB4F = RGB(23,235,79)
   const vf = [
     `fps=${FRAMES_EXTRACT}/${duration}`,
-    // Remove green background — tight threshold to avoid desaturating outfit colors
+    // Expand limited-range YUV (16-235) to full-range RGB (0-255) before any processing.
+    // Without this, colors look faded/washed out in the output frames.
+    `scale=iw:ih:flags=lanczos,format=rgb24`,
+    `colorlevels=rimin=0.0627:gimin=0.0627:bimin=0.0627:rimax=0.9216:gimax=0.9216:bimax=0.9216`,
+    // Remove green background
     `chromakey=color=0x17EB4F:similarity=0.08:blend=0.02`,
     // Scale to fit within 323x550 preserving aspect ratio
     `scale=w=${FRAME_WIDTH}:h=${FRAME_HEIGHT}:force_original_aspect_ratio=decrease`,
     // Pad to exactly 323x550 with transparent background, centered
     `pad=w=${FRAME_WIDTH}:h=${FRAME_HEIGHT}:x=(ow-iw)/2:y=(oh-ih)/2:color=0x00000000`,
-    // Ensure RGBA output
     `format=rgba`,
   ].join(',');
 
