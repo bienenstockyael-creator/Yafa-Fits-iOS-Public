@@ -209,13 +209,16 @@ async function processJob(job) {
     // 5. Extract & process frames
     await updateJob(job.id, { stage: 'compressing', status_title: 'Extracting frames', status_detail: 'Building 242-frame interactive sequence.', progress: 0 });
     const outfitId = `outfit-${job.outfit_num}`;
+    // Use job ID as a storage prefix so each attempt gets a unique URL,
+    // preventing the app's DiskFrameCache from serving stale frames on retry.
+    const storagePrefix = job.id;
     const webpPaths = await extractAndProcessFrames(videoPath, tmpDir, outfitId, async (progress) => {
       await updateJob(job.id, { progress, status_detail: `Processed ${Math.round(progress * FRAMES_TOTAL)} of ${FRAMES_TOTAL} frames.` });
     });
 
-    // 6. Upload frames to Supabase Storage
+    // 6. Upload frames to Supabase Storage under {job-id}/outfit-N/
     await updateJob(job.id, { status_title: 'Uploading', status_detail: `Saving ${FRAMES_TOTAL} frames to cloud storage.` });
-    await uploadFrames(webpPaths, outfitId, async (progress) => {
+    await uploadFrames(webpPaths, outfitId, storagePrefix, async (progress) => {
       await updateJob(job.id, { progress: 0.7 + progress * 0.3 });
     });
 
@@ -229,7 +232,7 @@ async function processJob(job) {
       folder: outfitId,
       prefix: `${outfitId}_`,
       frameExt: 'webp',
-      remoteBaseURL: STORAGE_BASE,
+      remoteBaseURL: `${STORAGE_BASE}${storagePrefix}/`,
       isRotationReversed: false,
       tags: [],
       products: [],
@@ -528,10 +531,11 @@ async function extractAndProcessFrames(videoPath, tmpDir, outfitId, onProgress) 
 // ---------------------------------------------------------------------------
 // Upload frames to Supabase Storage
 // ---------------------------------------------------------------------------
-async function uploadFrames(webpPaths, outfitId, onProgress) {
+async function uploadFrames(webpPaths, outfitId, storagePrefix, onProgress) {
   for (let i = 0; i < webpPaths.length; i++) {
     const frameData = await fs.promises.readFile(webpPaths[i]);
-    const remotePath = `${outfitId}/${path.basename(webpPaths[i])}`;
+    // Path: {job-id}/outfit-N/outfit-N_00000.webp — unique per job to bust app cache
+    const remotePath = `${storagePrefix}/${outfitId}/${path.basename(webpPaths[i])}`;
 
     const { error } = await supabase.storage
       .from('generated-outfits')
