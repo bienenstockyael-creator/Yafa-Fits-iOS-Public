@@ -79,6 +79,23 @@ const APNS_TOPIC = process.env.APNS_TOPIC || 'com.yafa.Yafa';
 process.on('uncaughtException',  (err) => console.error('Uncaught exception:', err));
 process.on('unhandledRejection', (reason) => console.error('Unhandled rejection:', reason));
 
+// Graceful shutdown — requeue the active job so the next worker picks it up
+let activeJobId = null;
+async function shutdown(signal) {
+  console.log(`${signal} received — shutting down gracefully`);
+  if (activeJobId) {
+    console.log(`Requeueing job ${activeJobId} for next worker`);
+    await supabase
+      .from('generation_jobs')
+      .update({ status: 'queued', stage: 'upload', status_title: 'Queued', status_detail: 'Worker restarted — will resume shortly.' })
+      .eq('id', activeJobId)
+      .eq('status', 'processing');
+  }
+  process.exit(0);
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT',  () => shutdown('SIGINT'));
+
 console.log('Yafa generation worker starting…');
 console.log('  SUPABASE_URL:', SUPABASE_URL ? 'set' : 'MISSING');
 console.log('  SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'set' : 'MISSING');
@@ -98,17 +115,26 @@ try {
 // ---------------------------------------------------------------------------
 // Poll loop
 // ---------------------------------------------------------------------------
+let pollCount = 0;
 async function pollLoop() {
   while (true) {
     try {
+      // Re-run stall check every 10 minutes to catch jobs orphaned by prior crashes
+      if (pollCount++ % 120 === 0 && pollCount > 1) {
+        await resetStalledJobs();
+      }
+
       const job = await claimNextJob();
       if (job) {
+        activeJobId = job.id;
         await processJob(job);
+        activeJobId = null;
       } else {
         await sleep(5_000);
       }
     } catch (err) {
       console.error('Poll error:', err.message);
+      activeJobId = null;
       await sleep(5_000);
     }
   }
