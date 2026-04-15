@@ -33,6 +33,8 @@ final class PipelineJob: Identifiable, @unchecked Sendable {
     var maskingBackend: UploadMaskingBackend = .appleVision
     var maskingVariants: [PreparedMaskingVariant] = []
     var sourceImage: Data?
+    var sourceImagePath: String?  // path in generation-inputs bucket (for retakes)
+    var serverJobId: UUID?        // generation_jobs.id being polled
     var cutoutImage: Data?
     var greenScreenImage: Data?
     var videoURL: URL?
@@ -63,6 +65,8 @@ struct PersistedPipelineReview: Codable, Sendable {
     let stagedOutfit: Outfit
     let uploadWeather: Weather?
     let isRotationReversed: Bool
+    let sourceImagePath: String?
+    let serverJobId: UUID?
     let prompt: String
     let persistedAt: Date
     let statusTitle: String
@@ -80,6 +84,8 @@ struct PersistedPipelineReview: Codable, Sendable {
         self.stagedOutfit = stagedOutfit
         self.uploadWeather = job.uploadWeather
         self.isRotationReversed = job.isRotationReversed
+        self.sourceImagePath = job.sourceImagePath
+        self.serverJobId = job.serverJobId
         self.prompt = job.prompt
         self.persistedAt = Date()
         self.statusTitle = job.statusTitle
@@ -93,6 +99,8 @@ struct PersistedPipelineReview: Codable, Sendable {
         job.stagedOutfit = stagedOutfit
         job.uploadWeather = uploadWeather
         job.isRotationReversed = isRotationReversed
+        job.sourceImagePath = sourceImagePath
+        job.serverJobId = serverJobId
         job.prompt = prompt
         job.statusTitle = statusTitle
         job.statusDetail = statusDetail

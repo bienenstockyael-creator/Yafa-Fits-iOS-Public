@@ -309,6 +309,35 @@ class OutfitStore {
         generationReadyForReview = true
     }
 
+    /// Called on app launch/foreground. Finds any server-completed job waiting for review
+    /// and restores it so the user can accept/retake without losing their generation.
+    func checkForServerCompletedJob(userId: UUID) async {
+        guard uploadJob == nil else { return }
+
+        do {
+            guard let record = try await GenerationJobService.shared.fetchPendingReviewJob(userId: userId),
+                  var remoteOutfit = record.remoteOutfit else { return }
+
+            remoteOutfit.isRotationReversed = false
+
+            let job = PipelineJob(outfitNum: remoteOutfit.outfitNumber ?? 0)
+            job.step = .review
+            job.isProcessing = false
+            job.serverJobId = record.id
+            job.stagedOutfit = remoteOutfit
+            job.statusTitle = "Ready"
+            job.statusDetail = "Your interactive fit is ready for review."
+
+            await MainActor.run {
+                guard uploadJob == nil else { return }
+                uploadJob = job
+                generationReadyForReview = true
+            }
+        } catch {
+            // Non-fatal — user can still manually check
+        }
+    }
+
     func isLocalOutfit(_ outfit: Outfit) -> Bool {
         LocalOutfitStore.shared.loadOutfits().contains { $0.id == outfit.id }
     }

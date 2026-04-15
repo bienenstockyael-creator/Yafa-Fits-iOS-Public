@@ -85,6 +85,8 @@
 		A95A14866E6CEABC11DBCDDB /* public-feed.json in Resources */ = {isa = PBXBuildFile; fileRef = E9EEE7F7310371BA0DB650A1 /* public-feed.json */; };
 		AB99B2F085034E2A1CBBF77A /* cloudy.json in Resources */ = {isa = PBXBuildFile; fileRef = 8E93326E60084B89CA340A41 /* cloudy.json */; };
 		AC0881DDF6A6508BAB207404 /* OutfitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A2CE7F573582B8F2F582033 /* OutfitService.swift */; };
+		C1D2E3F4A5B6C7D8E9F0A1B2 /* GenerationJobService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D2E3F4A5B6C7D8E9F0A1B3 /* GenerationJobService.swift */; };
+		D2E3F4A5B6C7D8E9F0A1B2C3 /* GenerationJobRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2E3F4A5B6C7D8E9F0A1B2C4 /* GenerationJobRecord.swift */; };
 		B1C234D0E5F67891AABB1234 /* PushNotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C234D0E5F678910AABB123 /* PushNotificationService.swift */; };
 		B18E3607CB764CEC45F54677 /* LocalOutfitStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE7400C8E76CC739BA9271FE /* LocalOutfitStore.swift */; };
 		B2AFB7640AE011959778E08F /* placeholder-1.webp in Resources */ = {isa = PBXBuildFile; fileRef = 3FC4F82EC6FC767F44CE9A4B /* placeholder-1.webp */; };
@@ -147,6 +149,8 @@
 		34A76145E123E70B78BE57D0 /* PreparedMaskingVariant.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreparedMaskingVariant.swift; sourceTree = "<group>"; };
 		39E4A1D8BA0D93C038BC46BB /* ContentSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentSource.swift; sourceTree = "<group>"; };
 		3A2CE7F573582B8F2F582033 /* OutfitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutfitService.swift; sourceTree = "<group>"; };
+		C1D2E3F4A5B6C7D8E9F0A1B3 /* GenerationJobService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationJobService.swift; sourceTree = "<group>"; };
+		D2E3F4A5B6C7D8E9F0A1B2C4 /* GenerationJobRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationJobRecord.swift; sourceTree = "<group>"; };
 		B1C234D0E5F678910AABB123 /* PushNotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushNotificationService.swift; sourceTree = "<group>"; };
 		3CAEA94C97888E4FB2411D67 /* FeedPost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedPost.swift; sourceTree = "<group>"; };
 		3E32233E0690243C6794FBE2 /* PublishSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublishSheet.swift; sourceTree = "<group>"; };
@@ -460,6 +464,7 @@
 				DE7400C8E76CC739BA9271FE /* LocalOutfitStore.swift */,
 				3A2CE7F573582B8F2F582033 /* OutfitService.swift */,
 				B1C234D0E5F678910AABB123 /* PushNotificationService.swift */,
+				C1D2E3F4A5B6C7D8E9F0A1B3 /* GenerationJobService.swift */,
 				9536A3D80F4BDF8F985E374D /* ProductImageService.swift */,
 				251414A04E6CDF8175AC3872 /* ProductLibraryService.swift */,
 				B0200DA9B94C7FF2FD79D899 /* SocialService.swift */,
@@ -481,6 +486,7 @@
 			isa = PBXGroup;
 			children = (
 				3CAEA94C97888E4FB2411D67 /* FeedPost.swift */,
+				D2E3F4A5B6C7D8E9F0A1B2C4 /* GenerationJobRecord.swift */,
 				F6BCC4406A27B6BF439BBA9D /* Outfit.swift */,
 				43F71A1221DDF5DC78BA4C36 /* PipelineJob.swift */,
 				34A76145E123E70B78BE57D0 /* PreparedMaskingVariant.swift */,
@@ -668,6 +674,8 @@
 				1D84D5A2F8CA0FC9845A8BC4 /* OutfitCardView.swift in Sources */,
 				FE102BDC0F83DC35A370EAA6 /* OutfitGridView.swift in Sources */,
 				AC0881DDF6A6508BAB207404 /* OutfitService.swift in Sources */,
+				C1D2E3F4A5B6C7D8E9F0A1B2 /* GenerationJobService.swift in Sources */,
+				D2E3F4A5B6C7D8E9F0A1B2C3 /* GenerationJobRecord.swift in Sources */,
 				B1C234D0E5F67891AABB1234 /* PushNotificationService.swift in Sources */,
 				374B22A95D5450B99FB44DD6 /* OutfitStore.swift in Sources */,
 				22B301AC155311EC382BBED1 /* PasswordResetView.swift in Sources */,

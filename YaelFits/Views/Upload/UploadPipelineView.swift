@@ -481,8 +481,10 @@ struct UploadPipelineView: View {
     }
 
     private func regenerateCurrentVideo() {
-        guard let job, let greenScreenData = job.greenScreenImage else {
-            presentError(UploadPipelineError.invalidImage)
+        guard let job,
+              let sourceImagePath = job.sourceImagePath,
+              let userId = store.userId else {
+            resetPipeline()
             return
         }
 
@@ -491,12 +493,8 @@ struct UploadPipelineView: View {
         LocalOutfitStore.shared.clearPendingReview()
         endGenerationBackgroundActivity()
 
-        if let stagedOutfit = job.stagedOutfit {
-            LocalOutfitStore.shared.deleteOutfitData(for: stagedOutfit)
-        }
-
         job.step = .generate
-        job.loaderStage = .creatingInteractiveFit
+        job.loaderStage = .removingBackground
         job.isRotationReversed = false
         job.error = nil
         job.isProcessing = true
@@ -504,12 +502,31 @@ struct UploadPipelineView: View {
         job.stagedOutfit = nil
         job.progress = nil
         job.logLines = []
-        job.statusTitle = "Submitting to Kling 2.5"
-        job.statusDetail = "Regenerating a 10-second orbit from the saved green-screen composite."
+        job.serverJobId = nil
+        job.statusTitle = "Resubmitting"
+        job.statusDetail = "Restarting generation from your saved photo."
 
         beginGenerationBackgroundActivity()
         let task = Task {
-            await generateVideo(job: job, greenScreenData: greenScreenData)
+            do {
+                let jobId = try await GenerationJobService.shared.resubmitJob(
+                    sourceImagePath: sourceImagePath,
+                    userId: userId,
+                    outfitNum: job.outfitNum,
+                    prompt: job.prompt
+                )
+                await MainActor.run { job.serverJobId = jobId }
+                await runPollingLoop(jobId: jobId, job: job)
+            } catch is CancellationError {
+                await MainActor.run { endGenerationBackgroundActivity() }
+            } catch {
+                await MainActor.run {
+                    job.isProcessing = false
+                    job.error = readableError(error)
+                    store.uploadTask = nil
+                    endGenerationBackgroundActivity()
+                }
+            }
         }
         store.replaceUploadTask(with: task)
     }
@@ -549,6 +566,9 @@ struct UploadPipelineView: View {
                 try? await OutfitService.saveArchiveOutfit(finalizedOutfit, userId: userId, isPublic: publishToFeed)
             }
         }
+        if let serverJobId = job.serverJobId {
+            Task { try? await GenerationJobService.shared.markAccepted(jobId: serverJobId, isPublished: publishToFeed) }
+        }
 
         Task.detached(priority: .utility) {
             await FrameLoader.shared.preloadFirstFrames(outfits: [finalizedOutfit])
@@ -556,7 +576,7 @@ struct UploadPipelineView: View {
     }
 
     private func retakeCurrentOutfit() {
-        guard job?.greenScreenImage != nil else {
+        guard job?.sourceImagePath != nil else {
             resetPipeline()
             return
         }
@@ -574,30 +594,34 @@ struct UploadPipelineView: View {
 
     private func processAndGenerate(job: PipelineJob, imageData: Data) async {
         do {
-            let preparedAssets = try await ImageMaskingService.shared.prepareUploadAssets(
-                from: imageData,
-                using: .falBria
-            ) { title, detail in
-                await MainActor.run {
-                    job.statusTitle = title
-                    job.statusDetail = detail
-                }
+            guard let userId = store.userId else {
+                throw UploadPipelineError.invalidImage
             }
+
+            // Upload photo + submit job to server
+            await MainActor.run {
+                job.loaderStage = .removingBackground
+                job.statusTitle = "Uploading"
+                job.statusDetail = "Uploading your photo securely."
+            }
+
+            let (jobId, sourceImagePath) = try await GenerationJobService.shared.submitJob(
+                imageData: imageData,
+                userId: userId,
+                outfitNum: job.outfitNum,
+                prompt: job.prompt
+            )
 
             await MainActor.run {
-                job.cutoutImage = preparedAssets.cutoutPNGData
-                job.greenScreenImage = preparedAssets.greenScreenPNGData
-                job.maskingBackend = .falBria
-                job.loaderStage = .creatingInteractiveFit
-                job.statusTitle = "Submitting to Kling 2.5"
-                job.statusDetail = "Sending the cutout to Kling 2.5 for a 10-second orbit."
+                job.serverJobId = jobId
+                job.sourceImagePath = sourceImagePath
+                job.statusTitle = "Queued"
+                job.statusDetail = "Your fit is queued for generation."
             }
 
-            await generateVideo(job: job, greenScreenData: preparedAssets.greenScreenPNGData)
+            await runPollingLoop(jobId: jobId, job: job)
         } catch is CancellationError {
-            await MainActor.run {
-                endGenerationBackgroundActivity()
-            }
+            await MainActor.run { endGenerationBackgroundActivity() }
             return
         } catch {
             await MainActor.run {
@@ -609,78 +633,62 @@ struct UploadPipelineView: View {
         }
     }
 
-    private func generateVideo(job: PipelineJob, greenScreenData: Data) async {
+    /// Polls the server job every 4 seconds and updates the UI until terminal state.
+    private func runPollingLoop(jobId: UUID, job: PipelineJob) async {
+        var lastRecord: GenerationJobRecord?
         do {
-            let videoURL = try await FalVideoGenerationService.shared.generateRotationVideo(
-                from: greenScreenData,
-                prompt: job.prompt
-            ) { progress in
-                await MainActor.run {
-                    job.requestId = progress.requestId
-                    job.statusTitle = progress.title
-                    job.statusDetail = progress.detail
-                    job.logLines = progress.logLines
+            while true {
+                try Task.checkCancellation()
+                let record = try await GenerationJobService.shared.pollJob(jobId: jobId)
+                lastRecord = record
+                await MainActor.run { applyJobRecord(record, to: job) }
+                if record.isTerminal { break }
+                try await Task.sleep(for: .seconds(4))
+            }
+
+            guard let record = lastRecord else { return }
+
+            await MainActor.run {
+                if record.isReviewReady, var remoteOutfit = record.remoteOutfit {
+                    remoteOutfit.isRotationReversed = false
+                    if remoteOutfit.weather == nil { remoteOutfit.weather = job.uploadWeather }
+                    job.stagedOutfit = remoteOutfit
+                    job.step = .review
+                    job.isProcessing = false
                     job.progress = nil
+                    job.error = nil
+                    job.statusTitle = "Ready"
+                    job.statusDetail = "Your interactive fit is ready for review."
+                    persistPendingReviewIfNeeded(for: job)
+                    store.generationReadyForReview = true
+                    store.uploadTask = nil
+                    endGenerationBackgroundActivity()
+                    sendGenerationCompleteNotificationIfNeeded()
+                } else {
+                    job.isProcessing = false
+                    job.error = record.error ?? "Generation did not complete."
+                    store.uploadTask = nil
+                    endGenerationBackgroundActivity()
                 }
-            }
-
-            await MainActor.run {
-                job.videoURL = videoURL
-                job.loaderStage = .compressing
-                job.isProcessing = true
-                job.progress = 0
-                job.error = nil
-                job.statusTitle = "Compressing"
-                job.statusDetail = "Building the final interactive frame sequence."
-            }
-
-            let outfit = try await VideoFrameSequenceExporter.shared.exportSequence(
-                from: videoURL,
-                referenceGreenScreenPNGData: greenScreenData,
-                outfitNumber: job.outfitNum
-            ) { progress, detail in
-                await MainActor.run {
-                    job.loaderStage = .compressing
-                    job.progress = progress
-                    job.statusTitle = "Compressing"
-                    job.statusDetail = detail
-                }
-            }
-
-            await MainActor.run {
-                job.isRotationReversed = false
-                var stagedOutfit = outfit
-                stagedOutfit.isRotationReversed = false
-                if stagedOutfit.weather == nil {
-                    stagedOutfit.weather = job.uploadWeather
-                }
-                job.stagedOutfit = stagedOutfit
-                job.step = .review
-                job.isProcessing = false
-                job.progress = nil
-                job.error = nil
-                job.statusTitle = "Ready"
-                job.statusDetail = "Your interactive fit is ready."
-                store.uploadTask = nil
-                persistPendingReviewIfNeeded(for: job)
-                store.generationReadyForReview = true
-                endGenerationBackgroundActivity()
-                sendGenerationCompleteNotificationIfNeeded()
             }
         } catch is CancellationError {
-            await MainActor.run {
-                endGenerationBackgroundActivity()
-            }
-            return
+            await MainActor.run { endGenerationBackgroundActivity() }
         } catch {
             await MainActor.run {
                 job.isProcessing = false
-                job.progress = nil
                 job.error = readableError(error)
                 store.uploadTask = nil
                 endGenerationBackgroundActivity()
             }
         }
+    }
+
+    private func applyJobRecord(_ record: GenerationJobRecord, to job: PipelineJob) {
+        job.loaderStage = record.loaderStage
+        if let title = record.statusTitle  { job.statusTitle  = title  }
+        if let detail = record.statusDetail { job.statusDetail = detail }
+        if let progress = record.progress   { job.progress     = progress }
+        if let err = record.error           { job.error        = err }
     }
 
     private func configurePreviewPlayer(with url: URL) {
@@ -709,12 +717,26 @@ struct UploadPipelineView: View {
     }
 
     private func discardUnacceptedStagedOutfitIfNeeded() {
-        guard let stagedOutfit = job?.stagedOutfit,
-              job?.resultOutfitId == nil else {
-            return
+        guard let currentJob = job, currentJob.resultOutfitId == nil else { return }
+
+        // Cancel or reject server job if still running / pending review
+        if let serverJobId = currentJob.serverJobId {
+            Task {
+                if currentJob.isProcessing {
+                    try? await GenerationJobService.shared.cancelJob(jobId: serverJobId)
+                }
+                // If it's in review state, leave it — server keeps the frames
+                // and the user can restore it on next launch.
+            }
         }
-        job?.stagedOutfit = nil
-        LocalOutfitStore.shared.deleteOutfitData(for: stagedOutfit)
+
+        if let stagedOutfit = currentJob.stagedOutfit {
+            currentJob.stagedOutfit = nil
+            // Only delete local frames (server-generated outfits have no local frames)
+            if stagedOutfit.remoteBaseURL == nil {
+                LocalOutfitStore.shared.deleteOutfitData(for: stagedOutfit)
+            }
+        }
         LocalOutfitStore.shared.clearPendingReview()
     }
 
