@@ -81,6 +81,7 @@ process.on('unhandledRejection', (reason) => console.error('Unhandled rejection:
 
 // Graceful shutdown — requeue the active job so the next worker picks it up
 let activeJobId = null;
+let pollCount = 0;
 async function shutdown(signal) {
   console.log(`${signal} received — shutting down gracefully`);
   if (activeJobId) {
@@ -115,7 +116,6 @@ try {
 // ---------------------------------------------------------------------------
 // Poll loop
 // ---------------------------------------------------------------------------
-let pollCount = 0;
 async function pollLoop() {
   while (true) {
     try {
