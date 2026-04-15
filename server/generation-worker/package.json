@@ -1,0 +1,13 @@
+{
+  "name": "yafa-generation-worker",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Server-side generation worker for Yafa outfit jobs",
+  "scripts": {
+    "start": "node src/index.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.8"
+  }
+}
