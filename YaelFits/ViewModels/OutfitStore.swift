@@ -35,6 +35,7 @@ class OutfitStore {
     var heroAnchorOutfitId: String?
     var viewTransitionPhase: ViewTransitionPhase = .idle
     var generationReadyForReview = false
+    var activeTagFilter: String?
     var hasPlayedInitialListEntrance = false
     var uploadTask: Task<Void, Never>?
     var currentProfile: Profile?

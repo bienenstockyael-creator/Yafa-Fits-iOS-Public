@@ -27,16 +27,8 @@ struct OutfitGridView: View {
     @State private var carouselTargetFrame: CGRect = .null
     @State private var entranceTask: Task<Void, Never>?
     @State private var carouselTransitionTask: Task<Void, Never>?
-    @State private var activeTagFilter: String?
-
-    private var allTags: [String] {
-        let tags = store.sortedOutfits.flatMap { $0.tags ?? [] }
-        var seen = Set<String>()
-        return tags.filter { seen.insert($0).inserted }
-    }
-
     private var displayedOutfits: [Outfit] {
-        guard let tag = activeTagFilter else { return store.sortedOutfits }
+        guard let tag = store.activeTagFilter else { return store.sortedOutfits }
         return store.sortedOutfits.filter { $0.tags?.contains(tag) == true }
     }
 
@@ -71,12 +63,6 @@ struct OutfitGridView: View {
                                     .padding(.top, 28)
                                     .padding(.bottom, 34)
                                     .blurFadeReveal(active: contentVisible, delay: 0.06, blurRadius: 10)
-                            }
-
-                            if !allTags.isEmpty {
-                                tagFilterRow
-                                    .padding(.bottom, 16)
-                                    .blurFadeReveal(active: contentVisible, delay: 0.08, blurRadius: 8)
                             }
 
                             outfitsGrid
@@ -156,7 +142,7 @@ struct OutfitGridView: View {
             .onAppear {
                 prepareEntrance()
             }
-            .onChange(of: activeTagFilter) { _, _ in
+            .onChange(of: store.activeTagFilter) { _, _ in
                 carouselIndex = 0
             }
             .onChange(of: store.isLoading) { _, isLoading in
@@ -286,35 +272,6 @@ struct OutfitGridView: View {
             .appCapsule(shadowRadius: 8, shadowY: 4)
         }
         .buttonStyle(.plain)
-    }
-
-    private var tagFilterRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: LayoutMetrics.xxSmall) {
-                ForEach(allTags, id: \.self) { tag in
-                    let isActive = activeTagFilter == tag
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            activeTagFilter = isActive ? nil : tag
-                        }
-                    } label: {
-                        Text(tag.uppercased())
-                            .font(.system(size: 10, weight: .semibold))
-                            .tracking(1.2)
-                            .foregroundStyle(isActive ? AppPalette.pageBackground : AppPalette.textMuted)
-                            .padding(.horizontal, LayoutMetrics.xSmall)
-                            .frame(height: 32)
-                            .background(
-                                isActive ? AppPalette.textPrimary : Color.clear,
-                                in: Capsule()
-                            )
-                            .overlay(Capsule().strokeBorder(AppPalette.cardBorder, lineWidth: isActive ? 0 : 1))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, LayoutMetrics.small)
-        }
     }
 
     private var dragHint: some View {

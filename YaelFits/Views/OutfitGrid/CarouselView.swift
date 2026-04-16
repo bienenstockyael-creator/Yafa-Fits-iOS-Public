@@ -369,7 +369,15 @@ struct CarouselDetailCard: View {
                 editableTagRow
             } else if let tags = outfit.tags, !tags.isEmpty {
                 FlowLayout(spacing: 8) {
-                    ForEach(tags, id: \.self) { tag in TagPill(tag: tag) }
+                    ForEach(tags, id: \.self) { tag in
+                        Button {
+                            store.activeTagFilter = store.activeTagFilter == tag ? nil : tag
+                            onDismiss()
+                        } label: {
+                            TagPill(tag: tag, isActive: store.activeTagFilter == tag)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
