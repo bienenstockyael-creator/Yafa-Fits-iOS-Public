@@ -326,6 +326,14 @@ class OutfitStore {
             guard let record = try await GenerationJobService.shared.fetchPendingReviewJob(userId: userId),
                   var remoteOutfit = record.remoteOutfit else { return }
 
+            // If the outfit already exists in the archive the user already accepted it —
+            // mark it accepted on the server and skip restoring the review screen.
+            let alreadyAccepted = outfits.contains { $0.id == remoteOutfit.id }
+            if alreadyAccepted {
+                Task { try? await GenerationJobService.shared.markAccepted(jobId: record.id, isPublished: false) }
+                return
+            }
+
             remoteOutfit.isRotationReversed = false
 
             let job = PipelineJob(outfitNum: remoteOutfit.outfitNumber ?? 0)
