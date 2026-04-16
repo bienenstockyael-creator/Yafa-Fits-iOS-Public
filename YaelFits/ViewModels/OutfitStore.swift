@@ -157,7 +157,7 @@ class OutfitStore {
             self.currentProfile = cachedProfile
         }
 
-        // Refresh from Supabase — save to cache only, don't update live UI
+        // Refresh from Supabase — update live UI and save to cache
         Task.detached(priority: .utility) {
             async let likedTask = try? SocialService.getLikedOutfitIds(userId: userId)
             async let savedTask = try? SocialService.getSavedOutfitIds(userId: userId)
@@ -173,6 +173,14 @@ class OutfitStore {
             LocalCache.saveSavedIds(saved, userId: userId)
             if let profile { LocalCache.saveProfile(profile, userId: userId) }
             LocalCache.saveFollowingIds(following, userId: userId)
+
+            // Update live UI with fresh data — critical for first sign-in when cache is empty
+            await MainActor.run {
+                if !liked.isEmpty { self.likedIds = liked }
+                if !saved.isEmpty { self.savedIds = saved }
+                if let profile { self.currentProfile = profile }
+                if !following.isEmpty { self.followingIds = following }
+            }
         }
     }
 
