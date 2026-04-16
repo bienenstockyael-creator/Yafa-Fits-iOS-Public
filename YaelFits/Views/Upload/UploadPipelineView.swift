@@ -178,9 +178,9 @@ struct UploadPipelineView: View {
         let stage = job?.loaderStage ?? .removingBackground
         switch stage {
         case .removingBackground:
-            return "Cutting you out of the background like the main character you are."
+            return "Cutting you out like the main character you are. Stay on the app for a sec."
         case .creatingInteractiveFit:
-            return "Good things take a few minutes. Sit tight — we'll notify you the second your fit is ready."
+            return "Good things take a few minutes. You can close the app — we'll ping you when it's ready."
         case .compressing:
             return "Almost there. Squeezing your fit into its final form."
         }
