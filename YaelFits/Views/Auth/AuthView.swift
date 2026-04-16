@@ -20,7 +20,14 @@ struct AuthView: View {
 
                 logoSection
 
-                Spacer().frame(height: 40)
+                Spacer().frame(height: 24)
+
+                if !showPasswordReset {
+                    modePicker
+                    Spacer().frame(height: 24)
+                } else {
+                    Spacer().frame(height: 40)
+                }
 
                 if showPasswordReset {
                     PasswordResetView(email: email) {
@@ -45,9 +52,6 @@ struct AuthView: View {
                 }
 
                 Spacer()
-
-                toggleSection
-                    .padding(.bottom, 32)
             }
             .padding(.horizontal, LayoutMetrics.screenPadding + 8)
         }
@@ -178,6 +182,37 @@ struct AuthView: View {
         .signInWithAppleButtonStyle(.black)
         .frame(height: 48)
         .cornerRadius(24)
+    }
+
+    // MARK: - Mode picker (Sign In / Sign Up)
+
+    private var modePicker: some View {
+        HStack(spacing: 0) {
+            ForEach([false, true], id: \.self) { signUp in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isSignUp = signUp
+                        showPasswordReset = false
+                        errorMessage = nil
+                    }
+                } label: {
+                    Text(signUp ? "Sign Up" : "Sign In")
+                        .font(.system(size: 13, weight: isSignUp == signUp ? .semibold : .regular))
+                        .foregroundStyle(isSignUp == signUp ? AppPalette.textPrimary : AppPalette.textMuted)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 38)
+                        .background(
+                            isSignUp == signUp
+                                ? AppPalette.groupedBackground
+                                : Color.clear,
+                            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(3)
+        .background(AppPalette.cardBorder.opacity(0.5), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
     }
 
     // MARK: - Divider & toggle

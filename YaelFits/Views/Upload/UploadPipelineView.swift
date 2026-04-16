@@ -13,6 +13,8 @@ struct UploadPipelineView: View {
     @State private var showingCamera = false
     @State private var previewPlayer: AVQueuePlayer?
     @State private var previewLooper: AVPlayerLooper?
+    @State private var showingPublishSheet = false
+    @State private var outfitToPublish: Outfit?
 
     var body: some View {
         GeometryReader { geometry in
@@ -63,6 +65,21 @@ struct UploadPipelineView: View {
                 .padding(.bottom, LayoutMetrics.bottomOverlayInset)
             }
             .scrollDisabled(true)
+        }
+        .sheet(item: $outfitToPublish) { outfit in
+            PublishSheet(outfit: outfit) { caption, products in
+                if let userId = store.userId {
+                    Task {
+                        let inputs = products.map {
+                            ProductInput(outfitId: outfit.id, name: $0.name, price: $0.price, image: $0.image, shopLink: $0.shopLink)
+                        }
+                        try? await OutfitService.publishOutfit(outfitId: outfit.id, caption: caption, products: inputs, outfit: outfit, userId: userId)
+                        await MainActor.run { store.publishOutfitToFeed(outfit) }
+                    }
+                }
+                outfitToPublish = nil
+            }
+            .environment(store)
         }
         .fullScreenCover(isPresented: $showingCamera) {
             CameraCaptureView { image in
@@ -256,7 +273,10 @@ struct UploadPipelineView: View {
                 .buttonStyle(.plain)
 
                 Button {
-                    finalizeCurrentVideo(publishToFeed: true)
+                    guard let outfit = job?.stagedOutfit else { return }
+                    finalizeCurrentVideo(publishToFeed: false)
+                    outfitToPublish = outfit
+                    showingPublishSheet = true
                 } label: {
                     Text("Accept + Publish to Public")
                         .font(.system(size: 13, weight: .semibold))
@@ -469,6 +489,10 @@ struct UploadPipelineView: View {
     private func beginPipeline(with imageData: Data) {
         store.cancelUploadTask()
         resetPreviewPlayer()
+        // Evict any previous staged outfit from frame cache before starting fresh
+        if let prev = job?.stagedOutfit {
+            Task { await FrameLoader.shared.evict(outfit: prev) }
+        }
         discardUnacceptedStagedOutfitIfNeeded()
         endGenerationBackgroundActivity()
 
@@ -592,6 +616,13 @@ struct UploadPipelineView: View {
 
         Task.detached(priority: .utility) {
             await FrameLoader.shared.preloadFirstFrames(outfits: [finalizedOutfit])
+        }
+
+        // Auto-clear the upload job after a short delay so the tab resets cleanly
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            guard store.uploadJob?.resultOutfitId == finalizedOutfit.id else { return }
+            store.uploadJob = nil
         }
     }
 

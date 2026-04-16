@@ -346,3 +346,7 @@ create policy "Users can view own generation inputs"
     bucket_id = 'generation-inputs'
     and auth.uid()::text = (storage.foldername(name))[1]
   );
+
+-- Add remote_base_url and caption to outfits (missing from initial schema)
+alter table public.outfits add column if not exists remote_base_url text;
+alter table public.outfits add column if not exists caption text;
