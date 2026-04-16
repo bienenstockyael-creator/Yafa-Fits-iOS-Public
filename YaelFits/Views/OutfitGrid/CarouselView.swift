@@ -74,7 +74,8 @@ struct CarouselView: View {
                         outfit: outfit,
                         onDelete: {
                             onDeleteOutfit(outfit)
-                        }
+                        },
+                        onDismiss: onDismiss
                     )
                         .padding(.horizontal, LayoutMetrics.screenPadding)
                         .opacity(showsChrome ? 1 : 0)
@@ -307,6 +308,7 @@ private struct CarouselHeroTargetFramePreferenceKey: PreferenceKey {
 struct CarouselDetailCard: View {
     let outfit: Outfit
     let onDelete: () -> Void
+    var onDismiss: (() -> Void)? = nil
     @Environment(OutfitStore.self) private var store
     @State private var showDeleteConfirmation = false
     @State private var selectedLinkedProduct: Product?
@@ -372,7 +374,7 @@ struct CarouselDetailCard: View {
                     ForEach(tags, id: \.self) { tag in
                         Button {
                             store.activeTagFilter = store.activeTagFilter == tag ? nil : tag
-                            onDismiss()
+                            onDismiss?()
                         } label: {
                             TagPill(tag: tag, isActive: store.activeTagFilter == tag)
                         }
