@@ -157,7 +157,7 @@ async function claimNextJob() {
   // Atomically claim it (handles concurrent workers)
   const { data: claimed } = await supabase
     .from('generation_jobs')
-    .update({ status: 'processing', stage: 'removing_background' })
+    .update({ status: 'processing', stage: 'creating_interactive_fit' })
     .eq('id', candidate.id)
     .eq('status', 'queued')
     .select()
@@ -186,30 +186,12 @@ async function processJob(job) {
   const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'yafa-'));
 
   try {
-    // 1. Download source image
-    await updateJob(job.id, { status_title: 'Downloading source', status_detail: 'Fetching your uploaded photo.' });
-    const sourceBuffer = await downloadFromStorage('generation-inputs', job.source_image_path);
-
-    // 2. FAL Bria background removal
-    await updateJob(job.id, { stage: 'removing_background', status_title: 'Removing background', status_detail: 'Running FAL Bria background removal.' });
-    console.log(`Job ${job.id}: source image ${sourceBuffer.length} bytes`);
-    let briaPollCount = 0;
-    const transparentPNG = await falBriaRemoveBackground(sourceBuffer, async (status) => {
-      briaPollCount++;
-      if (briaPollCount % 7 === 0) { // every ~21s
-        const pos = status.queue_position;
-        const detail = pos ? `Removing background — queue position: ${pos}` : 'Removing background…';
-        await updateJob(job.id, { status_detail: detail });
-      }
-    });
-    console.log(`Job ${job.id}: bria result ${transparentPNG.length} bytes`);
-
-    // 3. Green-screen composite for Kling
-    await updateJob(job.id, { status_title: 'Preparing canvas', status_detail: 'Compositing onto green-screen canvas.' });
-    const greenScreenPNG = await composeForKling(transparentPNG);
+    // 1. Download green screen PNG (Bria + compositing already done on device)
+    await updateJob(job.id, { stage: 'creating_interactive_fit', status_title: 'Preparing', status_detail: 'Loading green-screen from device.' });
+    const greenScreenPNG = await downloadFromStorage('generation-inputs', job.source_image_path);
     console.log(`Job ${job.id}: green screen ${greenScreenPNG.length} bytes`);
 
-    // 4. FAL Kling video generation
+    // 2. FAL Kling video generation
     await updateJob(job.id, { stage: 'creating_interactive_fit', status_title: 'Submitting to Kling 2.5', status_detail: 'Sending green-screen to Kling for a 10-second orbit.' });
     const videoPath = path.join(tmpDir, 'orbit.mp4');
     await falKlingGenerateVideo(greenScreenPNG, job.prompt || DEFAULT_PROMPT, videoPath, async (title, detail) => {

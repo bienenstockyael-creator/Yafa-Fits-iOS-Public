@@ -618,15 +618,36 @@ struct UploadPipelineView: View {
                 throw UploadPipelineError.invalidImage
             }
 
-            // Upload photo + submit job to server
+            // Step 1: Run Bria background removal locally using the app's FAL key.
+            // This is faster and avoids server-side FAL credit issues.
             await MainActor.run {
                 job.loaderStage = .removingBackground
-                job.statusTitle = "Uploading"
-                job.statusDetail = "Uploading your photo securely."
+                job.statusTitle = "Removing background"
+                job.statusDetail = "Cutting you out of the background."
             }
 
+            let preparedAssets = try await ImageMaskingService.shared.prepareUploadAssets(
+                from: imageData,
+                using: .falBria
+            ) { title, detail in
+                await MainActor.run {
+                    job.statusTitle = title
+                    job.statusDetail = detail
+                }
+            }
+
+            await MainActor.run {
+                job.cutoutImage = preparedAssets.cutoutPNGData
+                job.greenScreenImage = preparedAssets.greenScreenPNGData
+                job.loaderStage = .creatingInteractiveFit
+                job.statusTitle = "Queued"
+                job.statusDetail = "Uploading green screen and queueing for Kling generation."
+            }
+
+            // Step 2: Upload the green screen PNG (not the raw photo) and submit job.
+            // Server skips Bria entirely and goes straight to Kling.
             let (jobId, sourceImagePath) = try await GenerationJobService.shared.submitJob(
-                imageData: imageData,
+                imageData: preparedAssets.greenScreenPNGData,
                 userId: userId,
                 outfitNum: job.outfitNum,
                 prompt: job.prompt
@@ -636,7 +657,7 @@ struct UploadPipelineView: View {
                 job.serverJobId = jobId
                 job.sourceImagePath = sourceImagePath
                 job.statusTitle = "Queued"
-                job.statusDetail = "Your fit is queued for generation."
+                job.statusDetail = "Your fit is queued for Kling generation."
             }
 
             await runPollingLoop(jobId: jobId, job: job)

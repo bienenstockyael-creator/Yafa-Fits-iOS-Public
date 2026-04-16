@@ -11,12 +11,12 @@ actor GenerationJobService {
     /// Returns the job ID to poll.
     func submitJob(imageData: Data, userId: UUID, outfitNum: Int, prompt: String) async throws -> (jobId: UUID, sourceImagePath: String) {
         // 1. Upload source image to generation-inputs/{userId}/{uuid}.jpg
-        let fileName = "\(UUID().uuidString).jpg"
+        let fileName = "\(UUID().uuidString).png"
         let storagePath = "\(userId.uuidString)/\(fileName)"
 
         try await supabase.storage
             .from("generation-inputs")
-            .upload(storagePath, data: imageData, options: .init(contentType: "image/jpeg", upsert: false))
+            .upload(storagePath, data: imageData, options: .init(contentType: "image/png", upsert: false))
 
         // 2. Insert job row
         struct JobInsert: Encodable {
