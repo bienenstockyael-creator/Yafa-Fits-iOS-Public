@@ -27,18 +27,6 @@ struct OutfitGridView: View {
     @State private var carouselTargetFrame: CGRect = .null
     @State private var entranceTask: Task<Void, Never>?
     @State private var carouselTransitionTask: Task<Void, Never>?
-    @State private var activeTagFilter: String?
-
-    private var allTags: [String] {
-        let tags = store.sortedOutfits.flatMap { $0.tags ?? [] }
-        var seen = Set<String>()
-        return tags.filter { seen.insert($0).inserted }
-    }
-
-    private var displayedOutfits: [Outfit] {
-        guard let tag = activeTagFilter else { return store.sortedOutfits }
-        return store.sortedOutfits.filter { $0.tags?.contains(tag) == true }
-    }
 
     private let heroTransitionDuration: Double = 0.32
     private let heroFadeInDuration: Double = 0.12
@@ -66,17 +54,11 @@ struct OutfitGridView: View {
                             Color.clear
                                 .frame(height: LayoutMetrics.listTopInset)
 
-                            if !displayedOutfits.isEmpty {
+                            if !store.sortedOutfits.isEmpty {
                                 dragHint
                                     .padding(.top, 28)
                                     .padding(.bottom, 34)
                                     .blurFadeReveal(active: contentVisible, delay: 0.06, blurRadius: 10)
-                            }
-
-                            if !allTags.isEmpty {
-                                tagFilterRow
-                                    .padding(.bottom, 16)
-                                    .blurFadeReveal(active: contentVisible, delay: 0.08, blurRadius: 8)
                             }
 
                             outfitsGrid
@@ -90,7 +72,7 @@ struct OutfitGridView: View {
                     .scrollDisabled(isScrubbing || showCarousel)
                     .allowsHitTesting(!showCarousel)
                     .overlay {
-                        if displayedOutfits.isEmpty {
+                        if store.sortedOutfits.isEmpty {
                             emptyStatePrompt
                                 .blurFadeReveal(active: contentVisible, delay: 0.06, blurRadius: 10)
                         }
@@ -98,7 +80,7 @@ struct OutfitGridView: View {
 
                     if showCarousel {
                         CarouselView(
-                            outfits: displayedOutfits,
+                            outfits: store.sortedOutfits,
                             currentIndex: $carouselIndex,
                             backdropOpacity: carouselBackdropVisible ? 1 : 0,
                             showsChrome: carouselChromeVisible,
@@ -112,7 +94,7 @@ struct OutfitGridView: View {
                             onCurrentFrameChange: { frameIndex in
                                 activeCarouselFrameIndex = frameIndex
                                 if let entryFrame = carouselEntryFrame,
-                                   displayedOutfits[safe: carouselIndex]?.id == entryFrame.outfitId,
+                                   store.sortedOutfits[safe: carouselIndex]?.id == entryFrame.outfitId,
                                    frameIndex != entryFrame.frameIndex {
                                     hideCarouselEntryOverlay()
                                 }
@@ -156,9 +138,6 @@ struct OutfitGridView: View {
             .onAppear {
                 prepareEntrance()
             }
-            .onChange(of: activeTagFilter) { _, _ in
-                carouselIndex = 0
-            }
             .onChange(of: store.isLoading) { _, isLoading in
                 guard !showCarousel else { return }
                 if isLoading {
@@ -191,7 +170,7 @@ struct OutfitGridView: View {
 
     private var outfitsGrid: some View {
         LazyVGrid(columns: columns, spacing: 42) {
-            ForEach(Array(displayedOutfits.enumerated()), id: \.element.id) { index, outfit in
+            ForEach(Array(store.sortedOutfits.enumerated()), id: \.element.id) { index, outfit in
                 gridItem(outfit: outfit, index: index)
             }
         }
@@ -286,35 +265,6 @@ struct OutfitGridView: View {
             .appCapsule(shadowRadius: 8, shadowY: 4)
         }
         .buttonStyle(.plain)
-    }
-
-    private var tagFilterRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: LayoutMetrics.xxSmall) {
-                ForEach(allTags, id: \.self) { tag in
-                    let isActive = activeTagFilter == tag
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            activeTagFilter = isActive ? nil : tag
-                        }
-                    } label: {
-                        Text(tag.uppercased())
-                            .font(.system(size: 10, weight: .semibold))
-                            .tracking(1.2)
-                            .foregroundStyle(isActive ? AppPalette.pageBackground : AppPalette.textMuted)
-                            .padding(.horizontal, LayoutMetrics.xSmall)
-                            .frame(height: 32)
-                            .background(
-                                isActive ? AppPalette.textPrimary : Color.clear,
-                                in: Capsule()
-                            )
-                            .overlay(Capsule().strokeBorder(AppPalette.cardBorder, lineWidth: isActive ? 0 : 1))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, LayoutMetrics.small)
-        }
     }
 
     private var dragHint: some View {
@@ -466,7 +416,7 @@ struct OutfitGridView: View {
 
         guard
             showCarousel,
-            let currentOutfit = displayedOutfits[safe: carouselIndex]
+            let currentOutfit = store.sortedOutfits[safe: carouselIndex]
         else {
             showCarousel = false
             heroTransition = nil
@@ -569,7 +519,7 @@ struct OutfitGridView: View {
 
     @MainActor
     private func syncGridToCarouselSelection(using reader: ScrollViewProxy) async {
-        guard let outfitId = displayedOutfits[safe: carouselIndex]?.id else { return }
+        guard let outfitId = store.sortedOutfits[safe: carouselIndex]?.id else { return }
         var transaction = Transaction()
         transaction.animation = nil
         withTransaction(transaction) {
@@ -593,7 +543,7 @@ struct OutfitGridView: View {
     @MainActor
     private func waitForCarouselDisplayedFrame(_ frameIndex: Int, outfitId: String) async -> Bool {
         for _ in 0 ..< 24 {
-            if displayedOutfits[safe: carouselIndex]?.id == outfitId,
+            if store.sortedOutfits[safe: carouselIndex]?.id == outfitId,
                activeCarouselDisplayedFrame == frameIndex {
                 return true
             }
@@ -636,7 +586,7 @@ struct OutfitGridView: View {
         carouselTargetFrame = .null
         activeCarouselFrameIndex = 0
         activeCarouselDisplayedFrame = nil
-        carouselIndex = min(carouselIndex, max(displayedOutfits.count - 2, 0))
+        carouselIndex = min(carouselIndex, max(store.sortedOutfits.count - 2, 0))
         store.selectedOutfitId = nil
         store.deleteOutfit(outfit)
     }
