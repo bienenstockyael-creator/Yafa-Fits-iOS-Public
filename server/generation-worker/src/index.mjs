@@ -193,8 +193,16 @@ async function processJob(job) {
     // 2. FAL Bria background removal
     await updateJob(job.id, { stage: 'removing_background', status_title: 'Removing background', status_detail: 'Running FAL Bria background removal.' });
     console.log(`Job ${job.id}: source image ${sourceBuffer.length} bytes`);
-    const transparentPNG = await falBriaRemoveBackground(sourceBuffer);
-    console.log(`Job ${job.id}: bria result ${transparentPNG.length} bytes, first bytes: ${transparentPNG.slice(0,4).toString('hex')}`);
+    let briaPollCount = 0;
+    const transparentPNG = await falBriaRemoveBackground(sourceBuffer, async (status) => {
+      briaPollCount++;
+      if (briaPollCount % 7 === 0) { // every ~21s
+        const pos = status.queue_position;
+        const detail = pos ? `Removing background — queue position: ${pos}` : 'Removing background…';
+        await updateJob(job.id, { status_detail: detail });
+      }
+    });
+    console.log(`Job ${job.id}: bria result ${transparentPNG.length} bytes`);
 
     // 3. Green-screen composite for Kling
     await updateJob(job.id, { status_title: 'Preparing canvas', status_detail: 'Compositing onto green-screen canvas.' });
@@ -273,20 +281,21 @@ async function processJob(job) {
 // ---------------------------------------------------------------------------
 // FAL Bria background removal
 // ---------------------------------------------------------------------------
-async function falBriaRemoveBackground(imageBuffer) {
+async function falBriaRemoveBackground(imageBuffer, onHeartbeat) {
   const dataURI = `data:image/jpeg;base64,${imageBuffer.toString('base64')}`;
 
   const submitRes = await falPost(FAL_BRIA_URL, { image_url: dataURI });
   const transparentBuffer = await falPollForResult(submitRes, async (result) => {
-    // Handle different FAL response shapes
     const url = result?.image?.url ?? result?.images?.[0]?.url ?? result?.output?.image?.url;
-    console.log('Bria result keys:', Object.keys(result || {}));
     if (!url) throw new Error(`No image URL in Bria result: ${JSON.stringify(result).slice(0, 200)}`);
     const res = await fetch(url);
     if (!res.ok) throw new Error(`Bria image fetch failed: ${res.status} ${res.statusText}`);
     const buf = Buffer.from(await res.arrayBuffer());
-    console.log(`Bria image fetched: ${buf.length} bytes, content-type: ${res.headers.get('content-type')}`);
+    console.log(`Bria image fetched: ${buf.length} bytes`);
     return buf;
+  }, async (status) => {
+    // Heartbeat every ~20s so the app sees progress
+    if (onHeartbeat) await onHeartbeat(status);
   });
 
   return transparentBuffer;
@@ -608,9 +617,11 @@ async function falPost(url, body) {
 
 async function falPollForResult(submitResponse, onComplete, onProgress, timeoutMs = 10 * 60 * 1000) {
   const deadline = Date.now() + timeoutMs;
+  let pollCount = 0;
   while (true) {
     if (Date.now() > deadline) throw new Error(`FAL job timed out after ${timeoutMs/60000} minutes`);
     await sleep(3_000);
+    pollCount++;
     const statusRes = await fetch(submitResponse.status_url, {
       headers: { 'Authorization': `Key ${FAL_API_KEY}` },
       signal: AbortSignal.timeout(30_000),
