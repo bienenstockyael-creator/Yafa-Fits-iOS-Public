@@ -278,12 +278,11 @@ struct FeedPostCard: View {
         VStack(alignment: .leading, spacing: LayoutMetrics.small) {
             cardHeader
 
-            Group {
-                if let outfit {
-                    outfitContent(outfit)
-                }
+            if let outfit {
+                outfitContent(outfit)
+            } else {
+                Color.clear.frame(height: 292)
             }
-            .frame(height: 292)
 
             if metadataLabels.isEmpty == false {
                 metadataRow
