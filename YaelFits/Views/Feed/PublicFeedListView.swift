@@ -276,27 +276,29 @@ struct FeedPostCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: LayoutMetrics.small) {
-            cardHeader
+            if outfit != nil || store.outfitById[post.outfitId] != nil {
+                cardHeader
 
-            if let outfit {
-                outfitContent(outfit)
+                if let outfit {
+                    outfitContent(outfit)
+                }
+
+                if metadataLabels.isEmpty == false {
+                    metadataRow
+                }
+
+                if let caption = outfit?.caption ?? post.caption, !caption.isEmpty {
+                    Text(caption)
+                        .font(.system(size: 13))
+                        .foregroundStyle(AppPalette.textSecondary)
+                        .lineSpacing(3)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                cardActions
             }
-
-            if metadataLabels.isEmpty == false {
-                metadataRow
-            }
-
-            if let caption = outfit?.caption ?? post.caption, !caption.isEmpty {
-                Text(caption)
-                    .font(.system(size: 13))
-                    .foregroundStyle(AppPalette.textSecondary)
-                    .lineSpacing(3)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            cardActions
         }
-        .padding(LayoutMetrics.medium)
+        .padding(outfit != nil ? LayoutMetrics.medium : 0)
         .appCard()
         .sheet(isPresented: $showComments, onDismiss: {
             Task {
