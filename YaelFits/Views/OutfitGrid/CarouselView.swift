@@ -127,9 +127,15 @@ struct CarouselView: View {
                 view.gesture(carouselSwipeGesture(step: step))
             }
         }
-        .onChange(of: currentIndex) { _, _ in
+        .onChange(of: currentIndex) { _, newIndex in
             isScrubbingCurrentOutfit = false
             store.selectedOutfitId = currentOutfit?.id
+            // Preload adjacent slides so they're ready before the swipe lands
+            for offset in [-1, 1] {
+                let idx = newIndex + offset
+                guard outfits.indices.contains(idx) else { continue }
+                Task { _ = await FrameLoader.shared.frame(for: outfits[idx], index: 0) }
+            }
         }
         .onPreferenceChange(CarouselHeroTargetFramePreferenceKey.self) { frame in
             onHeroTargetFrameChange(frame)
@@ -142,6 +148,7 @@ struct CarouselView: View {
         let scale = max(0.82, 1.0 - Double(distance) * 0.16)
         let baseOpacity = max(0.38, 1.0 - Double(distance) * 0.34)
         let isCurrent = index == currentIndex
+        let isNear = distance <= 1
         let slideOpacity: Double = if isCurrent {
             showsCurrentLiveSlide ? baseOpacity : 0
         } else {
@@ -155,7 +162,7 @@ struct CarouselView: View {
                 outfit: outfit,
                 height: 318,
                 draggable: showsChrome && isCurrent,
-                eagerLoad: isCurrent,
+                eagerLoad: isNear,
                 preloadFullSequenceOnAppear: isCurrent,
                 initialFrameIndex: entryFrameIndex,
                 initialImage: entryFrameImage,
