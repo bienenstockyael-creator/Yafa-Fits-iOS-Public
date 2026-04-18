@@ -160,6 +160,7 @@ struct RootView: View {
         .padding(.horizontal, LayoutMetrics.screenPadding)
         .padding(.top, 8)
         .padding(.bottom, LayoutMetrics.xSmall)
+        .contentShape(Rectangle())
     }
 
     private var isCalendarActive: Bool {
@@ -220,8 +221,9 @@ struct RootView: View {
             Capsule()
                 .stroke(Color(red: 0.88, green: 0.89, blue: 0.91).opacity(0.9), lineWidth: 0.8)
         )
+        .padding(8)
+        .contentShape(Rectangle())
         .animation(.easeInOut(duration: 0.18), value: isCalendarActive)
-        .animation(.easeOut(duration: 0.2), value: isCalendarActive)
     }
 
     // MARK: - Hero View Transition
@@ -447,10 +449,10 @@ struct RootView: View {
                 .opacity(0.16)
 
             HStack(spacing: 0) {
-                tabItem(icon: .grid, label: "Home", tab: .list)
-                tabItem(icon: .plusCircle, label: "Upload", tab: .upload)
-                tabItem(icon: .globe, label: "Public", tab: .feed)
-                tabItem(icon: .person, label: "Profile", tab: .profile)
+                tabItem(icon: .grid, iconSize: 22, label: "Home", tab: .list)
+                tabItem(icon: .plusCircle, iconSize: 26, label: "Upload", tab: .upload)
+                tabItem(icon: .globe, iconSize: 24, label: "Public", tab: .feed)
+                tabItem(icon: .person, iconSize: 22, label: "Profile", tab: .profile)
             }
             .padding(.horizontal, LayoutMetrics.xxSmall)
             .padding(.top, LayoutMetrics.xSmall)
@@ -462,7 +464,7 @@ struct RootView: View {
         }
     }
 
-    private func tabItem(icon: AppIconGlyph, label: String, tab: AppView) -> some View {
+    private func tabItem(icon: AppIconGlyph, iconSize: CGFloat = 24, label: String, tab: AppView) -> some View {
         let isActive = store.currentView == tab || (tab == .list && store.currentView == .calendar)
         let showsUploadActivity = tab == .upload && store.isUploadInProgress
         return Button {
@@ -485,7 +487,7 @@ struct RootView: View {
                     } else {
                         AppIcon(
                             glyph: icon,
-                            size: 24,
+                            size: iconSize,
                             color: isActive ? AppPalette.iconActive : AppPalette.iconFaint
                         )
                         .frame(width: 36, height: 36)
@@ -542,6 +544,8 @@ struct RootView: View {
             Capsule()
                 .stroke(Color(red: 0.88, green: 0.89, blue: 0.91).opacity(0.9), lineWidth: 0.8)
         )
+        .padding(8)
+        .contentShape(Rectangle())
     }
 
     private func viewModeOption(icon: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
