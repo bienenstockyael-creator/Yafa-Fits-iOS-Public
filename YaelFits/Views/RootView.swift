@@ -10,9 +10,6 @@ struct RootView: View {
     @State private var loaderVisible = true
     @State private var loaderDismissTask: Task<Void, Never>?
     @State private var showsFavoritesSheet = false
-    @State private var showsNotificationsSheet = false
-    @State private var unreadNotificationCount = 0
-
     // In-app notification banner
     @State private var showReviewBanner = false
     @State private var bannerDismissTask: Task<Void, Never>?
@@ -136,9 +133,6 @@ struct RootView: View {
             FavoritesSheetView()
                 .environment(store)
         }
-        .sheet(isPresented: $showsNotificationsSheet) {
-            NotificationsPlaceholderSheet()
-        }
     }
 
     private var showsFloatingButtons: Bool {
@@ -153,9 +147,11 @@ struct RootView: View {
             Spacer()
             HStack(spacing: 8) {
                 if store.currentView == .list || store.currentView == .calendar {
-                    viewModeToggle
-                } else if store.currentView == .feed {
-                    notificationButton
+                    if store.selectedOutfitId != nil {
+                        tempToggle
+                    } else {
+                        viewModeToggle
+                    }
                 }
             }
         }
@@ -202,67 +198,30 @@ struct RootView: View {
     }
 
     private var viewModeToggle: some View {
-        Button {
-            guard !heroTransitioning else { return }
-            let impact = UIImpactFeedbackGenerator(style: .light)
-            impact.impactOccurred()
-            performViewTransition()
-        } label: {
-            Image(systemName: isCalendarActive ? "square.grid.3x3" : "calendar")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(AppPalette.textFaint)
-                .frame(width: 30, height: 30)
-                .background(
-                    Circle()
-                        .fill(Color.white.opacity(0.5))
-                )
-                .overlay(
-                    Circle()
-                        .strokeBorder(
-                            Color(red: 0.88, green: 0.89, blue: 0.91).opacity(0.5),
-                            lineWidth: 0.8
-                        )
-                )
+        HStack(spacing: 2) {
+            viewModeOption(icon: "square.grid.3x3", isSelected: !isCalendarActive) {
+                guard isCalendarActive, !heroTransitioning else { return }
+                performViewTransition()
+            }
+            viewModeOption(icon: "calendar", isSelected: isCalendarActive) {
+                guard !isCalendarActive, !heroTransitioning else { return }
+                performViewTransition()
+            }
         }
-        .buttonStyle(.plain)
+        .padding(2)
+        .frame(height: 30)
+        .background(
+            Capsule()
+                .fill(Color(red: 0.95, green: 0.95, blue: 0.96).opacity(0.98))
+        )
+        .overlay(
+            Capsule()
+                .stroke(Color(red: 0.88, green: 0.89, blue: 0.91).opacity(0.9), lineWidth: 0.8)
+        )
         .animation(.easeOut(duration: 0.2), value: isCalendarActive)
     }
 
     // MARK: - Hero View Transition
-
-    private var notificationButton: some View {
-        Button {
-            showsNotificationsSheet = true
-        } label: {
-            ZStack(alignment: .topTrailing) {
-                Image(systemName: "bell")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(AppPalette.textFaint)
-                    .frame(width: 30, height: 30)
-                    .background(
-                        Circle()
-                            .fill(Color.white.opacity(0.5))
-                    )
-                    .overlay(
-                        Circle()
-                            .strokeBorder(
-                                Color(red: 0.88, green: 0.89, blue: 0.91).opacity(0.5),
-                                lineWidth: 0.8
-                            )
-                    )
-
-                if unreadNotificationCount > 0 {
-                    Text("\(unreadNotificationCount)")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(minWidth: 14, minHeight: 14)
-                        .background(Color.red, in: Circle())
-                        .offset(x: 4, y: -4)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-    }
 
     private func performViewTransition() {
         viewTransitionTask?.cancel()
@@ -583,6 +542,27 @@ struct RootView: View {
             Capsule()
                 .stroke(Color(red: 0.88, green: 0.89, blue: 0.91).opacity(0.9), lineWidth: 0.8)
         )
+    }
+
+    private func viewModeOption(icon: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+            action()
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(isSelected ? AppPalette.textPrimary : AppPalette.textFaint)
+                .frame(width: 36, height: 24)
+                .background {
+                    if isSelected {
+                        Capsule()
+                            .fill(Color.white)
+                            .shadow(color: Color.black.opacity(0.06), radius: 3, y: 1)
+                    }
+                }
+        }
+        .buttonStyle(.plain)
     }
 
     private func temperatureOption(label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {

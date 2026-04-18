@@ -138,40 +138,39 @@ struct PublicFeedListView: View {
             .buttonStyle(.plain)
 
             Spacer()
-            tempToggle
+            feedNotificationButton
         }
         .padding(.horizontal, LayoutMetrics.screenPadding)
         .padding(.top, 8)
         .padding(.bottom, LayoutMetrics.xSmall)
     }
 
-    private var tempToggle: some View {
-        @Bindable var store = store
-        return HStack(spacing: 2) {
-            temperatureOption(label: "°F", isSelected: store.useFahrenheit) {
-                guard !store.useFahrenheit else { return }
-                let impact = UIImpactFeedbackGenerator(style: .light)
-                impact.impactOccurred()
-                withAnimation(.easeInOut(duration: 0.18)) { store.useFahrenheit = true }
-            }
-            temperatureOption(label: "°C", isSelected: !store.useFahrenheit) {
-                guard store.useFahrenheit else { return }
-                let impact = UIImpactFeedbackGenerator(style: .light)
-                impact.impactOccurred()
-                withAnimation(.easeInOut(duration: 0.18)) { store.useFahrenheit = false }
-            }
-        }
-        .padding(2)
-        .frame(height: 30)
-        .background(Capsule().fill(Color(red: 0.95, green: 0.95, blue: 0.96).opacity(0.98)))
-        .overlay(Capsule().stroke(Color(red: 0.88, green: 0.89, blue: 0.91).opacity(0.9), lineWidth: 0.8))
-    }
+    @State private var showsNotifications = false
 
-    private func temperatureOption(label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(label)
-                .font(.system(size: 10, weight: .semibold))
-                .tracking(0.4)
+    private var feedNotificationButton: some View {
+        Button {
+            showsNotifications = true
+        } label: {
+            Image(systemName: "bell")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(AppPalette.textFaint)
+                .frame(width: 30, height: 30)
+                .background(
+                    Circle()
+                        .fill(Color.white.opacity(0.5))
+                )
+                .overlay(
+                    Circle()
+                        .strokeBorder(
+                            Color(red: 0.88, green: 0.89, blue: 0.91).opacity(0.5),
+                            lineWidth: 0.8
+                        )
+                )
+        }
+        .buttonStyle(.plain)
+        .sheet(isPresented: $showsNotifications) {
+            NotificationsPlaceholderSheet()
+        }
                 .foregroundStyle(isSelected ? AppPalette.textPrimary : AppPalette.textFaint)
                 .frame(width: 40, height: 24)
                 .background {
