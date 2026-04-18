@@ -168,6 +168,11 @@ struct Outfit: Codable, Identifiable, Hashable, Sendable {
         return "\(folder)/\(prefix)\(padded).\(normalizedFrameExt)"
     }
 
+    func uniqueFrameKey(index: Int) -> String {
+        let base = remoteBaseURL ?? "local"
+        return "\(base)/\(framePath(index: index))"
+    }
+
     var resolvedRemoteBaseURL: URL? {
         if let remoteBaseURL,
            let url = URL(string: remoteBaseURL),

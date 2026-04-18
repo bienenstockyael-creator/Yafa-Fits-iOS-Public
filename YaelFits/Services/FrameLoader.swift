@@ -17,7 +17,7 @@ private final class DiskFrameCache {
     }
 
     private func fileURL(for outfit: Outfit, index: Int) -> URL {
-        cacheDir.appendingPathComponent(outfit.framePath(index: index))
+        cacheDir.appendingPathComponent(outfit.uniqueFrameKey(index: index))
     }
 
     func image(for outfit: Outfit, index: Int) -> UIImage? {
@@ -74,7 +74,7 @@ actor FrameLoader {
     /// 3. Disk frame cache (previously downloaded CDN frames)
     /// 4. CDN download → saved to disk cache for next time
     func frame(for outfit: Outfit, index: Int) async -> UIImage? {
-        let cacheKey = outfit.framePath(index: index) as NSString
+        let cacheKey = outfit.uniqueFrameKey(index: index) as NSString
 
         if let cached = cache.object(forKey: cacheKey) { return cached }
         if let pending = pendingTasks[cacheKey as String] { return await pending.value }
@@ -136,7 +136,7 @@ actor FrameLoader {
         let total = outfit.frameCount
         for offset in Swift.stride(from: -radius, through: radius, by: stride) {
             let idx = ((center + offset) % total + total) % total
-            let key = outfit.framePath(index: idx) as NSString
+            let key = outfit.uniqueFrameKey(index: idx) as NSString
             guard cache.object(forKey: key) == nil else { continue }
             Task { _ = await frame(for: outfit, index: idx) }
         }
@@ -181,7 +181,7 @@ actor FrameLoader {
 
     func evict(outfit: Outfit) {
         for index in 0..<outfit.frameCount {
-            let key = outfit.framePath(index: index) as NSString
+            let key = outfit.uniqueFrameKey(index: index) as NSString
             cache.removeObject(forKey: key)
             pendingTasks[key as String]?.cancel()
             pendingTasks.removeValue(forKey: key as String)
