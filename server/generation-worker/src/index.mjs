@@ -210,7 +210,7 @@ async function processJob(job) {
 
     // 5. Extract & process frames
     await updateJob(job.id, { stage: 'compressing', status_title: 'Extracting frames', status_detail: 'Building 242-frame interactive sequence.', progress: 0 });
-    const outfitId = `outfit-${job.outfit_num}`;
+    const outfitId = `outfit-${job.user_id.slice(0, 8)}-${job.outfit_num}`;
     // Use job ID as a storage prefix so each attempt gets a unique URL,
     // preventing the app's DiskFrameCache from serving stale frames on retry.
     const storagePrefix = job.id;
