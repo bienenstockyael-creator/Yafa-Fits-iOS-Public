@@ -147,11 +147,7 @@ struct RootView: View {
             Spacer()
             HStack(spacing: 8) {
                 if store.currentView == .list || store.currentView == .calendar {
-                    if store.selectedOutfitId != nil {
-                        tempToggle
-                    } else {
-                        viewModeToggle
-                    }
+                    viewModeToggle
                 }
             }
         }
@@ -551,9 +547,9 @@ struct RootView: View {
             action()
         } label: {
             Image(systemName: icon)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(isSelected ? AppPalette.textPrimary : AppPalette.textFaint)
-                .frame(width: 36, height: 24)
+                .frame(width: 40, height: 24)
                 .background {
                     if isSelected {
                         Capsule()

@@ -50,11 +50,12 @@ struct CarouselView: View {
 
             VStack(spacing: LayoutMetrics.small) {
                 if let outfit = currentOutfit, let weather = outfit.weather, !weather.condition.isEmpty {
-                    ZStack {
+                    HStack(spacing: 8) {
                         WeatherPill(weather: weather, useFahrenheit: store.useFahrenheit)
-                            .opacity(showsChrome ? 1 : 0)
-                            .allowsHitTesting(showsChrome)
+                        carouselTempToggle
                     }
+                    .opacity(showsChrome ? 1 : 0)
+                    .allowsHitTesting(showsChrome)
                     .frame(height: 36)
                 }
 
@@ -102,6 +103,42 @@ struct CarouselView: View {
                 keyboardHeight = 0
             }
         }
+    }
+
+    private var carouselTempToggle: some View {
+        HStack(spacing: 2) {
+            carouselTempOption(label: "°F", isSelected: store.useFahrenheit) {
+                withAnimation(.easeInOut(duration: 0.18)) { store.useFahrenheit = true }
+            }
+            carouselTempOption(label: "°C", isSelected: !store.useFahrenheit) {
+                withAnimation(.easeInOut(duration: 0.18)) { store.useFahrenheit = false }
+            }
+        }
+        .padding(2)
+        .frame(height: 30)
+        .background(Capsule().fill(Color(red: 0.95, green: 0.95, blue: 0.96).opacity(0.98)))
+        .overlay(Capsule().stroke(Color(red: 0.88, green: 0.89, blue: 0.91).opacity(0.9), lineWidth: 0.8))
+    }
+
+    private func carouselTempOption(label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            action()
+        } label: {
+            Text(label)
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(0.4)
+                .foregroundStyle(isSelected ? AppPalette.textPrimary : AppPalette.textFaint)
+                .frame(width: 40, height: 24)
+                .background {
+                    if isSelected {
+                        Capsule()
+                            .fill(Color.white)
+                            .shadow(color: Color.black.opacity(0.06), radius: 3, y: 1)
+                    }
+                }
+        }
+        .buttonStyle(.plain)
     }
 
     private var currentOutfit: Outfit? {
