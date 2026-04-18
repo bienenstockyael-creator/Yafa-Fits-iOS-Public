@@ -280,6 +280,9 @@ struct FeedPostCard: View {
 
             if let outfit {
                 outfitContent(outfit)
+                    .transition(.opacity)
+            } else {
+                Color.clear.frame(height: 292)
             }
 
             if metadataLabels.isEmpty == false {
@@ -318,7 +321,9 @@ struct FeedPostCard: View {
             // If outfit isn't in local store (another user's outfit), fetch from Supabase
             guard store.outfitById[post.outfitId] == nil else { return }
             if let remote = await ContentSource.getPublicOutfit(id: post.outfitId) {
-                await MainActor.run { fetchedOutfit = remote }
+                await MainActor.run {
+                    withAnimation(.easeIn(duration: 0.25)) { fetchedOutfit = remote }
+                }
             }
         }
         .scrollTransition(.interactive, axis: .vertical) { content, phase in
