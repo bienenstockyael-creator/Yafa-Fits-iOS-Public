@@ -95,8 +95,9 @@ actor FrameLoader {
                 return image
             }
 
-            // Bundled thumbnail — small webp files in app bundle (frame 0 only)
-            if index == 0 {
+            // Bundled thumbnail — only for bundled outfits (no custom remoteBaseURL).
+            // Skip for server-generated outfits to prevent cross-user frame mixing.
+            if index == 0, outfit.remoteBaseURL == nil {
                 let name = outfit.id
                 for ext in ["webp", "png"] {
                     if let url = Bundle.main.url(forResource: name, withExtension: ext),
