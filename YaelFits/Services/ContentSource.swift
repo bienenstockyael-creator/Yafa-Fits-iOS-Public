@@ -157,19 +157,23 @@ struct ContentSource {
     }
 
     static func getPublicOutfits() async -> [Outfit] {
-        do {
-            let rows: [SupabaseOutfitRow] = try await supabase
-                .from("outfits")
-                .select(outfitSelectWithProducts)
-                .eq("is_public", value: true)
-                .order("date", ascending: false)
-                .execute()
-                .value
+        if let rows: [SupabaseOutfitRow] = try? await supabase
+            .from("outfits")
+            .select(outfitSelectWithProducts)
+            .eq("is_public", value: true)
+            .order("date", ascending: false)
+            .execute()
+            .value {
             return rows.map { $0.toOutfit() }
-        } catch {
-            AppLogger.data.error("ContentSource query failed: \(error.localizedDescription)")
-            return []
         }
+        let rows: [SupabaseOutfitRow] = (try? await supabase
+            .from("outfits")
+            .select("id, name, date, frame_count, folder, prefix, frame_ext, remote_base_url, scale, is_rotation_reversed, caption")
+            .eq("is_public", value: true)
+            .order("date", ascending: false)
+            .execute()
+            .value) ?? []
+        return rows.map { $0.toOutfit() }
     }
 
     static func getAllOutfits(userId: UUID) async -> [Outfit] {
@@ -195,20 +199,27 @@ struct ContentSource {
 
     /// Fetch public outfits for a specific user.
     static func getPublicOutfits(forUser userId: UUID) async -> [Outfit] {
-        do {
-            let rows: [SupabaseOutfitRow] = try await supabase
-                .from("outfits")
-                .select(outfitSelectWithProducts)
-                .eq("user_id", value: userId.uuidString)
-                .eq("is_public", value: true)
-                .order("date", ascending: false)
-                .execute()
-                .value
+        // Try full query with products join
+        if let rows: [SupabaseOutfitRow] = try? await supabase
+            .from("outfits")
+            .select(outfitSelectWithProducts)
+            .eq("user_id", value: userId.uuidString)
+            .eq("is_public", value: true)
+            .order("date", ascending: false)
+            .execute()
+            .value {
             return rows.map { $0.toOutfit() }
-        } catch {
-            AppLogger.data.error("ContentSource query failed: \(error.localizedDescription)")
-            return []
         }
+        // Fallback: no joins — survives stale schema cache
+        let rows: [SupabaseOutfitRow] = (try? await supabase
+            .from("outfits")
+            .select("id, name, date, frame_count, folder, prefix, frame_ext, remote_base_url, scale, is_rotation_reversed, caption")
+            .eq("user_id", value: userId.uuidString)
+            .eq("is_public", value: true)
+            .order("date", ascending: false)
+            .execute()
+            .value) ?? []
+        return rows.map { $0.toOutfit() }
     }
 
     /// Fetch feed from followed users' public outfits + their profile info.
