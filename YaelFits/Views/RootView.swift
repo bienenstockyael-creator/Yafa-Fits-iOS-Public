@@ -485,10 +485,10 @@ struct RootView: View {
                     } else {
                         AppIcon(
                             glyph: icon,
-                            size: 20,
+                            size: 24,
                             color: isActive ? AppPalette.iconActive : AppPalette.iconFaint
                         )
-                        .frame(width: 28, height: 28)
+                        .frame(width: 36, height: 36)
                     }
 
                     if showsUploadActivity {
@@ -513,13 +513,10 @@ struct RootView: View {
                             .offset(x: 8, y: -5)
                     }
                 }
-                .frame(width: 32, height: 32)
-                Text(label)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(isActive ? AppPalette.textPrimary : AppPalette.textFaint)
+                .frame(width: 36, height: 36)
             }
             .frame(maxWidth: .infinity)
-            .frame(minHeight: 50)
+            .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

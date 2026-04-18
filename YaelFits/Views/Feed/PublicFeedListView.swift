@@ -29,20 +29,31 @@ struct PublicFeedListView: View {
             }
             .zIndex(2)
 
-            // Layer 4: Floating buttons (above everything)
+            // Layer 4: Floating notification (top right)
             VStack {
-                Spacer()
-                HStack(alignment: .bottom) {
-                    floatingNotificationButton
+                HStack {
                     Spacer()
-                    if hasScrolled && !store.feedPosts.isEmpty {
-                        floatingSearchButton
-                    }
+                    floatingNotificationButton
                 }
                 .padding(.horizontal, LayoutMetrics.screenPadding)
-                .padding(.bottom, 64)
+                .padding(.top, 12)
+                Spacer()
             }
             .zIndex(3)
+
+            // Layer 5: Floating search (bottom right)
+            if hasScrolled && !store.feedPosts.isEmpty {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        floatingSearchButton
+                    }
+                    .padding(.horizontal, LayoutMetrics.screenPadding)
+                    .padding(.bottom, 64)
+                }
+                .zIndex(4)
+            }
         }
         .task {
             guard !hasRefreshedFeed else { return }
