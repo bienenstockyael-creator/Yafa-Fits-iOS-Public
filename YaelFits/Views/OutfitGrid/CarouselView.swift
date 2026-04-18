@@ -373,6 +373,9 @@ struct CarouselDetailCard: View {
             // Products
             if isEditing {
                 editableProductRow
+                if (outfit.products ?? []).isEmpty {
+                    emptyProductRow
+                }
             } else if let products = outfit.products, !products.isEmpty {
                 productRow(products)
             } else {
@@ -397,13 +400,15 @@ struct CarouselDetailCard: View {
                 emptyTagRow
             }
 
-            // Action bar
-            HStack(spacing: 8) {
-                publishButton
-                Spacer(minLength: 0)
-                deleteButton
-                likeButton
-                shareButton
+            // Action bar — hidden in edit mode for more space
+            if !isEditing {
+                HStack(spacing: 8) {
+                    publishButton
+                    Spacer(minLength: 0)
+                    deleteButton
+                    likeButton
+                    shareButton
+                }
             }
         }
         .padding(LayoutMetrics.medium)
