@@ -51,15 +51,6 @@ struct YaelFitsApp: App {
                 }
             }
             .environment(authManager)
-            .toolbar {
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Done") {
-                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                    }
-                    .font(.system(size: 14, weight: .medium))
-                }
-            }
             .task(id: authManager.userId) {
                 await PushNotificationCoordinator.shared.setUserId(authManager.userId)
             }

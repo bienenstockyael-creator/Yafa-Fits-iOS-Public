@@ -147,6 +147,7 @@ struct OutfitGridView: View {
                 }
             }
             .onChange(of: showCarousel) { _, isShowing in
+                store.isCarouselOpen = isShowing
                 guard isShowing else { return }
                 Task { @MainActor in
                     await syncGridToCarouselSelection(using: reader)

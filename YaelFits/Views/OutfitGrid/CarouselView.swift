@@ -50,12 +50,11 @@ struct CarouselView: View {
 
             VStack(spacing: LayoutMetrics.small) {
                 if let outfit = currentOutfit, let weather = outfit.weather, !weather.condition.isEmpty {
-                    HStack(spacing: 8) {
+                    ZStack {
                         WeatherPill(weather: weather, useFahrenheit: store.useFahrenheit)
-                        carouselTempToggle
+                            .opacity(showsChrome ? 1 : 0)
+                            .allowsHitTesting(showsChrome)
                     }
-                    .opacity(showsChrome ? 1 : 0)
-                    .allowsHitTesting(showsChrome)
                     .frame(height: 36)
                 }
 

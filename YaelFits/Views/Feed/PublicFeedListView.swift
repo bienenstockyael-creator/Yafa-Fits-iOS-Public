@@ -8,13 +8,18 @@ struct PublicFeedListView: View {
     @State private var likeCounts: [String: Int] = [:]
     @State private var commentCounts: [String: Int] = [:]
     @State private var myLikedOutfitIds: Set<String> = []
+    @State private var showsNotifications = false
 
     var body: some View {
         ZStack(alignment: .top) {
             // Layer 1: Background
             AppPalette.groupedBackground.ignoresSafeArea()
 
-            // Layer 2: Cards
+            // Layer 2: Header
+            feedHeader
+                .zIndex(1)
+
+            // Layer 3: Cards (above header)
             Group {
                 if store.feedPosts.isEmpty {
                     emptyState
@@ -22,17 +27,22 @@ struct PublicFeedListView: View {
                     feedList
                 }
             }
-            .zIndex(1)
+            .zIndex(2)
 
-            // Layer 3: Header (above cards so bell is tappable)
-            feedHeader
-                .zIndex(2)
-
-            // Layer 4: Floating search (above everything)
-            if hasScrolled && !store.feedPosts.isEmpty {
-                floatingSearchButton
-                    .zIndex(3)
+            // Layer 4: Floating buttons (above everything)
+            VStack {
+                Spacer()
+                HStack(alignment: .bottom) {
+                    floatingNotificationButton
+                    Spacer()
+                    if hasScrolled && !store.feedPosts.isEmpty {
+                        floatingSearchButton
+                    }
+                }
+                .padding(.horizontal, LayoutMetrics.screenPadding)
+                .padding(.bottom, 64)
             }
+            .zIndex(3)
         }
         .task {
             guard !hasRefreshedFeed else { return }
@@ -138,60 +148,42 @@ struct PublicFeedListView: View {
             .buttonStyle(.plain)
 
             Spacer()
-            feedNotificationButton
         }
         .padding(.horizontal, LayoutMetrics.screenPadding)
         .padding(.top, 8)
         .padding(.bottom, LayoutMetrics.xSmall)
     }
 
-    @State private var showsNotifications = false
-
-    private var feedNotificationButton: some View {
+    private var floatingNotificationButton: some View {
         Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
             showsNotifications = true
         } label: {
             Image(systemName: "bell")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(AppPalette.textFaint)
-                .frame(width: 30, height: 30)
-                .background(
-                    Circle()
-                        .fill(Color.white.opacity(0.5))
-                )
-                .overlay(
-                    Circle()
-                        .strokeBorder(
-                            Color(red: 0.88, green: 0.89, blue: 0.91).opacity(0.5),
-                            lineWidth: 0.8
-                        )
-                )
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(AppPalette.iconPrimary)
+                .frame(width: 48, height: 48)
+                .appCircle()
         }
         .buttonStyle(.plain)
         .sheet(isPresented: $showsNotifications) {
             NotificationsPlaceholderSheet()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(.white)
         }
     }
 
     private var floatingSearchButton: some View {
-        VStack {
-            Spacer()
-            HStack {
-                Spacer()
-                Button {
-                    let impact = UIImpactFeedbackGenerator(style: .light)
-                    impact.impactOccurred()
-                    showDiscover = true
-                } label: {
-                    AppIcon(glyph: .search, size: 16, color: AppPalette.iconPrimary)
-                        .frame(width: 48, height: 48)
-                        .appCircle(shadowRadius: 12, shadowY: 6)
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, LayoutMetrics.screenPadding)
-            .padding(.bottom, 64)
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            showDiscover = true
+        } label: {
+            AppIcon(glyph: .search, size: 16, color: AppPalette.iconPrimary)
+                .frame(width: 48, height: 48)
+                .appCircle(shadowRadius: 12, shadowY: 6)
         }
+        .buttonStyle(.plain)
         .transition(.opacity)
     }
 

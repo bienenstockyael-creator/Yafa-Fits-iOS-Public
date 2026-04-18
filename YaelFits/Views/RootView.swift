@@ -147,7 +147,11 @@ struct RootView: View {
             Spacer()
             HStack(spacing: 8) {
                 if store.currentView == .list || store.currentView == .calendar {
-                    viewModeToggle
+                    if store.isCarouselOpen {
+                        tempToggle
+                    } else {
+                        viewModeToggle
+                    }
                 } else if store.currentView == .profile {
                     tempToggle
                 }
@@ -198,11 +202,11 @@ struct RootView: View {
     private var viewModeToggle: some View {
         HStack(spacing: 2) {
             viewModeOption(icon: "square.grid.3x3", isSelected: !isCalendarActive) {
-                guard isCalendarActive, !heroTransitioning else { return }
+                guard isCalendarActive else { return }
                 performViewTransition()
             }
             viewModeOption(icon: "calendar", isSelected: isCalendarActive) {
-                guard !isCalendarActive, !heroTransitioning else { return }
+                guard !isCalendarActive else { return }
                 performViewTransition()
             }
         }
@@ -216,6 +220,7 @@ struct RootView: View {
             Capsule()
                 .stroke(Color(red: 0.88, green: 0.89, blue: 0.91).opacity(0.9), lineWidth: 0.8)
         )
+        .animation(.easeInOut(duration: 0.18), value: isCalendarActive)
         .animation(.easeOut(duration: 0.2), value: isCalendarActive)
     }
 
