@@ -148,6 +148,8 @@ struct RootView: View {
             HStack(spacing: 8) {
                 if store.currentView == .list || store.currentView == .calendar {
                     viewModeToggle
+                } else if store.currentView == .profile {
+                    tempToggle
                 }
             }
         }
@@ -821,6 +823,7 @@ private struct FavoritesSheetView: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+        .presentationBackground(.white)
     }
 
     private func favoriteOutfitRow(_ outfit: Outfit) -> some View {

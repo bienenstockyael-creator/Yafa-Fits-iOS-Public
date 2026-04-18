@@ -14,11 +14,7 @@ struct PublicFeedListView: View {
             // Layer 1: Background
             AppPalette.groupedBackground.ignoresSafeArea()
 
-            // Layer 2: Header
-            feedHeader
-                .zIndex(1)
-
-            // Layer 3: Cards (above header)
+            // Layer 2: Cards
             Group {
                 if store.feedPosts.isEmpty {
                     emptyState
@@ -26,7 +22,11 @@ struct PublicFeedListView: View {
                     feedList
                 }
             }
-            .zIndex(2)
+            .zIndex(1)
+
+            // Layer 3: Header (above cards so bell is tappable)
+            feedHeader
+                .zIndex(2)
 
             // Layer 4: Floating search (above everything)
             if hasScrolled && !store.feedPosts.isEmpty {
@@ -311,6 +311,7 @@ struct FeedPostCard: View {
                 .environment(store)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
+                .presentationBackground(.white)
         }
         .task(id: post.outfitId) {
             // If outfit isn't in local store (another user's outfit), fetch from Supabase

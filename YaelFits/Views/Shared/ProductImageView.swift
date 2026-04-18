@@ -1,5 +1,11 @@
 import SwiftUI
 
+struct LinkedTagSelection: Identifiable {
+    let id: String
+
+    var tag: String { id }
+}
+
 struct ProductImageView: View {
     let product: Product
     let size: CGFloat
@@ -106,7 +112,69 @@ struct LinkedProductOutfitsSheet: View {
                     } else {
                         LazyVStack(spacing: LayoutMetrics.small) {
                             ForEach(linkedOutfits) { outfit in
-                                linkedOutfitRow(outfit)
+                                LinkedOutfitRow(outfit: outfit)
+                            }
+                        }
+                    }
+                }
+                .padding(LayoutMetrics.screenPadding)
+                .padding(.bottom, LayoutMetrics.large)
+            }
+            .background(AppPalette.groupedBackground)
+            .navigationTitle("Linked Outfits")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppPalette.textPrimary)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(.white)
+    }
+}
+
+struct LinkedTagOutfitsSheet: View {
+    let tag: String
+    let sourceOutfit: Outfit
+
+    @Environment(OutfitStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+
+    private var linkedOutfits: [Outfit] {
+        store.sortedOutfits.filter { outfit in
+            outfit.id != sourceOutfit.id &&
+            (outfit.tags ?? []).contains(where: { $0.caseInsensitiveCompare(tag) == .orderedSame })
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: LayoutMetrics.medium) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        TagPill(tag: tag)
+
+                        Text("Shown in other outfits")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(AppPalette.textMuted)
+                    }
+
+                    if linkedOutfits.isEmpty {
+                        Text("No linked outfits found yet.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(AppPalette.textMuted)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.vertical, LayoutMetrics.large)
+                    } else {
+                        LazyVStack(spacing: LayoutMetrics.small) {
+                            ForEach(linkedOutfits) { outfit in
+                                LinkedOutfitRow(outfit: outfit)
                             }
                         }
                     }
@@ -130,8 +198,14 @@ struct LinkedProductOutfitsSheet: View {
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
     }
+}
 
-    private func linkedOutfitRow(_ outfit: Outfit) -> some View {
+private struct LinkedOutfitRow: View {
+    let outfit: Outfit
+
+    @Environment(OutfitStore.self) private var store
+
+    var body: some View {
         HStack(spacing: LayoutMetrics.small) {
             RotatableOutfitImage(
                 outfit: outfit,
