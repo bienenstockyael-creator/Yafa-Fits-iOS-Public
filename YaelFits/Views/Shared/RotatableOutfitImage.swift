@@ -136,6 +136,17 @@ struct RotatableOutfitImage: View {
             onDisplayedFrameChange?(viewModel.displayedFrame)
             triggerEntranceIfNeeded(applyDelay: true)
         }
+        .onChange(of: eagerLoad) { _, eager in
+            if eager && !hasLoadedFrames {
+                hasLoadedFrames = true
+                viewModel.ensureCurrentFrameLoaded()
+            }
+        }
+        .onChange(of: draggable) { _, isDraggable in
+            if isDraggable && viewModel.displayedImage == nil {
+                viewModel.loadCurrentFrame()
+            }
+        }
         .onChange(of: viewModel.currentFrame) { _, frame in
             onFrameChange?(frame)
         }

@@ -130,11 +130,18 @@ struct CarouselView: View {
         .onChange(of: currentIndex) { _, newIndex in
             isScrubbingCurrentOutfit = false
             store.selectedOutfitId = currentOutfit?.id
-            // Preload adjacent slides so they're ready before the swipe lands
-            for offset in [-1, 1] {
+            // Preload current + adjacent so frames are ready instantly
+            for offset in [-1, 0, 1] {
                 let idx = newIndex + offset
                 guard outfits.indices.contains(idx) else { continue }
-                Task { _ = await FrameLoader.shared.frame(for: outfits[idx], index: 0) }
+                let outfit = outfits[idx]
+                Task {
+                    if offset == 0 {
+                        await FrameLoader.shared.preloadFullSequence(for: outfit)
+                    } else {
+                        _ = await FrameLoader.shared.frame(for: outfit, index: 0)
+                    }
+                }
             }
         }
         .onPreferenceChange(CarouselHeroTargetFramePreferenceKey.self) { frame in
