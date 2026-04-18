@@ -22,6 +22,7 @@ private struct AppCardModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .background {
                 LightBlurView(style: .systemThinMaterialLight)
                     .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
