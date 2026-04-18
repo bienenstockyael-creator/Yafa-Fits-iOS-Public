@@ -34,6 +34,7 @@ struct ProfileView: View {
             }
         }
         .scrollIndicators(.hidden)
+        .scrollDismissesKeyboard(.interactively)
         .background(AppPalette.pageBackground)
         .onAppear { loadProfile() }
         .alert("Sign out?", isPresented: $showSignOutConfirmation) {

@@ -752,16 +752,16 @@ private struct UploadTabIconView: View {
                         .rotationEffect(.degrees(-90))
                         .shadow(color: AppPalette.uploadGlow.opacity(0.45), radius: 1.2, y: 0)
                 }
-                .frame(width: 28, height: 28)
+                .frame(width: 36, height: 36)
                 .animation(.easeInOut(duration: 1.1), value: progress)
             }
 
             AppIcon(
                 glyph: .plusCircle,
-                size: 20,
+                size: 26,
                 color: isActive ? AppPalette.iconActive : AppPalette.iconFaint
             )
-            .frame(width: 28, height: 28)
+            .frame(width: 36, height: 36)
         }
     }
 }

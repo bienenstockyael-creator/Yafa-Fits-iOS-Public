@@ -43,6 +43,7 @@ struct CommentsSheet: View {
             .padding(.bottom, LayoutMetrics.medium)
         }
         .scrollIndicators(.hidden)
+        .scrollDismissesKeyboard(.interactively)
     }
 
     private var emptyState: some View {

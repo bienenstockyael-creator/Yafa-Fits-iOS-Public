@@ -39,6 +39,7 @@ struct PublishSheet: View {
                 .padding(.bottom, 100)
             }
             .background(AppPalette.groupedBackground)
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Publish to Feed")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.light, for: .navigationBar)
