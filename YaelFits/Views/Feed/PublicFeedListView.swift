@@ -274,41 +274,40 @@ struct FeedPostCard: View {
         store.outfitById[post.outfitId] ?? fetchedOutfit
     }
 
-    @State private var cardReady = false
+    @State private var cardVisible = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: LayoutMetrics.small) {
-            if cardReady {
-                cardHeader
+            cardHeader
 
-                if let outfit {
-                    outfitContent(outfit)
-                }
-
-                if metadataLabels.isEmpty == false {
-                    metadataRow
-                }
-
-                if let caption = outfit?.caption ?? post.caption, !caption.isEmpty {
-                    Text(caption)
-                        .font(.system(size: 13))
-                        .foregroundStyle(AppPalette.textSecondary)
-                        .lineSpacing(3)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-
-                cardActions
+            if let outfit {
+                outfitContent(outfit)
             }
+
+            if metadataLabels.isEmpty == false {
+                metadataRow
+            }
+
+            if let caption = outfit?.caption ?? post.caption, !caption.isEmpty {
+                Text(caption)
+                    .font(.system(size: 13))
+                    .foregroundStyle(AppPalette.textSecondary)
+                    .lineSpacing(3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            cardActions
         }
-        .padding(cardReady ? LayoutMetrics.medium : 0)
+        .padding(LayoutMetrics.medium)
         .appCard()
-        .opacity(cardReady ? 1 : 0)
+        .opacity(cardVisible ? 1 : 0)
+        .scaleEffect(cardVisible ? 1 : 0.96)
         .onChange(of: outfit) { _, newOutfit in
-            guard newOutfit != nil, !cardReady else { return }
-            withAnimation(.easeOut(duration: 0.35)) { cardReady = true }
+            guard newOutfit != nil, !cardVisible else { return }
+            withAnimation(.easeOut(duration: 0.3)) { cardVisible = true }
         }
         .onAppear {
-            if outfit != nil { cardReady = true }
+            if outfit != nil { cardVisible = true }
         }
         .sheet(isPresented: $showComments, onDismiss: {
             Task {
