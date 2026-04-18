@@ -171,17 +171,6 @@ struct PublicFeedListView: View {
         .sheet(isPresented: $showsNotifications) {
             NotificationsPlaceholderSheet()
         }
-                .foregroundStyle(isSelected ? AppPalette.textPrimary : AppPalette.textFaint)
-                .frame(width: 40, height: 24)
-                .background {
-                    if isSelected {
-                        Capsule()
-                            .fill(Color.white)
-                            .shadow(color: Color.black.opacity(0.06), radius: 3, y: 1)
-                    }
-                }
-        }
-        .buttonStyle(.plain)
     }
 
     private var floatingSearchButton: some View {
