@@ -215,7 +215,7 @@ struct ContentSource {
     /// Fetch a single public outfit with its products — used for feed cards
     /// belonging to other users whose outfits aren't in the local store.
     static func getPublicOutfit(id: String) async -> Outfit? {
-        // Try full query first, fall back to query without caption if schema cache issue
+        // Try full query with products join
         if let rows: [SupabaseOutfitRow] = try? await supabase
             .from("outfits")
             .select(outfitSelectWithProducts)
@@ -226,17 +226,41 @@ struct ContentSource {
             .value, let outfit = rows.first?.toOutfit() {
             return outfit
         }
-        // Fallback: minimal query without caption
-        let minimal = "id, name, date, frame_count, folder, prefix, frame_ext, remote_base_url, scale, tags, outfit_products(name, price, image, shop_link, product_id)"
-        let rows: [SupabaseOutfitRow]? = try? await supabase
+        // Fallback: no joins at all — survives stale PostgREST schema cache
+        struct SimpleOutfitRow: Decodable {
+            let id: String
+            let name: String
+            let date: String
+            let frameCount: Int
+            let folder: String
+            let prefix: String
+            let frameExt: String?
+            let remoteBaseURL: String?
+            let scale: Double?
+            let caption: String?
+            enum CodingKeys: String, CodingKey {
+                case id, name, date, folder, prefix, scale, caption
+                case frameCount = "frame_count"
+                case frameExt = "frame_ext"
+                case remoteBaseURL = "remote_base_url"
+            }
+        }
+        if let rows: [SimpleOutfitRow] = try? await supabase
             .from("outfits")
-            .select(minimal)
+            .select("id, name, date, frame_count, folder, prefix, frame_ext, remote_base_url, scale, caption")
             .eq("id", value: id)
             .eq("is_public", value: true)
             .limit(1)
             .execute()
-            .value
-        return rows?.first?.toOutfit()
+            .value, let row = rows.first {
+            return Outfit(
+                id: row.id, name: row.name, date: row.date,
+                frameCount: row.frameCount, folder: row.folder, prefix: row.prefix,
+                frameExt: row.frameExt, remoteBaseURL: row.remoteBaseURL, scale: row.scale,
+                caption: row.caption
+            )
+        }
+        return nil
     }
 
     static func getFollowedFeed(followingIds: Set<UUID>) async -> [FeedPost] {
