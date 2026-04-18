@@ -181,6 +181,11 @@ async function resetStalledJobs() {
 // ---------------------------------------------------------------------------
 // Full pipeline
 // ---------------------------------------------------------------------------
+async function isJobCancelled(jobId) {
+  const { data } = await supabase.from('generation_jobs').select('status').eq('id', jobId).single();
+  return data?.status === 'cancelled';
+}
+
 async function processJob(job) {
   console.log(`Job ${job.id}: outfit-${job.outfit_num} for user ${job.user_id}`);
   const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'yafa-'));
@@ -195,8 +200,13 @@ async function processJob(job) {
     await updateJob(job.id, { stage: 'creating_interactive_fit', status_title: 'Submitting to Kling 2.5', status_detail: 'Sending green-screen to Kling for a 10-second orbit.' });
     const videoPath = path.join(tmpDir, 'orbit.mp4');
     await falKlingGenerateVideo(greenScreenPNG, job.prompt || DEFAULT_PROMPT, videoPath, async (title, detail) => {
+      // Check for cancellation every poll cycle
+      if (await isJobCancelled(job.id)) throw new Error('Job cancelled by user');
       await updateJob(job.id, { stage: 'creating_interactive_fit', status_title: title, status_detail: detail });
     });
+
+    // Check cancellation before expensive steps
+    if (await isJobCancelled(job.id)) throw new Error('Job cancelled by user');
 
     // 5. Extract & process frames
     await updateJob(job.id, { stage: 'compressing', status_title: 'Extracting frames', status_detail: 'Building 242-frame interactive sequence.', progress: 0 });
