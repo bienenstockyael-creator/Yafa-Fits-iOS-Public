@@ -168,7 +168,7 @@ struct ContentSource {
         }
         let rows: [SupabaseOutfitRow] = (try? await supabase
             .from("outfits")
-            .select("id, name, date, frame_count, folder, prefix, frame_ext, remote_base_url, scale, is_rotation_reversed, caption")
+            .select("*")
             .eq("is_public", value: true)
             .order("date", ascending: false)
             .execute()
@@ -210,10 +210,10 @@ struct ContentSource {
             .value {
             return rows.map { $0.toOutfit() }
         }
-        // Fallback: no joins — survives stale schema cache
+        // Fallback: all columns, no joins — survives stale schema cache
         let rows: [SupabaseOutfitRow] = (try? await supabase
             .from("outfits")
-            .select("id, name, date, frame_count, folder, prefix, frame_ext, remote_base_url, scale, is_rotation_reversed, caption")
+            .select("*")
             .eq("user_id", value: userId.uuidString)
             .eq("is_public", value: true)
             .order("date", ascending: false)
