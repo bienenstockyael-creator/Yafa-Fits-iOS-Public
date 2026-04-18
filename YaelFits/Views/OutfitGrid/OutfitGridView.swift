@@ -414,6 +414,7 @@ struct OutfitGridView: View {
 
     private func dismissCarousel(using reader: ScrollViewProxy) {
         carouselTransitionTask?.cancel()
+        store.isCarouselOpen = false
 
         guard
             showCarousel,
