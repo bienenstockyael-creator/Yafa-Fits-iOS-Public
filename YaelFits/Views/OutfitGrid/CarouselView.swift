@@ -310,6 +310,7 @@ struct CarouselDetailCard: View {
     @Environment(OutfitStore.self) private var store
     @State private var showDeleteConfirmation = false
     @State private var selectedLinkedProduct: Product?
+    @State private var selectedLinkedTag: LinkedTagSelection?
     @State private var isPublished: Bool?
     @State private var isLoadingPublishState = false
     @State private var isTogglingPublish = false
@@ -369,7 +370,13 @@ struct CarouselDetailCard: View {
                 editableTagRow
             } else if let tags = outfit.tags, !tags.isEmpty {
                 FlowLayout(spacing: 8) {
-                    ForEach(tags, id: \.self) { tag in TagPill(tag: tag) }
+                    ForEach(tags, id: \.self) { tag in
+                        TagPill(tag: tag) {
+                            let impact = UIImpactFeedbackGenerator(style: .light)
+                            impact.impactOccurred()
+                            selectedLinkedTag = LinkedTagSelection(id: tag)
+                        }
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
@@ -398,6 +405,9 @@ struct CarouselDetailCard: View {
         }
         .sheet(item: $selectedLinkedProduct) { product in
             LinkedProductOutfitsSheet(product: product, sourceOutfit: outfit)
+        }
+        .sheet(item: $selectedLinkedTag) { selection in
+            LinkedTagOutfitsSheet(tag: selection.tag, sourceOutfit: outfit)
         }
         .sheet(isPresented: $showPublishSheet) {
             PublishSheet(outfit: outfit) { caption, products in
@@ -456,8 +466,9 @@ struct CarouselDetailCard: View {
                             productCell(product)
                         }
                     }
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, LayoutMetrics.medium)
                 }
+                .padding(.horizontal, -LayoutMetrics.medium)
             }
         }
     }
@@ -502,7 +513,6 @@ struct CarouselDetailCard: View {
     private var editableProductRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
-                // + always anchored at left
                 Button {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     showAddProduct = true
@@ -538,9 +548,10 @@ struct CarouselDetailCard: View {
                     }
                 }
             }
-            .padding(.horizontal, 2)
+            .padding(.horizontal, LayoutMetrics.medium)
             .padding(.vertical, 8)
         }
+        .padding(.horizontal, -LayoutMetrics.medium)
     }
 
     // MARK: - Editable tag row
@@ -580,8 +591,9 @@ struct CarouselDetailCard: View {
                         .appCapsule(shadowRadius: 0, shadowY: 0)
                     }
                 }
-                .padding(.horizontal, 2)
+                .padding(.horizontal, LayoutMetrics.medium)
             }
+            .padding(.horizontal, -LayoutMetrics.medium)
 
             if showingTagInput {
                 VStack(alignment: .leading, spacing: 0) {
@@ -683,7 +695,6 @@ struct CarouselDetailCard: View {
 
     private func productCell(_ product: Product) -> some View {
         Button {
-            guard hasLinkedOutfits(for: product) else { return }
             let impact = UIImpactFeedbackGenerator(style: .light)
             impact.impactOccurred()
             selectedLinkedProduct = product
@@ -700,13 +711,6 @@ struct CarouselDetailCard: View {
             }
         }
         .buttonStyle(.plain)
-    }
-
-    private func hasLinkedOutfits(for product: Product) -> Bool {
-        store.sortedOutfits.contains { linkedOutfit in
-            linkedOutfit.id != outfit.id &&
-            (linkedOutfit.products ?? []).contains(where: { $0.id == product.id })
-        }
     }
 
     private func archiveProductImage(_ product: Product) -> some View {

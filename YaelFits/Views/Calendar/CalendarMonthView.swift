@@ -286,6 +286,7 @@ struct CalendarDetailSheet: View {
     @Environment(OutfitStore.self) private var store
     @State private var showDeleteConfirmation = false
     @State private var selectedLinkedProduct: Product?
+    @State private var selectedLinkedTag: LinkedTagSelection?
     @State private var isPublished: Bool?
     @State private var isTogglingPublish = false
     @State private var showShareComposer = false
@@ -344,6 +345,9 @@ struct CalendarDetailSheet: View {
         }
         .sheet(item: $selectedLinkedProduct) { product in
             LinkedProductOutfitsSheet(product: product, sourceOutfit: outfit)
+        }
+        .sheet(item: $selectedLinkedTag) { selection in
+            LinkedTagOutfitsSheet(tag: selection.tag, sourceOutfit: outfit)
         }
         .task {
             let published = await OutfitService.isPublished(outfitId: outfit.id)
@@ -447,7 +451,13 @@ struct CalendarDetailSheet: View {
                 calEditableTagRow
             } else if let tags = outfit.tags, !tags.isEmpty {
                 FlowLayout(spacing: 8) {
-                    ForEach(tags, id: \.self) { tag in TagPill(tag: tag) }
+                    ForEach(tags, id: \.self) { tag in
+                        TagPill(tag: tag) {
+                            let impact = UIImpactFeedbackGenerator(style: .light)
+                            impact.impactOccurred()
+                            selectedLinkedTag = LinkedTagSelection(id: tag)
+                        }
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
@@ -544,8 +554,9 @@ struct CalendarDetailSheet: View {
                     }
                 }
             }
-            .padding(.horizontal, 2).padding(.vertical, 8)
+            .padding(.horizontal, LayoutMetrics.medium).padding(.vertical, 8)
         }
+        .padding(.horizontal, -LayoutMetrics.medium)
     }
 
     private var calEditableTagRow: some View {
@@ -581,8 +592,9 @@ struct CalendarDetailSheet: View {
                         .appCapsule(shadowRadius: 0, shadowY: 0)
                     }
                 }
-                .padding(.horizontal, 2)
+                .padding(.horizontal, LayoutMetrics.medium)
             }
+            .padding(.horizontal, -LayoutMetrics.medium)
 
             if showingTagInput {
                 VStack(alignment: .leading, spacing: 0) {
@@ -746,8 +758,9 @@ struct CalendarDetailSheet: View {
                             productCell(product)
                         }
                     }
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, LayoutMetrics.medium)
                 }
+                .padding(.horizontal, -LayoutMetrics.medium)
             }
         }
     }
@@ -765,7 +778,6 @@ struct CalendarDetailSheet: View {
 
     private func productCell(_ product: Product) -> some View {
         Button {
-            guard hasLinkedOutfits(for: product) else { return }
             let impact = UIImpactFeedbackGenerator(style: .light)
             impact.impactOccurred()
             selectedLinkedProduct = product
@@ -782,13 +794,6 @@ struct CalendarDetailSheet: View {
             }
         }
         .buttonStyle(.plain)
-    }
-
-    private func hasLinkedOutfits(for product: Product) -> Bool {
-        store.sortedOutfits.contains { linkedOutfit in
-            linkedOutfit.id != outfit.id &&
-            (linkedOutfit.products ?? []).contains(where: { $0.id == product.id })
-        }
     }
 
     private func calendarProductImage(_ product: Product) -> some View {
