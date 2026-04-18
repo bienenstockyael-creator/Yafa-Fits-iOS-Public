@@ -373,9 +373,6 @@ struct CarouselDetailCard: View {
             // Products
             if isEditing {
                 editableProductRow
-                if (outfit.products ?? []).isEmpty {
-                    emptyProductRow
-                }
             } else if let products = outfit.products, !products.isEmpty {
                 productRow(products)
             } else {
@@ -536,9 +533,17 @@ struct CarouselDetailCard: View {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     showAddProduct = true
                 } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 24))
-                        .foregroundStyle(AppPalette.textFaint)
+                    HStack(spacing: 8) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 24))
+                            .foregroundStyle(AppPalette.textFaint)
+                        if (outfit.products ?? []).isEmpty {
+                            Text("ADD PRODUCT")
+                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                .tracking(1.5)
+                                .foregroundStyle(AppPalette.textFaint)
+                        }
+                    }
                 }
                 .buttonStyle(.plain)
 
@@ -579,14 +584,21 @@ struct CarouselDetailCard: View {
         VStack(alignment: .leading, spacing: 8) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    // + always anchored at left
                     Button {
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         withAnimation { showingTagInput.toggle() }
                     } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 24))
-                            .foregroundStyle(AppPalette.textFaint)
+                        HStack(spacing: 8) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 24))
+                                .foregroundStyle(AppPalette.textFaint)
+                            if editableTags.isEmpty {
+                                Text("ADD TAG")
+                                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                    .tracking(1.5)
+                                    .foregroundStyle(AppPalette.textFaint)
+                            }
+                        }
                     }
                     .buttonStyle(.plain)
 
