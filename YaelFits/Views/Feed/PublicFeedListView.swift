@@ -86,6 +86,7 @@ struct PublicFeedListView: View {
                 }
             }
             .scrollTargetLayout()
+            .animation(.easeOut(duration: 0.3), value: store.feedPosts.count)
             .padding(.horizontal, LayoutMetrics.screenPadding)
             .padding(.bottom, LayoutMetrics.bottomOverlayInset)
             .background {
