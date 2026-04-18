@@ -411,5 +411,16 @@ class OutfitStore {
         await MainActor.run {
             self.feedPosts = freshFeed
         }
+
+        // Prefetch outfits + frame 0 for the first visible cards
+        Task.detached(priority: .utility) {
+            let postsToPreload = Array(freshFeed.prefix(10))
+            for post in postsToPreload {
+                guard self.outfitById[post.outfitId] == nil else { continue }
+                if let outfit = await ContentSource.getPublicOutfit(id: post.outfitId) {
+                    _ = await FrameLoader.shared.frame(for: outfit, index: 0)
+                }
+            }
+        }
     }
 }
