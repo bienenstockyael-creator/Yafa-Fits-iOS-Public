@@ -39,6 +39,7 @@ class OutfitStore {
     var hasPlayedInitialListEntrance = false
     var uploadTask: Task<Void, Never>?
     var currentProfile: Profile?
+    var feedOutfitCache: [String: Outfit] = [:]
 
     var outfitById: [String: Outfit] {
         Dictionary(uniqueKeysWithValues: outfits.map { ($0.id, $0) })
@@ -418,6 +419,7 @@ class OutfitStore {
             for post in postsToPreload {
                 guard self.outfitById[post.outfitId] == nil else { continue }
                 if let outfit = await ContentSource.getPublicOutfit(id: post.outfitId) {
+                    await MainActor.run { self.feedOutfitCache[post.outfitId] = outfit }
                     _ = await FrameLoader.shared.frame(for: outfit, index: 0)
                 }
             }

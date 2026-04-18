@@ -270,9 +270,9 @@ struct FeedPostCard: View {
     @State private var cartOpen = false
     @State private var fetchedOutfit: Outfit?
 
-    // Use local store first (fast), fall back to fetched (for other users' outfits)
+    // Use local store first, then prefetch cache, then per-card fetch
     private var outfit: Outfit? {
-        store.outfitById[post.outfitId] ?? fetchedOutfit
+        store.outfitById[post.outfitId] ?? store.feedOutfitCache[post.outfitId] ?? fetchedOutfit
     }
 
     @State private var cardVisible = false

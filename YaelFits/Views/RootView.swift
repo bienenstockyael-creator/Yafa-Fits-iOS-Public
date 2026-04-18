@@ -43,13 +43,18 @@ struct RootView: View {
                             .blur(radius: calendarViewBlur)
                             .allowsHitTesting(store.currentView == .calendar && !heroTransitioning)
                     }
-                case .feed:
-                    PublicFeedListView()
                 case .upload:
                     UploadPipelineView()
                 case .profile:
                     ProfileView()
+                default:
+                    EmptyView()
                 }
+
+                // Feed stays mounted so scroll position is preserved across tab switches
+                PublicFeedListView()
+                    .opacity(store.currentView == .feed ? 1 : 0)
+                    .allowsHitTesting(store.currentView == .feed)
             }
             .padding(.top, headerContentInset)
 
