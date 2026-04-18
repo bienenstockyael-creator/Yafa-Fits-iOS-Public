@@ -280,8 +280,6 @@ struct FeedPostCard: View {
 
             if let outfit {
                 outfitContent(outfit)
-            } else {
-                Color.clear.frame(height: 292)
             }
 
             if metadataLabels.isEmpty == false {
