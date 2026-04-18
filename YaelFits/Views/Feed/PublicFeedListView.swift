@@ -274,9 +274,11 @@ struct FeedPostCard: View {
         store.outfitById[post.outfitId] ?? fetchedOutfit
     }
 
+    @State private var cardReady = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: LayoutMetrics.small) {
-            if outfit != nil || store.outfitById[post.outfitId] != nil {
+            if cardReady {
                 cardHeader
 
                 if let outfit {
@@ -298,8 +300,16 @@ struct FeedPostCard: View {
                 cardActions
             }
         }
-        .padding(outfit != nil ? LayoutMetrics.medium : 0)
+        .padding(cardReady ? LayoutMetrics.medium : 0)
         .appCard()
+        .opacity(cardReady ? 1 : 0)
+        .onChange(of: outfit) { _, newOutfit in
+            guard newOutfit != nil, !cardReady else { return }
+            withAnimation(.easeOut(duration: 0.35)) { cardReady = true }
+        }
+        .onAppear {
+            if outfit != nil { cardReady = true }
+        }
         .sheet(isPresented: $showComments, onDismiss: {
             Task {
                 let counts = try? await SocialService.getCommentCounts(outfitIds: [post.outfitId])
