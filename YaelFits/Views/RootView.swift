@@ -10,6 +10,7 @@ struct RootView: View {
     @State private var loaderVisible = true
     @State private var loaderDismissTask: Task<Void, Never>?
     @State private var showsFavoritesSheet = false
+    @State private var feedHasAppeared = false
     // In-app notification banner
     @State private var showReviewBanner = false
     @State private var bannerDismissTask: Task<Void, Never>?
@@ -52,9 +53,14 @@ struct RootView: View {
                 }
 
                 // Feed stays mounted so scroll position is preserved across tab switches
-                PublicFeedListView()
-                    .opacity(store.currentView == .feed ? 1 : 0)
-                    .allowsHitTesting(store.currentView == .feed)
+                if store.currentView == .feed || feedHasAppeared {
+                    PublicFeedListView()
+                        .opacity(store.currentView == .feed ? 1 : 0)
+                        .allowsHitTesting(store.currentView == .feed)
+                        .frame(maxHeight: store.currentView == .feed ? .infinity : 0)
+                        .clipped()
+                        .onAppear { feedHasAppeared = true }
+                }
             }
             .padding(.top, headerContentInset)
 
