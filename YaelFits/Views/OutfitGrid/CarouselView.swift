@@ -570,9 +570,7 @@ struct CarouselDetailCard: View {
                     showAddProduct = true
                 } label: {
                     HStack(spacing: 8) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 32))
-                            .foregroundStyle(AppPalette.textFaint)
+                        AppIcon(glyph: .plusCircle, size: 32, color: AppPalette.textFaint, filled: true)
                         if (outfit.products ?? []).isEmpty {
                             Text("ADD PRODUCT")
                                 .font(.system(size: 9, weight: .bold, design: .monospaced))
@@ -625,9 +623,7 @@ struct CarouselDetailCard: View {
                         withAnimation { showingTagInput.toggle() }
                     } label: {
                         HStack(spacing: 8) {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.system(size: 32))
-                                .foregroundStyle(AppPalette.textFaint)
+                            AppIcon(glyph: .plusCircle, size: 32, color: AppPalette.textFaint, filled: true)
                             if editableTags.isEmpty {
                                 Text("ADD TAG")
                                     .font(.system(size: 9, weight: .bold, design: .monospaced))

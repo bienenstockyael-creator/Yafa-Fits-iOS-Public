@@ -524,9 +524,7 @@ struct CalendarDetailSheet: View {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     showAddProduct = true
                 } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 24))
-                        .foregroundStyle(AppPalette.textFaint)
+                    AppIcon(glyph: .plusCircle, size: 32, color: AppPalette.textFaint, filled: true)
                 }
                 .buttonStyle(.plain)
 
@@ -566,9 +564,7 @@ struct CalendarDetailSheet: View {
                     Button {
                         withAnimation { showingTagInput.toggle() }
                     } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 24))
-                            .foregroundStyle(AppPalette.textFaint)
+                        AppIcon(glyph: .plusCircle, size: 32, color: AppPalette.textFaint, filled: true)
                     }
                     .buttonStyle(.plain)
 

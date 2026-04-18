@@ -170,9 +170,7 @@ struct PublicFeedListView: View {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             showsNotifications = true
         } label: {
-            Image(systemName: "bell")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(AppPalette.iconPrimary)
+            AppIcon(glyph: .bell, size: 16, color: AppPalette.iconPrimary)
                 .frame(width: 48, height: 48)
                 .appCircle()
         }

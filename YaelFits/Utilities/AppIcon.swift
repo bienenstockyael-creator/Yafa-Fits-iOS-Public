@@ -27,6 +27,7 @@ enum AppIconGlyph {
     case search
     case cart
     case share
+    case bell
 }
 
 struct AppIcon: View {
@@ -190,6 +191,20 @@ struct AppIcon: View {
                 linePath(from: (12, 4), to: (12, 16), in: rect),
                 polylinePath(points: [(5, 12), (5, 20), (19, 20), (19, 12)], in: rect),
             ]
+        case .bell:
+            var body = Path()
+            body.addArc(center: point(12, 10, in: rect), radius: rect.width * (6.0 / 24), startAngle: .degrees(180), endAngle: .degrees(0), clockwise: false)
+            let left = point(6, 10, in: rect)
+            let right = point(18, 10, in: rect)
+            let botLeft = point(5, 18, in: rect)
+            let botRight = point(19, 18, in: rect)
+            body.addLine(to: CGPoint(x: left.x, y: left.y))
+            body.addLine(to: botLeft)
+            body.move(to: CGPoint(x: right.x, y: right.y))
+            body.addLine(to: botRight)
+            let bar = linePath(from: (4, 18), to: (20, 18), in: rect)
+            let clapper1 = Path(ellipseIn: scaledRect(x: 10, y: 19.5, width: 4, height: 3, in: rect))
+            return [body, bar, clapper1]
         }
     }
 

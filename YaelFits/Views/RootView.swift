@@ -202,11 +202,11 @@ struct RootView: View {
 
     private var viewModeToggle: some View {
         HStack(spacing: 2) {
-            viewModeOption(icon: "square.grid.3x3", isSelected: !isCalendarActive) {
+            viewModeOption(glyph: .grid, isSelected: !isCalendarActive) {
                 guard isCalendarActive else { return }
                 performViewTransition()
             }
-            viewModeOption(icon: "calendar", isSelected: isCalendarActive) {
+            viewModeOption(glyph: .calendar, isSelected: isCalendarActive) {
                 guard !isCalendarActive else { return }
                 performViewTransition()
             }
@@ -548,15 +548,13 @@ struct RootView: View {
         .contentShape(Rectangle())
     }
 
-    private func viewModeOption(icon: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+    private func viewModeOption(glyph: AppIconGlyph, isSelected: Bool, action: @escaping () -> Void) -> some View {
         Button {
             let impact = UIImpactFeedbackGenerator(style: .light)
             impact.impactOccurred()
             action()
         } label: {
-            Image(systemName: icon)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(isSelected ? AppPalette.textPrimary : AppPalette.textFaint)
+            AppIcon(glyph: glyph, size: 12, color: isSelected ? AppPalette.textPrimary : AppPalette.textFaint)
                 .frame(width: 40, height: 24)
                 .background {
                     if isSelected {

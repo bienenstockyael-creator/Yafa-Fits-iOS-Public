@@ -7,9 +7,7 @@ struct NotificationsPlaceholderSheet: View {
         NavigationStack {
             VStack(spacing: LayoutMetrics.large) {
                 Spacer()
-                Image(systemName: "bell.slash")
-                    .font(.system(size: 36))
-                    .foregroundStyle(AppPalette.textFaint)
+                AppIcon(glyph: .bell, size: 36, color: AppPalette.textFaint)
                 Text("No notifications yet")
                     .font(.system(size: 13))
                     .foregroundStyle(AppPalette.textMuted)
