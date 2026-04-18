@@ -535,7 +535,7 @@ struct CarouselDetailCard: View {
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 24))
+                            .font(.system(size: 32))
                             .foregroundStyle(AppPalette.textFaint)
                         if (outfit.products ?? []).isEmpty {
                             Text("ADD PRODUCT")
