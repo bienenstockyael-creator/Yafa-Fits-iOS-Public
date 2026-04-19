@@ -162,6 +162,7 @@ struct OutfitGridView: View {
             .onDisappear {
                 entranceTask?.cancel()
                 carouselTransitionTask?.cancel()
+                store.isCarouselOpen = false
             }
         }
     }
