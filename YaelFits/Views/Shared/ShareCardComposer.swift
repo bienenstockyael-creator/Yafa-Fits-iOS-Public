@@ -481,9 +481,6 @@ struct ShareCardComposer: View {
                 .frame(width: textWidth, alignment: .center)
                 .position(x: w / 2, y: h * 0.92)
         }
-            .padding(.horizontal, ootdInset)
-            .padding(.bottom, geo.size.height * 0.03)
-        }
     }
 
     // MARK: - Outfit layer
