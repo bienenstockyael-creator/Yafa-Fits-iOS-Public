@@ -448,14 +448,14 @@ struct ShareCardComposer: View {
                 .lineLimit(1)
                 .foregroundStyle(cardBlue)
                 .frame(width: textWidth, alignment: .center)
-                .position(x: w / 2, y: h * 0.08)
+                .position(x: w / 2, y: h * 0.20)
 
             // "YAFA FITS" — tucked right after the D of OOTD
             Text("YAFA FITS")
                 .font(.custom("PlayfairDisplay-Italic", size: textWidth * 0.033))
                 .tracking(0.8)
                 .foregroundStyle(cardBlue)
-                .position(x: w * 0.63, y: h * 0.145)
+                .position(x: w * 0.62, y: h * 0.255)
         }
     }
 
@@ -470,7 +470,7 @@ struct ShareCardComposer: View {
             Text(outfitDayOrdinal)
                 .font(.custom("PlayfairDisplay-Italic", size: textWidth * 0.14))
                 .foregroundStyle(cardBlue)
-                .position(x: w * 0.66, y: h * 0.56)
+                .position(x: w * 0.65, y: h * 0.46)
 
             // Month — centered, large
             Text(outfitMonthName.uppercased())
@@ -479,7 +479,7 @@ struct ShareCardComposer: View {
                 .lineLimit(1)
                 .foregroundStyle(cardBlue)
                 .frame(width: textWidth, alignment: .center)
-                .position(x: w / 2, y: h * 0.92)
+                .position(x: w / 2, y: h * 0.80)
         }
     }
 
