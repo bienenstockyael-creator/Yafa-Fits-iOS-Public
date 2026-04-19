@@ -439,7 +439,7 @@ struct ShareCardComposer: View {
         GeometryReader { geo in
             let textWidth = geo.size.width - ootdInset * 2
 
-            VStack(alignment: .center, spacing: 2) {
+            VStack(alignment: .trailing, spacing: 2) {
                 Text("OOTD")
                     .font(.custom("PlayfairDisplay-Italic", size: textWidth * 0.60))
                     .minimumScaleFactor(0.3)
@@ -451,10 +451,9 @@ struct ShareCardComposer: View {
                     .font(.custom("PlayfairDisplay-Italic", size: textWidth * 0.033))
                     .tracking(0.8)
                     .foregroundStyle(cardBlue)
-                    .frame(width: textWidth, alignment: .center)
             }
             .padding(.horizontal, ootdInset)
-            .padding(.top, 10)
+            .padding(.top, 5)
         }
     }
 
@@ -479,7 +478,7 @@ struct ShareCardComposer: View {
                     .frame(width: textWidth, alignment: .center)
             }
             .padding(.horizontal, ootdInset)
-            .padding(.bottom, 10)
+            .padding(.bottom, 5)
         }
     }
 
