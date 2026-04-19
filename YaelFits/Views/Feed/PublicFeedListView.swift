@@ -94,9 +94,15 @@ struct PublicFeedListView: View {
                         }
                     )
                     .id(post.id)
-                    .onReceive(NotificationCenter.default.publisher(for: .init("cartToggled-\(post.id)"))) { _ in
-                        withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.5)) {
-                            proxy.scrollTo("cartBottom-\(post.id)", anchor: .init(x: 0.5, y: 0.98))
+                    .onPreferenceChange(CartBottomKey.self) { bottomY in
+                        guard let bottomY else { return }
+                        let screenHeight = UIScreen.main.bounds.height
+                        let tabBarTop = screenHeight - 90
+                        // Only scroll if cart bottom is below the tab bar
+                        if bottomY > tabBarTop {
+                            withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.5)) {
+                                proxy.scrollTo("cartBottom-\(post.id)", anchor: .init(x: 0.5, y: 0.98))
+                            }
                         }
                     }
                 }
@@ -306,6 +312,7 @@ struct FeedPostCard: View {
     @State private var localLikeAdjustment: Int = 0
     @State private var localCommentCount: Int?
     @State private var cartOpen = false
+    @State private var cartNeedsScroll = false
     @State private var fetchedOutfit: Outfit?
 
     // Use local store first, then prefetch cache, then per-card fetch
@@ -536,9 +543,7 @@ struct FeedPostCard: View {
                             cartOpen.toggle()
                         }
                         if cartOpen {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                NotificationCenter.default.post(name: .init("cartToggled-\(post.id)"), object: nil)
-                            }
+                            cartNeedsScroll = true
                         }
                     }
                 }
@@ -593,7 +598,12 @@ struct FeedPostCard: View {
                     .padding(.bottom, LayoutMetrics.xxxSmall)
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .top)))
-                Color.clear.frame(height: 0).id("cartBottom-\(post.id)")
+                GeometryReader { geo in
+                    Color.clear
+                        .preference(key: CartBottomKey.self, value: geo.frame(in: .global).maxY)
+                }
+                .frame(height: 0)
+                .id("cartBottom-\(post.id)")
             }
         }
     }
@@ -638,5 +648,12 @@ struct FeedPostCard: View {
         }
         .buttonStyle(.plain)
         .frame(minWidth: LayoutMetrics.touchTarget, minHeight: LayoutMetrics.touchTarget)
+    }
+}
+
+private struct CartBottomKey: PreferenceKey {
+    static var defaultValue: CGFloat? = nil
+    static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) {
+        value = nextValue() ?? value
     }
 }
