@@ -214,11 +214,15 @@ struct ShareCardComposer: View {
             // the Color (not the text) determines the card size.
             Group {
                 if selectedTemplate == .ootdLive {
-                    LinearGradient(
-                        colors: [Color(white: 0.92), Color(white: 0.86)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
+                    ZStack {
+                        Color.white
+                        LinearGradient(
+                            colors: [Color(red: 0.737, green: 0.737, blue: 0.737), .black],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .opacity(0.4)
+                    }
                     .overlay(ootdBackLayer)
                 } else if selectedTemplate.isDynamic {
                     selectedTemplate.dynamicBackground
