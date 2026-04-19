@@ -96,7 +96,7 @@ struct PublicFeedListView: View {
                     .id(post.id)
                     .onReceive(NotificationCenter.default.publisher(for: .init("cartToggled-\(post.id)"))) { _ in
                         withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.5)) {
-                            proxy.scrollTo("cartBottom-\(post.id)")
+                            proxy.scrollTo("cartBottom-\(post.id)", anchor: .init(x: 0.5, y: 0.85))
                         }
                     }
                 }
