@@ -486,15 +486,31 @@ struct ShareCardComposer: View {
                 }
                 .frame(width: textWidth, height: textWidth * 0.12)
 
-                Text(outfitMonthName.uppercased())
-                    .font(.custom("PlayfairDisplay-Italic", size: textWidth * 0.50))
-                    .minimumScaleFactor(0.3)
-                    .lineLimit(1)
-                    .foregroundStyle(cardBlue)
-                    .frame(width: textWidth, alignment: .center)
+                // Month rendered to ink bounds via Canvas
+                Canvas { context, size in
+                    if let img = textToImage(
+                        outfitMonthName.uppercased(),
+                        fontName: "PlayfairDisplay-Italic",
+                        fontSize: textWidth * 0.50,
+                        kern: 0,
+                        color: UIColor(cardBlue)
+                    ) {
+                        let scale = min(size.width / img.size.width, 1.0)
+                        let w = img.size.width * scale
+                        let h = img.size.height * scale
+                        let rect = CGRect(
+                            x: (size.width - w) / 2,
+                            y: size.height - h,
+                            width: w,
+                            height: h
+                        )
+                        context.draw(Image(uiImage: img), in: rect)
+                    }
+                }
+                .frame(width: textWidth, height: textWidth * 0.35)
             }
             .padding(.horizontal, ootdInset)
-            .padding(.bottom, -5)
+            .padding(.bottom, 5)
         }
     }
 
