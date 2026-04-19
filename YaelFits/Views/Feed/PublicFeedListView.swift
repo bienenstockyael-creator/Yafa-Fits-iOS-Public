@@ -29,7 +29,23 @@ struct PublicFeedListView: View {
             }
             .zIndex(2)
 
-            // Layer 4: Floating search (bottom right)
+            // Layer 4: Floating notification (top right, fades out on scroll)
+            VStack {
+                HStack {
+                    Spacer()
+                    floatingNotificationButton
+                }
+                .padding(.horizontal, LayoutMetrics.screenPadding)
+                .padding(.top, 56)
+                Spacer()
+            }
+            .opacity(hasScrolled ? 0 : 1)
+            .scaleEffect(hasScrolled ? 0.6 : 1)
+            .animation(.easeInOut(duration: 0.2), value: hasScrolled)
+            .allowsHitTesting(!hasScrolled)
+            .zIndex(3)
+
+            // Layer 5: Floating search (bottom right, fades in on scroll)
             if hasScrolled && !store.feedPosts.isEmpty {
                 VStack {
                     Spacer()
@@ -40,7 +56,7 @@ struct PublicFeedListView: View {
                     .padding(.horizontal, LayoutMetrics.screenPadding)
                     .padding(.bottom, 64)
                 }
-                .zIndex(3)
+                .zIndex(4)
             }
         }
         .task {
@@ -95,7 +111,7 @@ struct PublicFeedListView: View {
         }
         .coordinateSpace(name: "feedScroll")
         .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
-        .contentMargins(.top, 60, for: .scrollContent)
+        .contentMargins(.top, 20, for: .scrollContent)
         .scrollIndicators(.hidden)
         .refreshable {
             await store.refreshFeed()
@@ -160,30 +176,21 @@ struct PublicFeedListView: View {
             .buttonStyle(.plain)
 
             Spacer()
-
-            headerNotificationButton
         }
         .padding(.horizontal, LayoutMetrics.screenPadding)
         .padding(.top, 8)
         .padding(.bottom, LayoutMetrics.xSmall)
     }
 
-    private var headerNotificationButton: some View {
+    private var floatingNotificationButton: some View {
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             showsNotifications = true
         } label: {
             ZStack(alignment: .topTrailing) {
-                AppIcon(glyph: .bell, size: 12, color: AppPalette.textFaint)
-                    .frame(width: 30, height: 30)
-                    .background(
-                        Capsule()
-                            .fill(Color(red: 0.95, green: 0.95, blue: 0.96).opacity(0.98))
-                    )
-                    .overlay(
-                        Capsule()
-                            .stroke(Color(red: 0.88, green: 0.89, blue: 0.91).opacity(0.9), lineWidth: 0.8)
-                    )
+                AppIcon(glyph: .bell, size: 16, color: AppPalette.iconPrimary)
+                    .frame(width: 48, height: 48)
+                    .appCircle()
 
                 if store.unreadNotificationCount > 0 {
                     Text("\(store.unreadNotificationCount)")
