@@ -463,7 +463,7 @@ struct ShareCardComposer: View {
         GeometryReader { geo in
             let textWidth = geo.size.width - ootdInset * 2
 
-            VStack(alignment: .trailing, spacing: -4) {
+            VStack(alignment: .trailing, spacing: 0) {
                 Spacer()
 
                 // Day rendered to ink bounds via Canvas — no font padding
@@ -500,7 +500,7 @@ struct ShareCardComposer: View {
                         let h = img.size.height * scale
                         let rect = CGRect(
                             x: (size.width - w) / 2,
-                            y: size.height - h,
+                            y: 0,
                             width: w,
                             height: h
                         )
