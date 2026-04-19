@@ -260,16 +260,17 @@ struct ContentSource {
                 let userId: String
                 let date: String
                 let caption: String?
+                let createdAt: String?
                 enum CodingKeys: String, CodingKey {
                     case id, date, caption
                     case userId = "user_id"
+                    case createdAt = "created_at"
                 }
             }
-            // Try with caption, fall back to without if schema cache is stale
             let outfitRows: [FeedOutfitRow]
             if let withCaption: [FeedOutfitRow] = try? await supabase
                 .from("outfits")
-                .select("id, user_id, date, caption")
+                .select("id, user_id, date, caption, created_at")
                 .eq("is_public", value: true)
                 .in("user_id", values: userIdStrings)
                 .order("created_at", ascending: false)
@@ -280,7 +281,7 @@ struct ContentSource {
             } else {
                 outfitRows = try await supabase
                     .from("outfits")
-                    .select("id, user_id, date")
+                    .select("id, user_id, date, created_at")
                     .eq("is_public", value: true)
                     .in("user_id", values: userIdStrings)
                     .order("created_at", ascending: false)
@@ -311,7 +312,8 @@ struct ContentSource {
                     profileImage: nil,
                     avatarUrl: profile?.avatarUrl,
                     authorId: UUID(uuidString: row.userId),
-                    isAuthorPro: profile?.isPro
+                    isAuthorPro: profile?.isPro,
+                    createdAt: row.createdAt
                 )
             }
         } catch {
