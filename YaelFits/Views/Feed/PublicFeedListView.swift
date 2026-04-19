@@ -555,7 +555,7 @@ struct FeedPostCard: View {
     }
 
     private var timestampLabel: String {
-        RelativeTime.label(from: outfit?.parsedDate)
+        RelativeTime.label(from: post.publishedDate ?? outfit?.parsedDate)
     }
 
     private func actionButton(

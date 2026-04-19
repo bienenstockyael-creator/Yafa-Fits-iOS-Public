@@ -327,15 +327,17 @@ struct ContentSource {
                 let id: String
                 let userId: String?
                 let caption: String?
+                let createdAt: String?
                 enum CodingKeys: String, CodingKey {
                     case id, caption
                     case userId = "user_id"
+                    case createdAt = "created_at"
                 }
             }
             let rows: [FeedOutfitRow]
             if let withCaption: [FeedOutfitRow] = try? await supabase
                 .from("outfits")
-                .select("id, user_id, caption")
+                .select("id, user_id, caption, created_at")
                 .eq("is_public", value: true)
                 .order("created_at", ascending: false)
                 .limit(50)
@@ -345,7 +347,7 @@ struct ContentSource {
             } else {
                 rows = try await supabase
                     .from("outfits")
-                    .select("id, user_id")
+                    .select("id, user_id, created_at")
                     .eq("is_public", value: true)
                     .order("created_at", ascending: false)
                     .limit(50)
@@ -374,7 +376,8 @@ struct ContentSource {
                     profileImage: nil,
                     avatarUrl: profile?.avatarUrl,
                     authorId: row.userId.flatMap { UUID(uuidString: $0) },
-                    isAuthorPro: profile?.isPro
+                    isAuthorPro: profile?.isPro,
+                    createdAt: row.createdAt
                 )
             }
         } catch {

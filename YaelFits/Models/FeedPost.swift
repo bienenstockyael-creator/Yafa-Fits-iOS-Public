@@ -11,6 +11,14 @@ struct FeedPost: Codable, Identifiable {
     var avatarUrl: String?
     var authorId: UUID?
     var isAuthorPro: Bool?
+    var createdAt: String?
+
+    var publishedDate: Date? {
+        guard let createdAt else { return nil }
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f.date(from: createdAt)
+    }
 
     var profileImageURL: URL? {
         guard let profileImage else { return nil }
