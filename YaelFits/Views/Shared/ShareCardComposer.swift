@@ -451,7 +451,7 @@ struct ShareCardComposer: View {
                 Spacer()
             }
             .padding(.horizontal, ootdInset)
-            .padding(.top, geo.size.height * 0.02)
+            .padding(.top, -geo.size.height * 0.02)
         }
     }
 
