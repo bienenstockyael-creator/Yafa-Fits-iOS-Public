@@ -36,10 +36,8 @@ enum ShareCardTemplate: Int, CaseIterable, Identifiable, Hashable {
         self == .monoLive || self == .electricLive || self == .ootdLive
     }
 
-    /// Whether this dynamic template uses the layered1 back PNG instead of a solid color.
-    var usesBackPNG: Bool {
-        self == .ootdLive
-    }
+    /// Whether this dynamic template uses a back PNG instead of a solid color.
+    var usesBackPNG: Bool { false }
 
     /// Background fill for dynamic templates.
     var dynamicBackground: Color { cardGray }
@@ -215,7 +213,13 @@ struct ShareCardComposer: View {
             // For dynamic templates the number is overlaid ON the Color so
             // the Color (not the text) determines the card size.
             Group {
-                if selectedTemplate.isDynamic && !selectedTemplate.usesBackPNG {
+                if selectedTemplate == .ootdLive {
+                    LinearGradient(
+                        colors: [Color(white: 0.92), Color(white: 0.86)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                } else if selectedTemplate.isDynamic {
                     selectedTemplate.dynamicBackground
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .overlay(
@@ -428,30 +432,30 @@ struct ShareCardComposer: View {
             let w = geo.size.width
             let h = geo.size.height
 
-            // "OOTD" top-left — Playfair Display Italic 135px → scale to card
+            // "OOTD" — large, upper area, centered
             Text("OOTD")
-                .font(.custom("PlayfairDisplay-Italic", size: w * 0.28))
+                .font(.custom("PlayfairDisplay-Italic", size: w * 0.30))
                 .foregroundStyle(cardBlue)
-                .position(x: w * 0.32, y: h * 0.06)
+                .position(x: w * 0.46, y: h * 0.13)
 
-            // Month name top-right — Playfair Display Italic 135px
-            Text(outfitMonthName.uppercased())
-                .font(.custom("PlayfairDisplay-Italic", size: w * 0.18))
-                .foregroundStyle(cardBlue)
-                .position(x: w * 0.72, y: h * 0.06)
-
-            // Day ordinal (e.g. "14th") — Playfair Display Regular 47px
-            Text(outfitDayOrdinal)
-                .font(.custom("PlayfairDisplay-Italic", size: w * 0.10))
-                .foregroundStyle(cardBlue)
-                .position(x: w * 0.88, y: h * 0.12)
-
-            // "YAFA FITS" bottom — Playfair Display Regular 12px
+            // "YAFA FITS" — tiny, tucked right of OOTD
             Text("YAFA FITS")
-                .font(.custom("PlayfairDisplay-Italic", size: w * 0.025))
-                .tracking(1.5)
+                .font(.custom("PlayfairDisplay-Italic", size: w * 0.026))
+                .tracking(0.8)
                 .foregroundStyle(cardBlue)
-                .position(x: w * 0.5, y: h * 0.97)
+                .position(x: w * 0.68, y: h * 0.11)
+
+            // Day ordinal — right side, between OOTD and APRIL
+            Text(outfitDayOrdinal)
+                .font(.custom("PlayfairDisplay-Italic", size: w * 0.105))
+                .foregroundStyle(cardBlue)
+                .position(x: w * 0.72, y: h * 0.28)
+
+            // Month name — large, lower area, centered
+            Text(outfitMonthName.uppercased())
+                .font(.custom("PlayfairDisplay-Italic", size: w * 0.30))
+                .foregroundStyle(cardBlue)
+                .position(x: w * 0.50, y: h * 0.88)
         }
     }
 
