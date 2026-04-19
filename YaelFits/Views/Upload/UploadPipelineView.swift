@@ -68,13 +68,15 @@ struct UploadPipelineView: View {
         }
         .sheet(item: $outfitToPublish) { outfit in
             PublishSheet(outfit: outfit) { caption, products in
+                // Finalize + publish after user confirms in the sheet
+                finalizeCurrentVideo(publishToFeed: true)
                 if let userId = store.userId {
                     Task {
                         let inputs = products.map {
                             ProductInput(outfitId: outfit.id, name: $0.name, price: $0.price, image: $0.image, shopLink: $0.shopLink)
                         }
                         try? await OutfitService.publishOutfit(outfitId: outfit.id, caption: caption, products: inputs, outfit: outfit, userId: userId)
-                        await MainActor.run { store.publishOutfitToFeed(outfit) }
+                        await MainActor.run { store.publishOutfitToFeed(outfit, caption: caption) }
                     }
                 }
                 outfitToPublish = nil
@@ -274,7 +276,6 @@ struct UploadPipelineView: View {
 
                 Button {
                     guard let outfit = job?.stagedOutfit else { return }
-                    finalizeCurrentVideo(publishToFeed: false)
                     outfitToPublish = outfit
                     showingPublishSheet = true
                 } label: {
