@@ -463,7 +463,7 @@ struct ShareCardComposer: View {
         GeometryReader { geo in
             let textWidth = geo.size.width - ootdInset * 2
 
-            VStack(alignment: .trailing, spacing: -30) {
+            VStack(alignment: .trailing, spacing: -38) {
                 Spacer()
 
                 Text(outfitDayOrdinal)
