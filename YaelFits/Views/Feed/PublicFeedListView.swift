@@ -93,6 +93,12 @@ struct PublicFeedListView: View {
                             commentCounts[post.outfitId] = newCount
                         }
                     )
+                    .id(post.id)
+                    .onReceive(NotificationCenter.default.publisher(for: .init("cartToggled-\(post.id)"))) { _ in
+                        withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.5)) {
+                            proxy.scrollTo(post.id, anchor: .bottom)
+                        }
+                    }
                 }
             }
             .scrollTargetLayout()
@@ -528,6 +534,11 @@ struct FeedPostCard: View {
                     ) {
                         withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.5)) {
                             cartOpen.toggle()
+                        }
+                        if cartOpen {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                NotificationCenter.default.post(name: .init("cartToggled-\(post.id)"), object: nil)
+                            }
                         }
                     }
                 }
