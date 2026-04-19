@@ -29,6 +29,7 @@ struct YaelFitsApp: App {
                                 _ = await (social, data)
                                 outfitStore.restorePersistedPendingReviewIfNeeded()
                                 await outfitStore.checkForServerCompletedJob(userId: userId)
+                                await outfitStore.refreshUnreadNotificationCount()
                                 // Show profile setup for new users with no display name
                                 if outfitStore.currentProfile?.displayName == nil {
                                     await MainActor.run { showProfileSetup = true }

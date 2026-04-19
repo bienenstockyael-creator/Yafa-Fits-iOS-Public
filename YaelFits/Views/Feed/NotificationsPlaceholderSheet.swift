@@ -47,6 +47,7 @@ struct NotificationsPlaceholderSheet: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Close") {
                         UserDefaults.standard.set(Date(), forKey: "lastSeenNotificationsAt")
+                        store.unreadNotificationCount = 0
                         dismiss()
                     }
                     .font(.system(size: 13))

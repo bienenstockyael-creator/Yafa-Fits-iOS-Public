@@ -38,6 +38,57 @@ class OutfitStore {
     var isCarouselOpen = false
     var unreadNotificationCount = 0
     var feedScrollToTopTrigger = 0
+
+    func refreshUnreadNotificationCount() async {
+        guard let userId else { return }
+        let lastSeen = UserDefaults.standard.object(forKey: "lastSeenNotificationsAt") as? Date ?? .distantPast
+        let since = ISO8601DateFormatter().string(from: lastSeen)
+
+        struct OIdRow: Decodable { let id: String }
+        let userOutfitIds: [String] = (try? await supabase
+            .from("outfits")
+            .select("id")
+            .eq("user_id", value: userId.uuidString)
+            .execute()
+            .value as [OIdRow])?.map(\.id) ?? []
+
+        var count = 0
+
+        if !userOutfitIds.isEmpty {
+            let likes: [OIdRow] = (try? await supabase
+                .from("likes")
+                .select("outfit_id")
+                .in("outfit_id", values: userOutfitIds)
+                .neq("user_id", value: userId.uuidString)
+                .gt("created_at", value: since)
+                .execute()
+                .value) ?? []
+            count += likes.count
+
+            let comments: [OIdRow] = (try? await supabase
+                .from("comments")
+                .select("outfit_id")
+                .in("outfit_id", values: userOutfitIds)
+                .neq("user_id", value: userId.uuidString)
+                .gt("created_at", value: since)
+                .execute()
+                .value) ?? []
+            count += comments.count
+        }
+
+        struct FollowIdRow: Decodable { let follower_id: String }
+        let follows: [FollowIdRow] = (try? await supabase
+            .from("follows")
+            .select("follower_id")
+            .eq("following_id", value: userId.uuidString)
+            .neq("follower_id", value: userId.uuidString)
+            .gt("created_at", value: since)
+            .execute()
+            .value) ?? []
+        count += follows.count
+
+        await MainActor.run { unreadNotificationCount = count }
+    }
     var hasPlayedInitialListEntrance = false
     var uploadTask: Task<Void, Never>?
     var currentProfile: Profile?
@@ -414,6 +465,8 @@ class OutfitStore {
         await MainActor.run {
             self.feedPosts = freshFeed
         }
+
+        await refreshUnreadNotificationCount()
 
         // Prefetch outfits + frame 0 for the first visible cards
         Task.detached(priority: .utility) {
