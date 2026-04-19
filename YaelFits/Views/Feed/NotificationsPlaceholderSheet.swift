@@ -258,7 +258,9 @@ private struct NotificationItem: Identifiable {
     var isNew: Bool = false
 
     var date: Date {
-        ISO8601DateFormatter().date(from: createdAt) ?? .distantPast
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f.date(from: createdAt) ?? .distantPast
     }
 
     var message: String {
