@@ -32,7 +32,8 @@ struct DiscoverView: View {
             .sheet(item: $selectedProfile) { profile in
                 UserProfileSheet(userId: profile.id)
                     .environment(store)
-                    .presentationBackground(AppPalette.groupedBackground)
+                    .presentationDragIndicator(.visible)
+                    .presentationBackground(.white)
                     .presentationCornerRadius(20)
             }
         }

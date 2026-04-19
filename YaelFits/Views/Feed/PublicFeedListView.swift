@@ -378,7 +378,7 @@ struct FeedPostCard: View {
                         .environment(store)
                         .presentationDetents([.large])
                         .presentationDragIndicator(.visible)
-                        .presentationBackground(AppPalette.groupedBackground)
+                        .presentationBackground(.white)
                         .presentationCornerRadius(20)
                 }
             }
