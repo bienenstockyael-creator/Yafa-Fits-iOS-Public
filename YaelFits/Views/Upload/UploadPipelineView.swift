@@ -1998,6 +1998,7 @@ private actor UploadWeatherService {
     }()
 
     func fetchCurrentWeather() async -> Weather? {
+        // Try GPS first, fall back to IP-based geolocation
         do {
             let location = try await UploadLocationCoordinator().requestLocation()
             return try await fetchWeather(
@@ -2005,8 +2006,18 @@ private actor UploadWeatherService {
                 longitude: location.coordinate.longitude
             )
         } catch {
+            // GPS failed or denied — try IP geolocation
+            return await fetchWeatherFromIP()
+        }
+    }
+
+    private func fetchWeatherFromIP() async -> Weather? {
+        struct IPLocation: Decodable { let lat: Double; let lon: Double }
+        guard let (data, _) = try? await session.data(from: URL(string: "http://ip-api.com/json/?fields=lat,lon")!),
+              let loc = try? JSONDecoder().decode(IPLocation.self, from: data) else {
             return nil
         }
+        return try? await fetchWeather(latitude: loc.lat, longitude: loc.lon)
     }
 
     private func fetchWeather(latitude: CLLocationDegrees, longitude: CLLocationDegrees) async throws -> Weather {
