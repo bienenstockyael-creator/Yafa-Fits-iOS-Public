@@ -47,7 +47,8 @@ async function pollLoop() {
 
 async function checkSocialActivity() {
   const since = lastCheck;
-  lastCheck = new Date().toISOString();
+  const now = new Date().toISOString();
+  lastCheck = now;
 
   // New likes
   const { data: likes } = await supabase
@@ -55,6 +56,7 @@ async function checkSocialActivity() {
     .select('user_id, outfit_id')
     .gt('created_at', since);
 
+  if (likes?.length) console.log(`Found ${likes.length} new like(s) since ${since}`);
   for (const like of likes ?? []) {
     const { data: outfit } = await supabase
       .from('outfits')
@@ -62,6 +64,7 @@ async function checkSocialActivity() {
       .eq('id', like.outfit_id)
       .single();
     if (outfit && outfit.user_id !== like.user_id) {
+      console.log(`Sending like notification to ${outfit.user_id.slice(0,8)}`);
       await sendPush(outfit.user_id, 'New like ❤️', 'Someone liked your outfit!');
     }
   }
@@ -72,6 +75,7 @@ async function checkSocialActivity() {
     .select('user_id, outfit_id, body')
     .gt('created_at', since);
 
+  if (comments?.length) console.log(`Found ${comments.length} new comment(s) since ${since}`);
   for (const comment of comments ?? []) {
     const { data: outfit } = await supabase
       .from('outfits')
@@ -79,6 +83,7 @@ async function checkSocialActivity() {
       .eq('id', comment.outfit_id)
       .single();
     if (outfit && outfit.user_id !== comment.user_id) {
+      console.log(`Sending comment notification to ${outfit.user_id.slice(0,8)}`);
       const preview = (comment.body || '').slice(0, 80) || 'Someone commented on your outfit!';
       await sendPush(outfit.user_id, 'New comment 💬', preview);
     }
@@ -90,8 +95,10 @@ async function checkSocialActivity() {
     .select('follower_id, following_id')
     .gt('created_at', since);
 
+  if (follows?.length) console.log(`Found ${follows.length} new follow(s) since ${since}`);
   for (const follow of follows ?? []) {
     if (follow.follower_id !== follow.following_id) {
+      console.log(`Sending follow notification to ${follow.following_id.slice(0,8)}`);
       await sendPush(follow.following_id, 'New follower 🙌', 'Someone started following you!');
     }
   }
@@ -104,7 +111,10 @@ async function sendPush(userId, title, body) {
     .eq('user_id', userId)
     .eq('platform', 'ios');
 
-  if (!tokens || tokens.length === 0) return;
+  if (!tokens || tokens.length === 0) {
+    console.log(`No tokens for user ${userId.slice(0,8)}`);
+    return;
+  }
 
   for (const { token, environment } of tokens) {
     const note = new apn.Notification();
