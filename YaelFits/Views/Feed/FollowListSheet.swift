@@ -34,7 +34,7 @@ struct FollowListSheet: View {
                     .scrollIndicators(.hidden)
                 }
             }
-            .background(AppPalette.pageBackground)
+            .background(.white)
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.light, for: .navigationBar)

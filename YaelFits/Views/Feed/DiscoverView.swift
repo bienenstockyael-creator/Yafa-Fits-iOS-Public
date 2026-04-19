@@ -18,7 +18,7 @@ struct DiscoverView: View {
                 searchBar
                 resultsList
             }
-            .background(AppPalette.groupedBackground)
+            .background(.white)
             .navigationTitle("Find Your People")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.light, for: .navigationBar)

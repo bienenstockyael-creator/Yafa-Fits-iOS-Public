@@ -48,7 +48,7 @@ struct UserProfileSheet: View {
                 .padding(.bottom, LayoutMetrics.large)
             }
             .scrollIndicators(.hidden)
-            .background(AppPalette.groupedBackground)
+            .background(.white)
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.light, for: .navigationBar)
             .task { await loadProfile() }
