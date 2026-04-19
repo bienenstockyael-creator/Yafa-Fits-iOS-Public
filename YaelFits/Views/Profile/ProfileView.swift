@@ -16,6 +16,10 @@ struct ProfileView: View {
     @State private var isUploadingAvatar = false
     @State private var uploadError: String?
     @State private var pendingCropImage: IdentifiableImage?
+    @State private var followerIds: [UUID] = []
+    @State private var followingIds: [UUID] = []
+    @State private var showFollowers = false
+    @State private var showFollowing = false
 
     var body: some View {
         ScrollView {
@@ -216,13 +220,47 @@ struct ProfileView: View {
     }
 
     private var statsSection: some View {
-        HStack(spacing: 0) {
-            statItem(count: store.sortedOutfits.count, label: "Outfits")
-            statItem(count: store.likedIds.count, label: "Liked")
-            statItem(count: store.savedIds.count, label: "Saved")
+        VStack(spacing: LayoutMetrics.small) {
+            HStack(spacing: 0) {
+                statItem(count: store.sortedOutfits.count, label: "Outfits")
+                statItem(count: store.likedIds.count, label: "Liked")
+                statItem(count: store.savedIds.count, label: "Saved")
+            }
+            .padding(.vertical, LayoutMetrics.small)
+            .appCard(cornerRadius: 20, shadowRadius: 6, shadowY: 3)
+
+            HStack(spacing: 0) {
+                Button { showFollowers = true } label: {
+                    statItem(count: followerIds.count, label: "Followers")
+                }.buttonStyle(.plain)
+                Button { showFollowing = true } label: {
+                    statItem(count: followingIds.count, label: "Following")
+                }.buttonStyle(.plain)
+            }
+            .padding(.vertical, LayoutMetrics.small)
+            .appCard(cornerRadius: 20, shadowRadius: 6, shadowY: 3)
         }
-        .padding(.vertical, LayoutMetrics.small)
-        .appCard(cornerRadius: 20, shadowRadius: 6, shadowY: 3)
+        .sheet(isPresented: $showFollowers) {
+            FollowListSheet(title: "Followers", userIds: followerIds)
+                .environment(store)
+                .presentationDragIndicator(.visible)
+                .presentationBackground(.white)
+        }
+        .sheet(isPresented: $showFollowing) {
+            FollowListSheet(title: "Following", userIds: followingIds)
+                .environment(store)
+                .presentationDragIndicator(.visible)
+                .presentationBackground(.white)
+        }
+        .task {
+            guard let userId = store.userId else { return }
+            let frs = (try? await SocialService.getFollowerIds(userId: userId)) ?? []
+            let fng = (try? await SocialService.getFollowingIds(userId: userId)) ?? []
+            await MainActor.run {
+                followerIds = Array(frs)
+                followingIds = Array(fng)
+            }
+        }
     }
 
     private func statItem(count: Int, label: String) -> some View {

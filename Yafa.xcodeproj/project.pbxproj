@@ -113,12 +113,13 @@
 		E344DB1A263DCD98D7F53A83 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D337C4C4402316C35342FD86 /* ProfileView.swift */; };
 		E823AF5D92E1552C3529D50F /* SocialService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0200DA9B94C7FF2FD79D899 /* SocialService.swift */; };
 		E829A0C19B1DFA9A885A7B54 /* CommentsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B54F1D89D0F53C54533E7A1 /* CommentsSheet.swift */; };
-		F1A2B3C4D5E6F7A8B9C0D1E2 /* NotificationsPlaceholderSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A2B3C4D5E6F7A8B9C0D1E3 /* NotificationsPlaceholderSheet.swift */; };
+		A1B2C3D4E5F6A7B8C9D0E1F2 /* FollowListSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F3 /* FollowListSheet.swift */; };
 		EA8546713771C1124022E886 /* outfit-16.webp in Resources */ = {isa = PBXBuildFile; fileRef = BEB2199F4533599D5693B5A2 /* outfit-16.webp */; };
 		EC0CA5A8FA12A4B6E8771D0C /* FalVideoGenerationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EB8B4728A72D35257989791 /* FalVideoGenerationService.swift */; };
 		ECF113AE085DAB89C380C75C /* outfit-20.webp in Resources */ = {isa = PBXBuildFile; fileRef = 7F16D58523C3D03D59A3625B /* outfit-20.webp */; };
 		EDCE9F834080E234A3B809C5 /* outfits.json in Resources */ = {isa = PBXBuildFile; fileRef = 6AF76DDBEC17ACF0DEB5C2B2 /* outfits.json */; };
 		EDEF93D554B05F4556CBEF39 /* CarouselView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EE82713F28FF3FC8E2D62F9 /* CarouselView.swift */; };
+		F1A2B3C4D5E6F7A8B9C0D1E2 /* NotificationsPlaceholderSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A2B3C4D5E6F7A8B9C0D1E3 /* NotificationsPlaceholderSheet.swift */; };
 		F7A15AB6247B925DADE4A0E4 /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81B954E0E1EBF71A99A79927 /* AuthView.swift */; };
 		FA44C3B031072C58E72871BC /* AddProductSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 662419C9FD163590FB593FB1 /* AddProductSheet.swift */; };
 		FB40B9D88FCEC7C1D58FF4BF /* RotatableOutfitImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49B67EDFF1375799A0757796 /* RotatableOutfitImage.swift */; };
@@ -132,7 +133,7 @@
 		08C870C07795EDBD2EFF2DD8 /* DiscoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverView.swift; sourceTree = "<group>"; };
 		0A93739B0CD45D361C7790C2 /* outfit-11.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-11.webp"; sourceTree = "<group>"; };
 		0B54F1D89D0F53C54533E7A1 /* CommentsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommentsSheet.swift; sourceTree = "<group>"; };
-		F1A2B3C4D5E6F7A8B9C0D1E3 /* NotificationsPlaceholderSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsPlaceholderSheet.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6A7B8C9D0E1F3 /* FollowListSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FollowListSheet.swift; sourceTree = "<group>"; };
 		0EB8B4728A72D35257989791 /* FalVideoGenerationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FalVideoGenerationService.swift; sourceTree = "<group>"; };
 		0F6E685A5C50CFF6759597AE /* outfit-7.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-7.webp"; sourceTree = "<group>"; };
 		11C878BD50E25C26C09E98B3 /* outfit-15.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-15.webp"; sourceTree = "<group>"; };
@@ -239,6 +240,7 @@
 		EE8E7C6F4FF612B588212336 /* LocalCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalCache.swift; sourceTree = "<group>"; };
 		EF568E0C17C6FF782B784F3C /* AuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthManager.swift; sourceTree = "<group>"; };
 		F15640B030569340C148E2F4 /* AvatarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarView.swift; sourceTree = "<group>"; };
+		F1A2B3C4D5E6F7A8B9C0D1E3 /* NotificationsPlaceholderSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsPlaceholderSheet.swift; sourceTree = "<group>"; };
 		F6B8C9D105280144E32EBE34 /* windy.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = windy.json; sourceTree = "<group>"; };
 		F6BCC4406A27B6BF439BBA9D /* Outfit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Outfit.swift; sourceTree = "<group>"; };
 		FDF9D01E8CA3A29D241E8B17 /* LottieView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LottieView.swift; sourceTree = "<group>"; };
@@ -401,6 +403,7 @@
 			isa = PBXGroup;
 			children = (
 				0B54F1D89D0F53C54533E7A1 /* CommentsSheet.swift */,
+				A1B2C3D4E5F6A7B8C9D0E1F3 /* FollowListSheet.swift */,
 				F1A2B3C4D5E6F7A8B9C0D1E3 /* NotificationsPlaceholderSheet.swift */,
 				08C870C07795EDBD2EFF2DD8 /* DiscoverView.swift */,
 				DA4DE6289C8151E4168591DB /* PublicFeedListView.swift */,
@@ -660,6 +663,7 @@
 				8F72948DEEE2D44825BE68A6 /* CalendarMonthView.swift in Sources */,
 				EDEF93D554B05F4556CBEF39 /* CarouselView.swift in Sources */,
 				E829A0C19B1DFA9A885A7B54 /* CommentsSheet.swift in Sources */,
+				A1B2C3D4E5F6A7B8C9D0E1F2 /* FollowListSheet.swift in Sources */,
 				F1A2B3C4D5E6F7A8B9C0D1E2 /* NotificationsPlaceholderSheet.swift in Sources */,
 				395534ECE07C62454403ADFE /* Constants.swift in Sources */,
 				01ED92B84B56FBC3638A34E0 /* ContentSource.swift in Sources */,
@@ -723,7 +727,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = YaelFits/YaelFits.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 12;
+				CURRENT_PROJECT_VERSION = 13;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = YaelFits/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -811,7 +815,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = YaelFits/YaelFits.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 12;
+				CURRENT_PROJECT_VERSION = 13;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = YaelFits/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (

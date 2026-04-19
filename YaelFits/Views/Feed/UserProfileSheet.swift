@@ -8,6 +8,10 @@ struct UserProfileSheet: View {
     @State private var isLoading = true
     @State private var followerCount = 0
     @State private var followingCount = 0
+    @State private var followerIds: [UUID] = []
+    @State private var followingIds: [UUID] = []
+    @State private var showFollowers = false
+    @State private var showFollowing = false
 
     private var isFollowing: Bool {
         store.followingIds.contains(userId)
@@ -77,11 +81,27 @@ struct UserProfileSheet: View {
             // Stats
             HStack(spacing: 0) {
                 statItem(count: outfits.count, label: "Outfits")
-                statItem(count: followerCount, label: "Followers")
-                statItem(count: followingCount, label: "Following")
+                Button { showFollowers = true } label: {
+                    statItem(count: followerCount, label: "Followers")
+                }.buttonStyle(.plain)
+                Button { showFollowing = true } label: {
+                    statItem(count: followingCount, label: "Following")
+                }.buttonStyle(.plain)
             }
             .padding(.vertical, LayoutMetrics.xSmall)
             .appCard(cornerRadius: 16, shadowRadius: 4, shadowY: 2)
+            .sheet(isPresented: $showFollowers) {
+                FollowListSheet(title: "Followers", userIds: followerIds)
+                    .environment(store)
+                    .presentationDragIndicator(.visible)
+                    .presentationBackground(.white)
+            }
+            .sheet(isPresented: $showFollowing) {
+                FollowListSheet(title: "Following", userIds: followingIds)
+                    .environment(store)
+                    .presentationDragIndicator(.visible)
+                    .presentationBackground(.white)
+            }
 
             // Follow button
             if !isOwnProfile {
@@ -146,16 +166,22 @@ struct UserProfileSheet: View {
             async let profileTask = SocialService.getProfile(userId: userId)
             async let countsTask = SocialService.getFollowCounts(userId: userId)
             async let outfitsTask = ContentSource.getPublicOutfits(forUser: userId)
+            async let followerIdsTask = try SocialService.getFollowerIds(userId: userId)
+            async let followingIdsTask = try SocialService.getFollowingIds(userId: userId)
 
             let p = try await profileTask
             let counts = try await countsTask
             let userOutfits = await outfitsTask
+            let frs = (try? await followerIdsTask) ?? []
+            let fng = (try? await followingIdsTask) ?? []
 
             await MainActor.run {
                 profile = p
                 followerCount = counts.followerCount
                 followingCount = counts.followingCount
                 outfits = userOutfits
+                followerIds = Array(frs)
+                followingIds = Array(fng)
                 isLoading = false
             }
         } catch {
