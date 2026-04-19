@@ -18,7 +18,7 @@ struct DiscoverView: View {
                 searchBar
                 resultsList
             }
-            .background(.white)
+            .background(AppPalette.groupedBackground)
             .navigationTitle("Find Your People")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.light, for: .navigationBar)
@@ -33,7 +33,7 @@ struct DiscoverView: View {
                 UserProfileSheet(userId: profile.id)
                     .environment(store)
                     .presentationDragIndicator(.visible)
-                    .presentationBackground(.white)
+                    .presentationBackground(AppPalette.groupedBackground)
                     .presentationCornerRadius(20)
             }
         }

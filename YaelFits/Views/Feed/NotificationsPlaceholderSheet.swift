@@ -39,7 +39,7 @@ struct NotificationsPlaceholderSheet: View {
                     .scrollIndicators(.hidden)
                 }
             }
-            .background(.white)
+            .background(AppPalette.groupedBackground)
             .navigationTitle("Notifications")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.light, for: .navigationBar)

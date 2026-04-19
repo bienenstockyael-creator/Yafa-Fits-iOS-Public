@@ -34,7 +34,7 @@ struct FollowListSheet: View {
                     .scrollIndicators(.hidden)
                 }
             }
-            .background(.white)
+            .background(AppPalette.groupedBackground)
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.light, for: .navigationBar)
@@ -50,7 +50,7 @@ struct FollowListSheet: View {
                 UserProfileSheet(userId: userId)
                     .environment(store)
                     .presentationDragIndicator(.visible)
-                    .presentationBackground(.white)
+                    .presentationBackground(AppPalette.groupedBackground)
             }
         }
     }

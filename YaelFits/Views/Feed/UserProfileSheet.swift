@@ -48,7 +48,7 @@ struct UserProfileSheet: View {
                 .padding(.bottom, LayoutMetrics.large)
             }
             .scrollIndicators(.hidden)
-            .background(.white)
+            .background(AppPalette.groupedBackground)
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.light, for: .navigationBar)
             .task { await loadProfile() }
@@ -94,13 +94,13 @@ struct UserProfileSheet: View {
                 FollowListSheet(title: "Followers", userIds: followerIds)
                     .environment(store)
                     .presentationDragIndicator(.visible)
-                    .presentationBackground(.white)
+                    .presentationBackground(AppPalette.groupedBackground)
             }
             .sheet(isPresented: $showFollowing) {
                 FollowListSheet(title: "Following", userIds: followingIds)
                     .environment(store)
                     .presentationDragIndicator(.visible)
-                    .presentationBackground(.white)
+                    .presentationBackground(AppPalette.groupedBackground)
             }
 
             // Follow button

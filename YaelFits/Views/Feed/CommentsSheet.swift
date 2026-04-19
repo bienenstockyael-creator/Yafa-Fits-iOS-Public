@@ -16,7 +16,7 @@ struct CommentsSheet: View {
                 Divider().opacity(0.16)
                 composeBar
             }
-            .background(.white)
+            .background(AppPalette.groupedBackground)
             .navigationTitle("Comments")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.light, for: .navigationBar)
@@ -130,7 +130,7 @@ struct CommentsSheet: View {
         }
         .padding(.horizontal, LayoutMetrics.screenPadding)
         .padding(.vertical, LayoutMetrics.xSmall)
-        .background(.white)
+        .background(AppPalette.groupedBackground)
     }
 
     private func loadComments() async {

@@ -181,7 +181,7 @@ struct PublicFeedListView: View {
                 .environment(store)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
-                .presentationBackground(.white)
+                .presentationBackground(AppPalette.groupedBackground)
         }
     }
 
@@ -325,7 +325,7 @@ struct FeedPostCard: View {
                 .environment(store)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
-                .presentationBackground(.white)
+                .presentationBackground(AppPalette.groupedBackground)
         }
         .task(id: post.outfitId) {
             // If outfit isn't in local store (another user's outfit), fetch from Supabase
@@ -378,7 +378,7 @@ struct FeedPostCard: View {
                         .environment(store)
                         .presentationDetents([.large])
                         .presentationDragIndicator(.visible)
-                        .presentationBackground(.white)
+                        .presentationBackground(AppPalette.groupedBackground)
                         .presentationCornerRadius(20)
                 }
             }

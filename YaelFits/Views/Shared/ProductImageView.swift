@@ -135,7 +135,7 @@ struct LinkedProductOutfitsSheet: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
-        .presentationBackground(.white)
+        .presentationBackground(AppPalette.groupedBackground)
     }
 }
 

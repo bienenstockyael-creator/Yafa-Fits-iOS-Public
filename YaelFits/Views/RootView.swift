@@ -838,7 +838,7 @@ private struct FavoritesSheetView: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
-        .presentationBackground(.white)
+        .presentationBackground(AppPalette.groupedBackground)
     }
 
     private func favoriteOutfitRow(_ outfit: Outfit) -> some View {
