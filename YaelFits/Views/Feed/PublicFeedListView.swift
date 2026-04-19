@@ -104,7 +104,8 @@ struct PublicFeedListView: View {
             }
         }
         .coordinateSpace(name: "feedScroll")
-        .scrollTargetBehavior(.viewAligned(limitBehavior: .automatic))
+        .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
+        .contentMargins(.top, 60, for: .scrollContent)
         .scrollIndicators(.hidden)
         .refreshable {
             await store.refreshFeed()

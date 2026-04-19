@@ -15,9 +15,15 @@ struct FeedPost: Codable, Identifiable {
 
     var publishedDate: Date? {
         guard let createdAt else { return nil }
+        // Supabase returns variable fractional digits — strip them for reliable parsing
+        let cleaned = createdAt.replacingOccurrences(
+            of: "\\.\\d+",
+            with: "",
+            options: .regularExpression
+        )
         let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f.date(from: createdAt)
+        f.formatOptions = [.withInternetDateTime]
+        return f.date(from: cleaned)
     }
 
     var profileImageURL: URL? {

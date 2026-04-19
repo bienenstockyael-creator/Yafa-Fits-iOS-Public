@@ -258,9 +258,10 @@ private struct NotificationItem: Identifiable {
     var isNew: Bool = false
 
     var date: Date {
+        let cleaned = createdAt.replacingOccurrences(of: "\\.\\d+", with: "", options: .regularExpression)
         let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f.date(from: createdAt) ?? .distantPast
+        f.formatOptions = [.withInternetDateTime]
+        return f.date(from: cleaned) ?? .distantPast
     }
 
     var message: String {
