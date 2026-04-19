@@ -219,6 +219,7 @@ struct ShareCardComposer: View {
                         startPoint: .top,
                         endPoint: .bottom
                     )
+                    .overlay(ootdBackLayer)
                 } else if selectedTemplate.isDynamic {
                     selectedTemplate.dynamicBackground
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -427,21 +428,19 @@ struct ShareCardComposer: View {
         return "\(day)\(suffix)"
     }
 
-    private var ootdDynamicFrontLayer: some View {
-        let inset: CGFloat = 24
+    private let ootdInset: CGFloat = 24
 
-        return GeometryReader { geo in
-            let w = geo.size.width
-            let textWidth = w - inset * 2
+    // Behind outfit: OOTD + YAFA FITS
+    private var ootdBackLayer: some View {
+        GeometryReader { geo in
+            let textWidth = geo.size.width - ootdInset * 2
 
             VStack(alignment: .leading, spacing: 0) {
-                // "OOTD" — large, centered
                 Text("OOTD")
                     .font(.custom("PlayfairDisplay-Italic", size: textWidth * 0.42))
                     .foregroundStyle(cardBlue)
                     .frame(width: textWidth, alignment: .center)
 
-                // "YAFA FITS" — tiny, left-aligned under OOTD
                 Text("YAFA FITS")
                     .font(.custom("PlayfairDisplay-Italic", size: textWidth * 0.033))
                     .tracking(0.8)
@@ -449,14 +448,25 @@ struct ShareCardComposer: View {
                     .padding(.top, 2)
 
                 Spacer()
+            }
+            .padding(.horizontal, ootdInset)
+            .padding(.top, geo.size.height * 0.04)
+        }
+    }
 
-                // Day ordinal — left-aligned, above month
+    // Above outfit: DAY + MONTH
+    private var ootdDynamicFrontLayer: some View {
+        GeometryReader { geo in
+            let textWidth = geo.size.width - ootdInset * 2
+
+            VStack(alignment: .leading, spacing: 0) {
+                Spacer()
+
                 Text(outfitDayOrdinal)
                     .font(.custom("PlayfairDisplay-Italic", size: textWidth * 0.14))
                     .foregroundStyle(cardBlue)
                     .padding(.bottom, 2)
 
-                // Month — scaled to fill same width as OOTD, centered
                 Text(outfitMonthName.uppercased())
                     .font(.custom("PlayfairDisplay-Italic", size: textWidth * 0.42))
                     .foregroundStyle(cardBlue)
@@ -464,8 +474,7 @@ struct ShareCardComposer: View {
                     .lineLimit(1)
                     .frame(width: textWidth, alignment: .center)
             }
-            .padding(.horizontal, inset)
-            .padding(.top, geo.size.height * 0.04)
+            .padding(.horizontal, ootdInset)
             .padding(.bottom, geo.size.height * 0.04)
         }
     }
