@@ -437,49 +437,49 @@ struct ShareCardComposer: View {
     // Behind outfit: OOTD + YAFA FITS
     private var ootdBackLayer: some View {
         GeometryReader { geo in
-            let w = geo.size.width
-            let h = geo.size.height
-            let textWidth = w - ootdInset * 2
+            let textWidth = geo.size.width - ootdInset * 2
 
-            // "OOTD" — centered, large
-            Text("OOTD")
-                .font(.custom("PlayfairDisplay-Italic", size: textWidth * 0.60))
-                .minimumScaleFactor(0.3)
-                .lineLimit(1)
-                .foregroundStyle(cardBlue)
-                .frame(width: textWidth, alignment: .center)
-                .position(x: w / 2, y: h * 0.20)
+            VStack(alignment: .center, spacing: 2) {
+                Text("OOTD")
+                    .font(.custom("PlayfairDisplay-Italic", size: textWidth * 0.60))
+                    .minimumScaleFactor(0.3)
+                    .lineLimit(1)
+                    .foregroundStyle(cardBlue)
+                    .frame(width: textWidth, alignment: .center)
 
-            // "YAFA FITS" — tucked right after the D of OOTD
-            Text("YAFA FITS")
-                .font(.custom("PlayfairDisplay-Italic", size: textWidth * 0.033))
-                .tracking(0.8)
-                .foregroundStyle(cardBlue)
-                .position(x: w * 0.62, y: h * 0.255)
+                Text("YAFA FITS")
+                    .font(.custom("PlayfairDisplay-Italic", size: textWidth * 0.033))
+                    .tracking(0.8)
+                    .foregroundStyle(cardBlue)
+                    .frame(width: textWidth, alignment: .center)
+            }
+            .padding(.horizontal, ootdInset)
+            .padding(.top, 10)
         }
     }
 
     // Above outfit: DAY + MONTH
     private var ootdDynamicFrontLayer: some View {
         GeometryReader { geo in
-            let w = geo.size.width
-            let h = geo.size.height
-            let textWidth = w - ootdInset * 2
+            let textWidth = geo.size.width - ootdInset * 2
 
-            // Day ordinal — center-right, above month
-            Text(outfitDayOrdinal)
-                .font(.custom("PlayfairDisplay-Italic", size: textWidth * 0.14))
-                .foregroundStyle(cardBlue)
-                .position(x: w * 0.65, y: h * 0.46)
+            VStack(alignment: .trailing, spacing: 2) {
+                Spacer()
 
-            // Month — centered, large
-            Text(outfitMonthName.uppercased())
-                .font(.custom("PlayfairDisplay-Italic", size: textWidth * 0.50))
-                .minimumScaleFactor(0.3)
-                .lineLimit(1)
-                .foregroundStyle(cardBlue)
-                .frame(width: textWidth, alignment: .center)
-                .position(x: w / 2, y: h * 0.80)
+                Text(outfitDayOrdinal)
+                    .font(.custom("PlayfairDisplay-Italic", size: textWidth * 0.14))
+                    .foregroundStyle(cardBlue)
+                    .frame(width: textWidth, alignment: .trailing)
+
+                Text(outfitMonthName.uppercased())
+                    .font(.custom("PlayfairDisplay-Italic", size: textWidth * 0.50))
+                    .minimumScaleFactor(0.3)
+                    .lineLimit(1)
+                    .foregroundStyle(cardBlue)
+                    .frame(width: textWidth, alignment: .center)
+            }
+            .padding(.horizontal, ootdInset)
+            .padding(.bottom, 10)
         }
     }
 
