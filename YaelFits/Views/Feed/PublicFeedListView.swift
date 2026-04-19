@@ -35,8 +35,8 @@ struct PublicFeedListView: View {
                     Spacer()
                     floatingNotificationButton
                         .opacity(hasScrolled ? 0 : 1)
-                        .scaleEffect(hasScrolled ? 0.6 : 1, anchor: .center)
-                        .animation(.easeInOut(duration: 0.2), value: hasScrolled)
+                        .scaleEffect(hasScrolled ? 0.3 : 1, anchor: .center)
+                        .animation(.easeOut(duration: 0.12), value: hasScrolled)
                 }
                 .padding(.horizontal, LayoutMetrics.screenPadding)
                 .padding(.top, 12)
