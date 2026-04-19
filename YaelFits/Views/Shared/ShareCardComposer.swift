@@ -510,7 +510,7 @@ struct ShareCardComposer: View {
                 .frame(width: textWidth, height: textWidth * 0.35)
             }
             .padding(.horizontal, ootdInset)
-            .padding(.bottom, 12)
+            .padding(.bottom, -10)
         }
     }
 
