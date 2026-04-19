@@ -463,52 +463,40 @@ struct ShareCardComposer: View {
         GeometryReader { geo in
             let textWidth = geo.size.width - ootdInset * 2
 
-            VStack(alignment: .trailing, spacing: 0) {
-                Spacer()
+            // DAY + MONTH in single Canvas for consistent spacing
+            Canvas { context, size in
+                let monthImg = textToImage(
+                    outfitMonthName.uppercased(),
+                    fontName: "PlayfairDisplay-Italic",
+                    fontSize: size.width * 0.50,
+                    kern: 0,
+                    color: UIColor(cardBlue)
+                )
+                let dayImg = textToImage(
+                    outfitDayOrdinal,
+                    fontName: "PlayfairDisplay-Italic",
+                    fontSize: size.width * 0.14,
+                    kern: 0,
+                    color: UIColor(cardBlue)
+                )
 
-                // Day rendered to ink bounds via Canvas — no font padding
-                Canvas { context, size in
-                    if let img = textToImage(
-                        outfitDayOrdinal,
-                        fontName: "PlayfairDisplay-Italic",
-                        fontSize: textWidth * 0.14,
-                        kern: 0,
-                        color: UIColor(cardBlue)
-                    ) {
-                        let rect = CGRect(
-                            x: size.width - img.size.width,
-                            y: size.height - img.size.height,
-                            width: img.size.width,
-                            height: img.size.height
-                        )
-                        context.draw(Image(uiImage: img), in: rect)
+                if let monthImg {
+                    let scale = min(size.width / monthImg.size.width, 1.0)
+                    let mw = monthImg.size.width * scale
+                    let mh = monthImg.size.height * scale
+                    let mx = (size.width - mw) / 2
+                    let my = size.height - mh
+                    context.draw(Image(uiImage: monthImg), in: CGRect(x: mx, y: my, width: mw, height: mh))
+
+                    // DAY sits right above month, right-aligned, fixed 4px gap
+                    if let dayImg {
+                        let dx = size.width - dayImg.size.width
+                        let dy = my - dayImg.size.height - 4
+                        context.draw(Image(uiImage: dayImg), in: CGRect(x: dx, y: dy, width: dayImg.size.width, height: dayImg.size.height))
                     }
                 }
-                .frame(width: textWidth, height: textWidth * 0.18)
-
-                // Month rendered to ink bounds via Canvas
-                Canvas { context, size in
-                    if let img = textToImage(
-                        outfitMonthName.uppercased(),
-                        fontName: "PlayfairDisplay-Italic",
-                        fontSize: textWidth * 0.50,
-                        kern: 0,
-                        color: UIColor(cardBlue)
-                    ) {
-                        let scale = min(size.width / img.size.width, 1.0)
-                        let w = img.size.width * scale
-                        let h = img.size.height * scale
-                        let rect = CGRect(
-                            x: (size.width - w) / 2,
-                            y: size.height - h,
-                            width: w,
-                            height: h
-                        )
-                        context.draw(Image(uiImage: img), in: rect)
-                    }
-                }
-                .frame(width: textWidth, height: textWidth * 0.28)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.horizontal, ootdInset)
             .padding(.bottom, 8)
         }
