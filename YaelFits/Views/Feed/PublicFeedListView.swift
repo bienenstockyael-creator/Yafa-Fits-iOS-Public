@@ -46,16 +46,20 @@ struct PublicFeedListView: View {
             .zIndex(3)
 
             // Layer 5: Floating search (bottom right, fades in on scroll)
-            if hasScrolled && !store.feedPosts.isEmpty {
+            if !store.feedPosts.isEmpty {
                 VStack {
                     Spacer()
                     HStack {
                         Spacer()
                         floatingSearchButton
+                            .opacity(hasScrolled ? 1 : 0)
+                            .scaleEffect(hasScrolled ? 1 : 0.3, anchor: .center)
+                            .animation(.easeOut(duration: 0.12), value: hasScrolled)
                     }
                     .padding(.horizontal, LayoutMetrics.screenPadding)
                     .padding(.bottom, 64)
                 }
+                .allowsHitTesting(hasScrolled)
                 .zIndex(4)
             }
         }
