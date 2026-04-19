@@ -491,7 +491,7 @@ struct ShareCardComposer: View {
                     // DAY sits right above month, right-aligned, fixed 4px gap
                     if let dayImg {
                         let dx = size.width - dayImg.size.width
-                        let dy = my - dayImg.size.height - 4
+                        let dy = my - dayImg.size.height - 1
                         context.draw(Image(uiImage: dayImg), in: CGRect(x: dx, y: dy, width: dayImg.size.width, height: dayImg.size.height))
                     }
                 }
