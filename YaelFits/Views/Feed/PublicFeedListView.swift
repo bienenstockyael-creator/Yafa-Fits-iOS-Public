@@ -34,14 +34,14 @@ struct PublicFeedListView: View {
                 HStack {
                     Spacer()
                     floatingNotificationButton
+                        .opacity(hasScrolled ? 0 : 1)
+                        .scaleEffect(hasScrolled ? 0.6 : 1, anchor: .center)
+                        .animation(.easeInOut(duration: 0.2), value: hasScrolled)
                 }
                 .padding(.horizontal, LayoutMetrics.screenPadding)
-                .padding(.top, 56)
+                .padding(.top, 12)
                 Spacer()
             }
-            .opacity(hasScrolled ? 0 : 1)
-            .scaleEffect(hasScrolled ? 0.6 : 1)
-            .animation(.easeInOut(duration: 0.2), value: hasScrolled)
             .allowsHitTesting(!hasScrolled)
             .zIndex(3)
 
