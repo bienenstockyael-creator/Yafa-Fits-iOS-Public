@@ -178,6 +178,7 @@ struct PublicFeedListView: View {
         .buttonStyle(.plain)
         .sheet(isPresented: $showsNotifications) {
             NotificationsPlaceholderSheet()
+                .environment(store)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(.white)
