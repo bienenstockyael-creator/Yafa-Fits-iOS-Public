@@ -463,8 +463,10 @@ struct ShareCardComposer: View {
             VStack(alignment: .leading, spacing: 0) {
                 Spacer()
 
-                // Day ordinal + YAFA FITS on same baseline area
+                // Day ordinal + YAFA FITS — right-aligned
                 HStack(alignment: .lastTextBaseline, spacing: 6) {
+                    Spacer()
+
                     Text(outfitDayOrdinal)
                         .font(.custom("PlayfairDisplay-Italic", size: textWidth * 0.14))
                         .foregroundStyle(cardBlue)
