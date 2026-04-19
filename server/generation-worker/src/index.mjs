@@ -84,6 +84,7 @@ process.on('unhandledRejection', (reason) => console.error('Unhandled rejection:
 // Graceful shutdown — requeue the active job so the next worker picks it up
 let activeJobId = null;
 let pollCount = 0;
+let lastSocialCheck = new Date().toISOString();
 async function shutdown(signal) {
   console.log(`${signal} received — shutting down gracefully`);
   if (activeJobId) {
@@ -121,9 +122,13 @@ try {
 async function pollLoop() {
   while (true) {
     try {
-      // Re-run stall check every 10 minutes to catch jobs orphaned by prior crashes
+      // Re-run stall check every 10 minutes
       if (pollCount++ % 120 === 0 && pollCount > 1) {
         await resetStalledJobs();
+      }
+      // Check for social activity every ~30 seconds (6 polls × 5s)
+      if (pollCount % 6 === 0) {
+        await checkSocialNotifications();
       }
 
       const job = await claimNextJob();
@@ -557,27 +562,83 @@ async function uploadFrames(webpPaths, outfitId, storagePrefix, onProgress) {
 }
 
 // ---------------------------------------------------------------------------
+// Social activity notifications (likes, comments, follows)
+// ---------------------------------------------------------------------------
+async function checkSocialNotifications() {
+  const since = lastSocialCheck;
+  lastSocialCheck = new Date().toISOString();
+
+  try {
+    // New likes
+    const { data: likes } = await supabase
+      .from('likes')
+      .select('user_id, outfit_id')
+      .gt('created_at', since);
+
+    for (const like of likes ?? []) {
+      const { data: outfit } = await supabase
+        .from('outfits')
+        .select('user_id')
+        .eq('id', like.outfit_id)
+        .single();
+      if (outfit && outfit.user_id !== like.user_id) {
+        await sendPushNotification(outfit.user_id, 'New like ❤️', 'Someone liked your outfit!', 'feed');
+      }
+    }
+
+    // New comments
+    const { data: comments } = await supabase
+      .from('comments')
+      .select('user_id, outfit_id, body')
+      .gt('created_at', since);
+
+    for (const comment of comments ?? []) {
+      const { data: outfit } = await supabase
+        .from('outfits')
+        .select('user_id')
+        .eq('id', comment.outfit_id)
+        .single();
+      if (outfit && outfit.user_id !== comment.user_id) {
+        const preview = (comment.body || '').slice(0, 80) || 'Someone commented on your outfit!';
+        await sendPushNotification(outfit.user_id, 'New comment 💬', preview, 'feed');
+      }
+    }
+
+    // New follows
+    const { data: follows } = await supabase
+      .from('follows')
+      .select('follower_id, following_id')
+      .gt('created_at', since);
+
+    for (const follow of follows ?? []) {
+      if (follow.follower_id !== follow.following_id) {
+        await sendPushNotification(follow.following_id, 'New follower 🙌', 'Someone started following you!', 'feed');
+      }
+    }
+  } catch (err) {
+    console.warn('Social notification check error:', err.message);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // APNs push notification
 // ---------------------------------------------------------------------------
-async function sendPushNotification(userId) {
+async function sendPushNotification(userId, title = 'Your interactive fit is ready ✨', body = 'Tap to review and add it to your archive.', route = 'upload') {
   const { data: tokens } = await supabase
     .from('device_push_tokens')
     .select('token,environment')
     .eq('user_id', userId)
     .eq('platform', 'ios');
 
-  if (!tokens || tokens.length === 0) {
-    console.log(`No device tokens for user ${userId}`);
-    return;
-  }
+  if (!tokens || tokens.length === 0) return;
 
   for (const { token, environment } of tokens) {
     const note = new apn.Notification();
     note.expiry   = Math.floor(Date.now() / 1000) + 3600;
     note.badge    = 1;
     note.sound    = 'default';
-    note.alert    = { title: 'Your interactive fit is ready ✨', body: 'Tap to review and add it to your archive.' };
-    note.payload  = { route: 'upload' };
+    note.alert    = { title, body };
+    note.payload  = { route };
     note.topic    = APNS_TOPIC;
 
     const provider = environment === 'production' ? apnProviderProd : apnProviderDev;
