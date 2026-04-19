@@ -442,7 +442,7 @@ struct ShareCardComposer: View {
             VStack(alignment: .leading, spacing: 0) {
                 // "OOTD" — full width, single line, auto-scale
                 Text("OOTD")
-                    .font(.custom("PlayfairDisplay-Italic", size: textWidth * 0.50))
+                    .font(.custom("PlayfairDisplay-Italic", size: textWidth * 0.60))
                     .minimumScaleFactor(0.3)
                     .lineLimit(1)
                     .foregroundStyle(cardBlue)
@@ -463,7 +463,7 @@ struct ShareCardComposer: View {
             VStack(alignment: .leading, spacing: 0) {
                 Spacer()
 
-                // Day ordinal + YAFA FITS — right-aligned
+                // Day ordinal + YAFA FITS — right-aligned to OOTD/MONTH edges
                 HStack(alignment: .lastTextBaseline, spacing: 6) {
                     Spacer()
 
@@ -476,6 +476,7 @@ struct ShareCardComposer: View {
                         .tracking(0.8)
                         .foregroundStyle(cardBlue)
                 }
+                .frame(width: textWidth)
                 .padding(.bottom, 1)
 
                 // Month — full width, single line, auto-scale
