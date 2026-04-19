@@ -463,13 +463,28 @@ struct ShareCardComposer: View {
         GeometryReader { geo in
             let textWidth = geo.size.width - ootdInset * 2
 
-            VStack(alignment: .trailing, spacing: -38) {
+            VStack(alignment: .trailing, spacing: 2) {
                 Spacer()
 
-                Text(outfitDayOrdinal)
-                    .font(.custom("PlayfairDisplay-Italic", size: textWidth * 0.14))
-                    .foregroundStyle(cardBlue)
-                    .frame(width: textWidth, alignment: .trailing)
+                // Day rendered to ink bounds via Canvas — no font padding
+                Canvas { context, size in
+                    if let img = textToImage(
+                        outfitDayOrdinal,
+                        fontName: "PlayfairDisplay-Italic",
+                        fontSize: textWidth * 0.14,
+                        kern: 0,
+                        color: UIColor(cardBlue)
+                    ) {
+                        let rect = CGRect(
+                            x: size.width - img.size.width,
+                            y: 0,
+                            width: img.size.width,
+                            height: img.size.height
+                        )
+                        context.draw(Image(uiImage: img), in: rect)
+                    }
+                }
+                .frame(width: textWidth, height: textWidth * 0.12)
 
                 Text(outfitMonthName.uppercased())
                     .font(.custom("PlayfairDisplay-Italic", size: textWidth * 0.50))
