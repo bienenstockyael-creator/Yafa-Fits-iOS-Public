@@ -29,19 +29,7 @@ struct PublicFeedListView: View {
             }
             .zIndex(2)
 
-            // Layer 4: Floating notification (top right)
-            VStack {
-                HStack {
-                    Spacer()
-                    floatingNotificationButton
-                }
-                .padding(.horizontal, LayoutMetrics.screenPadding)
-                .padding(.top, 12)
-                Spacer()
-            }
-            .zIndex(3)
-
-            // Layer 5: Floating search (bottom right)
+            // Layer 4: Floating search (bottom right)
             if hasScrolled && !store.feedPosts.isEmpty {
                 VStack {
                     Spacer()
@@ -52,7 +40,7 @@ struct PublicFeedListView: View {
                     .padding(.horizontal, LayoutMetrics.screenPadding)
                     .padding(.bottom, 64)
                 }
-                .zIndex(4)
+                .zIndex(3)
             }
         }
         .task {
@@ -68,8 +56,10 @@ struct PublicFeedListView: View {
     }
 
     private var feedList: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             LazyVStack(alignment: .leading, spacing: LayoutMetrics.large) {
+                Color.clear.frame(height: 0).id("feedTop")
                 searchBar
                     .padding(.top, LayoutMetrics.feedTopInset)
 
@@ -110,6 +100,15 @@ struct PublicFeedListView: View {
         .refreshable {
             await store.refreshFeed()
         }
+        .onChange(of: store.feedScrollToTopTrigger) { _, _ in
+            withAnimation { proxy.scrollTo("feedTop", anchor: .top) }
+            Task {
+                hasRefreshedFeed = false
+                await store.refreshFeed()
+                await loadCounts()
+            }
+        }
+        } // ScrollViewReader
     }
 
     private var searchBar: some View {
@@ -161,20 +160,40 @@ struct PublicFeedListView: View {
             .buttonStyle(.plain)
 
             Spacer()
+
+            headerNotificationButton
         }
         .padding(.horizontal, LayoutMetrics.screenPadding)
         .padding(.top, 8)
         .padding(.bottom, LayoutMetrics.xSmall)
     }
 
-    private var floatingNotificationButton: some View {
+    private var headerNotificationButton: some View {
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             showsNotifications = true
         } label: {
-            AppIcon(glyph: .bell, size: 16, color: AppPalette.iconPrimary)
-                .frame(width: 48, height: 48)
-                .appCircle()
+            ZStack(alignment: .topTrailing) {
+                AppIcon(glyph: .bell, size: 12, color: AppPalette.textFaint)
+                    .frame(width: 30, height: 30)
+                    .background(
+                        Capsule()
+                            .fill(Color(red: 0.95, green: 0.95, blue: 0.96).opacity(0.98))
+                    )
+                    .overlay(
+                        Capsule()
+                            .stroke(Color(red: 0.88, green: 0.89, blue: 0.91).opacity(0.9), lineWidth: 0.8)
+                    )
+
+                if store.unreadNotificationCount > 0 {
+                    Text("\(store.unreadNotificationCount)")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(minWidth: 14, minHeight: 14)
+                        .background(Color.red, in: Circle())
+                        .offset(x: 4, y: -4)
+                }
+            }
         }
         .buttonStyle(.plain)
         .sheet(isPresented: $showsNotifications) {

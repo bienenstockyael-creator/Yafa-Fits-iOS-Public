@@ -480,7 +480,15 @@ struct RootView: View {
         let showsUploadActivity = tab == .upload && store.isUploadInProgress
         return Button {
             let targetTab = (tab == .list && store.currentView == .calendar) ? AppView.list : tab
-            guard store.currentView != targetTab else { return }
+            if store.currentView == targetTab {
+                // Already on this tab — refresh feed if on feed
+                if tab == .feed {
+                    let impact = UIImpactFeedbackGenerator(style: .light)
+                    impact.impactOccurred()
+                    store.feedScrollToTopTrigger += 1
+                }
+                return
+            }
             let impact = UIImpactFeedbackGenerator(style: .light)
             impact.impactOccurred()
 
@@ -502,6 +510,15 @@ struct RootView: View {
                             color: isActive ? AppPalette.iconActive : AppPalette.iconFaint
                         )
                         .frame(width: 36, height: 36)
+                    }
+
+                    if tab == .feed && store.unreadNotificationCount > 0 {
+                        Text("\(store.unreadNotificationCount)")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(minWidth: 14, minHeight: 14)
+                            .background(Color.red, in: Circle())
+                            .offset(x: 8, y: -5)
                     }
 
                     if showsUploadActivity {

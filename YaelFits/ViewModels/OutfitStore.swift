@@ -36,6 +36,8 @@ class OutfitStore {
     var viewTransitionPhase: ViewTransitionPhase = .idle
     var generationReadyForReview = false
     var isCarouselOpen = false
+    var unreadNotificationCount = 0
+    var feedScrollToTopTrigger = 0
     var hasPlayedInitialListEntrance = false
     var uploadTask: Task<Void, Never>?
     var currentProfile: Profile?
