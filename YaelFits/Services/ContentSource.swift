@@ -146,7 +146,7 @@ struct ContentSource {
                 .from("outfits")
                 .select(outfitSelectWithProducts)
                 .eq("user_id", value: userId.uuidString)
-                .order("date", ascending: false)
+                .order("created_at", ascending: false)
                 .execute()
                 .value
             return rows.map { $0.toOutfit() }
@@ -161,7 +161,7 @@ struct ContentSource {
             .from("outfits")
             .select(outfitSelectWithProducts)
             .eq("is_public", value: true)
-            .order("date", ascending: false)
+            .order("created_at", ascending: false)
             .execute()
             .value {
             return rows.map { $0.toOutfit() }
@@ -170,7 +170,7 @@ struct ContentSource {
             .from("outfits")
             .select("*")
             .eq("is_public", value: true)
-            .order("date", ascending: false)
+            .order("created_at", ascending: false)
             .execute()
             .value) ?? []
         return rows.map { $0.toOutfit() }
@@ -205,7 +205,7 @@ struct ContentSource {
             .select(outfitSelectWithProducts)
             .eq("user_id", value: userId.uuidString)
             .eq("is_public", value: true)
-            .order("date", ascending: false)
+            .order("created_at", ascending: false)
             .execute()
             .value {
             return rows.map { $0.toOutfit() }
@@ -216,7 +216,7 @@ struct ContentSource {
             .select("*")
             .eq("user_id", value: userId.uuidString)
             .eq("is_public", value: true)
-            .order("date", ascending: false)
+            .order("created_at", ascending: false)
             .execute()
             .value) ?? []
         return rows.map { $0.toOutfit() }
@@ -272,7 +272,7 @@ struct ContentSource {
                 .select("id, user_id, date, caption")
                 .eq("is_public", value: true)
                 .in("user_id", values: userIdStrings)
-                .order("date", ascending: false)
+                .order("created_at", ascending: false)
                 .limit(50)
                 .execute()
                 .value {
@@ -283,7 +283,7 @@ struct ContentSource {
                     .select("id, user_id, date")
                     .eq("is_public", value: true)
                     .in("user_id", values: userIdStrings)
-                    .order("date", ascending: false)
+                    .order("created_at", ascending: false)
                     .limit(50)
                     .execute()
                     .value
@@ -337,7 +337,7 @@ struct ContentSource {
                 .from("outfits")
                 .select("id, user_id, caption")
                 .eq("is_public", value: true)
-                .order("date", ascending: false)
+                .order("created_at", ascending: false)
                 .limit(50)
                 .execute()
                 .value {
@@ -347,7 +347,7 @@ struct ContentSource {
                     .from("outfits")
                     .select("id, user_id")
                     .eq("is_public", value: true)
-                    .order("date", ascending: false)
+                    .order("created_at", ascending: false)
                     .limit(50)
                     .execute()
                     .value
