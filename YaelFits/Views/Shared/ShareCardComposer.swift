@@ -507,7 +507,7 @@ struct ShareCardComposer: View {
                         context.draw(Image(uiImage: img), in: rect)
                     }
                 }
-                .frame(width: textWidth, height: textWidth * 0.18)
+                .frame(width: textWidth, height: textWidth * 0.28)
             }
             .padding(.horizontal, ootdInset)
             .padding(.bottom, 8)
