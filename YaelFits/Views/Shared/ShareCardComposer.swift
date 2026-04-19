@@ -428,34 +428,45 @@ struct ShareCardComposer: View {
     }
 
     private var ootdDynamicFrontLayer: some View {
-        GeometryReader { geo in
+        let inset: CGFloat = 24
+
+        return GeometryReader { geo in
             let w = geo.size.width
-            let h = geo.size.height
+            let textWidth = w - inset * 2
 
-            // "OOTD" — large, upper area, centered
-            Text("OOTD")
-                .font(.custom("PlayfairDisplay-Italic", size: w * 0.30))
-                .foregroundStyle(cardBlue)
-                .position(x: w * 0.46, y: h * 0.13)
+            VStack(alignment: .leading, spacing: 0) {
+                // "OOTD" — large, centered
+                Text("OOTD")
+                    .font(.custom("PlayfairDisplay-Italic", size: textWidth * 0.42))
+                    .foregroundStyle(cardBlue)
+                    .frame(width: textWidth, alignment: .center)
 
-            // "YAFA FITS" — tiny, tucked right of OOTD
-            Text("YAFA FITS")
-                .font(.custom("PlayfairDisplay-Italic", size: w * 0.026))
-                .tracking(0.8)
-                .foregroundStyle(cardBlue)
-                .position(x: w * 0.68, y: h * 0.11)
+                // "YAFA FITS" — tiny, left-aligned under OOTD
+                Text("YAFA FITS")
+                    .font(.custom("PlayfairDisplay-Italic", size: textWidth * 0.033))
+                    .tracking(0.8)
+                    .foregroundStyle(cardBlue)
+                    .padding(.top, 2)
 
-            // Day ordinal — right side, between OOTD and APRIL
-            Text(outfitDayOrdinal)
-                .font(.custom("PlayfairDisplay-Italic", size: w * 0.105))
-                .foregroundStyle(cardBlue)
-                .position(x: w * 0.72, y: h * 0.28)
+                Spacer()
 
-            // Month name — large, lower area, centered
-            Text(outfitMonthName.uppercased())
-                .font(.custom("PlayfairDisplay-Italic", size: w * 0.30))
-                .foregroundStyle(cardBlue)
-                .position(x: w * 0.50, y: h * 0.88)
+                // Day ordinal — left-aligned, above month
+                Text(outfitDayOrdinal)
+                    .font(.custom("PlayfairDisplay-Italic", size: textWidth * 0.14))
+                    .foregroundStyle(cardBlue)
+                    .padding(.bottom, 2)
+
+                // Month — scaled to fill same width as OOTD, centered
+                Text(outfitMonthName.uppercased())
+                    .font(.custom("PlayfairDisplay-Italic", size: textWidth * 0.42))
+                    .foregroundStyle(cardBlue)
+                    .minimumScaleFactor(0.3)
+                    .lineLimit(1)
+                    .frame(width: textWidth, alignment: .center)
+            }
+            .padding(.horizontal, inset)
+            .padding(.top, geo.size.height * 0.04)
+            .padding(.bottom, geo.size.height * 0.04)
         }
     }
 
