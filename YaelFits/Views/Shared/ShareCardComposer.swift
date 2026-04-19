@@ -9,12 +9,10 @@ private let cardGray = Color(white: 0.918) // matches Mono PNG background exactl
 private let cardBlue = Color(red: 24/255, green: 3/255, blue: 254/255) // #1803FE
 
 enum ShareCardTemplate: Int, CaseIterable, Identifiable, Hashable {
-    // Static PNG templates
-    case mono     = 0
-    case electric = 1
-    // Dynamic code templates (same design, live date)
+    // Dynamic code templates
     case monoLive     = 5
     case electricLive = 6
+    case ootdLive     = 7
     // Two-layer PNG templates
     case layered1 = 2
     case layered2 = 3
@@ -24,11 +22,10 @@ enum ShareCardTemplate: Int, CaseIterable, Identifiable, Hashable {
 
     var name: String {
         switch self {
-        case .mono:         return "Mono"
-        case .electric:     return "Electric"
-        case .monoLive:     return "Mono ✦"
-        case .electricLive: return "Electric ✦"
-        case .layered1:     return "OOTD"
+        case .monoLive:     return "Mono"
+        case .electricLive: return "Electric"
+        case .ootdLive:     return "OOTD"
+        case .layered1:     return "OOTD Classic"
         case .layered2:     return "Fits"
         case .layered3:     return "Stats"
         }
@@ -36,7 +33,12 @@ enum ShareCardTemplate: Int, CaseIterable, Identifiable, Hashable {
 
     /// Dynamic code-based templates — render date layers in SwiftUI.
     var isDynamic: Bool {
-        self == .monoLive || self == .electricLive
+        self == .monoLive || self == .electricLive || self == .ootdLive
+    }
+
+    /// Whether this dynamic template uses the layered1 back PNG instead of a solid color.
+    var usesBackPNG: Bool {
+        self == .ootdLive
     }
 
     /// Background fill for dynamic templates.
@@ -45,12 +47,11 @@ enum ShareCardTemplate: Int, CaseIterable, Identifiable, Hashable {
     /// Back PNG — fills the card behind the outfit for PNG templates.
     var backImageName: String {
         switch self {
-        case .mono:     return "card-mono"
-        case .electric: return "card-electric"
-        case .layered1: return "card-layered1-back"
-        case .layered2: return "card-layered2-back"
-        case .layered3: return "card-layered3-back"
-        default:        return "card-mono" // unused for dynamic
+        case .ootdLive:  return "card-layered1-back"
+        case .layered1:  return "card-layered1-back"
+        case .layered2:  return "card-layered2-back"
+        case .layered3:  return "card-layered3-back"
+        default:         return "card-mono"
         }
     }
 
@@ -110,7 +111,7 @@ struct ShareCardComposer: View {
     @Environment(OutfitStore.self) private var store
     @Environment(\.dismiss) private var dismiss
 
-    @State private var selectedTemplate: ShareCardTemplate = .mono
+    @State private var selectedTemplate: ShareCardTemplate = .monoLive
     @State private var motionManager = CMMotionManager()
     @State private var gyroPitch: Double = 0
     @State private var gyroRoll: Double = 0
@@ -214,7 +215,7 @@ struct ShareCardComposer: View {
             // For dynamic templates the number is overlaid ON the Color so
             // the Color (not the text) determines the card size.
             Group {
-                if selectedTemplate.isDynamic {
+                if selectedTemplate.isDynamic && !selectedTemplate.usesBackPNG {
                     selectedTemplate.dynamicBackground
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .overlay(
@@ -261,9 +262,12 @@ struct ShareCardComposer: View {
             outfitLayer
                 .allowsHitTesting(true)
 
-            // Dynamic date front layer (month + weekday)
-            if selectedTemplate.isDynamic {
+            // Dynamic date front layer
+            if selectedTemplate.isDynamic && selectedTemplate != .ootdLive {
                 dynamicDateFrontLayer
+            }
+            if selectedTemplate == .ootdLive {
+                ootdDynamicFrontLayer
                     .id("date-front-\(selectedTemplate.id)")
                     .transition(.asymmetric(
                         insertion: .move(edge: templateSlideEdge),
@@ -401,6 +405,53 @@ struct ShareCardComposer: View {
                 .tracking(tracking)
                 .foregroundStyle(dynamicColor)
                 .position(x: geo.size.width / 2, y: geo.size.height * (1 - yPct))
+        }
+    }
+
+    // MARK: - OOTD dynamic front layer
+
+    private var outfitDayOrdinal: String {
+        guard let date = outfit.parsedDate else { return "--" }
+        let day = Calendar.current.component(.day, from: date)
+        let suffix: String
+        switch day {
+        case 1, 21, 31: suffix = "st"
+        case 2, 22: suffix = "nd"
+        case 3, 23: suffix = "rd"
+        default: suffix = "th"
+        }
+        return "\(day)\(suffix)"
+    }
+
+    private var ootdDynamicFrontLayer: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let h = geo.size.height
+
+            // "OOTD" top-left — Playfair Display Italic 135px → scale to card
+            Text("OOTD")
+                .font(.custom("PlayfairDisplay-Italic", size: w * 0.28))
+                .foregroundStyle(cardBlue)
+                .position(x: w * 0.32, y: h * 0.06)
+
+            // Month name top-right — Playfair Display Italic 135px
+            Text(outfitMonthName.uppercased())
+                .font(.custom("PlayfairDisplay-Italic", size: w * 0.18))
+                .foregroundStyle(cardBlue)
+                .position(x: w * 0.72, y: h * 0.06)
+
+            // Day ordinal (e.g. "14th") — Playfair Display Regular 47px
+            Text(outfitDayOrdinal)
+                .font(.custom("PlayfairDisplay-Italic", size: w * 0.10))
+                .foregroundStyle(cardBlue)
+                .position(x: w * 0.88, y: h * 0.12)
+
+            // "YAFA FITS" bottom — Playfair Display Regular 12px
+            Text("YAFA FITS")
+                .font(.custom("PlayfairDisplay-Italic", size: w * 0.025))
+                .tracking(1.5)
+                .foregroundStyle(cardBlue)
+                .position(x: w * 0.5, y: h * 0.97)
         }
     }
 
