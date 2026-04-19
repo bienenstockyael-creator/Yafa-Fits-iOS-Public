@@ -237,42 +237,16 @@ struct ContentSource {
             .value, let outfit = rows.first?.toOutfit() {
             return outfit
         }
-        // Fallback: no joins at all — survives stale PostgREST schema cache
-        struct SimpleOutfitRow: Decodable {
-            let id: String
-            let name: String
-            let date: String
-            let frameCount: Int
-            let folder: String
-            let prefix: String
-            let frameExt: String?
-            let remoteBaseURL: String?
-            let scale: Double?
-            let isRotationReversed: Bool?
-            let caption: String?
-            enum CodingKeys: String, CodingKey {
-                case id, name, date, folder, prefix, scale, caption
-                case frameCount = "frame_count"
-                case frameExt = "frame_ext"
-                case remoteBaseURL = "remote_base_url"
-                case isRotationReversed = "is_rotation_reversed"
-            }
-        }
-        if let rows: [SimpleOutfitRow] = try? await supabase
+        // Fallback: all columns, no joins — survives stale PostgREST schema cache
+        if let rows: [SupabaseOutfitRow] = try? await supabase
             .from("outfits")
-            .select("id, name, date, frame_count, folder, prefix, frame_ext, remote_base_url, scale, is_rotation_reversed, caption")
+            .select("*")
             .eq("id", value: id)
             .eq("is_public", value: true)
             .limit(1)
             .execute()
-            .value, let row = rows.first {
-            return Outfit(
-                id: row.id, name: row.name, date: row.date,
-                frameCount: row.frameCount, folder: row.folder, prefix: row.prefix,
-                frameExt: row.frameExt, remoteBaseURL: row.remoteBaseURL, scale: row.scale,
-                isRotationReversed: row.isRotationReversed,
-                caption: row.caption
-            )
+            .value, let outfit = rows.first?.toOutfit() {
+            return outfit
         }
         return nil
     }
