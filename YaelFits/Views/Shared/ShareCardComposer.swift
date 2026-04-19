@@ -14,7 +14,6 @@ enum ShareCardTemplate: Int, CaseIterable, Identifiable, Hashable {
     case electricLive = 6
     case ootdLive     = 7
     // Two-layer PNG templates
-    case layered1 = 2
     case layered2 = 3
     case layered3 = 4
 
@@ -25,7 +24,6 @@ enum ShareCardTemplate: Int, CaseIterable, Identifiable, Hashable {
         case .monoLive:     return "Mono"
         case .electricLive: return "Electric"
         case .ootdLive:     return "OOTD"
-        case .layered1:     return "OOTD Classic"
         case .layered2:     return "Fits"
         case .layered3:     return "Stats"
         }
@@ -45,8 +43,6 @@ enum ShareCardTemplate: Int, CaseIterable, Identifiable, Hashable {
     /// Back PNG — fills the card behind the outfit for PNG templates.
     var backImageName: String {
         switch self {
-        case .ootdLive:  return "card-layered1-back"
-        case .layered1:  return "card-layered1-back"
         case .layered2:  return "card-layered2-back"
         case .layered3:  return "card-layered3-back"
         default:         return "card-mono"
@@ -56,7 +52,6 @@ enum ShareCardTemplate: Int, CaseIterable, Identifiable, Hashable {
     /// Front PNG — rendered on top of the outfit. nil for dynamic/single-layer.
     var frontImageName: String? {
         switch self {
-        case .layered1: return "card-layered1-front"
         case .layered2: return "card-layered2-front"
         case .layered3: return "card-layered3-front"
         default:        return nil
