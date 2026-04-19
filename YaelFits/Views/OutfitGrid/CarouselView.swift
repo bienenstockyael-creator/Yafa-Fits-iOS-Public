@@ -384,13 +384,6 @@ struct CarouselDetailCard: View {
 
                 Spacer(minLength: 0)
 
-                if let outfitNumber = outfit.outfitNumber {
-                    Text("\(outfitNumber)/\(store.sortedOutfits.count)")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .tracking(1.8)
-                        .foregroundStyle(AppPalette.textFaint)
-                }
-
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         if isEditing { saveEdits() }
