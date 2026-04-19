@@ -463,7 +463,7 @@ struct ShareCardComposer: View {
         GeometryReader { geo in
             let textWidth = geo.size.width - ootdInset * 2
 
-            VStack(alignment: .trailing, spacing: 2) {
+            VStack(alignment: .trailing, spacing: -4) {
                 Spacer()
 
                 // Day rendered to ink bounds via Canvas — no font padding
@@ -484,7 +484,7 @@ struct ShareCardComposer: View {
                         context.draw(Image(uiImage: img), in: rect)
                     }
                 }
-                .frame(width: textWidth, height: textWidth * 0.12)
+                .frame(width: textWidth, height: textWidth * 0.18)
 
                 // Month rendered to ink bounds via Canvas
                 Canvas { context, size in
@@ -510,7 +510,7 @@ struct ShareCardComposer: View {
                 .frame(width: textWidth, height: textWidth * 0.35)
             }
             .padding(.horizontal, ootdInset)
-            .padding(.bottom, 5)
+            .padding(.bottom, 12)
         }
     }
 
