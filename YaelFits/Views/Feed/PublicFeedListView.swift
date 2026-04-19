@@ -96,7 +96,7 @@ struct PublicFeedListView: View {
                     .id(post.id)
                     .onReceive(NotificationCenter.default.publisher(for: .init("cartToggled-\(post.id)"))) { _ in
                         withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.5)) {
-                            proxy.scrollTo("cartBottom-\(post.id)", anchor: .init(x: 0.5, y: 0.85))
+                            proxy.scrollTo("cartBottom-\(post.id)", anchor: .init(x: 0.5, y: 0.92))
                         }
                     }
                 }
@@ -589,7 +589,8 @@ struct FeedPostCard: View {
                             )
                         }
                     }
-                    .padding(.vertical, LayoutMetrics.small)
+                    .padding(.top, LayoutMetrics.xxSmall)
+                    .padding(.bottom, LayoutMetrics.xxxSmall)
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .top)))
                 Color.clear.frame(height: 0).id("cartBottom-\(post.id)")
