@@ -477,7 +477,7 @@ struct ShareCardComposer: View {
                     ) {
                         let rect = CGRect(
                             x: size.width - img.size.width,
-                            y: 0,
+                            y: size.height - img.size.height,
                             width: img.size.width,
                             height: img.size.height
                         )
