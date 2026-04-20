@@ -211,9 +211,9 @@ struct ProfileView: View {
                         .foregroundStyle(AppPalette.textPrimary)
                 }
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: 48)
-            .appRoundedRect(cornerRadius: 18, shadowRadius: 0, shadowY: 0)
+            .padding(.horizontal, 32)
+            .frame(height: 44)
+            .appCapsule(shadowRadius: 6, shadowY: 3)
         }
         .buttonStyle(.plain)
         .disabled(isSaving)
