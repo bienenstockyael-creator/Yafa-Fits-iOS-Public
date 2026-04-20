@@ -31,15 +31,20 @@ struct YaelFitsApp: App {
                                 await outfitStore.checkForServerCompletedJob(userId: userId)
                                 await outfitStore.refreshUnreadNotificationCount()
                                 // Show profile setup for new users with no display name
-                                if outfitStore.currentProfile?.displayName == nil || outfitStore.currentProfile?.username == nil {
+                                let needsSetup = outfitStore.currentProfile?.username == nil || (outfitStore.currentProfile?.username ?? "").isEmpty
+                                if needsSetup {
                                     await MainActor.run { showProfileSetup = true }
                                 }
                             }
                         }
                         .sheet(isPresented: $showProfileSetup) {
                             if let userId = authManager.userId {
-                                ProfileSetupSheet(userId: userId) {
+                                ProfileSetupSheet(
+                                    userId: userId,
+                                    existingDisplayName: outfitStore.currentProfile?.displayName
+                                ) {
                                     showProfileSetup = false
+                                    Task { await outfitStore.loadSocialData(userId: userId) }
                                 }
                                 .presentationDetents([.large])
                                 .presentationDragIndicator(.hidden)

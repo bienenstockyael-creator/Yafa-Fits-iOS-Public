@@ -3,6 +3,7 @@ import SwiftUI
 /// Shown to new users who haven't set a display name yet.
 struct ProfileSetupSheet: View {
     let userId: UUID
+    var existingDisplayName: String?
     var onComplete: () -> Void
 
     @State private var displayName = ""
@@ -79,6 +80,11 @@ struct ProfileSetupSheet: View {
             .onTapGesture { focusedField = nil }
         }
         .interactiveDismissDisabled()
+        .onAppear {
+            if let existing = existingDisplayName, !existing.isEmpty, displayName.isEmpty {
+                displayName = existing
+            }
+        }
     }
 
     private var canSave: Bool {
