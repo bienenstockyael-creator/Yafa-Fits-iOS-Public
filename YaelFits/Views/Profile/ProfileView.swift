@@ -212,22 +212,20 @@ struct ProfileView: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 44)
-            .appCapsule(shadowRadius: 6, shadowY: 3)
+            .frame(height: 48)
+            .appRoundedRect(cornerRadius: 18, shadowRadius: 0, shadowY: 0)
         }
         .buttonStyle(.plain)
         .disabled(isSaving)
     }
 
     private var statsSection: some View {
-        VStack(spacing: LayoutMetrics.small) {
+        VStack(spacing: LayoutMetrics.medium) {
             HStack(spacing: 0) {
                 statItem(count: store.sortedOutfits.count, label: "Outfits")
                 statItem(count: store.likedIds.count, label: "Liked")
                 statItem(count: store.savedIds.count, label: "Saved")
             }
-            .padding(.vertical, LayoutMetrics.small)
-            .appCard(cornerRadius: 20, shadowRadius: 6, shadowY: 3)
 
             HStack(spacing: 0) {
                 Button { showFollowers = true } label: {
@@ -237,20 +235,18 @@ struct ProfileView: View {
                     statItem(count: followingIds.count, label: "Following")
                 }.buttonStyle(.plain)
             }
-            .padding(.vertical, LayoutMetrics.small)
-            .appCard(cornerRadius: 20, shadowRadius: 6, shadowY: 3)
         }
         .sheet(isPresented: $showFollowers) {
             FollowListSheet(title: "Followers", userIds: followerIds)
                 .environment(store)
                 .presentationDragIndicator(.visible)
-                .presentationBackground(.white)
+                .presentationBackground(AppPalette.groupedBackground)
         }
         .sheet(isPresented: $showFollowing) {
             FollowListSheet(title: "Following", userIds: followingIds)
                 .environment(store)
                 .presentationDragIndicator(.visible)
-                .presentationBackground(.white)
+                .presentationBackground(AppPalette.groupedBackground)
         }
         .task {
             guard let userId = store.userId else { return }
