@@ -31,7 +31,7 @@ struct YaelFitsApp: App {
                                 await outfitStore.checkForServerCompletedJob(userId: userId)
                                 await outfitStore.refreshUnreadNotificationCount()
                                 // Show profile setup for new users with no display name
-                                if outfitStore.currentProfile?.displayName == nil {
+                                if outfitStore.currentProfile?.displayName == nil || outfitStore.currentProfile?.username == nil {
                                     await MainActor.run { showProfileSetup = true }
                                 }
                             }
