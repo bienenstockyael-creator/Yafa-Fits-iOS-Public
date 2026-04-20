@@ -530,13 +530,26 @@ struct ShareCardComposer: View {
 
     // MARK: - Template picker
 
+    private var availableTemplates: [ShareCardTemplate] {
+        let productCount = outfit.products?.count ?? 0
+        return ShareCardTemplate.allCases.filter { template in
+            if template == .layered2 || template == .layered3 {
+                return productCount >= 3
+            }
+            return true
+        }
+    }
+
     private var templatePicker: some View {
-        HStack(spacing: 6) {
-            ForEach(ShareCardTemplate.allCases) { template in
+        let templates = availableTemplates
+        return HStack(spacing: 6) {
+            ForEach(templates) { template in
                 let isSelected = selectedTemplate == template
+                let templateIndex = templates.firstIndex(of: template) ?? 0
+                let selectedIndex = templates.firstIndex(of: selectedTemplate) ?? 0
                 Button {
                     guard template != selectedTemplate else { return }
-                    templateSlideEdge = template.rawValue > selectedTemplate.rawValue ? .trailing : .leading
+                    templateSlideEdge = templateIndex > selectedIndex ? .trailing : .leading
                     withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
                         selectedTemplate = template
                     }
