@@ -514,10 +514,18 @@ struct RootView: View {
 
                     if tab == .feed && store.unreadNotificationCount > 0 {
                         Text("\(store.unreadNotificationCount)")
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(minWidth: 14, minHeight: 14)
-                            .background(Color.red, in: Circle())
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(AppPalette.textMuted)
+                            .frame(width: 18, height: 18)
+                            .background {
+                                LightBlurView(style: .systemThinMaterialLight)
+                                    .clipShape(Circle())
+                                    .overlay(
+                                        Circle()
+                                            .fill(Color.white.opacity(0.96))
+                                    )
+                            }
+                            .overlay(Circle().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
                             .offset(x: 8, y: -5)
                     }
 

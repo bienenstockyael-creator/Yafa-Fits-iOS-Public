@@ -210,11 +210,19 @@ struct PublicFeedListView: View {
 
                 if store.unreadNotificationCount > 0 {
                     Text("\(store.unreadNotificationCount)")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(minWidth: 14, minHeight: 14)
-                        .background(Color.red, in: Circle())
-                        .offset(x: 4, y: -4)
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(AppPalette.textMuted)
+                        .frame(width: 20, height: 20)
+                        .background {
+                            LightBlurView(style: .systemThinMaterialLight)
+                                .clipShape(Circle())
+                                .overlay(
+                                    Circle()
+                                        .fill(Color.white.opacity(0.96))
+                                )
+                        }
+                        .overlay(Circle().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
+                        .offset(x: 6, y: -6)
                 }
             }
         }
