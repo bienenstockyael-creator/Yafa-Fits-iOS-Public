@@ -211,7 +211,7 @@ struct ProfileView: View {
                         .foregroundStyle(AppPalette.textPrimary)
                 }
             }
-            .padding(.horizontal, 32)
+            .frame(maxWidth: .infinity)
             .frame(height: 44)
             .appCapsule(shadowRadius: 6, shadowY: 3)
         }
