@@ -44,18 +44,22 @@ class OutfitStore {
         let lastSeen = UserDefaults.standard.object(forKey: "lastSeenNotificationsAt") as? Date ?? .distantPast
         let since = ISO8601DateFormatter().string(from: lastSeen)
 
-        struct OIdRow: Decodable { let id: String }
+        struct IdRow: Decodable { let id: String }
+        struct OutfitIdRow: Decodable {
+            let outfitId: String
+            enum CodingKeys: String, CodingKey { case outfitId = "outfit_id" }
+        }
         let userOutfitIds: [String] = (try? await supabase
             .from("outfits")
             .select("id")
             .eq("user_id", value: userId.uuidString)
             .execute()
-            .value as [OIdRow])?.map(\.id) ?? []
+            .value as [IdRow])?.map(\.id) ?? []
 
         var count = 0
 
         if !userOutfitIds.isEmpty {
-            let likes: [OIdRow] = (try? await supabase
+            let likes: [OutfitIdRow] = (try? await supabase
                 .from("likes")
                 .select("outfit_id")
                 .in("outfit_id", values: userOutfitIds)
@@ -65,7 +69,7 @@ class OutfitStore {
                 .value) ?? []
             count += likes.count
 
-            let comments: [OIdRow] = (try? await supabase
+            let comments: [OutfitIdRow] = (try? await supabase
                 .from("comments")
                 .select("outfit_id")
                 .in("outfit_id", values: userOutfitIds)
@@ -250,6 +254,12 @@ class OutfitStore {
     func updateOutfitTags(outfitId: String, tags: [String]) {
         guard let index = outfits.firstIndex(where: { $0.id == outfitId }) else { return }
         outfits[index].tags = tags
+        persistCache()
+    }
+
+    func updateOutfitDate(outfitId: String, date: String) {
+        guard let index = outfits.firstIndex(where: { $0.id == outfitId }) else { return }
+        outfits[index].date = date
         persistCache()
     }
 
@@ -453,14 +463,10 @@ class OutfitStore {
 
     func refreshFeed() async {
         guard let userId else { return }
-        var feedUserIds = followingIds
-        feedUserIds.insert(userId)
-        let freshFeed = await ContentSource.getFollowedFeed(followingIds: feedUserIds)
+        let freshFeed = await ContentSource.getPublicFeed()
         LocalCache.saveFeedPosts(freshFeed, userId: userId)
 
-        let currentIds = Set(feedPosts.map(\.id))
-        let freshIds = Set(freshFeed.map(\.id))
-        guard currentIds != freshIds else { return }
+        guard freshFeed != feedPosts else { return }
 
         await MainActor.run {
             self.feedPosts = freshFeed

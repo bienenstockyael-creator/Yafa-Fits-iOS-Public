@@ -34,7 +34,7 @@ struct ProfileView: View {
                     signOutSection
                 }
                 .padding(.horizontal, LayoutMetrics.screenPadding)
-                .padding(.bottom, LayoutMetrics.bottomOverlayInset)
+                .padding(.bottom, LayoutMetrics.screenPadding)
             }
         }
         .scrollIndicators(.hidden)
@@ -188,6 +188,13 @@ struct ProfileView: View {
         }
     }
 
+    private var hasProfileChanges: Bool {
+        let profile = store.currentProfile
+        let origDisplay = profile?.displayName ?? ""
+        let origBio = profile?.bio ?? ""
+        return displayName != origDisplay || bio != origBio
+    }
+
     private var saveButton: some View {
         Button {
             saveProfile()
@@ -206,17 +213,18 @@ struct ProfileView: View {
                     }
                 } else {
                     Text("SAVE")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: hasProfileChanges ? 12 : 11, weight: hasProfileChanges ? .semibold : .medium))
                         .tracking(1.5)
-                        .foregroundStyle(AppPalette.textPrimary)
+                        .foregroundStyle(hasProfileChanges ? AppPalette.textPrimary : AppPalette.textFaint)
                 }
             }
             .frame(maxWidth: .infinity)
             .frame(height: 44)
-            .appCapsule(shadowRadius: 6, shadowY: 3)
+            .appCapsule(shadowRadius: hasProfileChanges ? 6 : 0, shadowY: hasProfileChanges ? 3 : 0)
+            .animation(.easeInOut(duration: 0.2), value: hasProfileChanges)
         }
         .buttonStyle(.plain)
-        .disabled(isSaving)
+        .disabled(isSaving || (!hasProfileChanges && !showSaved))
     }
 
     private var statsSection: some View {
@@ -343,7 +351,7 @@ struct ProfileView: View {
         Task {
             let profile = Profile(
                 id: userId,
-                username: displayName.isEmpty ? nil : displayName,
+                username: store.currentProfile?.username,
                 displayName: displayName.isEmpty ? nil : displayName,
                 avatarUrl: store.currentProfile?.avatarUrl,
                 bio: bio.isEmpty ? nil : bio

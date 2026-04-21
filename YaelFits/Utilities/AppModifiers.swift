@@ -13,6 +13,26 @@ struct LightBlurView: UIViewRepresentable {
     }
 }
 
+struct GradientBlurView: View {
+    var height: CGFloat = 180
+
+    var body: some View {
+        LinearGradient(
+            stops: [
+                .init(color: AppPalette.pageBackground, location: 0),
+                .init(color: AppPalette.pageBackground, location: 0.4),
+                .init(color: AppPalette.pageBackground.opacity(0.7), location: 0.6),
+                .init(color: AppPalette.pageBackground.opacity(0.3), location: 0.8),
+                .init(color: AppPalette.pageBackground.opacity(0), location: 1),
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .frame(height: 200)
+        .allowsHitTesting(false)
+    }
+}
+
 // MARK: - Glassmorphism modifiers
 
 private struct AppCardModifier: ViewModifier {

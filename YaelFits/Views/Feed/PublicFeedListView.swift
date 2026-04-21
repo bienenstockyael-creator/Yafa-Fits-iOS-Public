@@ -57,7 +57,7 @@ struct PublicFeedListView: View {
                             .animation(.easeOut(duration: 0.12), value: hasScrolled)
                     }
                     .padding(.horizontal, LayoutMetrics.screenPadding)
-                    .padding(.bottom, 64)
+                    .padding(.bottom, LayoutMetrics.screenPadding)
                 }
                 .allowsHitTesting(hasScrolled)
                 .zIndex(4)
@@ -97,7 +97,7 @@ struct PublicFeedListView: View {
                     .onPreferenceChange(CartBottomKey.self) { bottomY in
                         guard let bottomY else { return }
                         let screenHeight = UIScreen.main.bounds.height
-                        let tabBarTop = screenHeight - 90
+                        let tabBarTop = screenHeight - LayoutMetrics.tabBarHeight - LayoutMetrics.screenPadding
                         // Only scroll if cart bottom is below the tab bar
                         if bottomY > tabBarTop {
                             withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.5)) {
@@ -110,7 +110,7 @@ struct PublicFeedListView: View {
             .scrollTargetLayout()
             .animation(.easeOut(duration: 0.3), value: store.feedPosts.count)
             .padding(.horizontal, LayoutMetrics.screenPadding)
-            .padding(.bottom, LayoutMetrics.bottomOverlayInset)
+            .padding(.bottom, LayoutMetrics.screenPadding)
             .background {
                 GeometryReader { proxy in
                     Color.clear
@@ -211,7 +211,7 @@ struct PublicFeedListView: View {
                 if store.unreadNotificationCount > 0 {
                     Text("\(store.unreadNotificationCount)")
                         .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(AppPalette.textMuted)
+                        .foregroundStyle(AppPalette.uploadGlow.opacity(0.7))
                         .frame(width: 20, height: 20)
                         .background {
                             LightBlurView(style: .systemThinMaterialLight)
@@ -222,6 +222,7 @@ struct PublicFeedListView: View {
                                 )
                         }
                         .overlay(Circle().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
+                        .shadow(color: AppPalette.uploadGlow.opacity(0.2), radius: 3, y: 1)
                         .offset(x: 6, y: -6)
                 }
             }

@@ -1,6 +1,6 @@
 import Foundation
 
-struct FeedPost: Codable, Identifiable {
+struct FeedPost: Codable, Identifiable, Equatable {
     let id: String
     let authorName: String
     let outfitId: String

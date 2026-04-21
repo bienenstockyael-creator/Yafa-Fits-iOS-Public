@@ -74,6 +74,15 @@ struct OutfitService {
             .execute()
     }
 
+    static func updateOutfitDate(outfitId: String, date: String) async throws {
+        struct DateUpdate: Encodable { let date: String }
+        try await supabase
+            .from("outfits")
+            .update(DateUpdate(date: date))
+            .eq("id", value: outfitId)
+            .execute()
+    }
+
     static func setPublished(_ isPublic: Bool, outfitId: String) async throws {
         try await supabase
             .from("outfits")

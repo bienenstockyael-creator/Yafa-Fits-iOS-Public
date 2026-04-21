@@ -105,15 +105,35 @@ enum LayoutMetrics {
     static let large: CGFloat = 24
     static let xLarge: CGFloat = 32
     static let screenPadding: CGFloat = 20
-    static let listTopInset: CGFloat = 76
-    static let carouselTopInset: CGFloat = 76
-    static let calendarTopInset: CGFloat = 94
-    static let feedTopInset: CGFloat = 92
-    static let uploadTopInset: CGFloat = 92
-    static let bottomOverlayInset: CGFloat = 120
-    static let floatingControlsInset: CGFloat = 176
     static let compactCornerRadius: CGFloat = 16
     static let cardCornerRadius: CGFloat = 24
+
+    private static var safeTop: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.windows.first?.safeAreaInsets.top ?? 47
+    }
+
+    private static var safeBottom: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.windows.first?.safeAreaInsets.bottom ?? 34
+    }
+
+    static var topBarHeight: CGFloat { safeTop + touchTarget }
+    static var tabBarHeight: CGFloat { 58 + safeBottom }
+
+    private static var screenHeight: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.windows.first?.bounds.height ?? 852
+    }
+
+    static var listTopInset: CGFloat { topBarHeight - screenHeight * 0.065 }
+    static var carouselTopInset: CGFloat { topBarHeight }
+    static var calendarTopInset: CGFloat { topBarHeight - screenHeight * 0.018 }
+    static var feedTopInset: CGFloat { topBarHeight - screenHeight * 0.045 }
+    static var uploadTopInset: CGFloat { topBarHeight - screenHeight * 0.044 }
 }
 
 // MARK: - Colors

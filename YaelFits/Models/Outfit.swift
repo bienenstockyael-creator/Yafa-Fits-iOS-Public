@@ -94,7 +94,7 @@ struct Product: Codable, Hashable, Identifiable, Sendable {
 struct Outfit: Codable, Identifiable, Hashable, Sendable {
     let id: String
     let name: String
-    let date: String
+    var date: String
     let frameCount: Int
     let folder: String
     let prefix: String

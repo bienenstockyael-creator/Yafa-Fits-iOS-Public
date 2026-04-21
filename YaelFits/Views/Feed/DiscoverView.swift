@@ -150,7 +150,7 @@ struct DiscoverView: View {
                         Text(profile.displayLabel)
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(AppPalette.textStrong)
-                        if let username = profile.username, username != profile.displayName {
+                        if let username = profile.username, !username.isEmpty {
                             Text("@\(username)")
                                 .font(.system(size: 11))
                                 .foregroundStyle(AppPalette.textMuted)

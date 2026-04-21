@@ -120,6 +120,7 @@ struct ShareCardComposer: View {
     private let storyHaptic = UIImpactFeedbackGenerator(style: .light)
     @State private var cardVisible = false
     @State private var templateSlideEdge: Edge = .trailing
+    @State private var carouselDragOffset: CGFloat = 0
 
     var body: some View {
         ZStack {
@@ -127,11 +128,11 @@ struct ShareCardComposer: View {
 
             VStack(spacing: 0) {
                 header
-                    .padding(.top, 28)
+                    .padding(.top, 48)
 
                 Spacer(minLength: 16)
 
-                cardArea
+                cardCarousel
                     .frame(height: 520)
                     .padding(.vertical, -20)
                     .offset(y: cardVisible ? 0 : 72)
@@ -200,116 +201,74 @@ struct ShareCardComposer: View {
         .padding(.horizontal, LayoutMetrics.screenPadding)
     }
 
-    // MARK: - Card area
+    // MARK: - Card carousel
 
-    private var cardArea: some View {
-        ZStack {
-            // Back layer — PNG or dynamic code background.
-            // For dynamic templates the number is overlaid ON the Color so
-            // the Color (not the text) determines the card size.
-            Group {
-                if selectedTemplate == .ootdLive {
-                    ZStack {
-                        Color.white
-                        LinearGradient(
-                            colors: [Color(red: 0.737, green: 0.737, blue: 0.737), .black],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                        .opacity(0.4)
+    private var cardCarousel: some View {
+        let templates = availableTemplates
+        let cardWidth = UIScreen.main.bounds.width - 48
+        let gap: CGFloat = 16
+        let step = cardWidth + gap
+
+        return GeometryReader { geo in
+            let currentIndex = templates.firstIndex(of: selectedTemplate) ?? 0
+            let cardHeight = geo.size.height - 40
+            let baseOffset = geo.size.width / 2 - cardWidth / 2 - CGFloat(currentIndex) * step
+
+            Color.clear
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(alignment: .leading) {
+                    HStack(spacing: gap) {
+                        ForEach(templates) { template in
+                            cardBackLayer(for: template)
+                                .frame(width: cardWidth, height: cardHeight)
+                                .clipShape(RoundedRectangle(cornerRadius: LayoutMetrics.cardCornerRadius, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: LayoutMetrics.cardCornerRadius, style: .continuous)
+                                        .strokeBorder(AppPalette.cardBorder, lineWidth: 0.75)
+                                )
+                                .shadow(color: Color.black.opacity(0.10), radius: 18, y: 10)
+                        }
                     }
-                    .overlay(ootdBackLayer)
-                } else if selectedTemplate.isDynamic {
-                    selectedTemplate.dynamicBackground
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .overlay(
-                            // Renders text to a tight ink-bounds image, then centers
-                            // that image — visually perfect for any combination of digits.
-                            Canvas { context, size in
-                                let isElec = selectedTemplate == .electricLive
-                                let fontName = isElec ? "PlayfairDisplay-Italic" : "Inter28pt-SemiBold"
-                                let fontSize: CGFloat = isElec ? 457.2 : 304
-                                let kern: CGFloat   = isElec ? -50.3 : -21.3
-                                let color = UIColor(dynamicColor)
-
-                                if let img = textToImage(
-                                    outfitDayNumber,
-                                    fontName: fontName, fontSize: fontSize,
-                                    kern: kern, color: color
-                                ) {
-                                    let rect = CGRect(
-                                        x: size.width  / 2 - img.size.width  / 2,
-                                        y: size.height / 2 - img.size.height / 2,
-                                        width:  img.size.width,
-                                        height: img.size.height
-                                    )
-                                    context.draw(Image(uiImage: img), in: rect)
-                                }
-                            }
-                        )
-                } else if let uiImage = UIImage(named: selectedTemplate.backImageName) {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    Color(white: 0.92)
+                    .offset(x: baseOffset + carouselDragOffset)
                 }
-            }
-            .id("back-\(selectedTemplate.id)")
-            .transition(.asymmetric(
-                insertion: .move(edge: templateSlideEdge),
-                removal: .move(edge: templateSlideEdge == .trailing ? .leading : .trailing)
-            ))
-            .allowsHitTesting(false)
-
-            // Outfit stays fixed
-            outfitLayer
-                .allowsHitTesting(true)
-
-            // Dynamic date front layer
-            if selectedTemplate.isDynamic && selectedTemplate != .ootdLive {
-                dynamicDateFrontLayer
-            }
-            if selectedTemplate == .ootdLive {
-                ootdDynamicFrontLayer
-                    .id("date-front-\(selectedTemplate.id)")
-                    .transition(.asymmetric(
-                        insertion: .move(edge: templateSlideEdge),
-                        removal: .move(edge: templateSlideEdge == .trailing ? .leading : .trailing)
-                    ))
+                .overlay {
+                    outfitLayer
+                        .frame(width: cardWidth, height: cardHeight)
+                }
+                .overlay(alignment: .leading) {
+                    HStack(spacing: gap) {
+                        ForEach(templates) { template in
+                            cardFrontLayer(for: template)
+                                .frame(width: cardWidth, height: cardHeight)
+                                .clipShape(RoundedRectangle(cornerRadius: LayoutMetrics.cardCornerRadius, style: .continuous))
+                        }
+                    }
+                    .offset(x: baseOffset + carouselDragOffset)
                     .allowsHitTesting(false)
-            }
-
-            // PNG front layers
-            Group {
-                if selectedTemplate.frontLayerIsFrosted,
-                   let frontName = selectedTemplate.frontImageName,
-                   let maskImage = solidAlphaMask(for: frontName) {
-                    FrostedShapeView(maskImage: maskImage)
                 }
-                if let frontName = selectedTemplate.frontImageName,
-                   let uiImage = UIImage(named: frontName) {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFill()
-                }
-            }
-            .id("front-\(selectedTemplate.id)")
-            .transition(.asymmetric(
-                insertion: .move(edge: templateSlideEdge),
-                removal: .move(edge: templateSlideEdge == .trailing ? .leading : .trailing)
-            ))
-            .allowsHitTesting(false)
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        carouselDragOffset = value.translation.width
+                    }
+                    .onEnded { value in
+                        let translation = value.translation.width
+                        let velocity = value.predictedEndTranslation.width
+                        var newIndex = currentIndex
+                        if translation < -50 || velocity < -200 {
+                            newIndex = min(currentIndex + 1, templates.count - 1)
+                        } else if translation > 50 || velocity > 200 {
+                            newIndex = max(currentIndex - 1, 0)
+                        }
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
+                            selectedTemplate = templates[newIndex]
+                            carouselDragOffset = 0
+                        }
+                    }
+            )
+            .animation(.spring(response: 0.42, dampingFraction: 0.82), value: selectedTemplate)
         }
-        .clipShape(RoundedRectangle(cornerRadius: LayoutMetrics.cardCornerRadius, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: LayoutMetrics.cardCornerRadius, style: .continuous)
-                .strokeBorder(AppPalette.cardBorder, lineWidth: 0.75)
-        )
-        .padding(.horizontal, 24)
-        .padding(.vertical, 20)
-        .shadow(color: Color.black.opacity(0.10), radius: 18, y: 10)
-        .shadow(color: Color.black.opacity(0.06), radius: 48, y: 22)
         .rotation3DEffect(
             .degrees(gyroPitch * 8),
             axis: (x: 1, y: 0, z: 0),
@@ -320,6 +279,79 @@ struct ShareCardComposer: View {
             axis: (x: 0, y: 1, z: 0),
             perspective: 0.4
         )
+    }
+
+    // MARK: - Card layers
+
+    private func cardBackLayer(for template: ShareCardTemplate) -> some View {
+        Group {
+            if template == .ootdLive {
+                ZStack {
+                    Color.white
+                    LinearGradient(
+                        colors: [Color(red: 0.737, green: 0.737, blue: 0.737), .black],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .opacity(0.4)
+                }
+                .overlay(ootdBackLayer)
+            } else if template.isDynamic {
+                template.dynamicBackground
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .overlay(
+                        Canvas { context, size in
+                            let isElec = template == .electricLive
+                            let fontName = isElec ? "PlayfairDisplay-Italic" : "Inter28pt-SemiBold"
+                            let fontSize: CGFloat = isElec ? 457.2 : 304
+                            let kern: CGFloat   = isElec ? -50.3 : -21.3
+                            let color = UIColor(dynamicColor)
+
+                            if let img = textToImage(
+                                outfitDayNumber,
+                                fontName: fontName, fontSize: fontSize,
+                                kern: kern, color: color
+                            ) {
+                                let rect = CGRect(
+                                    x: size.width  / 2 - img.size.width  / 2,
+                                    y: size.height / 2 - img.size.height / 2,
+                                    width:  img.size.width,
+                                    height: img.size.height
+                                )
+                                context.draw(Image(uiImage: img), in: rect)
+                            }
+                        }
+                    )
+            } else if let uiImage = UIImage(named: template.backImageName) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Color(white: 0.92)
+            }
+        }
+    }
+
+    private func cardFrontLayer(for template: ShareCardTemplate) -> some View {
+        ZStack {
+            if template.isDynamic && template != .ootdLive {
+                dynamicDateFrontLayer
+            }
+            if template == .ootdLive {
+                ootdDynamicFrontLayer
+            }
+            if template.frontLayerIsFrosted,
+               let frontName = template.frontImageName,
+               let maskImage = solidAlphaMask(for: frontName) {
+                FrostedShapeView(maskImage: maskImage)
+            }
+            if let frontName = template.frontImageName,
+               let uiImage = UIImage(named: frontName) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFill()
+            }
+        }
     }
 
     // MARK: - Text-to-image (ink-bounds centering)

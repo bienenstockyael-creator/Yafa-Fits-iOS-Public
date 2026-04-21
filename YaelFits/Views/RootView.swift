@@ -57,8 +57,8 @@ struct RootView: View {
                     PublicFeedListView()
                         .opacity(store.currentView == .feed ? 1 : 0)
                         .allowsHitTesting(store.currentView == .feed)
-                        .frame(maxHeight: store.currentView == .feed ? .infinity : 0)
-                        .clipped()
+                        .frame(maxWidth: store.currentView == .feed ? .infinity : 0,
+                               maxHeight: store.currentView == .feed ? .infinity : 0)
                         .onAppear { feedHasAppeared = true }
                 }
             }
@@ -88,17 +88,23 @@ struct RootView: View {
                         floatingFavoritesButton
                     }
                     .padding(.horizontal, LayoutMetrics.screenPadding)
-                    .padding(.bottom, 64)
+                    .padding(.bottom, LayoutMetrics.screenPadding)
                 }
                 .zIndex(65)
             }
 
             VStack {
                 Spacer()
-                tabBar
+                LinearGradient(
+                    colors: [.black.opacity(0), .black.opacity(0.06)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 120)
             }
+            .allowsHitTesting(false)
             .ignoresSafeArea(edges: .bottom)
-            .zIndex(100)
+            .zIndex(60)
 
             if loaderMounted {
                 loadingOverlay
@@ -114,6 +120,9 @@ struct RootView: View {
                 }
                 .zIndex(500)
             }
+        }
+        .safeAreaInset(edge: .bottom) {
+            tabBar
         }
         .onTapGesture {
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
@@ -455,24 +464,26 @@ struct RootView: View {
     }
 
     private var tabBar: some View {
-        VStack(spacing: 0) {
-            Divider()
-                .opacity(0.16)
-
-            HStack(spacing: 0) {
+        HStack(spacing: 0) {
                 tabItem(icon: .grid, iconSize: 22, label: "Home", tab: .list)
                 tabItem(icon: .plusCircle, iconSize: 26, label: "Upload", tab: .upload)
                 tabItem(icon: .globe, iconSize: 24, label: "Public", tab: .feed)
                 tabItem(icon: .person, iconSize: 22, label: "Profile", tab: .profile)
             }
-            .padding(.horizontal, LayoutMetrics.xxSmall)
-            .padding(.top, LayoutMetrics.xSmall)
-            .padding(.bottom, LayoutMetrics.medium)
-        }
-        .background {
-            LightBlurView(style: .systemThinMaterialLight)
-                .overlay(Rectangle().fill(AppPalette.cardFill))
-        }
+            .padding(.horizontal, LayoutMetrics.large)
+            .padding(.vertical, LayoutMetrics.xxSmall)
+            .background {
+                ZStack {
+                    LightBlurView(style: .systemThinMaterialLight)
+                        .clipShape(Capsule(style: .continuous))
+                    Capsule(style: .continuous).fill(AppPalette.cardFill)
+                }
+            }
+            .overlay(Capsule(style: .continuous).strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
+            .shadow(color: Color.black.opacity(0.12), radius: 20, y: 10)
+            .shadow(color: Color.black.opacity(0.06), radius: 6, y: 3)
+            .padding(.horizontal, LayoutMetrics.xLarge)
+            .padding(.bottom, LayoutMetrics.xxSmall)
     }
 
     private func tabItem(icon: AppIconGlyph, iconSize: CGFloat = 24, label: String, tab: AppView) -> some View {
@@ -515,7 +526,7 @@ struct RootView: View {
                     if tab == .feed && store.unreadNotificationCount > 0 {
                         Text("\(store.unreadNotificationCount)")
                             .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(AppPalette.textMuted)
+                            .foregroundStyle(AppPalette.uploadGlow.opacity(0.7))
                             .frame(width: 18, height: 18)
                             .background {
                                 LightBlurView(style: .systemThinMaterialLight)
@@ -526,6 +537,7 @@ struct RootView: View {
                                     )
                             }
                             .overlay(Circle().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
+                            .shadow(color: AppPalette.uploadGlow.opacity(0.2), radius: 3, y: 1)
                             .offset(x: 8, y: -5)
                     }
 
@@ -642,12 +654,13 @@ struct RootView: View {
                     glyph: .heart,
                     size: 16,
                     color: AppPalette.iconPrimary,
-                    filled: !store.likedIds.isEmpty
+                    filled: store.likedIds.contains(where: { id in store.outfits.contains { $0.id == id } })
                 )
                     .frame(width: 48, height: 48)
                     .appCircle()
-                if !store.likedIds.isEmpty {
-                    Text("\(store.likedIds.count)")
+                let ownLikedCount = store.likedIds.filter { id in store.outfits.contains { $0.id == id } }.count
+                if ownLikedCount > 0 {
+                    Text("\(ownLikedCount)")
                         .font(.system(size: 9, weight: .bold))
                         .foregroundStyle(AppPalette.textMuted)
                         .frame(width: 20, height: 20)
@@ -657,6 +670,7 @@ struct RootView: View {
                                 .overlay(Circle().fill(AppPalette.cardFill))
                         }
                         .overlay(Circle().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
+                        .shadow(color: AppPalette.cardShadow, radius: 4, y: 2)
                         .offset(x: 4, y: -4)
                 }
             }

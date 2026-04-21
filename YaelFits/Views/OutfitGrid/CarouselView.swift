@@ -24,8 +24,15 @@ struct CarouselView: View {
     @State private var isDismissing = false
     @State private var keyboardHeight: CGFloat = 0
 
+    private static let cardInset: CGFloat = 12
+
+    @State private var viewWidth: CGFloat = UIScreen.main.bounds.width
+    @State private var slideHeight: CGFloat = 318
+    @State private var isCardExpanded = false
+    @State private var cardExpandProgress: CGFloat = 0
+
     private var slideWidth: CGFloat {
-        max(220, min(UIScreen.main.bounds.width * 0.78, 320))
+        viewWidth - (Self.cardInset * 2)
     }
 
     private let gap: CGFloat = LayoutMetrics.xSmall
@@ -48,43 +55,63 @@ struct CarouselView: View {
                 .allowsHitTesting(false)
                 .opacity(backdropOpacity)
 
-            VStack(spacing: LayoutMetrics.small) {
-                if let outfit = currentOutfit, let weather = outfit.weather, !weather.condition.isEmpty {
-                    ZStack {
-                        WeatherPill(weather: weather, useFahrenheit: store.useFahrenheit)
+            GeometryReader { geo in
+                let bottomClearance = Self.cardInset
+                let usableHeight = geo.size.height - LayoutMetrics.carouselTopInset - bottomClearance
+                let computedSlideHeight = max(320, usableHeight * 0.66)
+                ZStack(alignment: .bottom) {
+                    VStack(spacing: LayoutMetrics.small) {
+                        if let outfit = currentOutfit, let weather = outfit.weather, !weather.condition.isEmpty {
+                            ZStack {
+                                WeatherPill(weather: weather, useFahrenheit: store.useFahrenheit)
+                                    .opacity(showsChrome ? 1 : 0)
+                                    .allowsHitTesting(showsChrome)
+                            }
+                            .frame(height: 36)
+                        }
+
+                        ZStack {
+                            carouselSlides
+                                .scaleEffect(1.0 - (cardExpandProgress * 0.23), anchor: .top)
+                            navButtons
+                                .opacity(showsChrome ? 1 : 0)
+                                .allowsHitTesting(showsChrome)
+                        }
+                        .frame(height: slideHeight)
+                        .scaleEffect(keyboardHeight > 0 ? 0.78 : 1.0, anchor: .top)
+                        .padding(.bottom, keyboardHeight > 0 ? -66 : 0)
+
+                        Spacer(minLength: 0)
+                    }
+                    .offset(y: -(slideHeight * 0.18 * cardExpandProgress))
+                    .animation(.spring(response: 0.4, dampingFraction: 0.78), value: isCardExpanded)
+                    .padding(.top, LayoutMetrics.carouselTopInset)
+
+                    if let outfit = currentOutfit {
+                        CarouselDetailCard(
+                            outfit: outfit,
+                            onDelete: {
+                                onDeleteOutfit(outfit)
+                            },
+                            isExpanded: $isCardExpanded,
+                            expandProgress: $cardExpandProgress
+                        )
+                            .padding(.horizontal, Self.cardInset)
                             .opacity(showsChrome ? 1 : 0)
                             .allowsHitTesting(showsChrome)
                     }
-                    .frame(height: 36)
                 }
-
-                ZStack {
-                    carouselSlides
-                    navButtons
-                        .opacity(showsChrome ? 1 : 0)
-                        .allowsHitTesting(showsChrome)
+                .padding(.bottom, bottomClearance)
+                .onAppear {
+                    viewWidth = geo.size.width
+                    slideHeight = computedSlideHeight
                 }
-                .frame(height: 318)
-                // Scale outfit down slightly when keyboard is open
-                .scaleEffect(keyboardHeight > 0 ? 0.78 : 1.0, anchor: .top)
-                .padding(.bottom, keyboardHeight > 0 ? -66 : 0)
-
-                if let outfit = currentOutfit {
-                    CarouselDetailCard(
-                        outfit: outfit,
-                        onDelete: {
-                            onDeleteOutfit(outfit)
-                        }
-                    )
-                        .padding(.horizontal, LayoutMetrics.screenPadding)
-                        .opacity(showsChrome ? 1 : 0)
-                        .allowsHitTesting(showsChrome)
+                .onChange(of: geo.size) { _, newSize in
+                    viewWidth = newSize.width
+                    let newUsable = newSize.height - LayoutMetrics.carouselTopInset - Self.cardInset
+                    slideHeight = max(240, newUsable * 0.46)
                 }
-
-                Spacer(minLength: 0)
             }
-            .padding(.top, LayoutMetrics.carouselTopInset)
-            .padding(.bottom, LayoutMetrics.xLarge)
             .offset(y: verticalDismissOffset - keyboardHeight)
             .opacity(isDismissing ? max(0.0, 1.0 - (verticalDismissOffset / 300.0)) : 1.0)
             .scaleEffect(isDismissing ? max(0.9, 1.0 - (verticalDismissOffset / 1500.0)) : 1.0, anchor: .top)
@@ -203,7 +230,7 @@ struct CarouselView: View {
         ZStack {
             RotatableOutfitImage(
                 outfit: outfit,
-                height: 318,
+                height: slideHeight,
                 draggable: showsChrome && isCurrent,
                 eagerLoad: isNear,
                 preloadFullSequenceOnAppear: isCurrent,
@@ -236,7 +263,7 @@ struct CarouselView: View {
                     .opacity(showsEntryOverlay ? 1 : 0)
             }
         }
-        .frame(width: slideWidth, height: 318)
+        .frame(width: slideWidth, height: slideHeight)
         .scaleEffect(scale, anchor: .bottom)
         .allowsHitTesting(showsChrome && isCurrent)
         .background {
@@ -313,7 +340,7 @@ struct CarouselView: View {
     }
 
     private var navButtons: some View {
-        HStack {
+        return HStack {
             navButton(icon: .chevronLeft, disabled: currentIndex <= 0) {
                 currentIndex -= 1
             }
@@ -322,7 +349,7 @@ struct CarouselView: View {
                 currentIndex += 1
             }
         }
-        .padding(.horizontal, LayoutMetrics.xxSmall)
+        .padding(.horizontal, Self.cardInset)
     }
 
     private func navButton(icon: AppIconGlyph, disabled: Bool, action: @escaping () -> Void) -> some View {
@@ -357,6 +384,8 @@ private struct CarouselHeroTargetFramePreferenceKey: PreferenceKey {
 struct CarouselDetailCard: View {
     let outfit: Outfit
     let onDelete: () -> Void
+    @Binding var isExpanded: Bool
+    @Binding var expandProgress: CGFloat
     @Environment(OutfitStore.self) private var store
     @State private var showDeleteConfirmation = false
     @State private var selectedLinkedProduct: Product?
@@ -367,78 +396,144 @@ struct CarouselDetailCard: View {
     @State private var showShareComposer = false
     @State private var showPublishSheet = false
     @State private var showAddProduct = false
-    // Edit mode
     @State private var isEditing = false
     @State private var editableTags: [String] = []
     @State private var showingTagInput = false
     @State private var newTagText = ""
-
+    @State private var editableDate: Date = Date()
+    @State private var showDatePicker = false
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            // Date + outfit counter + edit toggle
-            HStack(alignment: .firstTextBaseline, spacing: LayoutMetrics.small) {
-                Text(outfit.numericDateLabel(useFahrenheit: store.useFahrenheit))
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .tracking(1.8)
-                    .foregroundStyle(AppPalette.textFaint)
+            HStack(alignment: .center, spacing: LayoutMetrics.small) {
+                if isEditing {
+                    Button {
+                        showDatePicker.toggle()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(editableDateLabel)
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .tracking(1.8)
+                                .foregroundStyle(AppPalette.textSecondary)
+                            Image(systemName: "pencil")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(AppPalette.textSecondary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Text(outfit.numericDateLabel(useFahrenheit: store.useFahrenheit))
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .tracking(1.8)
+                        .foregroundStyle(AppPalette.textFaint)
+                }
 
                 Spacer(minLength: 0)
 
                 Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        if isEditing { saveEdits() }
-                        else { enterEditMode() }
-                        isEditing.toggle()
+                    let impact = UIImpactFeedbackGenerator(style: .light)
+                    impact.impactOccurred()
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.78)) {
+                        if isEditing { saveEdits(); isEditing = false }
+                        isExpanded.toggle()
+                        expandProgress = isExpanded ? 1 : 0
                     }
                 } label: {
-                    Text(isEditing ? "DONE" : "EDIT")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
-                        .tracking(1.5)
-                        .foregroundStyle(isEditing ? AppPalette.textSecondary : AppPalette.textFaint)
+                    HStack(spacing: 6) {
+                        Text(isExpanded ? "SHOW LESS" : "SHOW INFO")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .tracking(1.5)
+                            .foregroundStyle(AppPalette.textFaint)
+                        Image(systemName: "chevron.up")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(AppPalette.iconPrimary)
+                            .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                    }
+                    .frame(height: 36)
                 }
                 .buttonStyle(.plain)
             }
 
-            // Products
-            if isEditing {
-                editableProductRow
-            } else if let products = outfit.products, !products.isEmpty {
-                productRow(products)
-            } else {
-                emptyProductRow
-            }
+            if isExpanded {
+                if isEditing {
+                    editableProductRow
+                } else if let products = outfit.products, !products.isEmpty {
+                    productRow(products)
+                } else {
+                    emptyProductRow
+                }
 
-            // Tags
-            if isEditing {
-                editableTagRow
-            } else if let tags = outfit.tags, !tags.isEmpty {
-                FlowLayout(spacing: 8) {
-                    ForEach(tags, id: \.self) { tag in
-                        TagPill(tag: tag) {
-                            let impact = UIImpactFeedbackGenerator(style: .light)
-                            impact.impactOccurred()
-                            selectedLinkedTag = LinkedTagSelection(id: tag)
+                if isEditing {
+                    editableTagRow
+                } else if let tags = outfit.tags, !tags.isEmpty {
+                    FlowLayout(spacing: 8) {
+                        ForEach(tags, id: \.self) { tag in
+                            TagPill(tag: tag) {
+                                let impact = UIImpactFeedbackGenerator(style: .light)
+                                impact.impactOccurred()
+                                selectedLinkedTag = LinkedTagSelection(id: tag)
+                            }
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    emptyTagRow
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                emptyTagRow
             }
 
-            // Action bar — hidden in edit mode for more space
-            if !isEditing {
-                HStack(spacing: 8) {
-                    publishButton
-                    Spacer(minLength: 0)
-                    deleteButton
-                    likeButton
-                    shareButton
+            HStack(spacing: 8) {
+                publishButton
+                Spacer(minLength: 0)
+                deleteButton
+                likeButton
+                shareButton
+                if isExpanded {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            if isEditing { saveEdits() }
+                            else { enterEditMode() }
+                            isEditing.toggle()
+                        }
+                    } label: {
+                        Text(isEditing ? "SAVE" : "EDIT")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .tracking(1.5)
+                            .foregroundStyle(isEditing ? AppPalette.textSecondary : AppPalette.textFaint)
+                            .padding(.horizontal, 12)
+                            .frame(height: 36)
+                            .appCapsule(shadowRadius: 0, shadowY: 0)
+                    }
+                    .buttonStyle(.plain)
+                    .transition(.scale.combined(with: .opacity))
                 }
             }
+            .animation(.spring(response: 0.4, dampingFraction: 0.78), value: isExpanded)
         }
         .padding(LayoutMetrics.medium)
         .appCard(cornerRadius: LayoutMetrics.cardCornerRadius)
+        .animation(.spring(response: 0.4, dampingFraction: 0.78), value: isExpanded)
+        .gesture(
+            DragGesture(minimumDistance: 20)
+                .onEnded { value in
+                    let translation = value.translation.height
+                    let velocity = value.predictedEndTranslation.height
+                    if !isExpanded && (translation < -50 || velocity < -200) {
+                        let impact = UIImpactFeedbackGenerator(style: .light)
+                        impact.impactOccurred()
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.78)) {
+                            isExpanded = true
+                            expandProgress = 1
+                        }
+                    } else if isExpanded && (translation > 50 || velocity > 200) {
+                        let impact = UIImpactFeedbackGenerator(style: .light)
+                        impact.impactOccurred()
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.78)) {
+                            if isEditing { saveEdits(); isEditing = false }
+                            isExpanded = false
+                            expandProgress = 0
+                        }
+                    }
+                }
+        )
         .alert("Delete outfit?", isPresented: $showDeleteConfirmation) {
             Button("Delete", role: .destructive) {
                 store.deleteOutfit(outfit)
@@ -478,6 +573,22 @@ struct CarouselDetailCard: View {
         .fullScreenCover(isPresented: $showShareComposer) {
             ShareCardComposer(outfit: outfit)
                 .environment(store)
+        }
+        .sheet(isPresented: $showDatePicker) {
+            VStack(spacing: 16) {
+                Text("CHANGE DATE")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .tracking(1.5)
+                    .foregroundStyle(AppPalette.textFaint)
+                DatePicker("", selection: $editableDate, displayedComponents: .date)
+                    .datePickerStyle(.graphical)
+                    .tint(.black)
+                    .colorScheme(.light)
+            }
+            .padding(LayoutMetrics.medium)
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(AppPalette.pageBackground)
         }
         .task(id: outfit.id) {
             await loadPublishState()
@@ -562,15 +673,9 @@ struct CarouselDetailCard: View {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     showAddProduct = true
                 } label: {
-                    HStack(spacing: 8) {
-                        AppIcon(glyph: .plusCircle, size: 32, color: AppPalette.textFaint, filled: true)
-                        if (outfit.products ?? []).isEmpty {
-                            Text("ADD PRODUCT")
-                                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                .tracking(1.5)
-                                .foregroundStyle(AppPalette.textFaint)
-                        }
-                    }
+                    AppIcon(glyph: .plusCircle, size: 14, color: AppPalette.iconPrimary)
+                        .frame(width: 36, height: 36)
+                        .appCircle(shadowRadius: 0, shadowY: 0)
                 }
                 .buttonStyle(.plain)
 
@@ -615,15 +720,9 @@ struct CarouselDetailCard: View {
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         withAnimation { showingTagInput.toggle() }
                     } label: {
-                        HStack(spacing: 8) {
-                            AppIcon(glyph: .plusCircle, size: 32, color: AppPalette.textFaint, filled: true)
-                            if editableTags.isEmpty {
-                                Text("ADD TAG")
-                                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                    .tracking(1.5)
-                                    .foregroundStyle(AppPalette.textFaint)
-                            }
-                        }
+                        AppIcon(glyph: .plusCircle, size: 14, color: AppPalette.iconPrimary)
+                            .frame(width: 36, height: 36)
+                            .appCircle(shadowRadius: 0, shadowY: 0)
                     }
                     .buttonStyle(.plain)
 
@@ -717,16 +816,36 @@ struct CarouselDetailCard: View {
 
     // MARK: - Edit mode logic
 
+    private var editableDateLabel: String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = store.useFahrenheit ? "MM/dd/yy" : "dd/MM/yy"
+        return formatter.string(from: editableDate)
+    }
+
     private func enterEditMode() {
         editableTags = outfit.tags ?? []
+        editableDate = outfit.parsedDate ?? Date()
     }
 
     private func saveEdits() {
         showingTagInput = false
+        showDatePicker = false
         guard let userId = store.userId else { return }
         let tagsToSave = editableTags
         let outfitId = outfit.id
         store.updateOutfitTags(outfitId: outfitId, tags: tagsToSave)
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let newDateString = formatter.string(from: editableDate)
+        if newDateString != outfit.date {
+            store.updateOutfitDate(outfitId: outfitId, date: newDateString)
+            Task {
+                try? await OutfitService.updateOutfitDate(outfitId: outfitId, date: newDateString)
+            }
+        }
+
         Task {
             try? await ProductLibraryService.updateOutfitTags(outfitId: outfitId, tags: tagsToSave)
         }
@@ -763,7 +882,7 @@ struct CarouselDetailCard: View {
                     .foregroundStyle(AppPalette.textMuted)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
-                    .frame(width: 80)
+                    .frame(width: 72)
             }
         }
         .buttonStyle(.plain)
@@ -775,7 +894,9 @@ struct CarouselDetailCard: View {
                 AsyncImage(url: imageURL, transaction: Transaction(animation: .easeOut(duration: 0.2))) { phase in
                     switch phase {
                     case let .success(image):
-                        image.resizable().scaledToFit()
+                        image.resizable().scaledToFill()
+                            .frame(width: 72, height: 72)
+                            .clipped()
                     case .failure:
                         placeholderProductImage
                     case .empty:
@@ -788,7 +909,8 @@ struct CarouselDetailCard: View {
                 placeholderProductImage
             }
         }
-        .frame(width: 80, height: 80)
+        .frame(width: 72, height: 72)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private var placeholderProductImage: some View {
@@ -890,5 +1012,12 @@ struct CarouselDetailCard: View {
                 .appCircle(shadowRadius: 0, shadowY: 0)
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct CardHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }

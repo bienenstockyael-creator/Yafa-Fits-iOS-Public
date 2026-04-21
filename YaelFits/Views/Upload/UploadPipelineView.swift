@@ -57,12 +57,12 @@ struct UploadPipelineView: View {
                     maxWidth: .infinity,
                     minHeight: max(
                         0,
-                        geometry.size.height - LayoutMetrics.uploadTopInset - LayoutMetrics.bottomOverlayInset
+                        geometry.size.height - LayoutMetrics.uploadTopInset - LayoutMetrics.screenPadding
                     )
                 )
                 .padding(.horizontal, LayoutMetrics.screenPadding)
                 .padding(.top, LayoutMetrics.uploadTopInset)
-                .padding(.bottom, LayoutMetrics.bottomOverlayInset)
+                .padding(.bottom, LayoutMetrics.screenPadding)
             }
             .scrollDisabled(true)
         }

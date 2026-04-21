@@ -7,17 +7,19 @@ struct SocialService {
     static func ensureProfile(userId: UUID, displayName: String? = nil) async {
         struct ProfileUpsert: Encodable {
             let id: String
+            let username: String?
             let displayName: String?
             enum CodingKeys: String, CodingKey {
-                case id
+                case id, username
                 case displayName = "display_name"
             }
         }
         _ = try? await supabase
             .from("profiles")
             .upsert(
-                ProfileUpsert(id: userId.uuidString, displayName: displayName),
-                onConflict: "id"
+                ProfileUpsert(id: userId.uuidString, username: displayName.map { Profile.sanitizeUsername($0) }, displayName: displayName),
+                onConflict: "id",
+                ignoreDuplicates: true
             )
             .execute()
     }
@@ -43,7 +45,8 @@ struct SocialService {
     }
 
     static func updateProfile(_ profile: Profile) async throws {
-        struct ProfileUpdate: Encodable {
+        struct ProfileUpsertFull: Encodable {
+            let id: String
             let username: String?
             let display_name: String?
             let avatar_url: String?
@@ -51,13 +54,13 @@ struct SocialService {
         }
         try await supabase
             .from("profiles")
-            .update(ProfileUpdate(
+            .upsert(ProfileUpsertFull(
+                id: profile.id.uuidString,
                 username: profile.username,
                 display_name: profile.displayName,
                 avatar_url: profile.avatarUrl,
                 bio: profile.bio
-            ))
-            .eq("id", value: profile.id.uuidString)
+            ), onConflict: "id")
             .execute()
     }
 

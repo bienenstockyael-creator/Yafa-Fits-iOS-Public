@@ -64,7 +64,7 @@ struct OutfitGridView: View {
                             outfitsGrid
 
                             Color.clear
-                                .frame(height: LayoutMetrics.floatingControlsInset)
+                                .frame(height: LayoutMetrics.screenPadding)
                         }
                         .padding(.horizontal, LayoutMetrics.small)
                     }
@@ -77,6 +77,11 @@ struct OutfitGridView: View {
                                 .blurFadeReveal(active: contentVisible, delay: 0.06, blurRadius: 10)
                         }
                     }
+
+                    GradientBlurView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        .ignoresSafeArea(edges: .top)
+                        .allowsHitTesting(false)
 
                     if showCarousel {
                         CarouselView(
@@ -226,7 +231,6 @@ struct OutfitGridView: View {
             }
         )
         .blurFadeReveal(active: contentVisible, delay: revealDelay(for: index))
-        .headerProximityFade(headerBottom: 68, fadeZone: 80)
         .gridTransitionReveal(
             phase: store.viewTransitionPhase,
             isList: store.currentView == .list,
@@ -601,7 +605,7 @@ struct OutfitGridView: View {
             x: viewportFrame.minX,
             y: viewportFrame.minY,
             width: viewportFrame.width,
-            height: max(0, viewportFrame.height - LayoutMetrics.bottomOverlayInset)
+            height: max(0, viewportFrame.height)
         )
         let viewportCenter = CGPoint(x: visibleViewport.midX, y: visibleViewport.midY)
 

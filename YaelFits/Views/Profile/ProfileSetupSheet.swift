@@ -80,6 +80,10 @@ struct ProfileSetupSheet: View {
             .onTapGesture { focusedField = nil }
         }
         .interactiveDismissDisabled()
+        .onChange(of: username) { _, newValue in
+            let sanitized = Profile.sanitizeUsername(newValue)
+            if sanitized != newValue { username = sanitized }
+        }
         .onAppear {
             if let existing = existingDisplayName, !existing.isEmpty, displayName.isEmpty {
                 displayName = existing
@@ -96,8 +100,8 @@ struct ProfileSetupSheet: View {
         isSaving = true
         var profile = Profile(id: userId)
         profile.displayName = displayName.trimmingCharacters(in: .whitespaces)
-        let trimmedUsername = username.trimmingCharacters(in: .whitespaces)
-        profile.username = trimmedUsername.isEmpty ? nil : trimmedUsername
+        let sanitized = Profile.sanitizeUsername(username)
+        profile.username = sanitized.isEmpty ? nil : sanitized
         do {
             try await SocialService.updateProfile(profile)
             await MainActor.run { onComplete() }

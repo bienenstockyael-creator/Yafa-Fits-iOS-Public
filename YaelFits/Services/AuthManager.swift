@@ -48,6 +48,7 @@ class AuthManager {
         await MainActor.run {
             self.session = session
         }
+        await SocialService.ensureProfile(userId: session.user.id)
     }
 
     func sendOTP(email: String) async throws {
@@ -55,7 +56,10 @@ class AuthManager {
     }
 
     func verifyOTP(email: String, otp: String) async throws {
-        _ = try await supabase.auth.verifyOTP(email: email, token: otp, type: .magiclink)
+        let response = try await supabase.auth.verifyOTP(email: email, token: otp, type: .magiclink)
+        if let userId = response.session?.user.id {
+            await SocialService.ensureProfile(userId: userId)
+        }
     }
 
     func updatePassword(_ newPassword: String) async throws {

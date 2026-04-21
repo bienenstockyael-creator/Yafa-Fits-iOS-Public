@@ -27,7 +27,7 @@ struct CalendarMonthView: View {
                     }
 
                     Color.clear
-                        .frame(height: LayoutMetrics.floatingControlsInset)
+                        .frame(height: LayoutMetrics.screenPadding)
                 }
                 .padding(.horizontal, LayoutMetrics.large)
                 .padding(.top, LayoutMetrics.calendarTopInset)
@@ -296,6 +296,9 @@ struct CalendarDetailSheet: View {
     @State private var showingTagInput = false
     @State private var newTagText = ""
     @State private var keyboardHeight: CGFloat = 0
+    @State private var isExpanded = false
+    @State private var editableDate: Date = Date()
+    @State private var showDatePicker = false
 
     var body: some View {
         ZStack {
@@ -307,14 +310,16 @@ struct CalendarDetailSheet: View {
 
             GeometryReader { geometry in
                 let width = min(max(geometry.size.width - (LayoutMetrics.screenPadding * 2), 0), 600)
-                // Stage height is fixed — card grows dynamically to fit all content
-                let stageHeight: CGFloat = min(geometry.size.height * 0.34, 320)
+                let stageHeight: CGFloat = min(geometry.size.height * 0.51, 480)
 
                 VStack(spacing: 0) {
                     header
                     heroStage(stageHeight: stageHeight)
+                        .scaleEffect(isExpanded ? 0.90 : 1.0, anchor: .top)
+                        .frame(height: isExpanded ? stageHeight * 0.90 : stageHeight)
                         .scaleEffect(keyboardHeight > 0 ? 0.78 : 1.0, anchor: .top)
                         .padding(.bottom, keyboardHeight > 0 ? -66 : 0)
+                        .animation(.spring(response: 0.4, dampingFraction: 0.78), value: isExpanded)
                     footer
                 }
                 .padding(.horizontal, LayoutMetrics.medium)
@@ -326,7 +331,7 @@ struct CalendarDetailSheet: View {
                         .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
                         .overlay(
                             RoundedRectangle(cornerRadius: 30, style: .continuous)
-                                .fill(Color.white.opacity(0.42))
+                                .fill(Color(white: 0.92).opacity(0.55))
                         )
                 }
                 .overlay(
@@ -334,8 +339,7 @@ struct CalendarDetailSheet: View {
                         .strokeBorder(AppPalette.cardBorder, lineWidth: 0.85)
                 )
                 .shadow(color: AppPalette.cardShadow.opacity(0.72), radius: 26, y: 12)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .padding(.top, 76)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                 .offset(y: -keyboardHeight * 0.5)
                 .scaleEffect(isVisible ? 1 : 0.985)
                 .offset(y: isVisible ? 0 : 22)
@@ -369,10 +373,25 @@ struct CalendarDetailSheet: View {
 
     private var header: some View {
         HStack(alignment: .top) {
-            Text(outfit.numericDateLabel(useFahrenheit: useFahrenheit))
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .tracking(1.8)
-                .foregroundStyle(AppPalette.textFaint)
+            if isEditing {
+                Button { showDatePicker.toggle() } label: {
+                    HStack(spacing: 4) {
+                        Text(calEditableDateLabel)
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .tracking(1.8)
+                            .foregroundStyle(AppPalette.textSecondary)
+                        Image(systemName: "pencil")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(AppPalette.textSecondary)
+                    }
+                }
+                .buttonStyle(.plain)
+            } else {
+                Text(outfit.numericDateLabel(useFahrenheit: useFahrenheit))
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .tracking(1.8)
+                    .foregroundStyle(AppPalette.textFaint)
+            }
 
             Spacer()
 
@@ -413,67 +432,98 @@ struct CalendarDetailSheet: View {
         .padding(.top, 2)
     }
 
+    private var calEditableDateLabel: String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = useFahrenheit ? "MM/dd/yy" : "dd/MM/yy"
+        return formatter.string(from: editableDate)
+    }
+
     private var footer: some View {
         VStack(spacing: 14) {
-            // Header row: date + edit toggle
-            HStack {
-                Text(outfit.numericDateLabel(useFahrenheit: useFahrenheit))
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .tracking(1.8)
-                    .foregroundStyle(AppPalette.textFaint)
+            HStack(alignment: .center) {
                 Spacer(minLength: 0)
+
                 Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        if isEditing { saveCalendarEdits() }
-                        else { editableTags = outfit.tags ?? [] }
-                        isEditing.toggle()
+                    let impact = UIImpactFeedbackGenerator(style: .light)
+                    impact.impactOccurred()
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.78)) {
+                        if isEditing { saveCalendarEdits(); isEditing = false }
+                        isExpanded.toggle()
                     }
                 } label: {
-                    Text(isEditing ? "DONE" : "EDIT")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
-                        .tracking(1.5)
-                        .foregroundStyle(isEditing ? AppPalette.textSecondary : AppPalette.textFaint)
+                    HStack(spacing: 6) {
+                        Text(isExpanded ? "SHOW LESS" : "SHOW INFO")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .tracking(1.5)
+                            .foregroundStyle(AppPalette.textFaint)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(AppPalette.iconPrimary)
+                            .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                    }
+                    .frame(height: 36)
                 }
                 .buttonStyle(.plain)
             }
 
-            // Products
-            if isEditing {
-                calEditableProductRow
-            } else if let products = outfit.products, !products.isEmpty {
-                productRow(products)
-            } else {
-                emptyProductRow
-            }
+            if isExpanded {
+                if isEditing {
+                    calEditableProductRow
+                } else if let products = outfit.products, !products.isEmpty {
+                    productRow(products)
+                } else {
+                    emptyProductRow
+                }
 
-            // Tags
-            if isEditing {
-                calEditableTagRow
-            } else if let tags = outfit.tags, !tags.isEmpty {
-                FlowLayout(spacing: 8) {
-                    ForEach(tags, id: \.self) { tag in
-                        TagPill(tag: tag) {
-                            let impact = UIImpactFeedbackGenerator(style: .light)
-                            impact.impactOccurred()
-                            selectedLinkedTag = LinkedTagSelection(id: tag)
+                if isEditing {
+                    calEditableTagRow
+                } else if let tags = outfit.tags, !tags.isEmpty {
+                    FlowLayout(spacing: 8) {
+                        ForEach(tags, id: \.self) { tag in
+                            TagPill(tag: tag) {
+                                let impact = UIImpactFeedbackGenerator(style: .light)
+                                impact.impactOccurred()
+                                selectedLinkedTag = LinkedTagSelection(id: tag)
+                            }
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    calEmptyTagRow
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                calEmptyTagRow
             }
 
-            // Action bar
             HStack(spacing: 8) {
                 publishButton
                 Spacer(minLength: 0)
                 deleteButton
                 likeButton
                 calShareButton
+                if isExpanded {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            if isEditing { saveCalendarEdits() }
+                            else { editableTags = outfit.tags ?? []; editableDate = outfit.parsedDate ?? Date() }
+                            isEditing.toggle()
+                        }
+                    } label: {
+                        Text(isEditing ? "SAVE" : "EDIT")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .tracking(1.5)
+                            .foregroundStyle(isEditing ? AppPalette.textSecondary : AppPalette.textFaint)
+                            .padding(.horizontal, 12)
+                            .frame(height: 36)
+                            .appCapsule(shadowRadius: 0, shadowY: 0)
+                    }
+                    .buttonStyle(.plain)
+                    .transition(.scale.combined(with: .opacity))
+                }
             }
+            .animation(.spring(response: 0.4, dampingFraction: 0.78), value: isExpanded)
         }
         .padding(.top, 10)
+        .animation(.spring(response: 0.4, dampingFraction: 0.78), value: isExpanded)
         .frame(maxWidth: .infinity, alignment: .top)
         .alert("Delete outfit?", isPresented: $showDeleteConfirmation) {
             Button("Delete", role: .destructive) {
@@ -496,6 +546,22 @@ struct CalendarDetailSheet: View {
                                        products: (outfit.products ?? []) + [p])
                 }
             }
+        }
+        .sheet(isPresented: $showDatePicker) {
+            VStack(spacing: 16) {
+                Text("CHANGE DATE")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .tracking(1.5)
+                    .foregroundStyle(AppPalette.textFaint)
+                DatePicker("", selection: $editableDate, displayedComponents: .date)
+                    .datePickerStyle(.graphical)
+                    .tint(.black)
+                    .colorScheme(.light)
+            }
+            .padding(LayoutMetrics.medium)
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(AppPalette.pageBackground)
         }
     }
 
@@ -524,7 +590,9 @@ struct CalendarDetailSheet: View {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     showAddProduct = true
                 } label: {
-                    AppIcon(glyph: .plusCircle, size: 32, color: AppPalette.textFaint, filled: true)
+                    AppIcon(glyph: .plusCircle, size: 14, color: AppPalette.iconPrimary)
+                        .frame(width: 36, height: 36)
+                        .appCircle(shadowRadius: 0, shadowY: 0)
                 }
                 .buttonStyle(.plain)
 
@@ -564,7 +632,9 @@ struct CalendarDetailSheet: View {
                     Button {
                         withAnimation { showingTagInput.toggle() }
                     } label: {
-                        AppIcon(glyph: .plusCircle, size: 32, color: AppPalette.textFaint, filled: true)
+                        AppIcon(glyph: .plusCircle, size: 14, color: AppPalette.iconPrimary)
+                        .frame(width: 36, height: 36)
+                        .appCircle(shadowRadius: 0, shadowY: 0)
                     }
                     .buttonStyle(.plain)
 
@@ -646,10 +716,19 @@ struct CalendarDetailSheet: View {
 
     private func saveCalendarEdits() {
         showingTagInput = false
+        showDatePicker = false
         let tags = editableTags
         let outfitId = outfit.id
         store.updateOutfitTags(outfitId: outfitId, tags: tags)
         Task { try? await ProductLibraryService.updateOutfitTags(outfitId: outfitId, tags: tags) }
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let newDateString = formatter.string(from: editableDate)
+        if newDateString != outfit.date {
+            store.updateOutfitDate(outfitId: outfitId, date: newDateString)
+            Task { try? await OutfitService.updateOutfitDate(outfitId: outfitId, date: newDateString) }
+        }
     }
 
     private func commitCalTag() {
@@ -698,7 +777,7 @@ struct CalendarDetailSheet: View {
                     .padding(.horizontal, 12)
                     .appCapsule(shadowRadius: 0, shadowY: 0)
             } else {
-                Text(isPublished == true ? "UNPUBLISH" : "PUBLISH TO FEED")
+                Text(isPublished == true ? "UNPUBLISH" : "PUBLISH")
                     .font(.system(size: 10, weight: .semibold))
                     .tracking(1)
                     .foregroundStyle(isPublished == true ? AppPalette.textMuted : AppPalette.textPrimary)
@@ -786,7 +865,7 @@ struct CalendarDetailSheet: View {
                     .foregroundStyle(AppPalette.textMuted)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
-                    .frame(width: 88)
+                    .frame(width: 72)
             }
         }
         .buttonStyle(.plain)
@@ -798,7 +877,9 @@ struct CalendarDetailSheet: View {
                 AsyncImage(url: imageURL, transaction: Transaction(animation: .easeOut(duration: 0.2))) { phase in
                     switch phase {
                     case let .success(image):
-                        image.resizable().scaledToFit()
+                        image.resizable().scaledToFill()
+                            .frame(width: 72, height: 72)
+                            .clipped()
                     case .failure:
                         placeholderProductImage
                     case .empty:
@@ -811,7 +892,8 @@ struct CalendarDetailSheet: View {
                 placeholderProductImage
             }
         }
-        .frame(width: 80, height: 80)
+        .frame(width: 72, height: 72)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private var placeholderProductImage: some View {

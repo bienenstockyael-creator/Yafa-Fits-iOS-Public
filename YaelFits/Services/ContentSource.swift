@@ -141,19 +141,23 @@ struct ContentSource {
     // MARK: - Supabase data (network)
 
     static func getUserOutfits(userId: UUID) async -> [Outfit] {
-        do {
-            let rows: [SupabaseOutfitRow] = try await supabase
-                .from("outfits")
-                .select(outfitSelectWithProducts)
-                .eq("user_id", value: userId.uuidString)
-                .order("created_at", ascending: false)
-                .execute()
-                .value
+        if let rows: [SupabaseOutfitRow] = try? await supabase
+            .from("outfits")
+            .select(outfitSelectWithProducts)
+            .eq("user_id", value: userId.uuidString)
+            .order("created_at", ascending: false)
+            .execute()
+            .value {
             return rows.map { $0.toOutfit() }
-        } catch {
-            AppLogger.data.error("ContentSource query failed: \(error.localizedDescription)")
-            return []
         }
+        let rows: [SupabaseOutfitRow] = (try? await supabase
+            .from("outfits")
+            .select("*")
+            .eq("user_id", value: userId.uuidString)
+            .order("created_at", ascending: false)
+            .execute()
+            .value) ?? []
+        return rows.map { $0.toOutfit() }
     }
 
     static func getPublicOutfits() async -> [Outfit] {

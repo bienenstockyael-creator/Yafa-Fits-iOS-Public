@@ -70,6 +70,12 @@ struct UserProfileSheet: View {
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(AppPalette.textStrong)
 
+            if let username = profile?.username, !username.isEmpty {
+                Text("@\(username)")
+                    .font(.system(size: 13))
+                    .foregroundStyle(AppPalette.textMuted)
+            }
+
             // Bio
             if let bio = profile?.bio, !bio.isEmpty {
                 Text(bio)
