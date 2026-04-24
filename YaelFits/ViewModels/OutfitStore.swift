@@ -455,10 +455,22 @@ class OutfitStore {
 
     func refreshOutfits() async {
         guard let userId else { return }
-        let allOutfits = await ContentSource.getAllOutfits(userId: userId)
-        await MainActor.run {
-            self.outfits = allOutfits
+        let fresh = await ContentSource.getAllOutfits(userId: userId)
+        guard !fresh.isEmpty else { return }
+        let bundledIds = Set(ContentSource.getBundledOutfits().map(\.id))
+        let existingById = Dictionary(self.outfits.map { ($0.id, $0) },
+                                      uniquingKeysWith: { a, _ in a })
+        let merged = fresh.map { outfit -> Outfit in
+            // Preserve cached bundled outfits so user-tagged products/tags aren't lost
+            if bundledIds.contains(outfit.id), let cached = existingById[outfit.id] {
+                return cached
+            }
+            return outfit
         }
+        await MainActor.run {
+            self.outfits = merged
+        }
+        LocalCache.saveOutfits(merged, userId: userId)
     }
 
     func refreshFeed() async {

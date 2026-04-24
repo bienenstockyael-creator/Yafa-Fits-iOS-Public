@@ -8,6 +8,7 @@ struct YaelFitsApp: App {
     @State private var outfitStore = OutfitStore()
     @State private var authManager = AuthManager()
     @State private var showProfileSetup = false
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
@@ -62,6 +63,11 @@ struct YaelFitsApp: App {
             }
             .task {
                 await authManager.initialize()
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                if newPhase == .active, authManager.isAuthenticated {
+                    Task { await outfitStore.refreshOutfits() }
+                }
             }
         }
     }

@@ -82,9 +82,11 @@ actor PushNotificationCoordinator {
     }
 
     private func upsertToken(_ token: String, userId: UUID) async {
-        // Paid developer accounts always get production APNs tokens,
-        // even in debug builds from Xcode.
+#if DEBUG
+        let environment = "development"
+#else
         let environment = "production"
+#endif
 
         let row = TokenRow(
             token: token,
