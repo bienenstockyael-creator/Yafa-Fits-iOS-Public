@@ -268,16 +268,17 @@ struct ContentSource {
                 enum CodingKeys: String, CodingKey {
                     case id, date, caption
                     case userId = "user_id"
-                    case createdAt = "created_at"
+                    case createdAt = "published_at"
                 }
             }
             let outfitRows: [FeedOutfitRow]
             if let withCaption: [FeedOutfitRow] = try? await supabase
                 .from("outfits")
-                .select("id, user_id, date, caption, created_at")
+                .select("id, user_id, date, caption, published_at")
                 .eq("is_public", value: true)
                 .in("user_id", values: userIdStrings)
-                .order("created_at", ascending: false)
+                .not("published_at", operator: .is, value: "null")
+                .order("published_at", ascending: false)
                 .limit(50)
                 .execute()
                 .value {
@@ -285,10 +286,11 @@ struct ContentSource {
             } else {
                 outfitRows = try await supabase
                     .from("outfits")
-                    .select("id, user_id, date, created_at")
+                    .select("id, user_id, date, published_at")
                     .eq("is_public", value: true)
                     .in("user_id", values: userIdStrings)
-                    .order("created_at", ascending: false)
+                    .not("published_at", operator: .is, value: "null")
+                    .order("published_at", ascending: false)
                     .limit(50)
                     .execute()
                     .value
@@ -337,15 +339,16 @@ struct ContentSource {
                 enum CodingKeys: String, CodingKey {
                     case id, caption
                     case userId = "user_id"
-                    case createdAt = "created_at"
+                    case createdAt = "published_at"
                 }
             }
             let rows: [FeedOutfitRow]
             if let withCaption: [FeedOutfitRow] = try? await supabase
                 .from("outfits")
-                .select("id, user_id, caption, created_at")
+                .select("id, user_id, caption, published_at")
                 .eq("is_public", value: true)
-                .order("created_at", ascending: false)
+                .not("published_at", operator: .is, value: "null")
+                .order("published_at", ascending: false)
                 .limit(50)
                 .execute()
                 .value {
@@ -353,9 +356,10 @@ struct ContentSource {
             } else {
                 rows = try await supabase
                     .from("outfits")
-                    .select("id, user_id, created_at")
+                    .select("id, user_id, published_at")
                     .eq("is_public", value: true)
-                    .order("created_at", ascending: false)
+                    .not("published_at", operator: .is, value: "null")
+                    .order("published_at", ascending: false)
                     .limit(50)
                     .execute()
                     .value

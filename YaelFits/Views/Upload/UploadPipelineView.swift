@@ -1998,26 +1998,55 @@ private actor UploadWeatherService {
     }()
 
     func fetchCurrentWeather() async -> Weather? {
-        // Try GPS first, fall back to IP-based geolocation
-        do {
-            let location = try await UploadLocationCoordinator().requestLocation()
-            return try await fetchWeather(
-                latitude: location.coordinate.latitude,
-                longitude: location.coordinate.longitude
-            )
-        } catch {
-            // GPS failed or denied — try IP geolocation
-            return await fetchWeatherFromIP()
+        await withTaskGroup(of: Weather?.self) { group in
+            group.addTask {
+                try? await Task.sleep(for: .seconds(10))
+                return nil
+            }
+            group.addTask {
+                do {
+                    let location = try await UploadLocationCoordinator().requestLocation()
+                    return try await self.fetchWeather(
+                        latitude: location.coordinate.latitude,
+                        longitude: location.coordinate.longitude
+                    )
+                } catch {
+                    return await self.fetchWeatherFromIP()
+                }
+            }
+            for await result in group {
+                if let weather = result {
+                    group.cancelAll()
+                    return weather
+                }
+            }
+            return nil
         }
     }
 
     private func fetchWeatherFromIP() async -> Weather? {
         struct IPLocation: Decodable { let lat: Double; let lon: Double }
-        guard let (data, _) = try? await session.data(from: URL(string: "http://ip-api.com/json/?fields=lat,lon")!),
-              let loc = try? JSONDecoder().decode(IPLocation.self, from: data) else {
-            return nil
+        struct IPAPILocation: Decodable { let latitude: Double; let longitude: Double }
+
+        let providers: [(URL, (Data) -> (Double, Double)?)] = [
+            (URL(string: "https://ipapi.co/json/")!, { data in
+                guard let loc = try? JSONDecoder().decode(IPAPILocation.self, from: data) else { return nil }
+                return (loc.latitude, loc.longitude)
+            }),
+            (URL(string: "https://ipwho.is/")!, { data in
+                guard let loc = try? JSONDecoder().decode(IPAPILocation.self, from: data) else { return nil }
+                return (loc.latitude, loc.longitude)
+            }),
+        ]
+
+        for (url, parser) in providers {
+            guard let (data, _) = try? await session.data(from: url),
+                  let (lat, lon) = parser(data) else { continue }
+            if let weather = try? await fetchWeather(latitude: lat, longitude: lon) {
+                return weather
+            }
         }
-        return try? await fetchWeather(latitude: loc.lat, longitude: loc.lon)
+        return nil
     }
 
     private func fetchWeather(latitude: CLLocationDegrees, longitude: CLLocationDegrees) async throws -> Weather {

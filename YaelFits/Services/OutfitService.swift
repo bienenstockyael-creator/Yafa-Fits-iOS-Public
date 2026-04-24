@@ -35,6 +35,7 @@ struct OutfitService {
         let weatherTempC: Int?
         let weatherCondition: String?
         let isPublic: Bool
+        let publishedAt: String?
 
         enum CodingKeys: String, CodingKey {
             case id, name, date, folder, prefix, scale, tags, activity
@@ -47,6 +48,7 @@ struct OutfitService {
             case weatherTempC = "weather_temp_c"
             case weatherCondition = "weather_condition"
             case isPublic = "is_public"
+            case publishedAt = "published_at"
         }
     }
 
@@ -84,9 +86,17 @@ struct OutfitService {
     }
 
     static func setPublished(_ isPublic: Bool, outfitId: String) async throws {
+        struct PublishUpdate: Encodable {
+            let is_public: Bool
+            let published_at: String?
+        }
+        let now = ISO8601DateFormatter().string(from: Date())
         try await supabase
             .from("outfits")
-            .update(["is_public": isPublic])
+            .update(PublishUpdate(
+                is_public: isPublic,
+                published_at: isPublic ? now : nil
+            ))
             .eq("id", value: outfitId)
             .execute()
     }
@@ -176,7 +186,8 @@ struct OutfitService {
                 weatherTempF: outfit.weather?.tempF,
                 weatherTempC: outfit.weather?.tempC,
                 weatherCondition: outfit.weather?.condition,
-                isPublic: isPublic
+                isPublic: isPublic,
+                publishedAt: isPublic ? ISO8601DateFormatter().string(from: Date()) : nil
             ))
             .execute()
     }
