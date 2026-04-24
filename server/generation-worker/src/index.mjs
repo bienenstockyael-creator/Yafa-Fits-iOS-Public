@@ -32,6 +32,7 @@ const FRAME_HEIGHT  = 550;  // FrameConfig.dimensions.height
 const FRAMES_TOTAL  = 242;  // FrameConfig.framesPerOutfit
 const FRAMES_EXTRACT = 241; // UploadConfig.extractedFrameCount (FRAMES_TOTAL - 1)
 const WEBP_QUALITY  = 82;   // VideoFrameSequenceExporter.webPCompressionQuality
+const UPLOAD_CONCURRENCY = 8; // Parallel frame uploads to Supabase Storage
 
 // ImageMaskingService constants
 const COMP_WIDTH_RATIO    = 0.70;
@@ -535,13 +536,19 @@ async function extractAndProcessFrames(videoPath, tmpDir, outfitId, onProgress) 
 // Upload frames to Supabase Storage
 // ---------------------------------------------------------------------------
 async function uploadFrames(webpPaths, outfitId, storagePrefix, onProgress) {
-  for (let i = 0; i < webpPaths.length; i++) {
+  const started = Date.now();
+  let nextIndex = 0;
+  let completed = 0;
+  let aborted = false;
+
+  async function uploadOne(i) {
     const frameData = await fs.promises.readFile(webpPaths[i]);
     const remotePath = `${storagePrefix}/${outfitId}/${path.basename(webpPaths[i])}`;
 
     // Retry up to 4 times with backoff — Supabase occasionally returns Gateway Timeout
     let lastError;
     for (let attempt = 0; attempt < 4; attempt++) {
+      if (aborted) return;
       if (attempt > 0) await sleep(1000 * attempt);
       const { error } = await supabase.storage
         .from('generated-outfits')
@@ -551,9 +558,25 @@ async function uploadFrames(webpPaths, outfitId, storagePrefix, onProgress) {
       console.warn(`Upload attempt ${attempt + 1} failed for frame ${i}: ${error.message}`);
     }
     if (lastError) throw new Error(`Upload failed for ${remotePath}: ${lastError.message}`);
-    if (i % 20 === 0) await onProgress(i / webpPaths.length);
   }
+
+  async function worker() {
+    while (!aborted && nextIndex < webpPaths.length) {
+      const i = nextIndex++;
+      try {
+        await uploadOne(i);
+      } catch (err) {
+        aborted = true;
+        throw err;
+      }
+      completed++;
+      if (completed % 20 === 0) await onProgress(completed / webpPaths.length);
+    }
+  }
+
+  await Promise.all(Array.from({ length: UPLOAD_CONCURRENCY }, () => worker()));
   await onProgress(1);
+  console.log(`uploadFrames: ${webpPaths.length} frames in ${((Date.now() - started) / 1000).toFixed(1)}s`);
 }
 
 // ---------------------------------------------------------------------------
