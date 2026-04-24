@@ -46,14 +46,15 @@ actor ImageMaskingService {
             onUpdate: onUpdate
         )
         let refinedMaskedImage = refineMaskedImage(maskedImage, for: backend)
+        let enhancedImage = ImageEnhancementService.shared.enhance(refinedMaskedImage)
         // Keep the subject on the original photo canvas for the compare step so
         // both removers preserve the same framing and apparent scale.
         let cutoutCanvas = compositeMaskedImage(
-            refinedMaskedImage,
+            enhancedImage,
             canvasSize: sourceCanvasSize,
             backgroundColor: .clear
         )
-        let greenScreenCanvas = composeForKling(refinedMaskedImage, sourceCanvasSize: sourceCanvasSize)
+        let greenScreenCanvas = composeForKling(enhancedImage, sourceCanvasSize: sourceCanvasSize)
 
         guard let cutoutPNGData = ciContext.pngRepresentation(
             of: cutoutCanvas,
