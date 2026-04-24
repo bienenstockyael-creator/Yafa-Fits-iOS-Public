@@ -157,10 +157,13 @@ struct Outfit: Codable, Identifiable, Hashable, Sendable {
     }
 
     var outfitNumber: Int? {
-        let suffix = id.replacingOccurrences(of: "outfit-", with: "")
-        let digits = suffix.prefix { $0.isNumber }
-        guard digits.isEmpty == false else { return nil }
-        return Int(digits)
+        // IDs come in two shapes:
+        //   outfit-120                (legacy / device-generated)
+        //   outfit-31c9f3fd-120       (server-generated; middle chunk is user-id prefix)
+        // The outfit number is always the trailing digit run.
+        let trailing = id.reversed().prefix { $0.isNumber }
+        guard !trailing.isEmpty else { return nil }
+        return Int(String(trailing.reversed()))
     }
 
     func framePath(index: Int) -> String {
