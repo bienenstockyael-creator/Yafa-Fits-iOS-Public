@@ -436,6 +436,11 @@ async function extractAndProcessFrames(videoPath, tmpDir, outfitId, onProgress) 
     // Spill suppression: clamp the green channel to max(red, blue) in every pixel.
     // Kills the green tint on edges left behind by green-screen spill in the Kling video.
     `geq=r='r(X,Y)':g='min(g(X,Y),max(r(X,Y),b(X,Y)))':b='b(X,Y)':a='alpha(X,Y)'`,
+    // Matte choke: three passes of 4-neighbor alpha erosion (~3px shrink) to eat green fringe.
+    // Equivalent to After Effects "Matte Choker" at a stronger value.
+    `geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='min(min(alpha(X,Y),alpha(X-1,Y)),min(alpha(X+1,Y),min(alpha(X,Y-1),alpha(X,Y+1))))'`,
+    `geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='min(min(alpha(X,Y),alpha(X-1,Y)),min(alpha(X+1,Y),min(alpha(X,Y-1),alpha(X,Y+1))))'`,
+    `geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='min(min(alpha(X,Y),alpha(X-1,Y)),min(alpha(X+1,Y),min(alpha(X,Y-1),alpha(X,Y+1))))'`,
     // Scale to fit within 323x550 preserving aspect ratio
     `scale=w=${FRAME_WIDTH}:h=${FRAME_HEIGHT}:force_original_aspect_ratio=decrease`,
     // Pad to exactly 323x550 with transparent background, centered
@@ -482,9 +487,10 @@ async function extractAndProcessFrames(videoPath, tmpDir, outfitId, onProgress) 
     } catch (e) { console.warn('bounds sample error frame', i, e.message); }
   }
 
-  // Compute stable layout: scale so subject fills 92% of frame height, bottom-aligned
-  const TARGET_SUBJECT_H = FRAME_HEIGHT * 0.92;  // 506px
-  const BOTTOM_MARGIN    = FRAME_HEIGHT * 0.02;  // 11px
+  // Compute stable layout: scale so subject fills full frame height, bottom-aligned.
+  // Bumped from 92% to 100% to roughly match scale of legacy hand-processed outfits.
+  const TARGET_SUBJECT_H = FRAME_HEIGHT * 1.00;  // 550px
+  const BOTTOM_MARGIN    = FRAME_HEIGHT * 0.00;  // 0px
   let layoutScale = 1, cropLeft = 0, cropTop = 0;
 
   if (unionMaxX >= unionMinX) {
