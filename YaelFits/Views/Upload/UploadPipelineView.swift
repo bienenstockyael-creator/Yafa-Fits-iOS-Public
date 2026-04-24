@@ -16,14 +16,6 @@ struct UploadPipelineView: View {
     @State private var showingPublishSheet = false
     @State private var outfitToPublish: Outfit?
 
-    // Debug-only: on-device image enhancement toggle (visible to owner account only).
-    @AppStorage("imageEnhancement.enabled") private var imageEnhancementEnabled = false
-
-    private var isOwnerAccount: Bool {
-        guard let userId = store.userId else { return false }
-        return userId.uuidString.lowercased() == AppConfig.archiveOwnerUserId
-    }
-
     var body: some View {
         GeometryReader { geometry in
             ScrollView {
@@ -73,25 +65,6 @@ struct UploadPipelineView: View {
                 .padding(.bottom, LayoutMetrics.screenPadding)
             }
             .scrollDisabled(true)
-            .overlay(alignment: .bottomTrailing) {
-                if isOwnerAccount && isInitialUploadState {
-                    Button {
-                        imageEnhancementEnabled.toggle()
-                    } label: {
-                        Text("Enhance: \(imageEnhancementEnabled ? "ON" : "OFF")")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(imageEnhancementEnabled ? .white : AppPalette.textFaint)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(
-                                Capsule().fill(imageEnhancementEnabled ? Color.accentColor : AppPalette.groupedBackground)
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.trailing, 12)
-                    .padding(.bottom, 12)
-                }
-            }
         }
         .sheet(item: $outfitToPublish) { outfit in
             PublishSheet(outfit: outfit) { caption, products in
