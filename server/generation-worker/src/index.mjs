@@ -436,8 +436,9 @@ async function extractAndProcessFrames(videoPath, tmpDir, outfitId, onProgress) 
     // Spill suppression: clamp the green channel to max(red, blue) in every pixel.
     // Kills the green tint on edges left behind by green-screen spill in the Kling video.
     `geq=r='r(X,Y)':g='min(g(X,Y),max(r(X,Y),b(X,Y)))':b='b(X,Y)':a='alpha(X,Y)'`,
-    // Matte choke: 4-neighbor alpha erosion (~1px shrink) to eat remaining green fringe.
-    // Equivalent to After Effects "Matte Choker" at low values.
+    // Matte choke: two passes of 4-neighbor alpha erosion (~2px shrink) to eat green fringe.
+    // Equivalent to After Effects "Matte Choker" at a moderate value.
+    `geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='min(min(alpha(X,Y),alpha(X-1,Y)),min(alpha(X+1,Y),min(alpha(X,Y-1),alpha(X,Y+1))))'`,
     `geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='min(min(alpha(X,Y),alpha(X-1,Y)),min(alpha(X+1,Y),min(alpha(X,Y-1),alpha(X,Y+1))))'`,
     // Scale to fit within 323x550 preserving aspect ratio
     `scale=w=${FRAME_WIDTH}:h=${FRAME_HEIGHT}:force_original_aspect_ratio=decrease`,
