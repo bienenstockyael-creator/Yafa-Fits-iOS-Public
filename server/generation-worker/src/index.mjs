@@ -600,12 +600,33 @@ async function sendPushNotification(userId, title = 'Your interactive fit is rea
     note.payload  = { route };
     note.topic    = APNS_TOPIC;
 
-    const provider = environment === 'production' ? apnProviderProd : apnProviderDev;
+    const primary = environment === 'production' ? apnProviderProd : apnProviderDev;
+    const fallback = primary === apnProviderProd ? apnProviderDev : apnProviderProd;
+    const fallbackLabel = fallback === apnProviderProd ? 'production' : 'development';
+
     console.log(`Sending push via ${environment} APNs to ${token.slice(0,20)}...`);
-    const result = await provider.send(note, token);
+    let result = await primary.send(note, token);
+
+    // If the primary env rejects with an environment-mismatch error, retry on the other one.
+    // Handles cases where the client mislabeled the token's environment (e.g. debug builds
+    // with production entitlements or vice versa).
+    const envMismatchReasons = new Set(['BadDeviceToken', 'BadEnvironmentKeyInToken']);
+    if (result.failed.length > 0 && envMismatchReasons.has(result.failed[0].response?.reason)) {
+      console.warn(`APNs ${environment} rejected (${result.failed[0].response.reason}); retrying via ${fallbackLabel}...`);
+      result = await fallback.send(note, token);
+      if (result.failed.length === 0) {
+        // Persist the corrected environment so future pushes skip the wasted first attempt.
+        await supabase
+          .from('device_push_tokens')
+          .update({ environment: fallbackLabel })
+          .eq('token', token);
+        console.log(`Push sent via ${fallbackLabel}; updated token environment in DB`);
+      }
+    }
+
     if (result.failed.length > 0) {
       console.warn(`APNs failed:`, result.failed[0].response);
-    } else {
+    } else if (result.sent.length > 0) {
       console.log(`Push sent successfully`);
     }
   }

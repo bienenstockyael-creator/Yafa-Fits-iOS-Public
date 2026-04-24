@@ -82,11 +82,10 @@ actor PushNotificationCoordinator {
     }
 
     private func upsertToken(_ token: String, userId: UUID) async {
-#if DEBUG
-        let environment = "development"
-#else
+        // Paid developer account + aps-environment:production entitlement means
+        // iOS emits production tokens even in debug builds. Server falls back to
+        // the dev APNs endpoint automatically if production returns BadDeviceToken.
         let environment = "production"
-#endif
 
         let row = TokenRow(
             token: token,
