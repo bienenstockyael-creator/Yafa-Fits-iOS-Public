@@ -4,7 +4,9 @@ import SwiftUI
 // MARK: - App Configuration
 
 enum FrameConfig {
-    static let dimensions = CGSize(width: 323, height: 550)
+    // Frame size doubled from 323x550 to 646x1100 — experiment for visible
+    // sharpness without changing Kling input resolution.
+    static let dimensions = CGSize(width: 646, height: 1100)
     static let framesPerOutfit = 242
     static let pixelsPerFrame: CGFloat = 1.5
     static let friction: Double = 0.985
@@ -41,10 +43,10 @@ enum AppConfig {
 enum UploadConfig {
     static let defaultPrompt = "A smooth full 360 degrees circular camera orbit around the subject, moving anti clockwise (from right to left) at constant speed. The subject remains perfectly still and frozen in time."
     static let falVideoDuration = "10"
-    static let compositionDimensions = CGSize(
-        width: FrameConfig.dimensions.width * 2,
-        height: FrameConfig.dimensions.height * 2
-    )
+    // Kling input canvas — pinned to the original 646x1100 size. Bumping FrameConfig.dimensions
+    // would otherwise push the Kling input to 1292x2200, which we don't want (slower, larger,
+    // potentially over Kling input limits). Frames now match composition resolution 1:1.
+    static let compositionDimensions = CGSize(width: 646, height: 1100)
     static let extractedFrameCount = FrameConfig.framesPerOutfit - 1
     static let falPollingIntervalSeconds: TimeInterval = 3
 }

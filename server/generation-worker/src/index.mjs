@@ -25,10 +25,10 @@ const execFileAsync = promisify(execFile);
 // ---------------------------------------------------------------------------
 // Constants — must match iOS exactly
 // ---------------------------------------------------------------------------
-const CANVAS_WIDTH  = 646;  // UploadConfig.compositionDimensions.width  (323*2)
-const CANVAS_HEIGHT = 1100; // UploadConfig.compositionDimensions.height (550*2)
-const FRAME_WIDTH   = 323;  // FrameConfig.dimensions.width
-const FRAME_HEIGHT  = 550;  // FrameConfig.dimensions.height
+const CANVAS_WIDTH  = 646;  // UploadConfig.compositionDimensions.width  (Kling input)
+const CANVAS_HEIGHT = 1100; // UploadConfig.compositionDimensions.height (Kling input)
+const FRAME_WIDTH   = 646;  // FrameConfig.dimensions.width  (extracted frames — doubled experiment)
+const FRAME_HEIGHT  = 1100; // FrameConfig.dimensions.height (extracted frames — doubled experiment)
 const FRAMES_TOTAL  = 242;  // FrameConfig.framesPerOutfit
 const FRAMES_EXTRACT = 241; // UploadConfig.extractedFrameCount (FRAMES_TOTAL - 1)
 const WEBP_QUALITY  = 82;   // VideoFrameSequenceExporter.webPCompressionQuality
