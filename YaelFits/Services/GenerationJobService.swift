@@ -106,6 +106,16 @@ actor GenerationJobService {
             .execute()
     }
 
+    /// Marks a completed-but-unaccepted job as discarded so it stops re-surfacing
+    /// in the review screen on next launch.
+    func markRejected(jobId: UUID) async throws {
+        try await supabase
+            .from("generation_jobs")
+            .update(["review_state": "rejected"])
+            .eq("id", value: jobId.uuidString)
+            .execute()
+    }
+
     // MARK: - Restore on launch
 
     /// Finds the most recent completed-but-unreviewed job for the current user.

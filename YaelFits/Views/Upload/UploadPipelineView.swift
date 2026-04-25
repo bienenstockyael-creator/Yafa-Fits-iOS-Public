@@ -792,14 +792,16 @@ struct UploadPipelineView: View {
     private func discardUnacceptedStagedOutfitIfNeeded() {
         guard let currentJob = job, currentJob.resultOutfitId == nil else { return }
 
-        // Cancel or reject server job if still running / pending review
+        // Cancel or reject server job if still running / pending review.
+        // Reject (not leave) when in review — Start Fresh means the user is done
+        // with that generation and shouldn't see it re-surface on next launch.
         if let serverJobId = currentJob.serverJobId {
             Task {
                 if currentJob.isProcessing {
                     try? await GenerationJobService.shared.cancelJob(jobId: serverJobId)
+                } else {
+                    try? await GenerationJobService.shared.markRejected(jobId: serverJobId)
                 }
-                // If it's in review state, leave it — server keeps the frames
-                // and the user can restore it on next launch.
             }
         }
 
