@@ -654,7 +654,7 @@ async function falPost(url, body) {
   return res.json();
 }
 
-async function falPollForResult(submitResponse, onComplete, onProgress, timeoutMs = 10 * 60 * 1000) {
+async function falPollForResult(submitResponse, onComplete, onProgress, timeoutMs = 20 * 60 * 1000) {
   const deadline = Date.now() + timeoutMs;
   let pollCount = 0;
   while (true) {
