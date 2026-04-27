@@ -99,7 +99,11 @@ class OutfitStore {
     var feedOutfitCache: [String: Outfit] = [:]
 
     var outfitById: [String: Outfit] {
-        Dictionary(uniqueKeysWithValues: outfits.map { ($0.id, $0) })
+        // Use uniquingKeysWith (last-write-wins) instead of uniqueKeysWithValues
+        // so a duplicate id doesn't crash the feed render. Duplicates can occur
+        // briefly when addOutfit appends a freshly-accepted outfit whose id is
+        // already in self.outfits from cache or a prior load.
+        Dictionary(outfits.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
     }
 
     var archiveOutfits: [Outfit] {
@@ -342,7 +346,11 @@ class OutfitStore {
     }
 
     func addOutfit(_ outfit: Outfit) {
-        outfits.append(outfit)
+        if let existing = outfits.firstIndex(where: { $0.id == outfit.id }) {
+            outfits[existing] = outfit
+        } else {
+            outfits.append(outfit)
+        }
         LocalOutfitStore.shared.saveOutfit(outfit)
     }
 
