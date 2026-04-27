@@ -141,23 +141,76 @@ struct ContentSource {
     // MARK: - Supabase data (network)
 
     static func getUserOutfits(userId: UUID) async -> [Outfit] {
-        if let rows: [SupabaseOutfitRow] = try? await supabase
+        // Primary path: single query with the outfit_products join.
+        // If PostgREST's relationship inference is happy, this returns outfits + products.
+        let joined: [SupabaseOutfitRow]? = try? await supabase
             .from("outfits")
             .select(outfitSelectWithProducts)
             .eq("user_id", value: userId.uuidString)
             .order("created_at", ascending: false)
             .execute()
-            .value {
-            return rows.map { $0.toOutfit() }
+            .value
+        if let joined, joined.contains(where: { !($0.outfitProducts ?? []).isEmpty }) {
+            return joined.map { $0.toOutfit() }
         }
-        let rows: [SupabaseOutfitRow] = (try? await supabase
+
+        // Fallback: fetch outfits and outfit_products separately, then stitch.
+        // This is robust against PostgREST schema-cache staleness, where the join
+        // can silently return rows without their nested products.
+        let outfitRows: [SupabaseOutfitRow] = (try? await supabase
             .from("outfits")
-            .select("*")
+            .select("*, caption, remote_base_url")
             .eq("user_id", value: userId.uuidString)
             .order("created_at", ascending: false)
             .execute()
+            .value) ?? joined ?? []
+
+        let outfitIds = outfitRows.map(\.id)
+        guard !outfitIds.isEmpty else { return outfitRows.map { $0.toOutfit() } }
+
+        struct StandaloneProductRow: Decodable {
+            let outfitId: String
+            let name: String?
+            let price: String?
+            let image: String?
+            let shopLink: String?
+            let productId: UUID?
+            enum CodingKeys: String, CodingKey {
+                case name, price, image
+                case outfitId = "outfit_id"
+                case shopLink = "shop_link"
+                case productId = "product_id"
+            }
+        }
+        let productRows: [StandaloneProductRow] = (try? await supabase
+            .from("outfit_products")
+            .select("outfit_id, name, price, image, shop_link, product_id")
+            .in("outfit_id", values: outfitIds)
+            .execute()
             .value) ?? []
-        return rows.map { $0.toOutfit() }
+
+        let productsByOutfit: [String: [Product]] = Dictionary(grouping: productRows, by: \.outfitId)
+            .mapValues { rows in
+                rows.compactMap { row -> Product? in
+                    guard let n = row.name, !n.isEmpty else { return nil }
+                    return Product(
+                        name: n,
+                        price: row.price,
+                        image: row.image ?? "",
+                        shopLink: row.shopLink,
+                        productId: row.productId,
+                        tags: nil
+                    )
+                }
+            }
+
+        return outfitRows.map { row in
+            var outfit = row.toOutfit()
+            if let products = productsByOutfit[row.id], !products.isEmpty {
+                outfit.products = products
+            }
+            return outfit
+        }
     }
 
     static func getPublicOutfits() async -> [Outfit] {
