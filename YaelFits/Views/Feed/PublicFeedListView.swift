@@ -570,24 +570,11 @@ struct FeedPostCard: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 16) {
                         ForEach(Array(products.enumerated()), id: \.element.id) { index, product in
-                            VStack(spacing: 6) {
-                                ProductImageView(product: product, size: 56, cornerRadius: 14)
-
-                                Button {
-                                    // Use direct shop link if available, otherwise fall back to Google Shopping
-                                    if let shopLink = product.shopLink,
-                                       !shopLink.isEmpty,
-                                       let url = URL(string: shopLink) {
-                                        UIApplication.shared.open(url)
-                                    } else {
-                                        let query = product.name.trimmingCharacters(in: .whitespacesAndNewlines)
-                                        guard !query.isEmpty,
-                                              let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-                                              let url = URL(string: "https://www.google.com/search?tbm=shop&q=\(encoded)")
-                                        else { return }
-                                        UIApplication.shared.open(url)
-                                    }
-                                } label: {
+                            Button {
+                                openShopLink(for: product)
+                            } label: {
+                                VStack(spacing: 6) {
+                                    ProductImageView(product: product, size: 56, cornerRadius: 14)
                                     Text("BUY")
                                         .font(.system(size: 10, weight: .bold))
                                         .tracking(1.1)
@@ -597,8 +584,8 @@ struct FeedPostCard: View {
                                         .background(Capsule().fill(Color.white.opacity(0.45)))
                                         .overlay(Capsule().strokeBorder(Color.white.opacity(0.6), lineWidth: 0.8))
                                 }
-                                .buttonStyle(.plain)
                             }
+                            .buttonStyle(.plain)
                             .opacity(cartOpen ? 1 : 0)
                             .scaleEffect(cartOpen ? 1 : 0.85)
                             .animation(
@@ -624,6 +611,20 @@ struct FeedPostCard: View {
 
     private var timestampLabel: String {
         RelativeTime.label(from: post.publishedDate ?? outfit?.parsedDate)
+    }
+
+    private func openShopLink(for product: Product) {
+        if let shopLink = product.shopLink, !shopLink.isEmpty,
+           let url = URL(string: shopLink) {
+            UIApplication.shared.open(url)
+            return
+        }
+        let query = product.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty,
+              let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let url = URL(string: "https://www.google.com/search?tbm=shop&q=\(encoded)")
+        else { return }
+        UIApplication.shared.open(url)
     }
 
     private func actionButton(
