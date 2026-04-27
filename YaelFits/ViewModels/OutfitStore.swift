@@ -185,21 +185,35 @@ class OutfitStore {
         }
 
         // Save fresh Supabase data to cache for next launch — don't update live UI.
-        // For bundled outfits (not in Supabase), preserve the cached version so
-        // user-tagged products and tags aren't lost when the refresh runs.
+        // Preserve user-curated metadata (products/tags/caption) when fresh drops it.
         Task.detached(priority: .utility) {
             let fresh = await ContentSource.getAllOutfits(userId: userId)
             if !fresh.isEmpty {
                 let existing = LocalCache.loadOutfits(userId: userId) ?? []
+
+                // Same defensive check as refreshOutfits: if fresh has zero products
+                // but the cache had products, the join probably failed — skip overwrite.
+                let freshHasAnyProducts = fresh.contains { !($0.products ?? []).isEmpty }
+                let cacheHasAnyProducts = existing.contains { !($0.products ?? []).isEmpty }
+                if !freshHasAnyProducts && cacheHasAnyProducts {
+                    return
+                }
+
                 let existingById = Dictionary(existing.map { ($0.id, $0) },
                                               uniquingKeysWith: { a, _ in a })
-                let bundledIds = Set(ContentSource.getBundledOutfits().map(\.id))
                 let merged = fresh.map { outfit -> Outfit in
-                    // For bundled outfits, keep the cached copy (has user products/tags)
-                    if bundledIds.contains(outfit.id), let cached = existingById[outfit.id] {
-                        return cached
+                    guard let cached = existingById[outfit.id] else { return outfit }
+                    var preserved = outfit
+                    if (outfit.products ?? []).isEmpty && !(cached.products ?? []).isEmpty {
+                        preserved.products = cached.products
                     }
-                    return outfit
+                    if (outfit.tags ?? []).isEmpty && !(cached.tags ?? []).isEmpty {
+                        preserved.tags = cached.tags
+                    }
+                    if (outfit.caption ?? "").isEmpty && !(cached.caption ?? "").isEmpty {
+                        preserved.caption = cached.caption
+                    }
+                    return preserved
                 }
                 LocalCache.saveOutfits(merged, userId: userId)
             }
@@ -465,15 +479,35 @@ class OutfitStore {
         guard let userId else { return }
         let fresh = await ContentSource.getAllOutfits(userId: userId)
         guard !fresh.isEmpty else { return }
-        let bundledIds = Set(ContentSource.getBundledOutfits().map(\.id))
+
+        // Defensive: if the fresh fetch silently dropped products (e.g. the
+        // outfit_products join failed and the fallback bare-select kicked in),
+        // skip the update entirely. Otherwise we'd persist a products-less
+        // snapshot to LocalCache and the user would see all products vanish.
+        let freshHasAnyProducts = fresh.contains { !($0.products ?? []).isEmpty }
+        let currentHasAnyProducts = self.outfits.contains { !($0.products ?? []).isEmpty }
+        if !freshHasAnyProducts && currentHasAnyProducts {
+            return
+        }
+
         let existingById = Dictionary(self.outfits.map { ($0.id, $0) },
                                       uniquingKeysWith: { a, _ in a })
         let merged = fresh.map { outfit -> Outfit in
-            // Preserve cached bundled outfits so user-tagged products/tags aren't lost
-            if bundledIds.contains(outfit.id), let cached = existingById[outfit.id] {
-                return cached
+            guard let cached = existingById[outfit.id] else { return outfit }
+            // Always prefer fresh as the base, but recover any per-outfit fields
+            // that fresh dropped but cached still had (products / tags / caption).
+            // Protects user-curated metadata from a single bad fetch.
+            var preserved = outfit
+            if (outfit.products ?? []).isEmpty && !(cached.products ?? []).isEmpty {
+                preserved.products = cached.products
             }
-            return outfit
+            if (outfit.tags ?? []).isEmpty && !(cached.tags ?? []).isEmpty {
+                preserved.tags = cached.tags
+            }
+            if (outfit.caption ?? "").isEmpty && !(cached.caption ?? "").isEmpty {
+                preserved.caption = cached.caption
+            }
+            return preserved
         }
         await MainActor.run {
             self.outfits = merged
