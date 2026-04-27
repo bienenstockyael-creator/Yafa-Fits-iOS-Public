@@ -58,10 +58,28 @@ create table public.outfits (
   weather_temp_c int,
   weather_condition text,
   is_public boolean default false,
+  published_at timestamptz,
   created_at timestamptz default now() not null
 );
 
 alter table public.outfits enable row level security;
+
+-- Auto-fill published_at when is_public flips to true without an explicit value.
+-- Keeps the feed-visibility query (`published_at IS NOT NULL`) robust to older
+-- clients that flip is_public but don't yet know about the column.
+create or replace function public.set_published_at_on_publish()
+returns trigger language plpgsql as $$
+begin
+  if new.is_public = true and new.published_at is null then
+    new.published_at = now();
+  end if;
+  return new;
+end$$;
+
+drop trigger if exists outfits_auto_published_at on public.outfits;
+create trigger outfits_auto_published_at
+  before insert or update on public.outfits
+  for each row execute function public.set_published_at_on_publish();
 
 create policy "Public outfits viewable by everyone"
   on public.outfits for select using (is_public or auth.uid() = user_id);
