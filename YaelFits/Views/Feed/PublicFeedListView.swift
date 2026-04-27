@@ -317,6 +317,7 @@ struct FeedPostCard: View {
     @Environment(OutfitStore.self) private var store
     @State private var showComments = false
     @State private var showUserProfile = false
+    @State private var showLikers = false
     @State private var likeToggled = false
     @State private var localLikeAdjustment: Int = 0
     @State private var localCommentCount: Int?
@@ -363,6 +364,9 @@ struct FeedPostCard: View {
         }
         .onAppear {
             if outfit != nil { cardVisible = true }
+        }
+        .sheet(isPresented: $showLikers) {
+            LikersSheet(outfitId: post.outfitId)
         }
         .sheet(isPresented: $showComments, onDismiss: {
             Task {
@@ -511,7 +515,8 @@ struct FeedPostCard: View {
                     icon: .heart,
                     count: displayLikeCount,
                     filled: displayLiked,
-                    isActive: displayLiked
+                    isActive: displayLiked,
+                    longPressAction: displayLikeCount > 0 ? { showLikers = true } : nil
                 ) {
                     guard let userId = store.userId else { return }
                     withAnimation(.easeInOut(duration: 0.18)) {
@@ -626,6 +631,7 @@ struct FeedPostCard: View {
         count: Int? = nil,
         filled: Bool = false,
         isActive: Bool = false,
+        longPressAction: (() -> Void)? = nil,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
@@ -656,6 +662,7 @@ struct FeedPostCard: View {
             }
         }
         .buttonStyle(.plain)
+        .modifier(LongPressIfPresent(action: longPressAction))
         .frame(minWidth: LayoutMetrics.touchTarget, minHeight: LayoutMetrics.touchTarget)
     }
 }
@@ -664,5 +671,19 @@ private struct CartBottomKey: PreferenceKey {
     static var defaultValue: CGFloat? = nil
     static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) {
         value = nextValue() ?? value
+    }
+}
+
+private struct LongPressIfPresent: ViewModifier {
+    let action: (() -> Void)?
+
+    func body(content: Content) -> some View {
+        if let action {
+            content.simultaneousGesture(
+                LongPressGesture(minimumDuration: 0.4).onEnded { _ in action() }
+            )
+        } else {
+            content
+        }
     }
 }

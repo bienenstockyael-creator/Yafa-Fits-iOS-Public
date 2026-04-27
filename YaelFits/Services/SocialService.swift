@@ -96,6 +96,31 @@ struct SocialService {
             .execute()
     }
 
+    /// Profiles of every user who liked the given outfit, newest first.
+    static func getLikersForOutfit(_ outfitId: String) async throws -> [Profile] {
+        struct LikeRow: Decodable {
+            let userId: UUID
+            let createdAt: String
+            enum CodingKeys: String, CodingKey {
+                case userId = "user_id"
+                case createdAt = "created_at"
+            }
+        }
+        let likes: [LikeRow] = try await supabase
+            .from("likes")
+            .select("user_id, created_at")
+            .eq("outfit_id", value: outfitId)
+            .order("created_at", ascending: false)
+            .execute()
+            .value
+        let userIds = Set(likes.map(\.userId))
+        guard !userIds.isEmpty else { return [] }
+        let profiles = try await getProfiles(userIds: userIds)
+        // Preserve like-time ordering (most recent liker first).
+        let profileById = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id, $0) })
+        return likes.compactMap { profileById[$0.userId] }
+    }
+
     // MARK: - Saves
 
     static func getSavedOutfitIds(userId: UUID) async throws -> Set<String> {

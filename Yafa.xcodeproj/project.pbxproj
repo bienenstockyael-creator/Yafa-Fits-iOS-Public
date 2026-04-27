@@ -771,6 +771,7 @@
 		B340D774B32A1CA8FFFA5059 /* outfit-46_00232.webp in Resources */ = {isa = PBXBuildFile; fileRef = BCBBBB444FE348D05BA0D858 /* outfit-46_00232.webp */; };
 		B35BDF83547797F21FA5096E /* outfit-64_00061.webp in Resources */ = {isa = PBXBuildFile; fileRef = A3EE27C3D203154D23783E28 /* outfit-64_00061.webp */; };
 		B381EA2409DC3DFF9E842130 /* outfit-46_00043.webp in Resources */ = {isa = PBXBuildFile; fileRef = 26E371B147AC203136CFF09A /* outfit-46_00043.webp */; };
+		B3990FC6A6666816801E6B85 /* LikersSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1669A9739DE94A4D2C6EB670 /* LikersSheet.swift */; };
 		B3AB89BE6F5F2527250D4D55 /* outfit-46_00220.webp in Resources */ = {isa = PBXBuildFile; fileRef = FD614B067C3DA23523F1009A /* outfit-46_00220.webp */; };
 		B43C6F0A98845AA1CD7A05E5 /* outfit-64_00045.webp in Resources */ = {isa = PBXBuildFile; fileRef = 8BCA3F073D7F4324BFFEE9BD /* outfit-64_00045.webp */; };
 		B44ED7A9A68C2185611EBF48 /* outfit-65_00070.webp in Resources */ = {isa = PBXBuildFile; fileRef = BBFE412268B983E23AEEC881 /* outfit-65_00070.webp */; };
@@ -1203,6 +1204,7 @@
 		161CF9CE3882D092585371E0 /* outfit-65_00035.webp */ = {isa = PBXFileReference; path = "outfit-65_00035.webp"; sourceTree = "<group>"; };
 		164EDD363F11AF33BE31C8D1 /* outfit-53_00120.webp */ = {isa = PBXFileReference; path = "outfit-53_00120.webp"; sourceTree = "<group>"; };
 		164F24EA68178E5E5673CEF5 /* outfit-65_00019.webp */ = {isa = PBXFileReference; path = "outfit-65_00019.webp"; sourceTree = "<group>"; };
+		1669A9739DE94A4D2C6EB670 /* LikersSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LikersSheet.swift; sourceTree = "<group>"; };
 		1686CBAE709FCCD78266B560 /* outfit-53_00070.webp */ = {isa = PBXFileReference; path = "outfit-53_00070.webp"; sourceTree = "<group>"; };
 		16D23E8A74C6BA4DA933D546 /* outfit-65_00136.webp */ = {isa = PBXFileReference; path = "outfit-65_00136.webp"; sourceTree = "<group>"; };
 		16DFC5451BE0C5DB62618168 /* outfit-65_00231.webp */ = {isa = PBXFileReference; path = "outfit-65_00231.webp"; sourceTree = "<group>"; };
@@ -2593,6 +2595,7 @@
 				0B54F1D89D0F53C54533E7A1 /* CommentsSheet.swift */,
 				08C870C07795EDBD2EFF2DD8 /* DiscoverView.swift */,
 				765A7EC84BEB99AC0CCD8914 /* FollowListSheet.swift */,
+				1669A9739DE94A4D2C6EB670 /* LikersSheet.swift */,
 				474903917CC828F9A9431A6E /* NotificationsPlaceholderSheet.swift */,
 				DA4DE6289C8151E4168591DB /* PublicFeedListView.swift */,
 				6A852FB7BE96B45E54412928 /* UserProfileSheet.swift */,
@@ -4592,6 +4595,7 @@
 				4E2CF0F613B1C84D33EEF685 /* ImageEnhancementService.swift in Sources */,
 				5755A53F41F0BBF52E7FDF4A /* ImageMaskingService.swift in Sources */,
 				16C2D83AE59F47AF7304DCCA /* InteractiveTouchSurface.swift in Sources */,
+				B3990FC6A6666816801E6B85 /* LikersSheet.swift in Sources */,
 				62B6DF767B86BB73CE229655 /* LocalCache.swift in Sources */,
 				B18E3607CB764CEC45F54677 /* LocalOutfitStore.swift in Sources */,
 				3943BB1501C305483389E245 /* LottieView.swift in Sources */,
