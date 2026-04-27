@@ -45,16 +45,17 @@ struct NotificationsPlaceholderSheet: View {
             .toolbarColorScheme(.light, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Close") {
-                        UserDefaults.standard.set(Date(), forKey: "lastSeenNotificationsAt")
-                        store.unreadNotificationCount = 0
-                        dismiss()
-                    }
-                    .font(.system(size: 13))
-                    .foregroundStyle(AppPalette.textMuted)
+                    Button("Close") { dismiss() }
+                        .font(.system(size: 13))
+                        .foregroundStyle(AppPalette.textMuted)
                 }
             }
             .task { await loadNotifications() }
+            .onDisappear {
+                // Mark as seen on any dismissal (Close button, swipe-down, gesture).
+                UserDefaults.standard.set(Date(), forKey: "lastSeenNotificationsAt")
+                store.unreadNotificationCount = 0
+            }
         }
     }
 
