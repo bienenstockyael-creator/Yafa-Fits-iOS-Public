@@ -141,32 +141,54 @@ struct ContentSource {
     // MARK: - Supabase data (network)
 
     static func getUserOutfits(userId: UUID) async -> [Outfit] {
+        print("[DIAG] getUserOutfits start uid=\(userId.uuidString.prefix(8))")
         // Primary path: single query with the outfit_products join.
         // If PostgREST's relationship inference is happy, this returns outfits + products.
-        let joined: [SupabaseOutfitRow]? = try? await supabase
-            .from("outfits")
-            .select(outfitSelectWithProducts)
-            .eq("user_id", value: userId.uuidString)
-            .order("created_at", ascending: false)
-            .execute()
-            .value
+        let joined: [SupabaseOutfitRow]?
+        do {
+            joined = try await supabase
+                .from("outfits")
+                .select(outfitSelectWithProducts)
+                .eq("user_id", value: userId.uuidString)
+                .order("created_at", ascending: false)
+                .execute()
+                .value
+            let total = joined?.count ?? 0
+            let withProducts = joined?.filter { !($0.outfitProducts ?? []).isEmpty }.count ?? 0
+            print("[DIAG] joined query: \(total) outfits, \(withProducts) with products")
+        } catch {
+            joined = nil
+            print("[DIAG] joined query FAILED: \(error.localizedDescription)")
+        }
         if let joined, joined.contains(where: { !($0.outfitProducts ?? []).isEmpty }) {
+            print("[DIAG] using join path, returning \(joined.count) outfits")
             return joined.map { $0.toOutfit() }
         }
 
+        print("[DIAG] taking fallback two-query path")
         // Fallback: fetch outfits and outfit_products separately, then stitch.
         // This is robust against PostgREST schema-cache staleness, where the join
         // can silently return rows without their nested products.
-        let outfitRows: [SupabaseOutfitRow] = (try? await supabase
-            .from("outfits")
-            .select("*, caption, remote_base_url")
-            .eq("user_id", value: userId.uuidString)
-            .order("created_at", ascending: false)
-            .execute()
-            .value) ?? joined ?? []
+        let outfitRows: [SupabaseOutfitRow]
+        do {
+            outfitRows = try await supabase
+                .from("outfits")
+                .select("*, caption, remote_base_url")
+                .eq("user_id", value: userId.uuidString)
+                .order("created_at", ascending: false)
+                .execute()
+                .value
+            print("[DIAG] fallback outfits query: \(outfitRows.count) rows")
+        } catch {
+            print("[DIAG] fallback outfits query FAILED: \(error.localizedDescription)")
+            return (joined ?? []).map { $0.toOutfit() }
+        }
 
         let outfitIds = outfitRows.map(\.id)
-        guard !outfitIds.isEmpty else { return outfitRows.map { $0.toOutfit() } }
+        guard !outfitIds.isEmpty else {
+            print("[DIAG] no outfit IDs, returning empty-products outfits")
+            return outfitRows.map { $0.toOutfit() }
+        }
 
         struct StandaloneProductRow: Decodable {
             let outfitId: String
@@ -182,12 +204,19 @@ struct ContentSource {
                 case productId = "product_id"
             }
         }
-        let productRows: [StandaloneProductRow] = (try? await supabase
-            .from("outfit_products")
-            .select("outfit_id, name, price, image, shop_link, product_id")
-            .in("outfit_id", values: outfitIds)
-            .execute()
-            .value) ?? []
+        let productRows: [StandaloneProductRow]
+        do {
+            productRows = try await supabase
+                .from("outfit_products")
+                .select("outfit_id, name, price, image, shop_link, product_id")
+                .in("outfit_id", values: outfitIds)
+                .execute()
+                .value
+            print("[DIAG] outfit_products query: \(productRows.count) rows for \(outfitIds.count) outfits")
+        } catch {
+            print("[DIAG] outfit_products query FAILED: \(error.localizedDescription)")
+            productRows = []
+        }
 
         let productsByOutfit: [String: [Product]] = Dictionary(grouping: productRows, by: \.outfitId)
             .mapValues { rows in
@@ -203,6 +232,8 @@ struct ContentSource {
                     )
                 }
             }
+        let outfitsWithProducts = productsByOutfit.values.filter { !$0.isEmpty }.count
+        print("[DIAG] stitched: \(outfitsWithProducts)/\(outfitRows.count) outfits got products")
 
         return outfitRows.map { row in
             var outfit = row.toOutfit()
