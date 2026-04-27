@@ -99,7 +99,9 @@ create table public.outfit_products (
   outfit_id text references public.outfits(id) on delete cascade not null,
   name text not null,
   price text,
-  image text
+  image text,
+  shop_link text,
+  product_id uuid
 );
 
 alter table public.outfit_products enable row level security;
