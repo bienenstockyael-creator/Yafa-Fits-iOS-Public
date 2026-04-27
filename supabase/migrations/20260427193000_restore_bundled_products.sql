@@ -122,7 +122,9 @@ FROM (VALUES
 ) AS v(outfit_id, name, price, image, shop_link)
 WHERE EXISTS (
   SELECT 1 FROM public.outfits o
-  WHERE o.id = v.outfit_id AND o.user_id = '31c9f3fd-e672-43f2-954a-0b141640e76f'
+  WHERE o.id = v.outfit_id
+    AND o.user_id = '31c9f3fd-e672-43f2-954a-0b141640e76f'
+    AND o.is_public = false  -- only restore on private outfits, leave published ones alone
 )
 AND NOT EXISTS (
   SELECT 1 FROM public.outfit_products op WHERE op.outfit_id = v.outfit_id
