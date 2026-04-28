@@ -121,7 +121,7 @@ actor FalSegmentationService {
     }
 
     /// Count of pixels with luminance above the threshold — i.e. masked area.
-    private func whitePixelCount(in image: UIImage) -> Int {
+    nonisolated private func whitePixelCount(in image: UIImage) -> Int {
         guard let cg = image.cgImage else { return 0 }
         let width = cg.width
         let height = cg.height
@@ -326,10 +326,10 @@ actor FalSegmentationService {
         return decoded
     }
 
-    private func downloadData(from url: URL, apiKey: String) async throws -> Data {
+    nonisolated private func downloadData(from url: URL, apiKey: String) async throws -> Data {
         var request = URLRequest(url: url)
         request.setValue("Key \(apiKey)", forHTTPHeaderField: "Authorization")
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw UploadPipelineError.requestFailed("Mask download failed.")
         }
