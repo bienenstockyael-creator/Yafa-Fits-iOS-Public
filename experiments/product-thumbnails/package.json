@@ -1,0 +1,9 @@
+{
+  "name": "yafa-product-thumbnails-experiment",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "sharp": "^0.33.3"
+  }
+}
