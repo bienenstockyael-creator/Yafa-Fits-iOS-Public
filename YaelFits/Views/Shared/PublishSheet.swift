@@ -134,7 +134,7 @@ struct PublishSheet: View {
                                 .font(.system(size: 16))
                                 .foregroundStyle(AppPalette.textFaint)
                         }
-                        Text(isLoadingAutoDetect ? "LOADING…" : "AUTO-DETECT PRODUCTS")
+                        Text(isLoadingAutoDetect ? "LOADING…" : "QUICK ADD PRODUCTS")
                             .font(.system(size: 10, weight: .semibold, design: .monospaced))
                             .tracking(1.5)
                             .foregroundStyle(AppPalette.textFaint)

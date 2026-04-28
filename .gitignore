@@ -4,3 +4,14 @@ Config/Secrets.xcconfig
 xcuserdata/
 **/*.xcuserstate
 **/xcuserdata/
+
+# Node tooling
+**/node_modules/
+
+# Project file backups
+*.pbxproj.bak
+
+# Finder duplicates (Foo 2.ext / Foo 3.ext naming)
+Yafa 2.xcodeproj/
+Yafa 3.xcodeproj/
+YaelFits/Info 2.plist

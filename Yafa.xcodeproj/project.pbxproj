@@ -157,6 +157,7 @@
 		2719BE3E1A103339EE2EC117 /* outfit-65_00234.webp in Resources */ = {isa = PBXBuildFile; fileRef = 00A5B49051B93F1657CC7D0D /* outfit-65_00234.webp */; };
 		27C8061ADE90B00174305136 /* outfit-65_00033.webp in Resources */ = {isa = PBXBuildFile; fileRef = 2CBB9E008142F122C6C253BF /* outfit-65_00033.webp */; };
 		285132F4227473E194D09635 /* outfit-65_00153.webp in Resources */ = {isa = PBXBuildFile; fileRef = D30CD44CB4FA7EC7A5E87355 /* outfit-65_00153.webp */; };
+		28ABD3ED86399DDC96730921 /* FalProductThumbnailService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0880005C8013FF580A68DD /* FalProductThumbnailService.swift */; };
 		28ADD037813ECB12F2DF59A4 /* UploadMaskingBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E528CCFAA1423FAE69CD013 /* UploadMaskingBackend.swift */; };
 		28C432022C187324A2914F11 /* outfit-53_00225.webp in Resources */ = {isa = PBXBuildFile; fileRef = 0FABA0156FA65B0632C2B5B2 /* outfit-53_00225.webp */; };
 		28CCA20758CBBEB63D41B3D0 /* outfit-65_00112.webp in Resources */ = {isa = PBXBuildFile; fileRef = 37132C329A2F2CA7F9AD3A50 /* outfit-65_00112.webp */; };
@@ -549,6 +550,7 @@
 		82BBB1D01DD3B74DC5A11445 /* outfit-46_00229.webp in Resources */ = {isa = PBXBuildFile; fileRef = 936A568CF2803C38DE9399DD /* outfit-46_00229.webp */; };
 		82C4DAC21EA2EC1571A86692 /* outfit-65_00123.webp in Resources */ = {isa = PBXBuildFile; fileRef = 56EAA99AF540B01A62CD4CAE /* outfit-65_00123.webp */; };
 		83157B3BFD8474FA0AF5362C /* outfit-65_00030.webp in Resources */ = {isa = PBXBuildFile; fileRef = 04C0E33917E57F52B9D71AD1 /* outfit-65_00030.webp */; };
+		837BBB0834BF7D8251526AD9 /* ProductThumbnailUploadService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0042A9F52E9C7937F39DA0C5 /* ProductThumbnailUploadService.swift */; };
 		8393DBBFF6948A6050EA2D5C /* outfit-65_00144.webp in Resources */ = {isa = PBXBuildFile; fileRef = F2999FE73908DC81AC7EB1EE /* outfit-65_00144.webp */; };
 		83AD21CF97AC9A6B768AC294 /* outfit-64_00012.webp in Resources */ = {isa = PBXBuildFile; fileRef = 3D29204594EFE07B0F713F95 /* outfit-64_00012.webp */; };
 		83EEF7B71B20BCA7EE4DEC8C /* outfit-64_00107.webp in Resources */ = {isa = PBXBuildFile; fileRef = B9A7BC4C670EC769FDF1FFBD /* outfit-64_00107.webp */; };
@@ -618,6 +620,7 @@
 		932E72820EE36FA962B8AF4A /* outfit-46_00199.webp in Resources */ = {isa = PBXBuildFile; fileRef = 227354F35B76120C5D0B88FA /* outfit-46_00199.webp */; };
 		933B8E31C5D970CA7C1A600C /* outfit-53_00013.webp in Resources */ = {isa = PBXBuildFile; fileRef = 58923DEAE10EE54F20855357 /* outfit-53_00013.webp */; };
 		93C24BE5F8171D21E7BBFBE1 /* outfit-46_00083.webp in Resources */ = {isa = PBXBuildFile; fileRef = 4943C43D6F901606637D1EF4 /* outfit-46_00083.webp */; };
+		94E9B7B82C2CC1E52299820D /* AutoDetectProductsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C5FED192D1F5BFE0A9CF51B /* AutoDetectProductsView.swift */; };
 		95095C909014B5A6CF915FA8 /* outfit-46_00058.webp in Resources */ = {isa = PBXBuildFile; fileRef = 17F8A8D0BE2B9ADE3895F968 /* outfit-46_00058.webp */; };
 		9514BDF0B85BDAACDAE06741 /* outfit-64_00232.webp in Resources */ = {isa = PBXBuildFile; fileRef = 679D0E975A23CF2B556B1C8B /* outfit-64_00232.webp */; };
 		959FD0AEBA6E9CA3D802EDED /* outfit-53_00178.webp in Resources */ = {isa = PBXBuildFile; fileRef = A5B0545A702864A49874A3D1 /* outfit-53_00178.webp */; };
@@ -1011,6 +1014,7 @@
 		EB58FD9AEFDCE4381B80A51E /* outfit-46_00187.webp in Resources */ = {isa = PBXBuildFile; fileRef = 55DE616EA877930A7073EF20 /* outfit-46_00187.webp */; };
 		EB66D9B54AC1606C0857401E /* outfit-65_00071.webp in Resources */ = {isa = PBXBuildFile; fileRef = EA25432CF698241393525905 /* outfit-65_00071.webp */; };
 		EB76F3EAF4AAD3B7B20A0604 /* outfit-65_00239.webp in Resources */ = {isa = PBXBuildFile; fileRef = C87BD8ACA346F8FFB7001F6B /* outfit-65_00239.webp */; };
+		EB76FC7F5A45F1DD069F0895 /* FalSegmentationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7539E1F1B5B4EAEDB0E57F61 /* FalSegmentationService.swift */; };
 		EB9E7910B52F80251CAF7E56 /* outfit-53_00056.webp in Resources */ = {isa = PBXBuildFile; fileRef = 762960FB71A20BDD6C5FE765 /* outfit-53_00056.webp */; };
 		EBB7930076EB976FA7BCE41C /* outfit-53_00111.webp in Resources */ = {isa = PBXBuildFile; fileRef = FDD7F49B92A522E63076A5F9 /* outfit-53_00111.webp */; };
 		EBB83CF5AC959A86D97964B8 /* outfit-65_00108.webp in Resources */ = {isa = PBXBuildFile; fileRef = 1FA5149B823BEE96D78D0267 /* outfit-65_00108.webp */; };
@@ -1094,13 +1098,10 @@
 		FF119608456FFD50478712ED /* outfit-64_00218.webp in Resources */ = {isa = PBXBuildFile; fileRef = B26C8E83ABEE813A3131CE7C /* outfit-64_00218.webp */; };
 		FF1239734EB8A8FA6EBF4ADB /* outfit-53_00115.webp in Resources */ = {isa = PBXBuildFile; fileRef = 13F17E4516768AF32BF84ACF /* outfit-53_00115.webp */; };
 		FF966C14C95E6515D0B5CC52 /* outfit-53_00064.webp in Resources */ = {isa = PBXBuildFile; fileRef = 4C3B610C37FF1CAD274F349A /* outfit-53_00064.webp */; };
-		EB76FC7F5A45F1DD069F0895 /* FalSegmentationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7539E1F1B5B4EAEDB0E57F61 /* FalSegmentationService.swift */; };
-		28ABD3ED86399DDC96730921 /* FalProductThumbnailService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0880005C8013FF580A68DD /* FalProductThumbnailService.swift */; };
-		837BBB0834BF7D8251526AD9 /* ProductThumbnailUploadService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0042A9F52E9C7937F39DA0C5 /* ProductThumbnailUploadService.swift */; };
-		94E9B7B82C2CC1E52299820D /* AutoDetectProductsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C5FED192D1F5BFE0A9CF51B /* AutoDetectProductsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		0042A9F52E9C7937F39DA0C5 /* ProductThumbnailUploadService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductThumbnailUploadService.swift; sourceTree = "<group>"; };
 		00495134D5CC9E12F4BD3A00 /* outfit-53_00088.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-53_00088.webp"; sourceTree = "<group>"; };
 		009EC52E7467BB24F714187C /* outfit-53_00126.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-53_00126.webp"; sourceTree = "<group>"; };
 		00A5B49051B93F1657CC7D0D /* outfit-65_00234.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-65_00234.webp"; sourceTree = "<group>"; };
@@ -1289,6 +1290,7 @@
 		282E105CF52779B108B49B21 /* outfit-46_00217.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-46_00217.webp"; sourceTree = "<group>"; };
 		286FC3A5577AAC47C862F1F5 /* outfit-65_00094.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-65_00094.webp"; sourceTree = "<group>"; };
 		29E71BBBA1CFBB444044694A /* GenerationJobService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationJobService.swift; sourceTree = "<group>"; };
+		2A0880005C8013FF580A68DD /* FalProductThumbnailService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FalProductThumbnailService.swift; sourceTree = "<group>"; };
 		2A6FF9A3D1BCF5972F1F8F64 /* outfit-64_00001.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-64_00001.webp"; sourceTree = "<group>"; };
 		2A8419B2E8310CA834701C74 /* outfit-65_00065.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-65_00065.webp"; sourceTree = "<group>"; };
 		2B14365128B74489FBBC6578 /* outfit-53_00235.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-53_00235.webp"; sourceTree = "<group>"; };
@@ -1368,6 +1370,7 @@
 		3AE500043E4F69AB5B252F34 /* outfit-65_00206.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-65_00206.webp"; sourceTree = "<group>"; };
 		3BDA173114140185FCC4502A /* outfit-53_00040.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-53_00040.webp"; sourceTree = "<group>"; };
 		3BECFE6176D6701228803E68 /* outfit-46_00100.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-46_00100.webp"; sourceTree = "<group>"; };
+		3C5FED192D1F5BFE0A9CF51B /* AutoDetectProductsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoDetectProductsView.swift; sourceTree = "<group>"; };
 		3C71DF64BDA3024CAD5ED019 /* outfit-53_00136.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-53_00136.webp"; sourceTree = "<group>"; };
 		3CAEA94C97888E4FB2411D67 /* FeedPost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedPost.swift; sourceTree = "<group>"; };
 		3D23F48E9A97BC60B1D74DEF /* outfit-53_00176.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-53_00176.webp"; sourceTree = "<group>"; };
@@ -1588,6 +1591,7 @@
 		73F53DA39E6FF778F66578AE /* outfit-53_00005.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-53_00005.webp"; sourceTree = "<group>"; };
 		7430C4B99E445B625AABF792 /* star-anim-5.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "star-anim-5.json"; sourceTree = "<group>"; };
 		74EEED7320B5A56150AA104F /* outfit-46_00212.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-46_00212.webp"; sourceTree = "<group>"; };
+		7539E1F1B5B4EAEDB0E57F61 /* FalSegmentationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FalSegmentationService.swift; sourceTree = "<group>"; };
 		7541D524697241E5F86CDA46 /* outfit-46_00110.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-46_00110.webp"; sourceTree = "<group>"; };
 		7543B28E64A5E2CB336654FB /* outfit-65_00177.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-65_00177.webp"; sourceTree = "<group>"; };
 		755FB6B78240A01339C77AB2 /* outfit-65_00001.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-65_00001.webp"; sourceTree = "<group>"; };
@@ -2189,10 +2193,6 @@
 		FF496973822FBF115589C35B /* outfit-53_00025.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-53_00025.webp"; sourceTree = "<group>"; };
 		FFB770B6139ED3E634E6A4D8 /* outfit-46_00239.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-46_00239.webp"; sourceTree = "<group>"; };
 		FFC364DB0BEBE02825B592BD /* outfit-65_00143.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-65_00143.webp"; sourceTree = "<group>"; };
-		7539E1F1B5B4EAEDB0E57F61 /* FalSegmentationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FalSegmentationService.swift; sourceTree = "<group>"; };
-		2A0880005C8013FF580A68DD /* FalProductThumbnailService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FalProductThumbnailService.swift; sourceTree = "<group>"; };
-		0042A9F52E9C7937F39DA0C5 /* ProductThumbnailUploadService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductThumbnailUploadService.swift; sourceTree = "<group>"; };
-		3C5FED192D1F5BFE0A9CF51B /* AutoDetectProductsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoDetectProductsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -4663,7 +4663,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = YaelFits/YaelFits.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 25;
+				CURRENT_PROJECT_VERSION = 26;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = YaelFits/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -4751,7 +4751,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = YaelFits/YaelFits.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 25;
+				CURRENT_PROJECT_VERSION = 26;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = YaelFits/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (

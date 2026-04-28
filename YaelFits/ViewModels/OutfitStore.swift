@@ -21,7 +21,11 @@ class OutfitStore {
     var feedPosts: [FeedPost] = []
     var uploadJob: PipelineJob?
     var currentView: AppView = .list
-    var useFahrenheit: Bool = true
+    var useFahrenheit: Bool = (UserDefaults.standard.object(forKey: "preferredTempUnitFahrenheit") as? Bool) ?? true {
+        didSet {
+            UserDefaults.standard.set(useFahrenheit, forKey: "preferredTempUnitFahrenheit")
+        }
+    }
     var likedIds: Set<String> = []
     var savedIds: Set<String> = []
     var followingIds: Set<UUID> = []

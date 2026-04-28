@@ -23,7 +23,6 @@ struct CarouselView: View {
     @State private var verticalDismissOffset: CGFloat = 0
     @State private var isScrubbingCurrentOutfit = false
     @State private var isDismissing = false
-    @State private var keyboardHeight: CGFloat = 0
 
     private static let cardInset: CGFloat = 12
 
@@ -79,8 +78,10 @@ struct CarouselView: View {
                                 .allowsHitTesting(showsChrome)
                         }
                         .frame(height: slideHeight)
-                        .scaleEffect(keyboardHeight > 0 ? 0.78 : 1.0, anchor: .top)
-                        .padding(.bottom, keyboardHeight > 0 ? -66 : 0)
+                        // Keyboard-driven scale removed: it compounded with
+                        // the card-expand scale and stayed stuck after sheet
+                        // dismissals (Quick Add). Default keyboard avoidance
+                        // handles room for the caption field on its own.
 
                         Spacer(minLength: 0)
                     }
@@ -110,25 +111,17 @@ struct CarouselView: View {
                 .onChange(of: geo.size) { _, newSize in
                     viewWidth = newSize.width
                     let newUsable = newSize.height - LayoutMetrics.carouselTopInset - Self.cardInset
-                    slideHeight = max(240, newUsable * 0.46)
+                    // Must match the onAppear formula above — the previous
+                    // 0.46 multiplier permanently shrunk the outfit whenever
+                    // a sheet (e.g. Quick Add) caused a safe-area-driven
+                    // geometry change.
+                    slideHeight = max(320, newUsable * 0.66)
                 }
             }
-            .offset(y: verticalDismissOffset - keyboardHeight)
+            .offset(y: verticalDismissOffset)
             .opacity(isDismissing ? max(0.0, 1.0 - (verticalDismissOffset / 300.0)) : 1.0)
             .scaleEffect(isDismissing ? max(0.9, 1.0 - (verticalDismissOffset / 1500.0)) : 1.0, anchor: .top)
             .compositingGroup()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { n in
-            if let frame = n.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
-                withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
-                    keyboardHeight = frame.height
-                }
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
-            withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
-                keyboardHeight = 0
-            }
         }
     }
 
@@ -707,17 +700,21 @@ struct CarouselDetailCard: View {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     Task { await openAutoDetect() }
                 } label: {
-                    Group {
+                    HStack(spacing: 6) {
                         if isLoadingAutoDetect {
                             ProgressView().controlSize(.small).tint(AppPalette.iconPrimary)
                         } else {
                             Image(systemName: "sparkles")
-                                .font(.system(size: 14))
+                                .font(.system(size: 13))
                                 .foregroundStyle(AppPalette.iconPrimary)
                         }
+                        Text("Quick Add")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(AppPalette.textPrimary)
                     }
-                    .frame(width: 36, height: 36)
-                    .appCircle(shadowRadius: 0, shadowY: 0)
+                    .padding(.horizontal, 12)
+                    .frame(height: 36)
+                    .appCapsule(shadowRadius: 0, shadowY: 0)
                 }
                 .buttonStyle(.plain)
                 .disabled(isLoadingAutoDetect)

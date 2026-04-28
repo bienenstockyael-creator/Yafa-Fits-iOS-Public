@@ -39,15 +39,23 @@ actor FalSegmentationService {
         at point: CGPoint,
         onUpdate: @escaping @Sendable (FalSegmentationProgress) async -> Void
     ) async throws -> FalSegmentationResult {
-        guard let pngData = image.pngData() else {
+        // The cleaned outfit has a transparent background. With either a
+        // transparent or flat-colour BG, SAM2 reads the silhouette as one
+        // object and returns the whole-body mask for any tap. Compositing
+        // onto low-frequency grey noise gives SAM2 enough internal-edge
+        // contrast to pick out the specific garment that was tapped.
+        guard let opaque = compositeOverNoiseBackground(image),
+              let jpegData = opaque.jpegData(compressionQuality: 0.85) else {
             throw UploadPipelineError.requestFailed("Could not encode source image for segmentation.")
         }
         let apiKey = try loadFalAPIKey()
 
+        print("[SAM] uploading \(jpegData.count) bytes, tap=(\(Int(point.x)), \(Int(point.y))), imageSize=\(Int(image.size.width))x\(Int(image.size.height))")
+
         await onUpdate(FalSegmentationProgress(title: "Segmenting", detail: "Asking SAM2 to outline the tapped garment."))
 
         let request = SamRequest(
-            image_url: dataURI(for: pngData, mimeType: "image/png"),
+            image_url: dataURI(for: jpegData, mimeType: "image/jpeg"),
             prompts: [SamPoint(x: Int(point.x.rounded()), y: Int(point.y.rounded()), label: 1)],
             multimask_output: true
         )
@@ -80,6 +88,7 @@ actor FalSegmentationService {
         guard !maskURLs.isEmpty else {
             throw UploadPipelineError.maskGenerationFailed
         }
+        print("[SAM] returned \(maskURLs.count) mask(s)")
 
         await onUpdate(FalSegmentationProgress(title: "Segmenting", detail: "Picking the best mask."))
         let smallestMask = try await downloadSmallestMask(urls: maskURLs, apiKey: apiKey)
@@ -105,7 +114,9 @@ actor FalSegmentationService {
 
             var bestImage: UIImage?
             var bestArea = Int.max
-            for try await (_, img, area) in group {
+            var areas: [(Int, Int)] = []
+            for try await (idx, img, area) in group {
+                areas.append((idx, area))
                 // Skip degenerate empty masks; pick the smallest non-empty one.
                 guard area > 0 else { continue }
                 if area < bestArea {
@@ -113,11 +124,45 @@ actor FalSegmentationService {
                     bestImage = img
                 }
             }
+            print("[SAM] mask areas (idx, whitePixels): \(areas.sorted { $0.0 < $1.0 }) — picked area=\(bestArea)")
             guard let pick = bestImage else {
                 throw UploadPipelineError.maskGenerationFailed
             }
             return pick
         }
+    }
+
+    /// Flatten the (likely transparent) source image onto an opaque,
+    /// slightly-textured grey background. Used as SAM2 input only — the
+    /// original is still passed to the masking stage so the cropped output
+    /// keeps its transparent edges.
+    private func compositeOverNoiseBackground(_ image: UIImage) -> UIImage? {
+        guard let cg = image.cgImage else { return nil }
+        let extent = CGRect(x: 0, y: 0, width: cg.width, height: cg.height)
+
+        guard let randomFilter = CIFilter(name: "CIRandomGenerator"),
+              let rawNoise = randomFilter.outputImage else { return nil }
+
+        // Soft, low-saturation, mid-grey noise.
+        let noise = rawNoise
+            .cropped(to: extent)
+            .applyingFilter("CIColorControls", parameters: [
+                kCIInputSaturationKey: 0.0,
+                kCIInputBrightnessKey: 0.0,
+                kCIInputContrastKey: 0.4,
+            ])
+            .applyingFilter("CIGaussianBlur", parameters: [
+                kCIInputRadiusKey: 4.0,
+            ])
+            .cropped(to: extent)
+
+        let sourceCI = CIImage(cgImage: cg)
+        let composite = sourceCI.composited(over: noise)
+
+        guard let outputCG = ciContext.createCGImage(composite, from: extent) else {
+            return nil
+        }
+        return UIImage(cgImage: outputCG, scale: image.scale, orientation: image.imageOrientation)
     }
 
     /// Count of pixels with luminance above the threshold — i.e. masked area.
@@ -160,6 +205,16 @@ actor FalSegmentationService {
             return maskCI.transformed(by: CGAffineTransform(scaleX: sx, y: sy))
         }()
 
+        // Close small gaps in the mask. Strong internal contours like a zipper
+        // running down a jacket (or a hand/phone occluding the chest) cause SAM
+        // to break the garment into disconnected halves; a morphological close
+        // (dilate -> erode) bridges thin separators while leaving the outer
+        // silhouette roughly intact.
+        let closedMaskCI = scaledMaskCI
+            .applyingFilter("CIMorphologyMaximum", parameters: [kCIInputRadiusKey: 10.0])
+            .applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: 10.0])
+            .cropped(to: scaledMaskCI.extent)
+
         // Masked source: original through the mask, transparent outside.
         guard let blend = CIFilter(name: "CIBlendWithMask") else {
             throw UploadPipelineError.maskGenerationFailed
@@ -167,7 +222,7 @@ actor FalSegmentationService {
         blend.setValue(sourceCI, forKey: kCIInputImageKey)
         blend.setValue(CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 0)).cropped(to: sourceCI.extent),
                        forKey: kCIInputBackgroundImageKey)
-        blend.setValue(scaledMaskCI, forKey: kCIInputMaskImageKey)
+        blend.setValue(closedMaskCI, forKey: kCIInputMaskImageKey)
         guard let masked = blend.outputImage else {
             throw UploadPipelineError.maskGenerationFailed
         }
@@ -198,7 +253,7 @@ actor FalSegmentationService {
             .cropped(to: sourceCI.extent)
         highlightBlend.setValue(cyan, forKey: kCIInputImageKey)
         highlightBlend.setValue(transparent, forKey: kCIInputBackgroundImageKey)
-        highlightBlend.setValue(scaledMaskCI, forKey: kCIInputMaskImageKey)
+        highlightBlend.setValue(closedMaskCI, forKey: kCIInputMaskImageKey)
         guard let highlightCI = highlightBlend.outputImage,
               let highlightCG = ciContext.createCGImage(highlightCI, from: sourceCI.extent) else {
             throw UploadPipelineError.maskGenerationFailed

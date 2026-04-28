@@ -89,7 +89,8 @@ struct UploadPipelineView: View {
                 AutoDetectProductsView(
                     sourceImage: source.image,
                     userId: userId,
-                    existingProducts: []
+                    existingProducts: [],
+                    cancelLabel: "Skip / Add later"
                 ) { products in
                     job?.autoDetectedProducts = products
                     autoDetectImage = nil
