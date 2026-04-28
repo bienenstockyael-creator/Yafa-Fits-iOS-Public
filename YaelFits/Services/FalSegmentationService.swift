@@ -1,0 +1,288 @@
+import CoreImage
+import Foundation
+import UIKit
+
+struct FalSegmentationProgress: Sendable {
+    let title: String
+    let detail: String
+}
+
+actor FalSegmentationService {
+    static let shared = FalSegmentationService()
+
+    private let session: URLSession
+    private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
+
+    init(session: URLSession = .shared) {
+        self.session = session
+    }
+
+    /// Run SAM2 with a single point prompt at (x, y) on `image`, then return the
+    /// segmented region cropped tightly to its bounding box. The returned image
+    /// has a transparent background outside the segment.
+    ///
+    /// - Parameters:
+    ///   - image: the source image (typically the Bria-cleaned outfit selfie).
+    ///   - point: tap location in the image's coordinate space (top-left origin, pixels).
+    ///   - onUpdate: progress callback.
+    func segmentGarment(
+        in image: UIImage,
+        at point: CGPoint,
+        onUpdate: @escaping @Sendable (FalSegmentationProgress) async -> Void
+    ) async throws -> UIImage {
+        guard let pngData = image.pngData() else {
+            throw UploadPipelineError.requestFailed("Could not encode source image for segmentation.")
+        }
+        let apiKey = try loadFalAPIKey()
+
+        await onUpdate(FalSegmentationProgress(title: "Segmenting", detail: "Asking SAM2 to outline the tapped garment."))
+
+        let request = SamRequest(
+            image_url: dataURI(for: pngData, mimeType: "image/png"),
+            prompts: [SamPoint(x: Double(point.x), y: Double(point.y), label: 1)]
+        )
+
+        let submitURL = AppConfig.falQueueBaseURL.appendingPathComponent("fal-ai/sam2/image")
+        let submit: SamSubmitResponse = try await performJSONRequest(
+            url: submitURL,
+            method: "POST",
+            payload: request,
+            apiKey: apiKey
+        )
+
+        let result: SamResult = try await pollUntilComplete(
+            submit: submit,
+            apiKey: apiKey,
+            onUpdate: onUpdate
+        )
+
+        guard let maskURL = result.maskURL else {
+            throw UploadPipelineError.maskGenerationFailed
+        }
+
+        await onUpdate(FalSegmentationProgress(title: "Segmenting", detail: "Cropping the garment from your photo."))
+        let maskData = try await downloadData(from: maskURL, apiKey: apiKey)
+        guard let maskImage = UIImage(data: maskData) else {
+            throw UploadPipelineError.maskGenerationFailed
+        }
+
+        return try applyMaskAndCrop(source: image, mask: maskImage)
+    }
+
+    // MARK: - Mask + crop
+
+    private func applyMaskAndCrop(source: UIImage, mask: UIImage) throws -> UIImage {
+        guard let sourceCG = source.cgImage, let maskCG = mask.cgImage else {
+            throw UploadPipelineError.maskGenerationFailed
+        }
+
+        let sourceCI = CIImage(cgImage: sourceCG)
+        // Resize the mask to match the source if dimensions differ.
+        let maskCI = CIImage(cgImage: maskCG)
+        let scaledMaskCI: CIImage = {
+            let sx = sourceCI.extent.width / maskCI.extent.width
+            let sy = sourceCI.extent.height / maskCI.extent.height
+            if abs(sx - 1.0) < 0.001 && abs(sy - 1.0) < 0.001 { return maskCI }
+            return maskCI.transformed(by: CGAffineTransform(scaleX: sx, y: sy))
+        }()
+
+        // Use the mask as alpha. CIBlendWithMask treats white as opaque.
+        guard let blend = CIFilter(name: "CIBlendWithMask") else {
+            throw UploadPipelineError.maskGenerationFailed
+        }
+        blend.setValue(sourceCI, forKey: kCIInputImageKey)
+        blend.setValue(CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 0)).cropped(to: sourceCI.extent),
+                       forKey: kCIInputBackgroundImageKey)
+        blend.setValue(scaledMaskCI, forKey: kCIInputMaskImageKey)
+        guard let masked = blend.outputImage else {
+            throw UploadPipelineError.maskGenerationFailed
+        }
+
+        // Crop tightly to the non-transparent bounds, with 5% padding.
+        guard let bounds = nonTransparentBounds(in: masked) else {
+            throw UploadPipelineError.maskGenerationFailed
+        }
+        let padX = bounds.width * 0.05
+        let padY = bounds.height * 0.05
+        let padded = bounds.insetBy(dx: -padX, dy: -padY).intersection(masked.extent)
+        let cropped = masked.cropped(to: padded)
+
+        // Translate to origin so the resulting CGImage starts at (0,0).
+        let translated = cropped.transformed(by: CGAffineTransform(translationX: -padded.origin.x, y: -padded.origin.y))
+        guard let finalCG = ciContext.createCGImage(translated, from: CGRect(origin: .zero, size: padded.size)) else {
+            throw UploadPipelineError.maskGenerationFailed
+        }
+        return UIImage(cgImage: finalCG)
+    }
+
+    /// Scan the alpha channel and return the bounding box of non-transparent pixels.
+    /// Mirrors the helper in ImageMaskingService.
+    private func nonTransparentBounds(in image: CIImage) -> CGRect? {
+        let extent = image.extent
+        guard extent.width > 0, extent.height > 0 else { return nil }
+        guard let cg = ciContext.createCGImage(image, from: extent) else { return nil }
+        let width = cg.width
+        let height = cg.height
+        let bytesPerRow = width * 4
+        var pixels = [UInt8](repeating: 0, count: bytesPerRow * height)
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
+        guard let context = CGContext(
+            data: &pixels,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: bytesPerRow,
+            space: colorSpace,
+            bitmapInfo: bitmapInfo
+        ) else { return nil }
+        context.draw(cg, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        var minX = width, minY = height, maxX = -1, maxY = -1
+        for y in 0..<height {
+            let rowOffset = y * bytesPerRow
+            for x in 0..<width {
+                let alpha = pixels[rowOffset + x * 4 + 3]
+                if alpha > 8 {
+                    if x < minX { minX = x }
+                    if x > maxX { maxX = x }
+                    if y < minY { minY = y }
+                    if y > maxY { maxY = y }
+                }
+            }
+        }
+        guard maxX >= minX, maxY >= minY else { return nil }
+        // CIImage uses bottom-left origin; flip Y.
+        let flippedMinY = height - 1 - maxY
+        return CGRect(
+            x: CGFloat(minX),
+            y: CGFloat(flippedMinY),
+            width: CGFloat(maxX - minX + 1),
+            height: CGFloat(maxY - minY + 1)
+        )
+    }
+
+    // MARK: - FAL plumbing
+
+    private func pollUntilComplete<T: Decodable>(
+        submit: SamSubmitResponse,
+        apiKey: String,
+        onUpdate: @escaping @Sendable (FalSegmentationProgress) async -> Void
+    ) async throws -> T {
+        while true {
+            try Task.checkCancellation()
+            let status: SamStatusResponse = try await performRawRequest(url: submit.status_url, apiKey: apiKey)
+            switch status.status.lowercased() {
+            case "completed":
+                return try await performRawRequest(url: submit.response_url, apiKey: apiKey)
+            case "failed", "error":
+                throw UploadPipelineError.requestFailed(status.error?.message ?? "SAM2 failed.")
+            default:
+                await onUpdate(FalSegmentationProgress(title: "Segmenting", detail: "SAM2 is locating the garment."))
+            }
+            try await Task.sleep(for: .seconds(UploadConfig.falPollingIntervalSeconds))
+        }
+    }
+
+    private func loadFalAPIKey() throws -> String {
+        let env = ProcessInfo.processInfo.environment
+        if let k = env["FALAPIKey"], !k.isEmpty { return k }
+        if let k = env["FAL_API_KEY"], !k.isEmpty { return k }
+        if let k = env["FAL_KEY"], !k.isEmpty { return k }
+        if let k = Bundle.main.object(forInfoDictionaryKey: "FALAPIKey") as? String,
+           !k.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return k
+        }
+        throw UploadPipelineError.missingFalKey
+    }
+
+    private func dataURI(for data: Data, mimeType: String) -> String {
+        "data:\(mimeType);base64,\(data.base64EncodedString())"
+    }
+
+    private func performJSONRequest<T: Decodable, P: Encodable>(
+        url: URL, method: String, payload: P, apiKey: String
+    ) async throws -> T {
+        let body = try JSONEncoder().encode(payload)
+        return try await performDataRequest(url: url, method: method, body: body, apiKey: apiKey)
+    }
+
+    private func performRawRequest<T: Decodable>(url: URL, apiKey: String) async throws -> T {
+        try await performDataRequest(url: url, method: "GET", body: nil, apiKey: apiKey)
+    }
+
+    private func performDataRequest<T: Decodable>(
+        url: URL, method: String, body: Data?, apiKey: String
+    ) async throws -> T {
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.setValue("Key \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let body {
+            request.httpBody = body
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        }
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            let text = String(data: data, encoding: .utf8) ?? "<binary>"
+            throw UploadPipelineError.requestFailed("FAL \((response as? HTTPURLResponse)?.statusCode ?? -1): \(text.prefix(300))")
+        }
+        guard let decoded = try? JSONDecoder().decode(T.self, from: data) else {
+            throw UploadPipelineError.decodingFailed
+        }
+        return decoded
+    }
+
+    private func downloadData(from url: URL, apiKey: String) async throws -> Data {
+        var request = URLRequest(url: url)
+        request.setValue("Key \(apiKey)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw UploadPipelineError.requestFailed("Mask download failed.")
+        }
+        return data
+    }
+}
+
+private struct SamRequest: Encodable {
+    let image_url: String
+    let prompts: [SamPoint]
+}
+
+private struct SamPoint: Encodable {
+    let x: Double
+    let y: Double
+    let label: Int
+}
+
+private struct SamSubmitResponse: Decodable {
+    let request_id: String
+    let response_url: URL
+    let status_url: URL
+    let cancel_url: URL?
+}
+
+private struct SamStatusResponse: Decodable {
+    let status: String
+    let queue_position: Int?
+    let error: SamStatusError?
+}
+
+private struct SamStatusError: Decodable {
+    let message: String?
+}
+
+private struct SamResult: Decodable {
+    let image: SamMedia?
+    let images: [SamMedia]?
+    let mask: SamMedia?
+    let individual_masks: [SamMedia]?
+
+    var maskURL: URL? {
+        individual_masks?.first?.url ?? mask?.url ?? image?.url ?? images?.first?.url
+    }
+}
+
+private struct SamMedia: Decodable {
+    let url: URL
+}
