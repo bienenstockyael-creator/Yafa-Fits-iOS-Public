@@ -15,6 +15,7 @@ struct UploadPipelineView: View {
     @State private var previewLooper: AVPlayerLooper?
     @State private var showingPublishSheet = false
     @State private var outfitToPublish: Outfit?
+    @State private var autoDetectImage: AutoDetectSourceImage?
 
     var body: some View {
         GeometryReader { geometry in
@@ -82,6 +83,18 @@ struct UploadPipelineView: View {
                 outfitToPublish = nil
             }
             .environment(store)
+        }
+        .sheet(item: $autoDetectImage) { source in
+            if let userId = store.userId {
+                AutoDetectProductsView(
+                    sourceImage: source.image,
+                    userId: userId,
+                    existingProducts: []
+                ) { products in
+                    job?.autoDetectedProducts = products
+                    autoDetectImage = nil
+                }
+            }
         }
         .fullScreenCover(isPresented: $showingCamera) {
             CameraCaptureView { image in
@@ -674,6 +687,14 @@ struct UploadPipelineView: View {
                 job.loaderStage = .creatingInteractiveFit
                 job.statusTitle = "Queued"
                 job.statusDetail = "Uploading green screen and queueing for Kling generation."
+
+                // Present the auto-detect-products flow over the polling UI.
+                // Runs in parallel with Kling — user does products while
+                // the orbit video generates. Auto-detected products are
+                // merged into the staged outfit when Kling finishes.
+                if let cutoutImage = UIImage(data: preparedAssets.cutoutPNGData) {
+                    autoDetectImage = AutoDetectSourceImage(image: cutoutImage)
+                }
             }
 
             // Step 2: Upload the green screen PNG (not the raw photo) and submit job.
@@ -725,6 +746,10 @@ struct UploadPipelineView: View {
                 if record.isReviewReady, var remoteOutfit = record.remoteOutfit {
                     remoteOutfit.isRotationReversed = false
                     if remoteOutfit.weather == nil { remoteOutfit.weather = job.uploadWeather }
+                    if !job.autoDetectedProducts.isEmpty {
+                        let existing = remoteOutfit.products ?? []
+                        remoteOutfit.products = existing + job.autoDetectedProducts
+                    }
                     job.stagedOutfit = remoteOutfit
                     job.step = .review
                     job.isProcessing = false
@@ -2197,4 +2222,10 @@ private enum UploadWeatherServiceError: Error {
     case invalidRequest
     case invalidResponse
     case locationUnavailable
+}
+
+/// Identifiable wrapper so we can drive the auto-detect sheet via `.sheet(item:)`.
+private struct AutoDetectSourceImage: Identifiable {
+    let id = UUID()
+    let image: UIImage
 }

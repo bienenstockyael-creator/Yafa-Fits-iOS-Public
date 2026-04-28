@@ -9,6 +9,7 @@ import UIKit
 /// On done, accepted products are returned to the caller.
 struct AutoDetectProductsView: View {
     let sourceImage: UIImage
+    let userId: UUID
     var existingProducts: [Product] = []
     var onDone: ([Product]) -> Void
 
@@ -50,7 +51,7 @@ struct AutoDetectProductsView: View {
                 }
             }
             .sheet(item: $pending) { p in
-                LabelAndGenerateSheet(pending: p) { product in
+                LabelAndGenerateSheet(pending: p, userId: userId) { product in
                     if let product { detected.append(product) }
                     pending = nil
                 }
@@ -158,6 +159,7 @@ private struct PendingSegment: Identifiable {
 
 private struct LabelAndGenerateSheet: View {
     let pending: PendingSegment
+    let userId: UUID
     var onFinish: (Product?) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -168,7 +170,7 @@ private struct LabelAndGenerateSheet: View {
     @State private var label: String = ""
     @State private var statusDetail: String = "Outlining the garment…"
 
-    enum Phase { case segmenting, labeling, generating, reviewing, error }
+    enum Phase { case segmenting, labeling, generating, reviewing, uploading, error }
 
     var body: some View {
         VStack(spacing: LayoutMetrics.medium) {
@@ -212,7 +214,7 @@ private struct LabelAndGenerateSheet: View {
     @ViewBuilder
     private var content: some View {
         switch phase {
-        case .segmenting, .generating:
+        case .segmenting, .generating, .uploading:
             VStack(spacing: 8) {
                 ProgressView()
                 Text(statusDetail).font(.system(size: 12)).foregroundStyle(AppPalette.textMuted)
@@ -238,7 +240,7 @@ private struct LabelAndGenerateSheet: View {
         case .reviewing:
             VStack(spacing: LayoutMetrics.small) {
                 Button {
-                    accept()
+                    Task { await accept() }
                 } label: {
                     Text("Add to outfit").frame(maxWidth: .infinity)
                 }
@@ -307,21 +309,31 @@ private struct LabelAndGenerateSheet: View {
         }
     }
 
-    private func accept() {
-        guard let thumb = generatedThumbnail, let pngData = thumb.pngData() else { return }
-        // Encode as a data URI so we can show it in PublishSheet without an upload.
-        // Persistence to Supabase Storage will happen on the server side / publish
-        // step in a later commit.
-        let dataURI = "data:image/png;base64,\(pngData.base64EncodedString())"
-        let product = Product(
-            name: label.trimmingCharacters(in: .whitespaces),
-            price: nil,
-            image: dataURI,
-            shopLink: nil,
-            productId: nil,
-            tags: nil
-        )
-        onFinish(product)
-        dismiss()
+    private func accept() async {
+        guard let thumb = generatedThumbnail else { return }
+        await MainActor.run {
+            phase = .uploading
+            statusDetail = "Saving thumbnail…"
+        }
+        do {
+            let imageURL = try await ProductThumbnailUploadService.upload(thumb, userId: userId)
+            let product = Product(
+                name: label.trimmingCharacters(in: .whitespaces),
+                price: nil,
+                image: imageURL,
+                shopLink: nil,
+                productId: nil,
+                tags: nil
+            )
+            await MainActor.run {
+                onFinish(product)
+                dismiss()
+            }
+        } catch {
+            await MainActor.run {
+                statusDetail = error.localizedDescription
+                phase = .error
+            }
+        }
     }
 }

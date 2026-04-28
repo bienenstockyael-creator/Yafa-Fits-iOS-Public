@@ -52,6 +52,9 @@ final class PipelineJob: Identifiable, @unchecked Sendable {
     var progress: Double?
     var logLines: [String] = []
     var publishedToFeed: Bool = false
+    /// Products auto-detected via tap-to-segment during the upload flow.
+    /// Merged into stagedOutfit.products once Kling completes.
+    var autoDetectedProducts: [Product] = []
 
     init(outfitNum: Int) {
         self.id = "outfit-\(outfitNum)"
