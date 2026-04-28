@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: - Publish sheet
 
@@ -14,6 +15,8 @@ struct PublishSheet: View {
     @State private var isPublishing = false
     @State private var publishError: String?
     @State private var showAddProduct = false
+    @State private var autoDetectSource: PublishAutoDetectSource?
+    @State private var isLoadingAutoDetect = false
 
     // Shop links available to all users — products only appear on feed if linked
 
@@ -56,6 +59,20 @@ struct PublishSheet: View {
                         let p = Product(name: product.name, price: nil, image: product.imageURL,
                                         productId: product.id, tags: product.tags)
                         taggedProducts.append(ProductWithShopLink(product: p, shopURL: ""))
+                    }
+                }
+            }
+            .sheet(item: $autoDetectSource) { source in
+                if let userId = store.userId {
+                    AutoDetectProductsView(
+                        sourceImage: source.image,
+                        userId: userId,
+                        existingProducts: []
+                    ) { products in
+                        for product in products {
+                            taggedProducts.append(ProductWithShopLink(product: product, shopURL: ""))
+                        }
+                        autoDetectSource = nil
                     }
                 }
             }
@@ -107,6 +124,31 @@ struct PublishSheet: View {
 
                 Button {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    Task { await openAutoDetect() }
+                } label: {
+                    HStack(spacing: LayoutMetrics.xSmall) {
+                        if isLoadingAutoDetect {
+                            ProgressView().tint(AppPalette.textFaint)
+                        } else {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 16))
+                                .foregroundStyle(AppPalette.textFaint)
+                        }
+                        Text(isLoadingAutoDetect ? "LOADING…" : "AUTO-DETECT PRODUCTS")
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .tracking(1.5)
+                            .foregroundStyle(AppPalette.textFaint)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(LayoutMetrics.medium)
+                }
+                .buttonStyle(.plain)
+                .disabled(isLoadingAutoDetect)
+
+                Divider().opacity(0.5)
+
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     showAddProduct = true
                 } label: {
                     HStack(spacing: LayoutMetrics.xSmall) {
@@ -124,6 +166,28 @@ struct PublishSheet: View {
                 .buttonStyle(.plain)
             }
             .appCard(cornerRadius: LayoutMetrics.cardCornerRadius)
+        }
+    }
+
+    private func openAutoDetect() async {
+        guard !isLoadingAutoDetect else { return }
+        await MainActor.run { isLoadingAutoDetect = true }
+        defer { Task { @MainActor in isLoadingAutoDetect = false } }
+
+        guard let baseURL = outfit.resolvedRemoteBaseURL else {
+            await MainActor.run { publishError = "This outfit has no remote frames to source from yet." }
+            return
+        }
+        let frameURL = outfit.frameURL(index: 0, baseURL: baseURL)
+        do {
+            let (data, _) = try await URLSession.shared.data(from: frameURL)
+            guard let image = UIImage(data: data) else {
+                await MainActor.run { publishError = "Could not decode the outfit frame." }
+                return
+            }
+            await MainActor.run { autoDetectSource = PublishAutoDetectSource(image: image) }
+        } catch {
+            await MainActor.run { publishError = "Couldn't fetch a frame: \(error.localizedDescription)" }
         }
     }
 
@@ -295,4 +359,9 @@ private struct ProductWithShopLink: Identifiable {
     let id = UUID()
     let product: Product
     var shopURL: String
+}
+
+private struct PublishAutoDetectSource: Identifiable {
+    let id = UUID()
+    let image: UIImage
 }
