@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct CarouselView: View {
     let outfits: [Outfit]
@@ -396,6 +397,8 @@ struct CarouselDetailCard: View {
     @State private var showShareComposer = false
     @State private var showPublishSheet = false
     @State private var showAddProduct = false
+    @State private var autoDetectSource: CarouselAutoDetectSource?
+    @State private var isLoadingAutoDetect = false
     @State private var isEditing = false
     @State private var editableTags: [String] = []
     @State private var showingTagInput = false
@@ -570,6 +573,27 @@ struct CarouselDetailCard: View {
                 }
             }
         }
+        .sheet(item: $autoDetectSource) { source in
+            if let userId = store.userId {
+                AutoDetectProductsView(
+                    sourceImage: source.image,
+                    userId: userId,
+                    existingProducts: outfit.products ?? []
+                ) { newProducts in
+                    let added = newProducts.filter { newProduct in
+                        !(outfit.products ?? []).contains(where: { $0.name == newProduct.name })
+                    }
+                    if !added.isEmpty {
+                        store.updateOutfit(
+                            outfit.id,
+                            caption: outfit.caption,
+                            products: (outfit.products ?? []) + added
+                        )
+                    }
+                    autoDetectSource = nil
+                }
+            }
+        }
         .fullScreenCover(isPresented: $showShareComposer) {
             ShareCardComposer(outfit: outfit)
                 .environment(store)
@@ -678,6 +702,25 @@ struct CarouselDetailCard: View {
                         .appCircle(shadowRadius: 0, shadowY: 0)
                 }
                 .buttonStyle(.plain)
+
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    Task { await openAutoDetect() }
+                } label: {
+                    Group {
+                        if isLoadingAutoDetect {
+                            ProgressView().controlSize(.small).tint(AppPalette.iconPrimary)
+                        } else {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 14))
+                                .foregroundStyle(AppPalette.iconPrimary)
+                        }
+                    }
+                    .frame(width: 36, height: 36)
+                    .appCircle(shadowRadius: 0, shadowY: 0)
+                }
+                .buttonStyle(.plain)
+                .disabled(isLoadingAutoDetect)
 
                 ForEach(outfit.products ?? [], id: \.id) { product in
                     ZStack(alignment: .topTrailing) {
@@ -857,6 +900,22 @@ struct CarouselDetailCard: View {
         Task { try? await ProductLibraryService.removeProductFromOutfit(outfitId: outfit.id, product: product) }
     }
 
+    private func openAutoDetect() async {
+        guard !isLoadingAutoDetect else { return }
+        await MainActor.run { isLoadingAutoDetect = true }
+        defer { Task { @MainActor in isLoadingAutoDetect = false } }
+
+        guard let baseURL = outfit.resolvedRemoteBaseURL else { return }
+        let frameURL = outfit.frameURL(index: 0, baseURL: baseURL)
+        do {
+            let (data, _) = try await URLSession.shared.data(from: frameURL)
+            guard let image = UIImage(data: data) else { return }
+            await MainActor.run { autoDetectSource = CarouselAutoDetectSource(image: image) }
+        } catch {
+            // Quiet failure — user can retry by tapping the button again.
+        }
+    }
+
     private func removeTag(_ tag: String) {
         editableTags.removeAll { $0 == tag }
     }
@@ -1020,4 +1079,9 @@ private struct CardHeightKey: PreferenceKey {
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = max(value, nextValue())
     }
+}
+
+private struct CarouselAutoDetectSource: Identifiable {
+    let id = UUID()
+    let image: UIImage
 }
