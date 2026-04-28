@@ -7,6 +7,15 @@ struct FalSegmentationProgress: Sendable {
     let detail: String
 }
 
+/// Result of segmenting one garment.
+struct FalSegmentationResult: Sendable {
+    /// Tight crop of the garment with a transparent background — fed to nano-banana.
+    let croppedGarment: UIImage
+    /// Same dimensions as the source image; opaque cyan inside the mask, transparent
+    /// outside. Composited over the original to highlight what SAM2 detected.
+    let highlightOverlay: UIImage
+}
+
 actor FalSegmentationService {
     static let shared = FalSegmentationService()
 
@@ -29,7 +38,7 @@ actor FalSegmentationService {
         in image: UIImage,
         at point: CGPoint,
         onUpdate: @escaping @Sendable (FalSegmentationProgress) async -> Void
-    ) async throws -> UIImage {
+    ) async throws -> FalSegmentationResult {
         guard let pngData = image.pngData() else {
             throw UploadPipelineError.requestFailed("Could not encode source image for segmentation.")
         }
@@ -39,7 +48,7 @@ actor FalSegmentationService {
 
         let request = SamRequest(
             image_url: dataURI(for: pngData, mimeType: "image/png"),
-            prompts: [SamPoint(x: Double(point.x), y: Double(point.y), label: 1)]
+            prompts: [SamPoint(x: Int(point.x.rounded()), y: Int(point.y.rounded()), label: 1)]
         )
 
         let submitURL = AppConfig.falQueueBaseURL.appendingPathComponent("fal-ai/sam2/image")
@@ -71,7 +80,7 @@ actor FalSegmentationService {
 
     // MARK: - Mask + crop
 
-    private func applyMaskAndCrop(source: UIImage, mask: UIImage) throws -> UIImage {
+    private func applyMaskAndCrop(source: UIImage, mask: UIImage) throws -> FalSegmentationResult {
         guard let sourceCG = source.cgImage, let maskCG = mask.cgImage else {
             throw UploadPipelineError.maskGenerationFailed
         }
@@ -86,7 +95,7 @@ actor FalSegmentationService {
             return maskCI.transformed(by: CGAffineTransform(scaleX: sx, y: sy))
         }()
 
-        // Use the mask as alpha. CIBlendWithMask treats white as opaque.
+        // Masked source: original through the mask, transparent outside.
         guard let blend = CIFilter(name: "CIBlendWithMask") else {
             throw UploadPipelineError.maskGenerationFailed
         }
@@ -98,7 +107,7 @@ actor FalSegmentationService {
             throw UploadPipelineError.maskGenerationFailed
         }
 
-        // Crop tightly to the non-transparent bounds, with 5% padding.
+        // Tight crop for nano-banana input.
         guard let bounds = nonTransparentBounds(in: masked) else {
             throw UploadPipelineError.maskGenerationFailed
         }
@@ -106,13 +115,32 @@ actor FalSegmentationService {
         let padY = bounds.height * 0.05
         let padded = bounds.insetBy(dx: -padX, dy: -padY).intersection(masked.extent)
         let cropped = masked.cropped(to: padded)
-
-        // Translate to origin so the resulting CGImage starts at (0,0).
         let translated = cropped.transformed(by: CGAffineTransform(translationX: -padded.origin.x, y: -padded.origin.y))
-        guard let finalCG = ciContext.createCGImage(translated, from: CGRect(origin: .zero, size: padded.size)) else {
+        guard let croppedCG = ciContext.createCGImage(translated, from: CGRect(origin: .zero, size: padded.size)) else {
             throw UploadPipelineError.maskGenerationFailed
         }
-        return UIImage(cgImage: finalCG)
+        let croppedGarment = UIImage(cgImage: croppedCG)
+
+        // Highlight overlay: same size as source, tinted cyan inside the mask,
+        // transparent outside. We drop this on top of the source in the UI to
+        // show the user what was detected.
+        guard let highlightBlend = CIFilter(name: "CIBlendWithMask") else {
+            throw UploadPipelineError.maskGenerationFailed
+        }
+        let cyan = CIImage(color: CIColor(red: 0.18, green: 0.83, blue: 0.96, alpha: 0.55))
+            .cropped(to: sourceCI.extent)
+        let transparent = CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 0))
+            .cropped(to: sourceCI.extent)
+        highlightBlend.setValue(cyan, forKey: kCIInputImageKey)
+        highlightBlend.setValue(transparent, forKey: kCIInputBackgroundImageKey)
+        highlightBlend.setValue(scaledMaskCI, forKey: kCIInputMaskImageKey)
+        guard let highlightCI = highlightBlend.outputImage,
+              let highlightCG = ciContext.createCGImage(highlightCI, from: sourceCI.extent) else {
+            throw UploadPipelineError.maskGenerationFailed
+        }
+        let highlightOverlay = UIImage(cgImage: highlightCG)
+
+        return FalSegmentationResult(croppedGarment: croppedGarment, highlightOverlay: highlightOverlay)
     }
 
     /// Scan the alpha channel and return the bounding box of non-transparent pixels.
@@ -250,8 +278,8 @@ private struct SamRequest: Encodable {
 }
 
 private struct SamPoint: Encodable {
-    let x: Double
-    let y: Double
+    let x: Int
+    let y: Int
     let label: Int
 }
 
