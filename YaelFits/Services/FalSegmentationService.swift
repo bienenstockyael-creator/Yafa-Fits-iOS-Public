@@ -48,7 +48,8 @@ actor FalSegmentationService {
 
         let request = SamRequest(
             image_url: dataURI(for: pngData, mimeType: "image/png"),
-            prompts: [SamPoint(x: Int(point.x.rounded()), y: Int(point.y.rounded()), label: 1)]
+            prompts: [SamPoint(x: Int(point.x.rounded()), y: Int(point.y.rounded()), label: 1)],
+            multimask_output: true
         )
 
         let submitURL = AppConfig.falQueueBaseURL.appendingPathComponent("fal-ai/sam2/image")
@@ -65,17 +66,81 @@ actor FalSegmentationService {
             onUpdate: onUpdate
         )
 
-        guard let maskURL = result.maskURL else {
+        // Collect every mask URL the response provided. SAM2 with
+        // multimask_output=true returns 3 candidates at different scales — we
+        // download them all and pick the smallest, which is usually the
+        // specific garment the user clicked rather than the whole subject.
+        var maskURLs: [URL] = []
+        if let individual = result.individual_masks {
+            maskURLs = individual.compactMap { $0.url }
+        }
+        if maskURLs.isEmpty, let single = result.maskURL {
+            maskURLs = [single]
+        }
+        guard !maskURLs.isEmpty else {
             throw UploadPipelineError.maskGenerationFailed
         }
+
+        await onUpdate(FalSegmentationProgress(title: "Segmenting", detail: "Picking the best mask."))
+        let smallestMask = try await downloadSmallestMask(urls: maskURLs, apiKey: apiKey)
 
         await onUpdate(FalSegmentationProgress(title: "Segmenting", detail: "Cropping the garment from your photo."))
-        let maskData = try await downloadData(from: maskURL, apiKey: apiKey)
-        guard let maskImage = UIImage(data: maskData) else {
-            throw UploadPipelineError.maskGenerationFailed
-        }
+        return try applyMaskAndCrop(source: image, mask: smallestMask)
+    }
 
-        return try applyMaskAndCrop(source: image, mask: maskImage)
+    private func downloadSmallestMask(urls: [URL], apiKey: String) async throws -> UIImage {
+        // Download all masks in parallel, then pick the one with the smallest
+        // white area (most specific to the user's tap).
+        try await withThrowingTaskGroup(of: (Int, UIImage, Int).self) { group in
+            for (idx, url) in urls.enumerated() {
+                group.addTask {
+                    let data = try await self.downloadData(from: url, apiKey: apiKey)
+                    guard let img = UIImage(data: data) else {
+                        throw UploadPipelineError.maskGenerationFailed
+                    }
+                    let area = self.whitePixelCount(in: img)
+                    return (idx, img, area)
+                }
+            }
+
+            var bestImage: UIImage?
+            var bestArea = Int.max
+            for try await (_, img, area) in group {
+                // Skip degenerate empty masks; pick the smallest non-empty one.
+                guard area > 0 else { continue }
+                if area < bestArea {
+                    bestArea = area
+                    bestImage = img
+                }
+            }
+            guard let pick = bestImage else {
+                throw UploadPipelineError.maskGenerationFailed
+            }
+            return pick
+        }
+    }
+
+    /// Count of pixels with luminance above the threshold — i.e. masked area.
+    private func whitePixelCount(in image: UIImage) -> Int {
+        guard let cg = image.cgImage else { return 0 }
+        let width = cg.width
+        let height = cg.height
+        let bytesPerRow = width * 4
+        var pixels = [UInt8](repeating: 0, count: bytesPerRow * height)
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
+        guard let ctx = CGContext(
+            data: &pixels, width: width, height: height,
+            bitsPerComponent: 8, bytesPerRow: bytesPerRow,
+            space: colorSpace, bitmapInfo: bitmapInfo
+        ) else { return 0 }
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: width, height: height))
+        var count = 0
+        for i in stride(from: 0, to: pixels.count, by: 4) {
+            // Treat any pixel with R > 128 as "in mask". (SAM masks are b/w.)
+            if pixels[i] > 128 { count += 1 }
+        }
+        return count
     }
 
     // MARK: - Mask + crop
@@ -275,6 +340,7 @@ actor FalSegmentationService {
 private struct SamRequest: Encodable {
     let image_url: String
     let prompts: [SamPoint]
+    let multimask_output: Bool
 }
 
 private struct SamPoint: Encodable {
