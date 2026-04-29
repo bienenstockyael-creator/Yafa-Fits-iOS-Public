@@ -20,6 +20,10 @@ struct RotatableOutfitImage: View {
     var onHorizontalDragChange: ((Bool) -> Void)? = nil
     var onFrameChange: ((Int) -> Void)? = nil
     var onDisplayedFrameChange: ((Int?) -> Void)? = nil
+    /// Pulls the drag/tap surface inwards from the left and right edges
+    /// so horizontal swipes near the edges fall through to whatever is
+    /// behind (e.g. a parent carousel). Default 0 = full-width hit area.
+    var horizontalDragInset: CGFloat = 0
 
     @State private var viewModel: FrameSequenceViewModel
     @State private var thumbnail: UIImage?
@@ -48,7 +52,8 @@ struct RotatableOutfitImage: View {
         onTap: (() -> Void)? = nil,
         onHorizontalDragChange: ((Bool) -> Void)? = nil,
         onFrameChange: ((Int) -> Void)? = nil,
-        onDisplayedFrameChange: ((Int?) -> Void)? = nil
+        onDisplayedFrameChange: ((Int?) -> Void)? = nil,
+        horizontalDragInset: CGFloat = 0
     ) {
         self.outfit = outfit
         self.height = height
@@ -68,6 +73,7 @@ struct RotatableOutfitImage: View {
         self.onHorizontalDragChange = onHorizontalDragChange
         self.onFrameChange = onFrameChange
         self.onDisplayedFrameChange = onDisplayedFrameChange
+        self.horizontalDragInset = horizontalDragInset
         self._viewModel = State(
             initialValue: FrameSequenceViewModel(
                 outfit: outfit,
@@ -119,6 +125,7 @@ struct RotatableOutfitImage: View {
                         endDragIfNeeded()
                     } : nil
                 )
+                .padding(.horizontal, horizontalDragInset)
             }
         }
         .onAppear {

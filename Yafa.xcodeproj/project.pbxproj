@@ -1108,6 +1108,8 @@
 		F97FD4AF3B3FC62324F0F4AE /* Remix.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE97B0C96709C804643AF281 /* Remix.swift */; };
 		A4405D6A54D1D0D5F54FBC48 /* RemixStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4B04E1E9CC13E9109E91065 /* RemixStorage.swift */; };
 		C39C360599877661A0253854 /* RemixArchiveSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 476308F8F5EBED5CD1EF9881 /* RemixArchiveSheetView.swift */; };
+		D7E6CD395F499695D9A0FAD3 /* Colorama.metal in Sources */ = {isa = PBXBuildFile; fileRef = ECF79DC7A3EC1E3AAE48F6EF /* Colorama.metal */; };
+		E86A164C67AD68BBA28AF9E0 /* GTFAdieuTRIAL-BlackSlanted.otf in Resources */ = {isa = PBXBuildFile; fileRef = 484F33AF35F673CA85183B22 /* GTFAdieuTRIAL-BlackSlanted.otf */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -2213,6 +2215,8 @@
 		DE97B0C96709C804643AF281 /* Remix.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Remix.swift; sourceTree = "<group>"; };
 		F4B04E1E9CC13E9109E91065 /* RemixStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemixStorage.swift; sourceTree = "<group>"; };
 		476308F8F5EBED5CD1EF9881 /* RemixArchiveSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemixArchiveSheetView.swift; sourceTree = "<group>"; };
+		ECF79DC7A3EC1E3AAE48F6EF /* Colorama.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = Colorama.metal; sourceTree = "<group>"; };
+		484F33AF35F673CA85183B22 /* GTFAdieuTRIAL-BlackSlanted.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "GTFAdieuTRIAL-BlackSlanted.otf"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -2315,6 +2319,7 @@
 				1EE333DC7C8D3A4F7E7D7DEC /* Utilities */,
 				70B7A72CC276897379561492 /* ViewModels */,
 				5B15E1EEEC6AD6743D333429 /* Views */,
+				8155B4617F396439D9EBC8B8 /* Shaders */,
 			);
 			path = YaelFits;
 			sourceTree = "<group>";
@@ -2614,6 +2619,7 @@
 				A97A1CA096A532AA1FA2219C /* Inter_28pt-MediumItalic.ttf */,
 				E4ADA0A6F7861DEAEA0781FD /* Inter_28pt-SemiBold.ttf */,
 				60A31063DA222A97AF101191 /* PlayfairDisplay-Italic.otf */,
+				484F33AF35F673CA85183B22 /* GTFAdieuTRIAL-BlackSlanted.otf */,
 			);
 			path = Fonts;
 			sourceTree = "<group>";
@@ -3519,6 +3525,14 @@
 				476308F8F5EBED5CD1EF9881 /* RemixArchiveSheetView.swift */,
 			);
 			path = VirtualCloset;
+			sourceTree = "<group>";
+		};
+		8155B4617F396439D9EBC8B8 /* Shaders */ = {
+			isa = PBXGroup;
+			children = (
+				ECF79DC7A3EC1E3AAE48F6EF /* Colorama.metal */,
+			);
+			path = Shaders;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -4609,6 +4623,7 @@
 				81E4B1978611C60A4A46D661 /* stormy.json in Resources */,
 				A8FBAE75835F5B8E2408B6B1 /* sunny.json in Resources */,
 				4C1D7D2C2780705E46A2698D /* windy.json in Resources */,
+				E86A164C67AD68BBA28AF9E0 /* GTFAdieuTRIAL-BlackSlanted.otf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -4697,6 +4712,7 @@
 				F97FD4AF3B3FC62324F0F4AE /* Remix.swift in Sources */,
 				A4405D6A54D1D0D5F54FBC48 /* RemixStorage.swift in Sources */,
 				C39C360599877661A0253854 /* RemixArchiveSheetView.swift in Sources */,
+				D7E6CD395F499695D9A0FAD3 /* Colorama.metal in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

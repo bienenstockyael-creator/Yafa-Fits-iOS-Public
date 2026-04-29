@@ -1,5 +1,7 @@
 import AVFoundation
+import CoreImage
 import CoreMotion
+import Photos
 import SwiftUI
 import UIKit
 
@@ -13,6 +15,7 @@ enum ShareCardTemplate: Int, CaseIterable, Identifiable, Hashable {
     case monoLive     = 5
     case electricLive = 6
     case ootdLive     = 7
+    case colorama     = 8
     // Two-layer PNG templates
     case layered2 = 3
     case layered3 = 4
@@ -24,6 +27,7 @@ enum ShareCardTemplate: Int, CaseIterable, Identifiable, Hashable {
         case .monoLive:     return "Mono"
         case .electricLive: return "Electric"
         case .ootdLive:     return "OOTD"
+        case .colorama:     return "Colorama"
         case .layered2:     return "Fits"
         case .layered3:     return "Stats"
         }
@@ -31,14 +35,21 @@ enum ShareCardTemplate: Int, CaseIterable, Identifiable, Hashable {
 
     /// Dynamic code-based templates — render date layers in SwiftUI.
     var isDynamic: Bool {
-        self == .monoLive || self == .electricLive || self == .ootdLive
+        self == .monoLive || self == .electricLive
+            || self == .ootdLive || self == .colorama
     }
 
     /// Whether this dynamic template uses a back PNG instead of a solid color.
     var usesBackPNG: Bool { false }
 
     /// Background fill for dynamic templates.
-    var dynamicBackground: Color { cardGray }
+    var dynamicBackground: Color {
+        // Cool light-grey/blue backdrop for colorama; everything else
+        // uses the standard cardGray.
+        self == .colorama
+            ? Color(red: 0.86, green: 0.89, blue: 0.95)
+            : cardGray
+    }
 
     /// Back PNG — fills the card behind the outfit for PNG templates.
     var backImageName: String {
@@ -59,6 +70,172 @@ enum ShareCardTemplate: Int, CaseIterable, Identifiable, Hashable {
     }
 
     var frontLayerIsFrosted: Bool { self == .layered2 }
+
+    /// Color variants offered for this template. The first entry is the
+    /// template's default look (matches the existing in-app appearance);
+    /// subsequent entries are alternative tints. Templates without
+    /// variants return an empty array.
+    var colorVariants: [TemplateColorVariant] {
+        switch self {
+        case .monoLive:
+            // BG / text pairs supplied by Yael. Tint = background (the
+            // dot in the picker shows the bg colour); textColor is the
+            // date-number colour drawn on top.
+            return [
+                TemplateColorVariant(id: 0, tint: cardGray, textColor: .black),
+                TemplateColorVariant(
+                    id: 1,
+                    tint: Color(red: 0x18 / 255.0, green: 0x03 / 255.0, blue: 0xFE / 255.0),
+                    textColor: Color(red: 0xD1 / 255.0, green: 0xCD / 255.0, blue: 0xFF / 255.0)
+                ),
+                TemplateColorVariant(
+                    id: 2,
+                    tint: Color(red: 0xE6 / 255.0, green: 0x3E / 255.0, blue: 0x33 / 255.0),
+                    textColor: Color(red: 0xD6 / 255.0, green: 0xC2 / 255.0, blue: 0xC1 / 255.0)
+                ),
+                TemplateColorVariant(
+                    id: 3,
+                    tint: Color(red: 0xD6 / 255.0, green: 0xC2 / 255.0, blue: 0xC1 / 255.0),
+                    textColor: Color(red: 0xE6 / 255.0, green: 0x3E / 255.0, blue: 0x33 / 255.0)
+                ),
+                TemplateColorVariant(
+                    id: 4,
+                    tint: Color(red: 0xFE / 255.0, green: 0x2C / 255.0, blue: 0x09 / 255.0),
+                    textColor: Color(red: 0x33 / 255.0, green: 0x09 / 255.0, blue: 0x02 / 255.0)
+                ),
+                TemplateColorVariant(
+                    id: 5,
+                    tint: Color(red: 0xFB / 255.0, green: 0xE5 / 255.0, blue: 0x4D / 255.0),
+                    textColor: Color(red: 0x32 / 255.0, green: 0x2E / 255.0, blue: 0x0F / 255.0)
+                ),
+            ]
+        case .electricLive:
+            // BG / text pairs supplied by Yael. The picker dot uses
+            // whichever of bg/text is more saturated so each variant
+            // is visually distinct.
+            return [
+                TemplateColorVariant(id: 0, tint: cardBlue), // unchanged default
+                TemplateColorVariant(
+                    id: 1,
+                    tint: Color(red: 0xE6 / 255.0, green: 0x3E / 255.0, blue: 0x33 / 255.0),
+                    textColor: Color(red: 0xE6 / 255.0, green: 0x3E / 255.0, blue: 0x33 / 255.0),
+                    backgroundColor: Color(red: 0xEC / 255.0, green: 0xEC / 255.0, blue: 0xEC / 255.0)
+                ),
+                TemplateColorVariant(
+                    id: 2,
+                    tint: Color(red: 0x99 / 255.0, green: 0x8B / 255.0, blue: 0x8A / 255.0),
+                    textColor: Color(red: 0x99 / 255.0, green: 0x8B / 255.0, blue: 0x8A / 255.0),
+                    backgroundColor: Color(red: 0xEC / 255.0, green: 0xEC / 255.0, blue: 0xEC / 255.0)
+                ),
+                TemplateColorVariant(
+                    id: 3,
+                    tint: Color(red: 0x18 / 255.0, green: 0x03 / 255.0, blue: 0xFE / 255.0),
+                    textColor: Color(red: 0xEC / 255.0, green: 0xEC / 255.0, blue: 0xEC / 255.0),
+                    backgroundColor: Color(red: 0x18 / 255.0, green: 0x03 / 255.0, blue: 0xFE / 255.0)
+                ),
+                TemplateColorVariant(
+                    id: 4,
+                    tint: Color(red: 0xE6 / 255.0, green: 0x3E / 255.0, blue: 0x33 / 255.0),
+                    textColor: Color(red: 0xEC / 255.0, green: 0xEC / 255.0, blue: 0xEC / 255.0),
+                    backgroundColor: Color(red: 0xE6 / 255.0, green: 0x3E / 255.0, blue: 0x33 / 255.0)
+                ),
+                TemplateColorVariant(
+                    id: 5,
+                    tint: Color(red: 0xB3 / 255.0, green: 0xA9 / 255.0, blue: 0xA9 / 255.0),
+                    textColor: Color(red: 0xEC / 255.0, green: 0xEC / 255.0, blue: 0xEC / 255.0),
+                    backgroundColor: Color(red: 0xB3 / 255.0, green: 0xA9 / 255.0, blue: 0xA9 / 255.0)
+                ),
+            ]
+        case .ootdLive:
+            // BG / text triplets supplied by Yael. Each non-default
+            // variant replaces OOTD's white→black 40% gradient with a
+            // full-opacity two-stop gradient and recolours the OOTD /
+            // YAFA FITS / DAY+MONTH text.
+            return [
+                TemplateColorVariant(id: 0, tint: cardBlue), // unchanged default
+                TemplateColorVariant(
+                    id: 1,
+                    tint: Color(red: 0xA2 / 255.0, green: 0xFF / 255.0, blue: 0xBA / 255.0),
+                    textColor: Color(red: 0xA2 / 255.0, green: 0xFF / 255.0, blue: 0xBA / 255.0),
+                    backgroundColor: Color(red: 0x0A / 255.0, green: 0x13 / 255.0, blue: 0x10 / 255.0),
+                    gradientTop: Color(red: 0x17 / 255.0, green: 0x3C / 255.0, blue: 0x37 / 255.0)
+                ),
+                TemplateColorVariant(
+                    id: 2,
+                    tint: Color(red: 0x13 / 255.0, green: 0x00 / 255.0, blue: 0x4B / 255.0),
+                    textColor: .white,
+                    backgroundColor: .black,
+                    gradientTop: Color(red: 0x13 / 255.0, green: 0x00 / 255.0, blue: 0x4B / 255.0)
+                ),
+                TemplateColorVariant(
+                    id: 3,
+                    tint: Color(red: 0xFE / 255.0, green: 0x03 / 255.0, blue: 0x78 / 255.0),
+                    textColor: Color(red: 0xFE / 255.0, green: 0x03 / 255.0, blue: 0x78 / 255.0),
+                    backgroundColor: Color(red: 0x54 / 255.0, green: 0x13 / 255.0, blue: 0x31 / 255.0),
+                    gradientTop: Color(red: 0xFF / 255.0, green: 0xDC / 255.0, blue: 0xEC / 255.0)
+                ),
+            ]
+        case .colorama:
+            // The actual letter-palette colours live in `Colorama.metal`
+            // (one stitchable shader function per variant). The fields
+            // here just describe the bg gradient + the picker dot tint.
+            return [
+                TemplateColorVariant(
+                    id: 0,
+                    tint: Color(red: 0.74, green: 0.83, blue: 0.96)
+                ),
+                TemplateColorVariant(
+                    id: 1, // pink
+                    tint: Color(red: 0xE8 / 255.0, green: 0x3E / 255.0, blue: 0x7C / 255.0),
+                    backgroundColor: Color(red: 0xF2 / 255.0, green: 0xA8 / 255.0, blue: 0xC7 / 255.0),
+                    gradientTop: Color(red: 0xF5 / 255.0, green: 0xE8 / 255.0, blue: 0xD8 / 255.0)
+                ),
+                TemplateColorVariant(
+                    id: 2, // sage
+                    tint: Color(red: 0x82 / 255.0, green: 0xC6 / 255.0, blue: 0x6E / 255.0),
+                    backgroundColor: Color(red: 0x6B / 255.0, green: 0x8E / 255.0, blue: 0x5C / 255.0),
+                    gradientTop: Color(red: 0xEA / 255.0, green: 0xF5 / 255.0, blue: 0xFC / 255.0)
+                ),
+                TemplateColorVariant(
+                    id: 3, // sunset
+                    tint: Color(red: 0xF5 / 255.0, green: 0xBC / 255.0, blue: 0x73 / 255.0),
+                    backgroundColor: Color(red: 0x2D / 255.0, green: 0x5B / 255.0, blue: 0xA3 / 255.0),
+                    gradientTop: Color(red: 0xF5 / 255.0, green: 0xE5 / 255.0, blue: 0xD0 / 255.0)
+                ),
+            ]
+        case .layered2, .layered3:
+            return []
+        }
+    }
+}
+
+/// One selectable colour variant for a template. `tint` is shown in the
+/// picker dot AND drives the relevant accent in the card rendering
+/// (background fill for mono / colorama, accent text for electric /
+/// OOTD). `textColor` is an optional secondary used by templates that
+/// recolour their text alongside the background (mono).
+struct TemplateColorVariant: Identifiable, Hashable {
+    let id: Int
+    let tint: Color
+    let textColor: Color?
+    let backgroundColor: Color?
+    /// Top stop of a vertical gradient bg (used by OOTD + colorama
+    /// variants). `backgroundColor` is the bottom stop.
+    let gradientTop: Color?
+
+    init(
+        id: Int,
+        tint: Color,
+        textColor: Color? = nil,
+        backgroundColor: Color? = nil,
+        gradientTop: Color? = nil
+    ) {
+        self.id = id
+        self.tint = tint
+        self.textColor = textColor
+        self.backgroundColor = backgroundColor
+        self.gradientTop = gradientTop
+    }
 }
 
 // MARK: - Frosted shape view
@@ -115,12 +292,44 @@ struct ShareCardComposer: View {
     @State private var gyroResumeTask: Task<Void, Never>?
     @State private var gyroRollOffset: Double = 0
     @State private var gyroBaseFrame: Int = 0
-    @State private var isExportingVideo = false
+    /// Which export is in progress (so we can show the spinner on the
+    /// correct button). nil = no export running.
+    @State private var activeExport: ExportDestination?
     @State private var exportError: String?
     private let storyHaptic = UIImpactFeedbackGenerator(style: .light)
     @State private var cardVisible = false
     @State private var templateSlideEdge: Edge = .trailing
     @State private var carouselDragOffset: CGFloat = 0
+    // Continuous fractional template index while the user is scrubbing
+    // the dot picker. nil at rest — the dots then track `selectedTemplate`
+    // (and any in-progress carousel drag).
+    @State private var dotScrubPosition: CGFloat? = nil
+
+    // Per-template selected colour variant. Persists per template, so
+    // switching back to a previously-customised template restores its
+    // colour. Default (missing key) means variant 0.
+    @State private var colorVariantIndex: [ShareCardTemplate: Int] = [:]
+
+    // Cached colorama text bitmaps. Rebuilding these on every body
+    // pass (gyroPitch ticks 30+×/sec) is what was making the share
+    // tab lag. Keyed on the source string so they only re-render
+    // when the outfit's date actually changes.
+    @State private var coloramaTextImage: UIImage?
+    @State private var coloramaTextMonth: String?
+    @State private var coloramaDayImage: UIImage?
+    @State private var coloramaDayString: String?
+    @State private var coloramaWeekdayImage: UIImage?
+    @State private var coloramaWeekdayString: String?
+
+    // Stroke-only versions used for the wave-driven edge highlight.
+    @State private var coloramaMonthStroke: UIImage?
+    @State private var coloramaDayStroke: UIImage?
+    @State private var coloramaWeekdayStroke: UIImage?
+
+    // "OOTD" text shown at the top of the colorama card. Constant
+    // string so it's rendered once and reused across outfits.
+    @State private var coloramaOotdImage: UIImage?
+    @State private var coloramaOotdStroke: UIImage?
 
     var body: some View {
         ZStack {
@@ -131,6 +340,10 @@ struct ShareCardComposer: View {
                     .padding(.top, 48)
 
                 Spacer(minLength: 16)
+
+                templateTitle
+                    .padding(.bottom, 6)
+                    .opacity(cardVisible ? 1 : 0)
 
                 cardCarousel
                     .frame(height: 520)
@@ -145,14 +358,19 @@ struct ShareCardComposer: View {
                     )
 
                 templatePicker
-                    .padding(.top, 18)
+                    .padding(.top, 14)
                     .opacity(cardVisible ? 1 : 0)
                     .offset(y: cardVisible ? 0 : 20)
 
-                Spacer(minLength: 16)
+                templateColorPicker
+                    .padding(.top, 14)
+                    .opacity(cardVisible ? 1 : 0)
+
+                Spacer(minLength: 32)
 
                 shareActions
                     .padding(.horizontal, LayoutMetrics.screenPadding)
+                    .padding(.top, 14)
                     .padding(.bottom, LayoutMetrics.xLarge)
                     .opacity(cardVisible ? 1 : 0)
                     .offset(y: cardVisible ? 0 : 16)
@@ -183,7 +401,7 @@ struct ShareCardComposer: View {
             Button(action: { dismiss() }) {
                 AppIcon(glyph: .xmark, size: 12, color: AppPalette.iconPrimary)
                     .frame(width: 36, height: 36)
-                    .appCircle(shadowRadius: 0, shadowY: 0)
+                    .appCircle()
             }
             .buttonStyle(.plain)
 
@@ -214,11 +432,32 @@ struct ShareCardComposer: View {
             let cardHeight = geo.size.height - 40
             let baseOffset = geo.size.width / 2 - cardWidth / 2 - CGFloat(currentIndex) * step
 
+            // Each card's distance from the visible centre, in fractional
+            // template-index units. 0 = centre, ±1 = one slot away, etc.
+            // Updates continuously while the carousel is being dragged
+            // so the rotation interpolates smoothly during the swipe.
+            let cardRelativePos: (Int) -> CGFloat = { i in
+                CGFloat(i) - CGFloat(currentIndex) + carouselDragOffset / step
+            }
+            // Max Y-rotation a side card receives. 30° gives a clearly
+            // visible 3D tilt without distorting the centre card's look.
+            let maxYRotation: Double = 30
+            // Templates whose front layer contains a `UIVisualEffectView`
+            // (the Fits frosted sticker) can't be 3D-rotated — the blur
+            // is dropped by UIKit whenever the view is rendered through
+            // a 3D transform. We skip rotation for them.
+            let canRotate: (ShareCardTemplate) -> Bool = { t in
+                !t.frontLayerIsFrosted
+            }
+
             Color.clear
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(alignment: .leading) {
                     HStack(spacing: gap) {
-                        ForEach(templates) { template in
+                        ForEach(Array(templates.enumerated()), id: \.element) { i, template in
+                            let degrees: Double = canRotate(template)
+                                ? -Double(cardRelativePos(i)) * maxYRotation
+                                : 0
                             cardBackLayer(for: template)
                                 .frame(width: cardWidth, height: cardHeight)
                                 .clipShape(RoundedRectangle(cornerRadius: LayoutMetrics.cardCornerRadius, style: .continuous))
@@ -227,6 +466,12 @@ struct ShareCardComposer: View {
                                         .strokeBorder(AppPalette.cardBorder, lineWidth: 0.75)
                                 )
                                 .shadow(color: Color.black.opacity(0.10), radius: 18, y: 10)
+                                .rotation3DEffect(
+                                    .degrees(degrees),
+                                    axis: (x: 0, y: 1, z: 0),
+                                    anchor: .center,
+                                    perspective: 0.5
+                                )
                         }
                     }
                     .offset(x: baseOffset + carouselDragOffset)
@@ -237,10 +482,19 @@ struct ShareCardComposer: View {
                 }
                 .overlay(alignment: .leading) {
                     HStack(spacing: gap) {
-                        ForEach(templates) { template in
+                        ForEach(Array(templates.enumerated()), id: \.element) { i, template in
+                            let degrees: Double = canRotate(template)
+                                ? -Double(cardRelativePos(i)) * maxYRotation
+                                : 0
                             cardFrontLayer(for: template)
                                 .frame(width: cardWidth, height: cardHeight)
                                 .clipShape(RoundedRectangle(cornerRadius: LayoutMetrics.cardCornerRadius, style: .continuous))
+                                .rotation3DEffect(
+                                    .degrees(degrees),
+                                    axis: (x: 0, y: 1, z: 0),
+                                    anchor: .center,
+                                    perspective: 0.5
+                                )
                         }
                     }
                     .offset(x: baseOffset + carouselDragOffset)
@@ -283,21 +537,76 @@ struct ShareCardComposer: View {
 
     // MARK: - Card layers
 
-    private func cardBackLayer(for template: ShareCardTemplate) -> some View {
+    private func cardBackLayer(
+        for template: ShareCardTemplate,
+        forcedTime: Double? = nil
+    ) -> some View {
         Group {
             if template == .ootdLive {
-                ZStack {
-                    Color.white
-                    LinearGradient(
-                        colors: [Color(red: 0.737, green: 0.737, blue: 0.737), .black],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .opacity(0.4)
+                // Variants 1+ override the white→black 40% gradient
+                // with a full-opacity two-stop gradient. Variant 0
+                // (unchanged) keeps the original look.
+                let v = colorVariant(for: .ootdLive)
+                Group {
+                    if let top = v?.gradientTop, let bottom = v?.backgroundColor {
+                        LinearGradient(
+                            colors: [top, bottom],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    } else {
+                        ZStack {
+                            Color.white
+                            LinearGradient(
+                                colors: [Color(red: 0.737, green: 0.737, blue: 0.737), .black],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                            .opacity(0.4)
+                        }
+                    }
                 }
                 .overlay(ootdBackLayer)
+            } else if template == .colorama {
+                let v = colorVariant(for: .colorama)
+                let bgTop = v?.gradientTop ?? Color(red: 0.88, green: 0.89, blue: 0.91)
+                let bgBottom = v?.backgroundColor ?? renderingTint(for: .colorama)
+                LinearGradient(
+                    colors: [bgTop, bgBottom],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .overlay(coloramaBigNumber(forcedTime: forcedTime))
             } else if template.isDynamic {
-                template.dynamicBackground
+                // mono uses the variant tint as the full-card fill; for
+                // mono uses tint as bg; electric reads bg + text from
+                // the variant explicitly. Variant 1 (default) for
+                // electric leaves bg/text nil, which falls back to the
+                // legacy cardGray bg and tint as the text colour.
+                let backgroundFill: Color = {
+                    if template == .monoLive {
+                        return renderingTint(for: .monoLive)
+                    }
+                    if template == .electricLive,
+                       let bg = colorVariant(for: .electricLive)?.backgroundColor {
+                        return bg
+                    }
+                    return template.dynamicBackground
+                }()
+                let textColorSwift: Color = {
+                    switch template {
+                    case .electricLive:
+                        let v = colorVariant(for: .electricLive)
+                        return v?.textColor ?? v?.tint ?? cardBlue
+                    case .monoLive:
+                        return colorVariant(for: .monoLive)?.textColor ?? .black
+                    default:
+                        return dynamicColor
+                    }
+                }()
+                let dateColor = UIColor(textColorSwift)
+                backgroundFill
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .overlay(
                         Canvas { context, size in
@@ -305,12 +614,11 @@ struct ShareCardComposer: View {
                             let fontName = isElec ? "PlayfairDisplay-Italic" : "Inter28pt-SemiBold"
                             let fontSize: CGFloat = isElec ? 457.2 : 304
                             let kern: CGFloat   = isElec ? -50.3 : -21.3
-                            let color = UIColor(dynamicColor)
 
                             if let img = textToImage(
                                 outfitDayNumber,
                                 fontName: fontName, fontSize: fontSize,
-                                kern: kern, color: color
+                                kern: kern, color: dateColor
                             ) {
                                 let rect = CGRect(
                                     x: size.width  / 2 - img.size.width  / 2,
@@ -322,6 +630,30 @@ struct ShareCardComposer: View {
                             }
                         }
                     )
+                    // Brand mark — bottom-right of the card, tinted to
+                    // match the variant's text colour (so it adapts
+                    // across mono / electric variants). On Electric the
+                    // logo is dropped onto the same horizontal axis as
+                    // the weekday label (yPct = 0.05).
+                    .overlay {
+                        GeometryReader { geo in
+                            if let logo = Self.coloramaLogo {
+                                let logoW = geo.size.width * 0.12
+                                let logoY: CGFloat = template == .electricLive
+                                    ? geo.size.height * 0.95
+                                    : geo.size.height - logoW * 0.30 - 20
+                                Image(uiImage: logo)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: logoW)
+                                    .colorMultiply(textColorSwift)
+                                    .position(
+                                        x: geo.size.width - logoW / 2 - 20,
+                                        y: logoY
+                                    )
+                            }
+                        }
+                    }
             } else if let uiImage = UIImage(named: template.backImageName) {
                 Image(uiImage: uiImage)
                     .resizable()
@@ -332,9 +664,495 @@ struct ShareCardComposer: View {
         }
     }
 
+    // MARK: - Colorama big number
+    //
+    // The animation cycle period (seconds) lives in the Metal shader as
+    // `CYCLE_SECONDS`. Keep these in sync if you change one.
+
+    /// Reproduces the AE Colorama tutorial recipe in pure SwiftUI:
+    ///
+    ///   1. **Coloured gradient layer** — vertical LinearGradient with
+    ///      blue→light-blue→white→light-blue→blue stops (the "colorama
+    ///      output" applied to a white-top/black-bottom gradient,
+    ///      mapped through a blue/grey hue). The white peak's location
+    ///      is driven by `phase`, animated by TimelineView. As phase
+    ///      cycles 0→1, the white band scrolls top → bottom and loops
+    ///      seamlessly (the colour wrap happens off-screen above /
+    ///      below the letters because gradient extent ≥ letter extent).
+    ///
+    ///   2. **Mask by letter shape** — `.mask(textImage)` clips the
+    ///      coloured gradient to the day-number outline. Same as the
+    ///      AE precompose-then-mask step.
+    ///
+    ///   3. **White inner glow on letter outlines** — `coloramaTinted-
+    ///      Image(.white, blur: 5).blendMode(.plusLighter)` brightens
+    ///      the very edges of the strokes additively, giving the
+    ///      "white outlines bleeding inward" feel.
+    ///
+    ///   5. **Outer glow** — two stacked blurred-tinted copies of the
+    ///      text image (heavy soft halo + saturated mid halo) provide
+    ///      the diffuse blue glow into the black background.
+    ///
+    /// Step 4 from the AE recipe (turbulent displace + time
+    /// displacement using the inner-glow shape as source) is omitted
+    /// here — those need a Metal shader because SwiftUI primitives
+    /// don't expose noise distortion or temporal sampling. Easy to add
+    /// later as a polish layer.
+    /// Must match `CYCLE_SECONDS` in `Colorama.metal`.
+    private static let coloramaCycleSeconds: Double = 6.0
+
+    private func coloramaBigNumber(forcedTime: Double? = nil) -> some View {
+        // Month + day-of-month + weekday, all rendered through a single
+        // shared shader pass so they read as cutouts from one continuous
+        // animated gradient. Bitmaps are cached in @State and only
+        // re-rendered when their source string changes.
+        //
+        // Layout:
+        //   • month: GTF Adieu Black Slanted 320pt, fills card width,
+        //     centred vertically.
+        //   • day:   same font, half the month's size, sits directly
+        //     above the month with its left edge aligned to the month's.
+        //   • weekday: Inter italic at the bottom (unchanged).
+        let monthAbbrev = outfit.parsedDate?
+            .formatted(.dateTime.month(.abbreviated))
+            .lowercased() ?? "—"
+        let dayString = outfitDayNumber
+        let weekdayString = outfitWeekday
+        let smallYPct: CGFloat = 0.08
+        // Visible ink-to-ink gap between day's bottom and month's top.
+        // 0 = day glyph bottom touches month glyph top; negative values
+        // overlap the day into the month's ascender space.
+        let dayMonthGap: CGFloat = 4
+        // Pad inside each text bitmap (from `textToImage`).
+        let bitmapInkPad: CGFloat = 4
+
+        return GeometryReader { geo in
+            let cardW = geo.size.width
+            let cardH = geo.size.height
+
+            // Month occupies the full card width; its displayed height
+            // is derived from the bitmap's aspect ratio.
+            let monthDispH: CGFloat = {
+                guard let s = coloramaTextImage?.size, s.width > 0 else { return 0 }
+                return cardW * s.height / s.width
+            }()
+            let monthCenterX = cardW / 2
+            let monthCenterY = cardH / 2
+            let monthTopY = monthCenterY - monthDispH / 2
+
+            // Day is sized to a consistent HEIGHT — half the displayed
+            // month height. Width follows from the bitmap's aspect ratio
+            // so single-digit days ("1") and double-digit days ("28")
+            // appear at the same visual scale, just with different
+            // widths. Right edge aligned to the card's right edge.
+            let dayDispH: CGFloat = monthDispH * 0.5
+            let dayBitmapAspect: CGFloat = {
+                guard let s = coloramaDayImage?.size, s.height > 0 else { return 0 }
+                return s.width / s.height
+            }()
+            let dayDispW = dayDispH * dayBitmapAspect
+            // Bitmap padding scaled into display space, used to place
+            // glyph-ink against glyph-ink rather than bitmap-edge
+            // against bitmap-edge.
+            let monthPadDisplayed: CGFloat = {
+                guard let s = coloramaTextImage?.size, s.width > 0 else { return 0 }
+                return bitmapInkPad * cardW / s.width
+            }()
+            let dayPadDisplayed: CGFloat = {
+                guard let s = coloramaDayImage?.size, s.height > 0 else { return 0 }
+                return bitmapInkPad * dayDispH / s.height
+            }()
+            let dayCenterX = cardW - dayDispW / 2
+            let dayCenterY = monthTopY
+                + monthPadDisplayed + dayPadDisplayed
+                - dayMonthGap
+                - dayDispH / 2
+
+            ZStack {
+                // ---- HALOS (static, cached per-text bitmap) ----
+                ZStack {
+                    if let img = coloramaOotdImage {
+                        coloramaHaloStack(
+                            img,
+                            fitWidth: nil,
+                            centerX: cardW / 2, centerY: cardH * smallYPct,
+                            blurOuter: 18, blurMid: 9
+                        )
+                    }
+                    if let img = coloramaTextImage {
+                        coloramaHaloStack(
+                            img,
+                            fitWidth: cardW,
+                            centerX: monthCenterX, centerY: monthCenterY,
+                            blurOuter: 65, blurMid: 32
+                        )
+                    }
+                    if let img = coloramaDayImage {
+                        coloramaHaloStack(
+                            img,
+                            fitWidth: dayDispW,
+                            centerX: dayCenterX, centerY: dayCenterY,
+                            blurOuter: 22, blurMid: 11
+                        )
+                    }
+                    if let img = coloramaWeekdayImage {
+                        coloramaHaloStack(
+                            img,
+                            fitWidth: nil,
+                            centerX: cardW / 2, centerY: cardH * (1 - smallYPct),
+                            blurOuter: 18, blurMid: 9
+                        )
+                    }
+                }
+                .drawingGroup()
+
+                // ---- ANIMATED SHADER + COMBINED MASK + EDGE STROKES ----
+                // In-app: TimelineView drives `t`. Export: caller passes
+                // `forcedTime` so each video frame can render its own
+                // moment of the cycle.
+                Group {
+                    if let t = forcedTime {
+                        coloramaAnimatedBody(
+                            t: t,
+                            cardW: cardW, cardH: cardH,
+                            dayDispW: dayDispW,
+                            dayCenterX: dayCenterX, dayCenterY: dayCenterY,
+                            monthCenterX: monthCenterX, monthCenterY: monthCenterY,
+                            smallYPct: smallYPct
+                        )
+                    } else {
+                        TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) { timeline in
+                            let t = timeline.date.timeIntervalSinceReferenceDate
+                                .truncatingRemainder(dividingBy: 600)
+                            coloramaAnimatedBody(
+                                t: t,
+                                cardW: cardW, cardH: cardH,
+                                dayDispW: dayDispW,
+                                dayCenterX: dayCenterX, dayCenterY: dayCenterY,
+                                monthCenterX: monthCenterX, monthCenterY: monthCenterY,
+                                smallYPct: smallYPct
+                            )
+                        }
+                    }
+                }
+
+                // ---- INNER GLOWS (static, cached) ----
+                ZStack {
+                    if let img = coloramaOotdImage {
+                        Image(uiImage: img)
+                            .colorMultiply(.white)
+                            .blur(radius: 1.5)
+                            .position(x: cardW / 2, y: cardH * smallYPct)
+                    }
+                    if let img = coloramaTextImage {
+                        coloramaTintedImage(
+                            img, geo: geo,
+                            color: .white, blur: 5
+                        )
+                    }
+                    if let img = coloramaDayImage {
+                        Image(uiImage: img)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: dayDispW)
+                            .colorMultiply(.white)
+                            .blur(radius: 1.5)
+                            .position(x: dayCenterX, y: dayCenterY)
+                    }
+                    if let img = coloramaWeekdayImage {
+                        Image(uiImage: img)
+                            .colorMultiply(.white)
+                            .blur(radius: 1.5)
+                            .position(x: cardW / 2, y: cardH * (1 - smallYPct))
+                    }
+                }
+                .drawingGroup()
+                .blendMode(.plusLighter)
+                .opacity(0.25)
+
+                // ---- SOLID WHITE LOGO (bottom right, no effects) ----
+                // Brand mark — sits on top of everything, doesn't pulse
+                // with the gradient. Half the size of the original
+                // shader-driven logo at top.
+                if let logo = Self.coloramaLogo {
+                    let logoW = cardW * 0.12
+                    Image(uiImage: logo)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: logoW)
+                        .position(
+                            x: cardW - logoW / 2 - 20,
+                            y: cardH - logoW * 0.30 - 20
+                        )
+                }
+            }
+            .compositingGroup()
+        }
+        .task(id: monthAbbrev) {
+            guard coloramaTextMonth != monthAbbrev else { return }
+            coloramaTextImage = textToImage(
+                monthAbbrev,
+                fontName: "GTFAdieuTRIAL-BlackSlanted", fontSize: 320,
+                kern: -8.0, color: .white
+            )
+            coloramaMonthStroke = textToImage(
+                monthAbbrev,
+                fontName: "GTFAdieuTRIAL-BlackSlanted", fontSize: 320,
+                kern: -8.0, color: .white,
+                strokeWidthPercent: 0.625
+            )
+            coloramaTextMonth = monthAbbrev
+        }
+        .task(id: dayString) {
+            guard coloramaDayString != dayString else { return }
+            coloramaDayImage = textToImage(
+                dayString,
+                fontName: "GTFAdieuTRIAL-BlackSlanted", fontSize: 110,
+                kern: -2.75, color: .white
+            )
+            coloramaDayStroke = textToImage(
+                dayString,
+                fontName: "GTFAdieuTRIAL-BlackSlanted", fontSize: 110,
+                kern: -2.75, color: .white,
+                strokeWidthPercent: 0.625
+            )
+            coloramaDayString = dayString
+        }
+        .task(id: weekdayString) {
+            guard coloramaWeekdayString != weekdayString else { return }
+            coloramaWeekdayImage = textToImage(
+                weekdayString,
+                fontName: "Inter28pt-MediumItalic", fontSize: 36,
+                kern: -1.565, color: .white
+            )
+            coloramaWeekdayStroke = textToImage(
+                weekdayString,
+                fontName: "Inter28pt-MediumItalic", fontSize: 36,
+                kern: -1.565, color: .white,
+                strokeWidthPercent: 1.5
+            )
+            coloramaWeekdayString = weekdayString
+        }
+        // "OOTD" never changes — render once on first appearance.
+        .task {
+            if coloramaOotdImage == nil {
+                coloramaOotdImage = textToImage(
+                    "OOTD",
+                    fontName: "Inter28pt-MediumItalic", fontSize: 36,
+                    kern: -1.565, color: .white
+                )
+                coloramaOotdStroke = textToImage(
+                    "OOTD",
+                    fontName: "Inter28pt-MediumItalic", fontSize: 36,
+                    kern: -1.565, color: .white,
+                    strokeWidthPercent: 1.5
+                )
+            }
+        }
+    }
+
+    /// Two-layer outer halo (blue diffuse + brighter mid) for one text
+    /// bitmap. Used by `coloramaBigNumber` for each of the three text
+    /// elements with proportional blur radii.
+    private func coloramaHaloStack(
+        _ img: UIImage,
+        fitWidth: CGFloat?,
+        centerX: CGFloat,
+        centerY: CGFloat,
+        blurOuter: CGFloat,
+        blurMid: CGFloat
+    ) -> some View {
+        let halo = coloramaHaloColors()
+        return ZStack {
+            tintedTextLayer(
+                img, fitWidth: fitWidth,
+                centerX: centerX, centerY: centerY,
+                color: halo.outer,
+                blur: blurOuter, opacity: 0.40
+            )
+            tintedTextLayer(
+                img, fitWidth: fitWidth,
+                centerX: centerX, centerY: centerY,
+                color: halo.mid,
+                blur: blurMid, opacity: 0.75
+            )
+            .blendMode(.plusLighter)
+        }
+    }
+
+    /// One tinted+blurred copy of a text bitmap. `fitWidth` non-nil
+    /// scales the image to that width (used by the big month);
+    /// `fitWidth` nil renders at the bitmap's natural size (used by
+    /// the small day/weekday labels).
+    private func tintedTextLayer(
+        _ img: UIImage,
+        fitWidth: CGFloat?,
+        centerX: CGFloat,
+        centerY: CGFloat,
+        color: Color,
+        blur: CGFloat,
+        opacity: Double
+    ) -> some View {
+        Group {
+            if let w = fitWidth {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: w)
+            } else {
+                Image(uiImage: img)
+            }
+        }
+        .colorMultiply(color)
+        .blur(radius: blur)
+        .opacity(opacity)
+        .position(x: centerX, y: centerY)
+    }
+
+    /// One tinted+blurred copy of the text image, scaled to fill the
+    /// card width and centred in `geo`. Used for the outer halo stack
+    /// and the inner-glow layer; all of them scale together so they
+    /// stay aligned with the masked gradient body.
+    private func coloramaTintedImage(
+        _ img: UIImage,
+        geo: GeometryProxy,
+        color: Color,
+        blur: CGFloat,
+        opacity: Double = 1.0
+    ) -> some View {
+        Image(uiImage: img)
+            .resizable()
+            .scaledToFit()
+            .frame(width: geo.size.width)
+            .colorMultiply(color)
+            .blur(radius: blur)
+            .opacity(opacity)
+            .position(x: geo.size.width / 2, y: geo.size.height / 2)
+    }
+
+    /// Animated portion of the colorama composite — the displaced
+    /// gradient body + the wave-driven white edge strokes. Pulled out so
+    /// both the live `TimelineView` path and the export per-frame path
+    /// can share it.
+    @ViewBuilder
+    private func coloramaAnimatedBody(
+        t: Double,
+        cardW: CGFloat, cardH: CGFloat,
+        dayDispW: CGFloat,
+        dayCenterX: CGFloat, dayCenterY: CGFloat,
+        monthCenterX: CGFloat, monthCenterY: CGFloat,
+        smallYPct: CGFloat
+    ) -> some View {
+        ZStack {
+            // Gradient body with AE-style displacement.
+            coloramaLetterShapes(
+                cardW: cardW,
+                dayDispW: dayDispW,
+                dayCenterX: dayCenterX, dayCenterY: dayCenterY,
+                monthCenterX: monthCenterX, monthCenterY: monthCenterY,
+                cardH: cardH, smallYPct: smallYPct
+            )
+            .frame(width: cardW, height: cardH)
+            .layerEffect(
+                coloramaDisplacedShader(t: t, cardW: cardW, cardH: cardH),
+                maxSampleOffset: .zero
+            )
+
+            // Edge strokes masked by the displaced gradient luminance.
+            ZStack {
+                if let img = coloramaOotdStroke {
+                    Image(uiImage: img)
+                        .position(x: cardW / 2, y: cardH * smallYPct)
+                }
+                if let img = coloramaMonthStroke {
+                    Image(uiImage: img)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: cardW)
+                        .position(x: monthCenterX, y: monthCenterY)
+                }
+                if let img = coloramaDayStroke {
+                    Image(uiImage: img)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: dayDispW)
+                        .position(x: dayCenterX, y: dayCenterY)
+                }
+                if let img = coloramaWeekdayStroke {
+                    Image(uiImage: img)
+                        .position(x: cardW / 2, y: cardH * (1 - smallYPct))
+                }
+            }
+            .colorMultiply(.white)
+            .mask(
+                coloramaLetterShapes(
+                    cardW: cardW,
+                    dayDispW: dayDispW,
+                    dayCenterX: dayCenterX, dayCenterY: dayCenterY,
+                    monthCenterX: monthCenterX, monthCenterY: monthCenterY,
+                    cardH: cardH, smallYPct: smallYPct
+                )
+                .frame(width: cardW, height: cardH)
+                .layerEffect(
+                    coloramaDisplacedShader(t: t, cardW: cardW, cardH: cardH),
+                    maxSampleOffset: .zero
+                )
+                .luminanceToAlpha()
+            )
+            .blendMode(.plusLighter)
+        }
+    }
+
+    /// Letter shapes laid out at the right positions — used as both the
+    /// displacement-map source for the gradient body and as the mask
+    /// source for the edge-stroke luminance lookup.
+    @ViewBuilder
+    private func coloramaLetterShapes(
+        cardW: CGFloat,
+        dayDispW: CGFloat,
+        dayCenterX: CGFloat, dayCenterY: CGFloat,
+        monthCenterX: CGFloat, monthCenterY: CGFloat,
+        cardH: CGFloat, smallYPct: CGFloat
+    ) -> some View {
+        let textBlur: CGFloat = 3
+        return ZStack {
+            // OOTD at top-centre — same Inter italic as the weekday at
+            // the bottom, gets the same shader effect as the letters.
+            if let img = coloramaOotdImage {
+                Image(uiImage: img)
+                    .blur(radius: textBlur)
+                    .position(x: cardW / 2, y: cardH * smallYPct)
+            }
+            if let img = coloramaTextImage {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: cardW)
+                    .blur(radius: textBlur)
+                    .position(x: monthCenterX, y: monthCenterY)
+            }
+            if let img = coloramaDayImage {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: dayDispW)
+                    .blur(radius: textBlur)
+                    .position(x: dayCenterX, y: dayCenterY)
+            }
+            if let img = coloramaWeekdayImage {
+                Image(uiImage: img)
+                    .blur(radius: textBlur)
+                    .position(x: cardW / 2, y: cardH * (1 - smallYPct))
+            }
+        }
+    }
+
     private func cardFrontLayer(for template: ShareCardTemplate) -> some View {
         ZStack {
-            if template.isDynamic && template != .ootdLive {
+            if template.isDynamic && template != .ootdLive && template != .colorama {
+                // colorama renders day/weekday with the gradient effect
+                // in its back layer (coloramaBigNumber), so we skip the
+                // plain-text front layer for that template.
                 dynamicDateFrontLayer
             }
             if template == .ootdLive {
@@ -361,16 +1179,22 @@ struct ShareCardComposer: View {
     private func textToImage(
         _ string: String,
         fontName: String, fontSize: CGFloat,
-        kern: CGFloat, color: UIColor
+        kern: CGFloat, color: UIColor,
+        strokeWidthPercent: CGFloat = 0  // > 0 = stroke-only render
     ) -> UIImage? {
         guard let ctFont = CTFontCreateWithName(fontName as CFString, fontSize, nil) as CTFont? else {
             return nil
         }
-        let attrs: [NSAttributedString.Key: Any] = [
+        var attrs: [NSAttributedString.Key: Any] = [
             kCTFontAttributeName as NSAttributedString.Key: ctFont,
             kCTForegroundColorAttributeName as NSAttributedString.Key: color.cgColor,
             kCTKernAttributeName as NSAttributedString.Key: kern as NSNumber
         ]
+        if strokeWidthPercent > 0 {
+            // Positive value = stroke-only render (no fill).
+            attrs[kCTStrokeWidthAttributeName as NSAttributedString.Key] = strokeWidthPercent as NSNumber
+            attrs[kCTStrokeColorAttributeName as NSAttributedString.Key] = color.cgColor
+        }
         let attrStr = NSAttributedString(string: string, attributes: attrs)
         let line = CTLineCreateWithAttributedString(attrStr)
 
@@ -402,7 +1226,15 @@ struct ShareCardComposer: View {
     // MARK: - Dynamic date layers (monoLive / electricLive)
 
     private var dynamicColor: Color {
-        selectedTemplate == .electricLive ? cardBlue : .black
+        switch selectedTemplate {
+        case .electricLive:
+            let v = colorVariant(for: .electricLive)
+            return v?.textColor ?? v?.tint ?? cardBlue
+        case .colorama:     return .white  // legible on the black backdrop
+        case .monoLive:
+            return colorVariant(for: .monoLive)?.textColor ?? .black
+        default:            return .black
+        }
     }
 
     private var outfitDayNumber: String {
@@ -418,7 +1250,7 @@ struct ShareCardComposer: View {
 
     private var dynamicDateFrontLayer: some View {
         // Use GeometryReader for precise positioning matching the reference design:
-        // Month center at ~5% from top, weekday center at ~5% from bottom
+        // Top label center at ~5% from top, weekday center at ~5% from bottom
         GeometryReader { geo in
             // Electric ✦: Inter Medium Italic 21pt, -0.865 tracking, 5% from edges
             // Mono ✦:     Inter Medium Italic 52.151pt, -1.565 tracking, 8% from edges
@@ -428,9 +1260,16 @@ struct ShareCardComposer: View {
             let tracking: CGFloat = isElectric ? -0.865 : -1.565
             let yPct: CGFloat = isElectric ? 0.05 : 0.08
             let font = Font.custom("Inter28pt-MediumItalic", size: fontSize)
+            // Colorama already renders the month huge in the back layer,
+            // so we surface the day number at top instead of repeating
+            // the month — the three datums (month / day / weekday) all
+            // appear once each on the card.
+            let topLabel = selectedTemplate == .colorama
+                ? outfitDayNumber
+                : outfitMonthName
 
             // .position() centers the text's own bounding box at the given point
-            Text(outfitMonthName)
+            Text(topLabel)
                 .font(font)
                 .tracking(tracking)
                 .foregroundStyle(dynamicColor)
@@ -463,7 +1302,9 @@ struct ShareCardComposer: View {
 
     // Behind outfit: OOTD + YAFA FITS
     private var ootdBackLayer: some View {
-        GeometryReader { geo in
+        let v = colorVariant(for: .ootdLive)
+        let accent = v?.textColor ?? v?.tint ?? cardBlue
+        return GeometryReader { geo in
             let textWidth = geo.size.width - ootdInset * 2
 
             VStack(alignment: .leading, spacing: -24) {
@@ -471,13 +1312,13 @@ struct ShareCardComposer: View {
                     .font(.custom("PlayfairDisplay-Italic", size: textWidth * 1.1))
                     .minimumScaleFactor(0.3)
                     .lineLimit(1)
-                    .foregroundStyle(cardBlue)
+                    .foregroundStyle(accent)
                     .frame(width: textWidth, alignment: .center)
 
                 Text("YAFA FITS")
                     .font(.custom("PlayfairDisplay-Italic", size: textWidth * 0.033))
                     .tracking(0.8)
-                    .foregroundStyle(cardBlue)
+                    .foregroundStyle(accent)
                     .padding(.leading, textWidth * 0.73)
             }
             .padding(.horizontal, ootdInset)
@@ -487,7 +1328,9 @@ struct ShareCardComposer: View {
 
     // Above outfit: DAY + MONTH
     private var ootdDynamicFrontLayer: some View {
-        GeometryReader { geo in
+        let v = colorVariant(for: .ootdLive)
+        let accent = UIColor(v?.textColor ?? v?.tint ?? cardBlue)
+        return GeometryReader { geo in
             let textWidth = geo.size.width - ootdInset * 2
 
             // DAY + MONTH in single Canvas for consistent spacing
@@ -497,14 +1340,14 @@ struct ShareCardComposer: View {
                     fontName: "PlayfairDisplay-Italic",
                     fontSize: size.width * 0.50,
                     kern: 0,
-                    color: UIColor(cardBlue)
+                    color: accent
                 )
                 let dayImg = textToImage(
                     outfitDayOrdinal,
                     fontName: "PlayfairDisplay-Italic",
                     fontSize: size.width * 0.14,
                     kern: 0,
-                    color: UIColor(cardBlue)
+                    color: accent
                 )
 
                 if let monthImg {
@@ -554,7 +1397,11 @@ struct ShareCardComposer: View {
                 if isDraggingOutfit || gyroSuspended {
                     gyroBaseFrame = frame
                 }
-            }
+            },
+            // Pull the scrub area in from the sides so horizontal swipes
+            // near the card edges go to the template carousel instead
+            // of getting eaten by the outfit drag.
+            horizontalDragInset: 56
         )
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 40)
@@ -572,48 +1419,247 @@ struct ShareCardComposer: View {
         }
     }
 
-    private var templatePicker: some View {
+    /// The dots' continuous "active" index — drives the magnification
+    /// lens. When the user is scrubbing the dots, that wins; otherwise
+    /// it follows `selectedTemplate` plus any in-progress carousel drag,
+    /// so the lens slides smoothly while the carousel is being swiped.
+    private var pickerActivePosition: CGFloat {
         let templates = availableTemplates
-        return HStack(spacing: 6) {
-            ForEach(templates) { template in
-                let isSelected = selectedTemplate == template
-                let templateIndex = templates.firstIndex(of: template) ?? 0
-                let selectedIndex = templates.firstIndex(of: selectedTemplate) ?? 0
+        if let scrub = dotScrubPosition { return scrub }
+        let currentIndex = templates.firstIndex(of: selectedTemplate) ?? 0
+        let cardWidth = UIScreen.main.bounds.width - 48
+        let gap: CGFloat = 16
+        let step = cardWidth + gap
+        return CGFloat(currentIndex) + (-carouselDragOffset / step)
+    }
+
+    /// Currently-selected colour variant for the given template. Falls
+    /// back to variant 0 when the template has no variants defined or
+    /// when the saved index is out of range.
+    private func colorVariant(for template: ShareCardTemplate) -> TemplateColorVariant? {
+        let variants = template.colorVariants
+        guard !variants.isEmpty else { return nil }
+        let idx = min(max(0, colorVariantIndex[template] ?? 0), variants.count - 1)
+        return variants[idx]
+    }
+
+    /// Tint to use when rendering a given template — variant tint when
+    /// available, else the template's natural default colour.
+    private func renderingTint(for template: ShareCardTemplate) -> Color {
+        if let v = colorVariant(for: template) { return v.tint }
+        return template == .electricLive ? cardBlue : cardGray
+    }
+
+    /// Outer + mid halo colours for the active colorama variant. The
+    /// outer (heavier blur) uses the deepest hue of the palette; the
+    /// mid (brighter, tighter) uses the saturated mid stop.
+    private func coloramaHaloColors() -> (outer: Color, mid: Color) {
+        switch colorVariantIndex[.colorama] ?? 0 {
+        case 1: // pink
+            return (
+                Color(red: 0.700, green: 0.180, blue: 0.380),
+                Color(red: 0.910, green: 0.243, blue: 0.486) // #E83E7C
+            )
+        case 2: // sage
+            return (
+                Color(red: 0.350, green: 0.580, blue: 0.300),
+                Color(red: 0.510, green: 0.776, blue: 0.431)
+            )
+        case 3: // sunset
+            return (
+                Color(red: 0.200, green: 0.350, blue: 0.580),
+                Color(red: 0.282, green: 0.471, blue: 0.722)
+            )
+        default: // unchanged default blue
+            return (
+                Color(red: 0.10, green: 0.20, blue: 0.95),
+                Color(red: 0.18, green: 0.30, blue: 1.00)
+            )
+        }
+    }
+
+    /// Silhouette-only version of `Resources/logo.png`. The source PNG
+    /// has no alpha channel — dark silhouettes on a solid white BG —
+    /// so we invert luminance (dark → bright) and run that through
+    /// `CIMaskToAlpha`, which yields a white-on-transparent shape with
+    /// alpha derived from the original's silhouettes. Computed once.
+    private static let coloramaLogo: UIImage? = {
+        guard let original = UIImage(named: "logo"),
+              let cgImage = original.cgImage else { return nil }
+        let input = CIImage(cgImage: cgImage)
+
+        let inverter = CIFilter(name: "CIColorInvert")
+        inverter?.setValue(input, forKey: kCIInputImageKey)
+        guard let inverted = inverter?.outputImage else { return nil }
+
+        let masker = CIFilter(name: "CIMaskToAlpha")
+        masker?.setValue(inverted, forKey: kCIInputImageKey)
+        guard let masked = masker?.outputImage else { return nil }
+
+        let context = CIContext()
+        guard let cgOutput = context.createCGImage(masked, from: masked.extent) else { return nil }
+        return UIImage(
+            cgImage: cgOutput,
+            scale: original.scale,
+            orientation: original.imageOrientation
+        )
+    }()
+
+    /// Picks the colorama displacement shader for the active variant.
+    /// One stitchable function per palette in `Colorama.metal` because
+    /// SwiftUI's shader bridge doesn't accept Color/float3/float4 args
+    /// — palette has to be hardcoded per shader.
+    private func coloramaDisplacedShader(
+        t: Double, cardW: CGFloat, cardH: CGFloat
+    ) -> Shader {
+        let argT: Shader.Argument = .float(Float(t))
+        let argW: Shader.Argument = .float(Float(cardW))
+        let argH: Shader.Argument = .float(Float(cardH))
+        switch colorVariantIndex[.colorama] ?? 0 {
+        case 1:  return ShaderLibrary.coloramaDisplacedPink(argT, argW, argH)
+        case 2:  return ShaderLibrary.coloramaDisplacedSage(argT, argW, argH)
+        case 3:  return ShaderLibrary.coloramaDisplacedSunset(argT, argW, argH)
+        default: return ShaderLibrary.coloramaDisplacedDefault(argT, argW, argH)
+        }
+    }
+
+
+    /// Row of colour-variant dots shown beneath the carousel for the
+    /// currently-selected template. Tap a dot to switch the template's
+    /// active variant — no animation, the change is immediate.
+    private var templateColorPicker: some View {
+        let variants = selectedTemplate.colorVariants
+        let activeId = colorVariant(for: selectedTemplate)?.id ?? 0
+
+        return HStack(spacing: 14) {
+            ForEach(variants) { variant in
                 Button {
-                    guard template != selectedTemplate else { return }
-                    templateSlideEdge = templateIndex > selectedIndex ? .trailing : .leading
-                    withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
-                        selectedTemplate = template
-                    }
+                    colorVariantIndex[selectedTemplate] = variant.id
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 } label: {
-                    Text(template.name.uppercased())
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
-                        .tracking(2)
-                        .foregroundStyle(isSelected ? AppPalette.textSecondary : AppPalette.textFaint)
-                        .padding(.horizontal, 12)
-                        .frame(height: 36)
-                        .appCapsule(shadowRadius: 0, shadowY: 0)
-                        .opacity(isSelected ? 1 : 0.6)
+                    Circle()
+                        .fill(variant.tint)
+                        .frame(width: 14, height: 14)
+                        .overlay(
+                            Circle()
+                                .strokeBorder(Color.black.opacity(0.10), lineWidth: 0.5)
+                        )
+                        .overlay(
+                            Circle()
+                                .strokeBorder(
+                                    AppPalette.textSecondary,
+                                    lineWidth: variant.id == activeId ? 1.5 : 0
+                                )
+                                .padding(-3.5)
+                        )
                 }
                 .buttonStyle(.plain)
-                .animation(.easeInOut(duration: 0.2), value: selectedTemplate)
             }
         }
+        .frame(height: 24)
+    }
+
+    /// Floating template name above the carousel. Hard-cut on change —
+    /// `.transaction` strips any animation that might be inherited from
+    /// the surrounding `withAnimation` calls (carousel snap, dot scrub).
+    private var templateTitle: some View {
+        Text(selectedTemplate.name.uppercased())
+            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+            .tracking(2)
+            .foregroundStyle(AppPalette.textMuted)
+            .frame(height: 22)
+            .transaction { $0.animation = nil }
+    }
+
+    /// Dot row with macOS-Dock-style magnification. Scrubbable: drag
+    /// across the dots and the selection follows your finger with snap
+    /// + haptic at each template boundary. The lens also reflects an
+    /// in-progress carousel swipe so the two stay in sync.
+    private var templatePicker: some View {
+        let templates = availableTemplates
+        // The picker is small / flat at rest and "wakes up" — bigger
+        // dots, wider spacing, magnifying lens on — only while the user
+        // is interacting. Interaction = scrubbing the dots OR dragging
+        // the carousel, both of which mutate state we already track.
+        let isActive = dotScrubPosition != nil || abs(carouselDragOffset) > 0.5
+        let dotSize: CGFloat = isActive ? 6 : 4
+        let dotSpacing: CGFloat = isActive ? 18 : 11
+        let maxScale: CGFloat = isActive ? 2.4 : 1.0
+        let spread: CGFloat = 2.0
+        let active = pickerActivePosition
+        let activeIntClamped = Int(round(
+            max(0, min(CGFloat(templates.count - 1), active))
+        ))
+
+        return GeometryReader { geo in
+            let totalWidth = CGFloat(max(0, templates.count - 1)) * dotSpacing
+            let leadingX = (geo.size.width - totalWidth) / 2
+
+            ZStack {
+                ForEach(Array(templates.enumerated()), id: \.element) { i, _ in
+                    let centerX = leadingX + CGFloat(i) * dotSpacing
+                    let d = abs(active - CGFloat(i))
+                    let proximity = max(0, 1 - d / spread)
+                    let scale = 1 + (maxScale - 1) * proximity * proximity
+                    let isSelected = i == activeIntClamped
+
+                    Circle()
+                        .fill(isSelected ? AppPalette.textSecondary : AppPalette.textFaint)
+                        .frame(width: dotSize, height: dotSize)
+                        .scaleEffect(scale)
+                        .position(x: centerX, y: geo.size.height / 2)
+                }
+            }
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        guard templates.count > 1 else { return }
+                        let relativeX = value.location.x - leadingX
+                        let frac = relativeX / dotSpacing
+                        let clamped = max(0, min(CGFloat(templates.count - 1), frac))
+                        dotScrubPosition = clamped
+
+                        let snapped = Int(round(clamped))
+                        let newTemplate = templates[snapped]
+                        if newTemplate != selectedTemplate {
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
+                                templateSlideEdge =
+                                    snapped > (templates.firstIndex(of: selectedTemplate) ?? 0)
+                                    ? .trailing : .leading
+                                selectedTemplate = newTemplate
+                            }
+                        }
+                    }
+                    .onEnded { _ in
+                        // Release the scrub override and let the lens
+                        // settle back onto the selected template. The
+                        // animation is what produces the "magnetism"
+                        // feel as the magnification snaps into place.
+                        withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
+                            dotScrubPosition = nil
+                        }
+                    }
+            )
+        }
+        .frame(height: 36)
+        // Spring the size/spacing changes when the picker wakes / sleeps.
+        .animation(.spring(response: 0.42, dampingFraction: 0.85), value: isActive)
     }
 
     // MARK: - Share actions
 
     private var shareActions: some View {
-        HStack(spacing: 10) {
+        let exporting = activeExport != nil
+        return HStack(spacing: 10) {
             Button {
-                // Set loading state synchronously so UI updates before the task starts
-                isExportingVideo = true
+                activeExport = .instagramStories
                 storyHaptic.impactOccurred()
-                exportAndShareVideo()
+                exportAndShareVideo(destination: .instagramStories)
             } label: {
                 HStack(spacing: 6) {
-                    if isExportingVideo {
+                    if activeExport == .instagramStories {
                         ProgressView()
                             .tint(AppPalette.textMuted)
                             .scaleEffect(0.7)
@@ -627,27 +1673,35 @@ struct ShareCardComposer: View {
                 }
                 .padding(.horizontal, 14)
                 .frame(height: 36)
-                .appCapsule(shadowRadius: 0, shadowY: 0)
+                .appCapsule()
             }
             .buttonStyle(.plain)
-            .disabled(isExportingVideo)
+            .disabled(exporting)
 
             Button {
+                activeExport = .cameraRoll
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                shareAsLink()
+                exportAndShareVideo(destination: .cameraRoll)
             } label: {
                 HStack(spacing: 6) {
-                    AppIcon(glyph: .globe, size: 12, color: AppPalette.iconPrimary)
-                    Text("LINK")
+                    if activeExport == .cameraRoll {
+                        ProgressView()
+                            .tint(AppPalette.textMuted)
+                            .scaleEffect(0.7)
+                    } else {
+                        AppIcon(glyph: .image, size: 12, color: AppPalette.iconPrimary)
+                    }
+                    Text("SAVE")
                         .font(.system(size: 10, weight: .semibold))
                         .tracking(1)
                         .foregroundStyle(AppPalette.textMuted)
                 }
                 .padding(.horizontal, 14)
                 .frame(height: 36)
-                .appCapsule(shadowRadius: 0, shadowY: 0)
+                .appCapsule()
             }
             .buttonStyle(.plain)
+            .disabled(exporting)
         }
     }
 
@@ -731,20 +1785,95 @@ struct ShareCardComposer: View {
     // MARK: - Export
 
     // 9:16 at half resolution — high enough quality, low enough memory
-    private let storyCanvas = CGSize(width: 540, height: 960)
+    // Full Instagram Stories resolution. Half-res (540x960) was visibly
+    // soft once IG upscaled it to phone width.
+    private let storyCanvas = CGSize(width: 1080, height: 1920)
 
-    private func exportAndShareVideo() {
+    /// Snapshot the dynamic front-layer view (mono/electric date text,
+    /// OOTD's DAY+MONTH) so it's included in the exported video.
+    @MainActor
+    private func renderDynamicFrontImage(size: CGSize) -> UIImage? {
+        let view = cardFrontLayer(for: selectedTemplate)
+            .frame(width: size.width, height: size.height)
+        let renderer = ImageRenderer(content: view)
+        renderer.proposedSize = ProposedViewSize(width: size.width, height: size.height)
+        renderer.scale = 2
+        return renderer.uiImage
+    }
+
+    @MainActor
+    private func renderDynamicBackImage(
+        size: CGSize,
+        time: Double? = nil
+    ) -> UIImage? {
+        // Snapshot the live back-layer view for dynamic templates.
+        // Pass `time` to drive a specific frame of the colorama animation
+        // — used by the export loop to render each video frame at its
+        // own moment of the cycle.
+        let view = cardBackLayer(for: selectedTemplate, forcedTime: time)
+            .frame(width: size.width, height: size.height)
+        let renderer = ImageRenderer(content: view)
+        renderer.proposedSize = ProposedViewSize(width: size.width, height: size.height)
+        renderer.scale = 2
+        return renderer.uiImage
+    }
+
+    private enum ExportDestination {
+        case instagramStories
+        case cameraRoll
+    }
+
+    private func exportAndShareVideo(destination: ExportDestination = .instagramStories) {
         Task {
+            // Sleep ~one frame so the SwiftUI re-render that swaps the
+            // icon for the spinner actually paints before we grab the
+            // main thread for the first heavy render. `Task.yield()`
+            // alone wasn't enough — the task can resume before the
+            // pending UI render runs.
+            try? await Task.sleep(for: .milliseconds(50))
+
             let canvas = storyCanvas
-            let backImage = UIImage(named: selectedTemplate.backImageName)
-            let frontImage = selectedTemplate.frontImageName.flatMap { UIImage(named: $0) }
+            // We render the back/front layers at HALF the canvas
+            // dimensions (logical) — the SwiftUI layout (font sizes,
+            // text positions, halo blur radii etc.) was tuned for that
+            // size. The renderer's scale=2 then gives us underlying
+            // pixels that match the full 1080-wide canvas, so the
+            // snapshot draws crisp 1:1 at the larger card rect.
+            let renderCanvasScale: CGFloat = 0.5
+            let cardW = canvas.width * 0.82 * renderCanvasScale
+            let cardH = cardW * (480.0 / 342.0)
+            let backSize = CGSize(width: cardW, height: cardH)
+
+            // Only colorama animates per-frame (the gradient cycle).
+            // Mono / electric / OOTD have STATIC back layers, so we
+            // render their back ONCE here instead of per-frame in the
+            // loop — this used to do 45 redundant SwiftUI renders per
+            // export and was the dominant cost for those templates.
+            let isColorama = selectedTemplate == .colorama
+            let staticBackImage: UIImage? = await MainActor.run {
+                if !selectedTemplate.isDynamic {
+                    return UIImage(named: selectedTemplate.backImageName)
+                }
+                if isColorama { return nil }  // rendered per-frame below
+                return renderDynamicBackImage(size: backSize, time: nil)
+            }
+            // Front layer for dynamic templates contains the date text
+            // (mono/electric top + bottom labels, OOTD's DAY+MONTH)
+            // and isn't a bundled PNG — snapshot the SwiftUI view ONCE
+            // since the text doesn't animate per video frame.
+            let frontImage: UIImage? = await MainActor.run {
+                if selectedTemplate.isDynamic {
+                    return renderDynamicFrontImage(size: backSize)
+                }
+                return selectedTemplate.frontImageName.flatMap { UIImage(named: $0) }
+            }
 
             // One full forward rotation — seamless loop since frame 0 ≈ frame N (360° orbit)
             let totalFrames = outfit.frameCount
             let allIndices = Array(Swift.stride(from: 0, to: totalFrames, by: 2))
 
             guard !allIndices.isEmpty else {
-                await MainActor.run { isExportingVideo = false; exportError = "No frames to export." }
+                await MainActor.run { activeExport = nil; exportError = "No frames to export." }
                 return
             }
 
@@ -754,7 +1883,7 @@ struct ShareCardComposer: View {
 
             // Set up writer before loading any frames
             guard let writer = try? AVAssetWriter(outputURL: url, fileType: .mp4) else {
-                await MainActor.run { isExportingVideo = false; exportError = "Couldn't create video." }
+                await MainActor.run { activeExport = nil; exportError = "Couldn't create video." }
                 return
             }
 
@@ -763,6 +1892,13 @@ struct ShareCardComposer: View {
                 AVVideoCodecKey: AVVideoCodecType.h264,
                 AVVideoWidthKey: Int(canvas.width),
                 AVVideoHeightKey: Int(canvas.height),
+                // 8 Mbps gives crisp 1080×1920 output. The h264 default
+                // for this resolution is closer to 2-3 Mbps which IG
+                // re-encodes again on upload, compounding artefacts.
+                AVVideoCompressionPropertiesKey: [
+                    AVVideoAverageBitRateKey: 8_000_000,
+                    AVVideoMaxKeyFrameIntervalKey: 30
+                ]
             ]
             let input = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
             input.expectsMediaDataInRealTime = false
@@ -779,10 +1915,21 @@ struct ShareCardComposer: View {
             writer.startWriting()
             writer.startSession(atSourceTime: .zero)
 
+            // Pick a colorama cycle count that fits naturally inside the
+            // video duration so the gradient phase wraps cleanly at the
+            // loop boundary (other sin/cos terms have minor
+            // discontinuities — accepted tradeoff).
+            let totalIterations = allIndices.count
+            let videoDuration = Double(totalIterations) / Double(fps)
+            let coloramaCycles = max(
+                1,
+                Int(round(videoDuration / Self.coloramaCycleSeconds))
+            )
+            let totalShaderTime = Double(coloramaCycles) * Self.coloramaCycleSeconds
+
             // Stream: composite one frame at a time and write immediately.
-            // Never hold more than 1 frame in memory.
             var writtenCount = 0
-            for outfitIndex in allIndices {
+            for (i, outfitIndex) in allIndices.enumerated() {
                 guard let outfitFrame = await FrameLoader.shared.frame(for: outfit, index: outfitIndex) else {
                     continue
                 }
@@ -791,8 +1938,21 @@ struct ShareCardComposer: View {
                     try? await Task.sleep(for: .milliseconds(5))
                 }
 
+                // Only colorama needs a fresh back image per frame
+                // (the gradient cycles); other templates reuse the
+                // single `staticBackImage` rendered up front.
+                let frameBackImage: UIImage?
+                if isColorama {
+                    let frameTime = (Double(i) / Double(totalIterations)) * totalShaderTime
+                    frameBackImage = await MainActor.run {
+                        renderDynamicBackImage(size: backSize, time: frameTime)
+                    }
+                } else {
+                    frameBackImage = staticBackImage
+                }
+
                 let composed = compositeFrame(outfitFrame: outfitFrame,
-                                              backImage: backImage,
+                                              backImage: frameBackImage,
                                               frontImage: frontImage,
                                               canvas: canvas)
                 if let composed, let buffer = pixelBuffer(from: composed, size: canvas) {
@@ -807,12 +1967,48 @@ struct ShareCardComposer: View {
 
             let success = writer.status == .completed && writtenCount > 0
             await MainActor.run {
-                isExportingVideo = false
-                if success {
-                    shareToInstagramStories(videoURL: url)
-                } else {
+                activeExport = nil
+                guard success else {
                     exportError = "Couldn't export the video. Please try again."
+                    return
                 }
+                switch destination {
+                case .instagramStories:
+                    shareToInstagramStories(videoURL: url)
+                case .cameraRoll:
+                    saveVideoToCameraRoll(videoURL: url)
+                }
+            }
+        }
+    }
+
+    private func saveVideoToCameraRoll(videoURL: URL) {
+        // Trigger system permission prompt automatically; if denied,
+        // surface a clear error. `addOnly` is sufficient since we're
+        // only writing, not reading the user's library.
+        PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
+            switch status {
+            case .authorized, .limited:
+                PHPhotoLibrary.shared().performChanges {
+                    PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: videoURL)
+                } completionHandler: { success, error in
+                    DispatchQueue.main.async {
+                        if !success {
+                            exportError = error?.localizedDescription
+                                ?? "Couldn't save to camera roll."
+                        } else {
+                            UINotificationFeedbackGenerator().notificationOccurred(.success)
+                        }
+                    }
+                }
+            case .denied, .restricted:
+                DispatchQueue.main.async {
+                    exportError = "Photos access denied. Allow access in Settings to save videos."
+                }
+            case .notDetermined:
+                break // requestAuthorization will resolve to one of the above
+            @unknown default:
+                break
             }
         }
     }
