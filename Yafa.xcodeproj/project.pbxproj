@@ -1098,6 +1098,16 @@
 		FF119608456FFD50478712ED /* outfit-64_00218.webp in Resources */ = {isa = PBXBuildFile; fileRef = B26C8E83ABEE813A3131CE7C /* outfit-64_00218.webp */; };
 		FF1239734EB8A8FA6EBF4ADB /* outfit-53_00115.webp in Resources */ = {isa = PBXBuildFile; fileRef = 13F17E4516768AF32BF84ACF /* outfit-53_00115.webp */; };
 		FF966C14C95E6515D0B5CC52 /* outfit-53_00064.webp in Resources */ = {isa = PBXBuildFile; fileRef = 4C3B610C37FF1CAD274F349A /* outfit-53_00064.webp */; };
+		D31278AFA3AB300ABF1761DA /* VirtualClosetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFF43B996AE1B66BD126DE13 /* VirtualClosetView.swift */; };
+		DDE2DADA7F69CF971EED33BB /* ProductCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB381BF9FBE2A1D4A0FCE1C5 /* ProductCategory.swift */; };
+		E2569D78CFCEB1AED2B22E3D /* AvatarOnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1045F324B554714A44C6734C /* AvatarOnboardingView.swift */; };
+		F9306283217A0AD0C3A65A85 /* FalAvatarStandardizationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 903283F6AC38FB49306C4936 /* FalAvatarStandardizationService.swift */; };
+		69CAE66052928B36184608C8 /* ClosetAvatarStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = B52DDFF0081DADED31BB4F63 /* ClosetAvatarStorage.swift */; };
+		916035F16BEDB48AAB025B74 /* FalDressAvatarService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8F15B25BBE7FFFAD1FF491D /* FalDressAvatarService.swift */; };
+		48C2B948CF5AB025F2D7FCDF /* DressAvatarSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C878BCD523FEE294544CB48 /* DressAvatarSheetView.swift */; };
+		F97FD4AF3B3FC62324F0F4AE /* Remix.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE97B0C96709C804643AF281 /* Remix.swift */; };
+		A4405D6A54D1D0D5F54FBC48 /* RemixStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4B04E1E9CC13E9109E91065 /* RemixStorage.swift */; };
+		C39C360599877661A0253854 /* RemixArchiveSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 476308F8F5EBED5CD1EF9881 /* RemixArchiveSheetView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -2193,6 +2203,16 @@
 		FF496973822FBF115589C35B /* outfit-53_00025.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-53_00025.webp"; sourceTree = "<group>"; };
 		FFB770B6139ED3E634E6A4D8 /* outfit-46_00239.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-46_00239.webp"; sourceTree = "<group>"; };
 		FFC364DB0BEBE02825B592BD /* outfit-65_00143.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-65_00143.webp"; sourceTree = "<group>"; };
+		DFF43B996AE1B66BD126DE13 /* VirtualClosetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VirtualClosetView.swift; sourceTree = "<group>"; };
+		BB381BF9FBE2A1D4A0FCE1C5 /* ProductCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductCategory.swift; sourceTree = "<group>"; };
+		1045F324B554714A44C6734C /* AvatarOnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarOnboardingView.swift; sourceTree = "<group>"; };
+		903283F6AC38FB49306C4936 /* FalAvatarStandardizationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FalAvatarStandardizationService.swift; sourceTree = "<group>"; };
+		B52DDFF0081DADED31BB4F63 /* ClosetAvatarStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClosetAvatarStorage.swift; sourceTree = "<group>"; };
+		F8F15B25BBE7FFFAD1FF491D /* FalDressAvatarService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FalDressAvatarService.swift; sourceTree = "<group>"; };
+		8C878BCD523FEE294544CB48 /* DressAvatarSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DressAvatarSheetView.swift; sourceTree = "<group>"; };
+		DE97B0C96709C804643AF281 /* Remix.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Remix.swift; sourceTree = "<group>"; };
+		F4B04E1E9CC13E9109E91065 /* RemixStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemixStorage.swift; sourceTree = "<group>"; };
+		476308F8F5EBED5CD1EF9881 /* RemixArchiveSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemixArchiveSheetView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -2623,6 +2643,7 @@
 				84B2486E69E9323876220F6C /* Profile */,
 				3C444B39D57BCF8F6402DF69 /* Shared */,
 				DEB62E5EBF315C41C23E2C56 /* Upload */,
+				3E34EAE3AC6D9A61B040E5D3 /* VirtualCloset */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -2929,6 +2950,10 @@
 				7539E1F1B5B4EAEDB0E57F61 /* FalSegmentationService.swift */,
 				2A0880005C8013FF580A68DD /* FalProductThumbnailService.swift */,
 				0042A9F52E9C7937F39DA0C5 /* ProductThumbnailUploadService.swift */,
+				903283F6AC38FB49306C4936 /* FalAvatarStandardizationService.swift */,
+				B52DDFF0081DADED31BB4F63 /* ClosetAvatarStorage.swift */,
+				F8F15B25BBE7FFFAD1FF491D /* FalDressAvatarService.swift */,
+				F4B04E1E9CC13E9109E91065 /* RemixStorage.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -2964,6 +2989,8 @@
 				646E58B0E2ADCFBE6F3987BF /* Profile.swift */,
 				45E7F9B93946878842D0BB50 /* SocialModels.swift */,
 				3E528CCFAA1423FAE69CD013 /* UploadMaskingBackend.swift */,
+				BB381BF9FBE2A1D4A0FCE1C5 /* ProductCategory.swift */,
+				DE97B0C96709C804643AF281 /* Remix.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -3481,6 +3508,17 @@
 				9ACE0F1992CD1E1C592E84FE /* PasswordResetView.swift */,
 			);
 			path = Auth;
+			sourceTree = "<group>";
+		};
+		3E34EAE3AC6D9A61B040E5D3 /* VirtualCloset */ = {
+			isa = PBXGroup;
+			children = (
+				DFF43B996AE1B66BD126DE13 /* VirtualClosetView.swift */,
+				1045F324B554714A44C6734C /* AvatarOnboardingView.swift */,
+				8C878BCD523FEE294544CB48 /* DressAvatarSheetView.swift */,
+				476308F8F5EBED5CD1EF9881 /* RemixArchiveSheetView.swift */,
+			);
+			path = VirtualCloset;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -4649,6 +4687,16 @@
 				28ABD3ED86399DDC96730921 /* FalProductThumbnailService.swift in Sources */,
 				837BBB0834BF7D8251526AD9 /* ProductThumbnailUploadService.swift in Sources */,
 				94E9B7B82C2CC1E52299820D /* AutoDetectProductsView.swift in Sources */,
+				D31278AFA3AB300ABF1761DA /* VirtualClosetView.swift in Sources */,
+				DDE2DADA7F69CF971EED33BB /* ProductCategory.swift in Sources */,
+				E2569D78CFCEB1AED2B22E3D /* AvatarOnboardingView.swift in Sources */,
+				F9306283217A0AD0C3A65A85 /* FalAvatarStandardizationService.swift in Sources */,
+				69CAE66052928B36184608C8 /* ClosetAvatarStorage.swift in Sources */,
+				916035F16BEDB48AAB025B74 /* FalDressAvatarService.swift in Sources */,
+				48C2B948CF5AB025F2D7FCDF /* DressAvatarSheetView.swift in Sources */,
+				F97FD4AF3B3FC62324F0F4AE /* Remix.swift in Sources */,
+				A4405D6A54D1D0D5F54FBC48 /* RemixStorage.swift in Sources */,
+				C39C360599877661A0253854 /* RemixArchiveSheetView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

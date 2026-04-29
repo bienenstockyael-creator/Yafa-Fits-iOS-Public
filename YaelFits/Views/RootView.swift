@@ -10,6 +10,13 @@ struct RootView: View {
     @State private var loaderVisible = true
     @State private var loaderDismissTask: Task<Void, Never>?
     @State private var showsFavoritesSheet = false
+    @State private var showsVirtualCloset = false
+    @State private var showsAvatarOnboarding = false
+    /// Standardized closet avatar. Hydrated from disk on appear so a returning
+    /// user doesn't have to redo onboarding. Cross-device sync via Supabase
+    /// Storage is a follow-up.
+    @State private var closetAvatar: UIImage?
+    @State private var hydratedAvatarForUserId: UUID?
     @State private var feedHasAppeared = false
     // In-app notification banner
     @State private var showReviewBanner = false
@@ -130,9 +137,13 @@ struct RootView: View {
         .onAppear {
             store.restorePersistedPendingReviewIfNeeded()
             syncLoadingOverlay(isLoading: store.isLoading)
+            hydrateClosetAvatarIfNeeded()
             Task {
                 await PushNotificationCoordinator.shared.requestAuthorization()
             }
+        }
+        .onChange(of: store.userId) { _, _ in
+            hydrateClosetAvatarIfNeeded()
         }
         .onChange(of: store.isLoading) { _, isLoading in
             syncLoadingOverlay(isLoading: isLoading)
@@ -153,6 +164,36 @@ struct RootView: View {
             FavoritesSheetView()
                 .environment(store)
         }
+        .fullScreenCover(isPresented: $showsVirtualCloset) {
+            if let userId = store.userId {
+                VirtualClosetView(
+                    userId: userId,
+                    avatar: closetAvatar
+                ) {
+                    showsVirtualCloset = false
+                }
+                .environment(store)
+            }
+        }
+        .fullScreenCover(isPresented: $showsAvatarOnboarding) {
+            AvatarOnboardingView(
+                onAccept: { avatar in
+                    closetAvatar = avatar
+                    if let userId = store.userId {
+                        ClosetAvatarStorage.save(avatar, userId: userId)
+                        hydratedAvatarForUserId = userId
+                    }
+                    showsAvatarOnboarding = false
+                    // Hand off to the closet after the cover dismisses so
+                    // the second presentation animates cleanly.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        showsVirtualCloset = true
+                    }
+                },
+                onClose: { showsAvatarOnboarding = false }
+            )
+            .environment(store)
+        }
     }
 
     private var showsFloatingButtons: Bool {
@@ -171,6 +212,9 @@ struct RootView: View {
                         tempToggle
                     } else {
                         viewModeToggle
+                        if canAccessVirtualCloset {
+                            closetButton
+                        }
                     }
                 } else if store.currentView == .profile {
                     tempToggle
@@ -244,6 +288,57 @@ struct RootView: View {
         .padding(8)
         .contentShape(Rectangle())
         .animation(.easeInOut(duration: 0.18), value: isCalendarActive)
+    }
+
+    /// Loads the persisted avatar for the current user if we haven't already
+    /// hydrated for that ID this session. Returning users skip onboarding.
+    private func hydrateClosetAvatarIfNeeded() {
+        guard let userId = store.userId, hydratedAvatarForUserId != userId else { return }
+        hydratedAvatarForUserId = userId
+        if let stored = ClosetAvatarStorage.load(userId: userId) {
+            closetAvatar = stored
+        }
+    }
+
+    /// Gates the Virtual Closet entry point to Pro accounts (`profile.isPro`)
+    /// or the archive owner. While Pro is being rolled out, only the owner
+    /// sees the closet — every other account gets the standard list/calendar
+    /// toggle without the closet shortcut.
+    private var canAccessVirtualCloset: Bool {
+        if store.userId?.uuidString.lowercased() == AppConfig.archiveOwnerUserId {
+            return true
+        }
+        return store.currentProfile?.isPro == true
+    }
+
+    /// Entry point into the Virtual Closet. Sits next to the grid/calendar
+    /// toggle on the List & Calendar tabs. First time in: routes through
+    /// avatar onboarding. Subsequent visits go straight to the closet.
+    private var closetButton: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            if closetAvatar == nil {
+                showsAvatarOnboarding = true
+            } else {
+                showsVirtualCloset = true
+            }
+        } label: {
+            AppIcon(glyph: .tshirt, size: 12, color: AppPalette.iconPrimary)
+                .frame(width: 30, height: 30)
+                .background(
+                    Circle()
+                        .fill(Color(red: 0.95, green: 0.95, blue: 0.96).opacity(0.98))
+                )
+                .overlay(
+                    Circle()
+                        .stroke(
+                            Color(red: 0.88, green: 0.89, blue: 0.91).opacity(0.9),
+                            lineWidth: 0.8
+                        )
+                )
+                .padding(8)
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Hero View Transition

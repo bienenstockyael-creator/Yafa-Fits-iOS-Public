@@ -28,6 +28,9 @@ enum AppIconGlyph {
     case cart
     case share
     case bell
+    case tshirt
+    case sparkles
+    case stack
 }
 
 struct AppIcon: View {
@@ -205,6 +208,20 @@ struct AppIcon: View {
             let bar = linePath(from: (4, 18), to: (20, 18), in: rect)
             let clapper1 = Path(ellipseIn: scaledRect(x: 10, y: 19.5, width: 4, height: 3, in: rect))
             return [body, bar, clapper1]
+        case .tshirt:
+            return [tshirtPath(in: rect)]
+        case .sparkles:
+            return [
+                sparklePath(cx: 12, cy: 12, size: 7, in: rect),
+                sparklePath(cx: 19, cy: 5, size: 2.5, in: rect),
+                sparklePath(cx: 5, cy: 18, size: 2, in: rect),
+            ]
+        case .stack:
+            return [
+                roundedRectPath(x: 3, y: 15, width: 18, height: 5, radius: 1.5, in: rect),
+                roundedRectPath(x: 4.5, y: 9.5, width: 15, height: 5, radius: 1.5, in: rect),
+                roundedRectPath(x: 6, y: 4, width: 12, height: 5, radius: 1.5, in: rect),
+            ]
         }
     }
 
@@ -339,6 +356,44 @@ struct AppIcon: View {
         var p = Path(); p.move(to: point(20, 21, in: r))
         p.addCurve(to: point(12, 14, in: r), control1: point(20, 17.1, in: r), control2: point(16.4, 14, in: r))
         p.addCurve(to: point(4, 21, in: r), control1: point(7.6, 14, in: r), control2: point(4, 17.1, in: r))
+        return p
+    }
+
+    private func tshirtPath(in r: CGRect) -> Path {
+        // Single closed outline traced clockwise from the left hem corner.
+        // 24x24 viewbox; body is x∈[6,18], hem y=20, sleeves extend to
+        // x=3 / x=21, neckline dips from (9,5) curving down to (15,5).
+        var p = Path()
+        p.move(to: point(6, 20, in: r))                                       // hem left
+        p.addLine(to: point(6, 11, in: r))                                    // body left → sleeve junction
+        p.addLine(to: point(3, 12, in: r))                                    // left sleeve cuff (outer-bottom)
+        p.addLine(to: point(3, 7, in: r))                                     // left sleeve top (outer-top)
+        p.addLine(to: point(8, 5, in: r))                                     // shoulder peak (left)
+        p.addLine(to: point(9, 5, in: r))                                     // neckline left edge
+        p.addQuadCurve(to: point(15, 5, in: r), control: point(12, 8, in: r)) // neckline curve
+        p.addLine(to: point(16, 5, in: r))                                    // shoulder peak (right)
+        p.addLine(to: point(21, 7, in: r))                                    // right sleeve top
+        p.addLine(to: point(21, 12, in: r))                                   // right sleeve cuff
+        p.addLine(to: point(18, 11, in: r))                                   // body right ← sleeve junction
+        p.addLine(to: point(18, 20, in: r))                                   // body right → hem
+        p.closeSubpath()
+        return p
+    }
+
+    private func sparklePath(cx: CGFloat, cy: CGFloat, size: CGFloat, in r: CGRect) -> Path {
+        // 4-point star with concave sides — the inset controls how
+        // pinched the waist of each arm is.
+        let inset = size * 0.3
+        var p = Path()
+        p.move(to: point(cx, cy - size, in: r))
+        p.addLine(to: point(cx + inset, cy - inset, in: r))
+        p.addLine(to: point(cx + size, cy, in: r))
+        p.addLine(to: point(cx + inset, cy + inset, in: r))
+        p.addLine(to: point(cx, cy + size, in: r))
+        p.addLine(to: point(cx - inset, cy + inset, in: r))
+        p.addLine(to: point(cx - size, cy, in: r))
+        p.addLine(to: point(cx - inset, cy - inset, in: r))
+        p.closeSubpath()
         return p
     }
 }

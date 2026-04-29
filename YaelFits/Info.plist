@@ -30,6 +30,8 @@
 	<string>Use the camera to capture a full-body mirror selfie for outfit generation.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Use your location to attach the current weather to uploaded outfits.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Save dressed avatar looks to your photo library.</string>
 	<key>NSUserNotificationsUsageDescription</key>
 	<string>Get notified when your interactive fit is ready.</string>
 	<key>UIAppFonts</key>

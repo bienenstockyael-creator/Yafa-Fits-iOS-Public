@@ -920,7 +920,7 @@ private final class GenerationBackgroundActivity {
     }
 }
 
-private struct CameraCaptureView: UIViewControllerRepresentable {
+struct CameraCaptureView: UIViewControllerRepresentable {
     let onImagePicked: (UIImage?) -> Void
 
     func makeCoordinator() -> Coordinator {
