@@ -68,11 +68,13 @@ struct CarouselView: View {
                                     .allowsHitTesting(showsChrome)
                             }
                             .frame(height: 36)
+                            .offset(y: -16 * (1.0 - cardExpandProgress))
                         }
 
                         ZStack {
                             carouselSlides
-                                .scaleEffect(1.0 - (cardExpandProgress * 0.23), anchor: .top)
+                                // 1.20 (collapsed) → 0.77 (expanded), linear in cardExpandProgress.
+                                .scaleEffect(1.2 - (cardExpandProgress * 0.43), anchor: .top)
                             navButtons
                                 .opacity(showsChrome ? 1 : 0)
                                 .allowsHitTesting(showsChrome)
@@ -376,6 +378,8 @@ private struct CarouselHeroTargetFramePreferenceKey: PreferenceKey {
 }
 
 struct CarouselDetailCard: View {
+    static let locationMaxLength = 30
+
     let outfit: Outfit
     let onDelete: () -> Void
     @Binding var isExpanded: Bool
@@ -398,7 +402,65 @@ struct CarouselDetailCard: View {
     @State private var newTagText = ""
     @State private var editableDate: Date = Date()
     @State private var showDatePicker = false
+    @State private var editableLocation: String = ""
+    @FocusState private var isLocationFieldFocused: Bool
+    /// Whether the info card is showing at all. False at first view —
+    /// outfit goes full-screen, only the floating INFO button is
+    /// visible. Tapping that button summons the card in its minimal
+    /// state. `isExpanded` then independently controls whether the
+    /// products/tags rows show.
+    @State private var isCardVisible = false
+
     var body: some View {
+        // Info button is the anchor: card scales out from underneath it.
+        ZStack(alignment: .bottomTrailing) {
+            if isCardVisible {
+                cardContent
+                    .frame(maxWidth: .infinity)
+                    .transition(
+                        .scale(scale: 0.05, anchor: .bottomTrailing)
+                            .combined(with: .opacity)
+                    )
+            }
+            infoButton
+                .padding(.trailing, LayoutMetrics.small)
+                .padding(.bottom, LayoutMetrics.small)
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .animation(.spring(response: 0.4, dampingFraction: 0.78), value: isCardVisible)
+        .animation(.spring(response: 0.4, dampingFraction: 0.78), value: isExpanded)
+    }
+
+    /// INFO toggle. Single button — same instance pinned at the
+    /// bottom-trailing corner of the carousel detail card area in
+    /// every state. Always shows the floating-button shadow so it
+    /// matches the other primary floating buttons (search, favorites,
+    /// notifications).
+    private var infoButton: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.78)) {
+                if isCardVisible {
+                    if isEditing { saveEdits(); isEditing = false }
+                    isCardVisible = false
+                    isExpanded = false
+                    expandProgress = 0
+                } else {
+                    isCardVisible = true
+                    expandProgress = isExpanded ? 1 : 0.4
+                }
+            }
+        } label: {
+            Image(systemName: "info.circle")
+                .font(.system(size: 16, weight: .regular))
+                .foregroundStyle(AppPalette.iconPrimary)
+                .frame(width: 48, height: 48)
+                .appCircle()
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var cardContent: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .center, spacing: LayoutMetrics.small) {
                 if isEditing {
@@ -410,17 +472,64 @@ struct CarouselDetailCard: View {
                                 .font(.system(size: 10, weight: .bold, design: .monospaced))
                                 .tracking(1.8)
                                 .foregroundStyle(AppPalette.textSecondary)
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
                             Image(systemName: "pencil")
                                 .font(.system(size: 9, weight: .semibold))
                                 .foregroundStyle(AppPalette.textSecondary)
                         }
                     }
                     .buttonStyle(.plain)
+
+                    Text("·")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundStyle(AppPalette.textFaint)
+
+                    HStack(spacing: 4) {
+                        TextField(
+                            "",
+                            text: $editableLocation,
+                            prompt: Text("ADD LOCATION")
+                                .foregroundColor(AppPalette.textFaint)
+                        )
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .tracking(1.8)
+                            .foregroundStyle(AppPalette.textSecondary)
+                            .textInputAutocapitalization(.characters)
+                            .autocorrectionDisabled()
+                            .submitLabel(.done)
+                            .focused($isLocationFieldFocused)
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                            .onChange(of: editableLocation) { _, newValue in
+                                if newValue.count > Self.locationMaxLength {
+                                    editableLocation = String(newValue.prefix(Self.locationMaxLength))
+                                }
+                            }
+                        Image(systemName: "pencil")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(AppPalette.textSecondary)
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        isLocationFieldFocused = true
+                    }
                 } else {
                     Text(outfit.numericDateLabel(useFahrenheit: store.useFahrenheit))
                         .font(.system(size: 10, weight: .bold, design: .monospaced))
                         .tracking(1.8)
                         .foregroundStyle(AppPalette.textFaint)
+
+                    if let location = outfit.location, !location.isEmpty {
+                        Text("·")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundStyle(AppPalette.textFaint)
+                        Text(location.uppercased())
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .tracking(1.8)
+                            .foregroundStyle(AppPalette.textFaint)
+                            .lineLimit(1)
+                    }
                 }
 
                 Spacer(minLength: 0)
@@ -431,7 +540,10 @@ struct CarouselDetailCard: View {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.78)) {
                         if isEditing { saveEdits(); isEditing = false }
                         isExpanded.toggle()
-                        expandProgress = isExpanded ? 1 : 0
+                        // Collapsing here goes back to the *minimal*
+                        // state, not fully hidden — only the floating
+                        // INFO button fully hides the card.
+                        expandProgress = isExpanded ? 1 : 0.4
                     }
                 } label: {
                     HStack(spacing: 6) {
@@ -439,12 +551,16 @@ struct CarouselDetailCard: View {
                             .font(.system(size: 9, weight: .bold, design: .monospaced))
                             .tracking(1.5)
                             .foregroundStyle(AppPalette.textFaint)
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
                         Image(systemName: "chevron.up")
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(AppPalette.iconPrimary)
                             .rotationEffect(.degrees(isExpanded ? 180 : 0))
                     }
-                    .frame(height: 36)
+                    .padding(.vertical, 8)
+                    .padding(.leading, 12)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
@@ -461,13 +577,22 @@ struct CarouselDetailCard: View {
                 if isEditing {
                     editableTagRow
                 } else if let tags = outfit.tags, !tags.isEmpty {
-                    FlowLayout(spacing: 8) {
+                    FlowLayout(spacing: 6) {
                         ForEach(tags, id: \.self) { tag in
-                            TagPill(tag: tag) {
+                            Button {
                                 let impact = UIImpactFeedbackGenerator(style: .light)
                                 impact.impactOccurred()
                                 selectedLinkedTag = LinkedTagSelection(id: tag)
+                            } label: {
+                                Text(tag.uppercased())
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .tracking(0.8)
+                                    .foregroundStyle(AppPalette.textMuted)
+                                    .padding(.horizontal, 10)
+                                    .frame(height: 26)
+                                    .appCapsule(shadowRadius: 0, shadowY: 0)
                             }
+                            .buttonStyle(.plain)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -479,10 +604,20 @@ struct CarouselDetailCard: View {
             HStack(spacing: 8) {
                 publishButton
                 Spacer(minLength: 0)
-                deleteButton
-                likeButton
-                shareButton
+                if !isExpanded {
+                    // Expanded mode trims to focus on Edit/Save; Delete reappears in edit mode.
+                    deleteButton
+                        .transition(.scale.combined(with: .opacity))
+                    likeButton
+                        .transition(.scale.combined(with: .opacity))
+                    shareButton
+                        .transition(.scale.combined(with: .opacity))
+                }
                 if isExpanded {
+                    if isEditing {
+                        deleteButton
+                            .transition(.scale.combined(with: .opacity))
+                    }
                     Button {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             if isEditing { saveEdits() }
@@ -490,21 +625,22 @@ struct CarouselDetailCard: View {
                             isEditing.toggle()
                         }
                     } label: {
-                        Text(isEditing ? "SAVE" : "EDIT")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
-                            .tracking(1.5)
-                            .foregroundStyle(isEditing ? AppPalette.textSecondary : AppPalette.textFaint)
-                            .padding(.horizontal, 12)
-                            .frame(height: 36)
-                            .appCapsule(shadowRadius: 0, shadowY: 0)
+                        Text(isEditing ? "Save" : "Edit")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(AppPalette.textPrimary)
+                            .padding(.horizontal, 16)
+                            .frame(height: 48)
+                            .appCapsule()
                     }
                     .buttonStyle(.plain)
                     .transition(.scale.combined(with: .opacity))
                 }
             }
+            // Trailing slot for the info-button overlay (48 + 8 gap).
+            .padding(.trailing, 56)
             .animation(.spring(response: 0.4, dampingFraction: 0.78), value: isExpanded)
         }
-        .padding(LayoutMetrics.medium)
+        .padding(LayoutMetrics.small)
         .appCard(cornerRadius: LayoutMetrics.cardCornerRadius)
         .animation(.spring(response: 0.4, dampingFraction: 0.78), value: isExpanded)
         .gesture(
@@ -525,7 +661,9 @@ struct CarouselDetailCard: View {
                         withAnimation(.spring(response: 0.4, dampingFraction: 0.78)) {
                             if isEditing { saveEdits(); isEditing = false }
                             isExpanded = false
-                            expandProgress = 0
+                            // Drag-down only collapses to minimal; the
+                            // floating INFO button is what fully hides.
+                            expandProgress = 0.4
                         }
                     }
                 }
@@ -649,10 +787,13 @@ struct CarouselDetailCard: View {
     private var emptyProductRow: some View {
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            showAddProduct = true
+            withAnimation(.easeInOut(duration: 0.2)) {
+                enterEditMode()
+                isEditing = true
+            }
         } label: {
             HStack {
-                EmptyProductCard()
+                EmptyProductCard(size: 88, cornerRadius: 16, iconSize: 22)
             }
             .frame(maxWidth: .infinity, alignment: .center)
         }
@@ -667,14 +808,15 @@ struct CarouselDetailCard: View {
                 isEditing = true
             }
         } label: {
-            HStack(spacing: 6) {
-                AppIcon(glyph: .plusCircle, size: 14, color: AppPalette.textFaint)
-                Text("Add a tag")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(AppPalette.textMuted)
+            HStack(spacing: 4) {
+                AppIcon(glyph: .plusCircle, size: 9, color: AppPalette.textFaint)
+                Text("ADD A TAG")
+                    .font(.system(size: 9, weight: .semibold))
+                    .tracking(0.8)
+                    .foregroundStyle(AppPalette.textFaint)
             }
-            .frame(height: 36)
-            .padding(.horizontal, LayoutMetrics.xSmall)
+            .padding(.horizontal, 10)
+            .frame(height: 26)
             .appCapsule(shadowRadius: 0, shadowY: 0)
         }
         .buttonStyle(.plain)
@@ -715,6 +857,8 @@ struct CarouselDetailCard: View {
                     .padding(.horizontal, 12)
                     .frame(height: 36)
                     .appCapsule(shadowRadius: 0, shadowY: 0)
+                    // AI-action accent: soft purple halo.
+                    .shadow(color: Color(red: 0.62, green: 0.55, blue: 0.95).opacity(0.18), radius: 8, y: 0)
                 }
                 .buttonStyle(.plain)
                 .disabled(isLoadingAutoDetect)
@@ -724,10 +868,10 @@ struct CarouselDetailCard: View {
                         VStack(spacing: 4) {
                             archiveProductImage(product)
                             Text(product.displayName)
-                                .font(.system(size: 9, weight: .medium))
+                                .font(.system(size: 10, weight: .medium))
                                 .foregroundStyle(AppPalette.textMuted)
                                 .lineLimit(1)
-                                .frame(width: 64)
+                                .frame(width: 88)
                         }
 
                         Button {
@@ -765,6 +909,12 @@ struct CarouselDetailCard: View {
                             .appCircle(shadowRadius: 0, shadowY: 0)
                     }
                     .buttonStyle(.plain)
+
+                    if editableTags.isEmpty && !showingTagInput {
+                        Text("Add a tag")
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundStyle(AppPalette.textFaint)
+                    }
 
                     ForEach(editableTags, id: \.self) { tag in
                         HStack(spacing: 4) {
@@ -866,6 +1016,7 @@ struct CarouselDetailCard: View {
     private func enterEditMode() {
         editableTags = outfit.tags ?? []
         editableDate = outfit.parsedDate ?? Date()
+        editableLocation = outfit.location ?? ""
     }
 
     private func saveEdits() {
@@ -883,6 +1034,15 @@ struct CarouselDetailCard: View {
             store.updateOutfitDate(outfitId: outfitId, date: newDateString)
             Task {
                 try? await OutfitService.updateOutfitDate(outfitId: outfitId, date: newDateString)
+            }
+        }
+
+        let trimmedLocation = editableLocation.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalized = trimmedLocation.isEmpty ? nil : trimmedLocation
+        if normalized != outfit.location {
+            store.updateOutfitLocation(outfitId: outfitId, location: normalized)
+            Task {
+                try? await OutfitService.updateOutfitLocation(outfitId: outfitId, location: normalized)
             }
         }
 
@@ -934,11 +1094,11 @@ struct CarouselDetailCard: View {
                 archiveProductImage(product)
 
                 Text(product.displayName)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(AppPalette.textMuted)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
-                    .frame(width: 72)
+                    .frame(width: 88)
             }
         }
         .buttonStyle(.plain)
@@ -951,7 +1111,7 @@ struct CarouselDetailCard: View {
                     switch phase {
                     case let .success(image):
                         image.resizable().scaledToFill()
-                            .frame(width: 72, height: 72)
+                            .frame(width: 88, height: 88)
                             .clipped()
                     case .failure:
                         placeholderProductImage
@@ -965,16 +1125,16 @@ struct CarouselDetailCard: View {
                 placeholderProductImage
             }
         }
-        .frame(width: 72, height: 72)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .frame(width: 88, height: 88)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private var placeholderProductImage: some View {
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
             .fill(Color.white.opacity(0.22))
             .overlay {
                 Text("Preview")
-                    .font(.system(size: 8, weight: .semibold))
+                    .font(.system(size: 9, weight: .semibold))
                     .tracking(0.6)
                     .foregroundStyle(AppPalette.textMuted.opacity(0.9))
             }
@@ -992,12 +1152,12 @@ struct CarouselDetailCard: View {
         } label: {
             AppIcon(
                 glyph: .heart,
-                size: 14,
+                size: 16,
                 color: AppPalette.iconPrimary,
                 filled: isLiked
             )
-                .frame(width: 36, height: 36)
-                .appCircle(shadowRadius: 0, shadowY: 0)
+                .frame(width: 48, height: 48)
+                .appCircle()
         }
         .buttonStyle(.plain)
     }
@@ -1016,18 +1176,17 @@ struct CarouselDetailCard: View {
             Group {
                 if isLoadingPublishState || isTogglingPublish {
                     ProgressView()
+                        .controlSize(.small)
                         .tint(AppPalette.textMuted)
-                        .padding(.horizontal, 12)
                 } else {
-                    Text(isPublished == true ? "UNPUBLISH" : "PUBLISH TO FEED")
-                        .font(.system(size: 10, weight: .semibold))
-                        .tracking(1.2)
+                    Text(isPublished == true ? "Unpublish" : "Publish")
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(isPublished == true ? AppPalette.textMuted : AppPalette.textPrimary)
-                        .padding(.horizontal, LayoutMetrics.xSmall)
                 }
             }
-            .frame(height: 36)
-            .appCapsule(shadowRadius: 0, shadowY: 0)
+            .padding(.horizontal, 16)
+            .frame(height: 48)
+            .appCapsule()
         }
         .buttonStyle(.plain)
         .disabled(isLoadingPublishState || isTogglingPublish)
@@ -1050,9 +1209,9 @@ struct CarouselDetailCard: View {
         Button {
             showDeleteConfirmation = true
         } label: {
-            AppIcon(glyph: .trash, size: 14, color: AppPalette.iconPrimary)
-                .frame(width: 36, height: 36)
-                .appCircle(shadowRadius: 0, shadowY: 0)
+            AppIcon(glyph: .trash, size: 16, color: AppPalette.iconPrimary)
+                .frame(width: 48, height: 48)
+                .appCircle()
         }
         .buttonStyle(.plain)
     }
@@ -1063,9 +1222,9 @@ struct CarouselDetailCard: View {
             impact.impactOccurred()
             showShareComposer = true
         } label: {
-            AppIcon(glyph: .share, size: 14, color: AppPalette.iconPrimary)
-                .frame(width: 36, height: 36)
-                .appCircle(shadowRadius: 0, shadowY: 0)
+            AppIcon(glyph: .share, size: 16, color: AppPalette.iconPrimary)
+                .frame(width: 48, height: 48)
+                .appCircle()
         }
         .buttonStyle(.plain)
     }

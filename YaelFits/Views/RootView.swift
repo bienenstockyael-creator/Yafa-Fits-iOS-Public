@@ -94,8 +94,8 @@ struct RootView: View {
                         Spacer()
                         floatingFavoritesButton
                     }
-                    .padding(.horizontal, LayoutMetrics.screenPadding)
-                    .padding(.bottom, LayoutMetrics.screenPadding)
+                    .padding(.horizontal, 28)
+                    .padding(.bottom, 28)
                 }
                 .zIndex(65)
             }

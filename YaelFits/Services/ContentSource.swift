@@ -67,11 +67,12 @@ private struct SupabaseOutfitRow: Decodable {
     let weatherTempF: Int?
     let weatherTempC: Int?
     let weatherCondition: String?
+    let location: String?
     let isPublic: Bool?
     let outfitProducts: [SupabaseProductRow]?
 
     enum CodingKeys: String, CodingKey {
-        case id, name, date, folder, prefix, tags, activity, scale, caption
+        case id, name, date, folder, prefix, tags, activity, scale, caption, location
         case userId = "user_id"
         case frameCount = "frame_count"
         case frameExt = "frame_ext"
@@ -105,7 +106,8 @@ private struct SupabaseOutfitRow: Decodable {
             activity: activity,
             weather: weather,
             products: products,
-            caption: caption
+            caption: caption,
+            location: location
         )
     }
 }

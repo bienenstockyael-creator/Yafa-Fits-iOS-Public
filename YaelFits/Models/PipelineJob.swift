@@ -40,6 +40,7 @@ final class PipelineJob: Identifiable, @unchecked Sendable {
     var videoURL: URL?
     var stagedOutfit: Outfit?
     var uploadWeather: Weather?
+    var uploadLocation: String?
     var isRotationReversed: Bool = false
     var requestId: String?
     var prompt: String = UploadConfig.defaultPrompt
@@ -67,6 +68,7 @@ struct PersistedPipelineReview: Codable, Sendable {
     let outfitNum: Int
     let stagedOutfit: Outfit
     let uploadWeather: Weather?
+    let uploadLocation: String?
     let isRotationReversed: Bool
     let sourceImagePath: String?
     let serverJobId: UUID?
@@ -86,6 +88,7 @@ struct PersistedPipelineReview: Codable, Sendable {
         self.outfitNum = job.outfitNum
         self.stagedOutfit = stagedOutfit
         self.uploadWeather = job.uploadWeather
+        self.uploadLocation = job.uploadLocation
         self.isRotationReversed = job.isRotationReversed
         self.sourceImagePath = job.sourceImagePath
         self.serverJobId = job.serverJobId
@@ -101,6 +104,7 @@ struct PersistedPipelineReview: Codable, Sendable {
         job.loaderStage = .compressing
         job.stagedOutfit = stagedOutfit
         job.uploadWeather = uploadWeather
+        job.uploadLocation = uploadLocation
         job.isRotationReversed = isRotationReversed
         job.sourceImagePath = sourceImagePath
         job.serverJobId = serverJobId

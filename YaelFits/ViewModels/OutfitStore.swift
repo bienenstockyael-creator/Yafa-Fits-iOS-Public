@@ -217,6 +217,9 @@ class OutfitStore {
                     if (outfit.caption ?? "").isEmpty && !(cached.caption ?? "").isEmpty {
                         preserved.caption = cached.caption
                     }
+                    if (outfit.location ?? "").isEmpty, let cachedLocation = cached.location, !cachedLocation.isEmpty {
+                        preserved.location = cachedLocation
+                    }
                     return preserved
                 }
                 LocalCache.saveOutfits(merged, userId: userId)
@@ -282,6 +285,13 @@ class OutfitStore {
     func updateOutfitDate(outfitId: String, date: String) {
         guard let index = outfits.firstIndex(where: { $0.id == outfitId }) else { return }
         outfits[index].date = date
+        persistCache()
+    }
+
+    func updateOutfitLocation(outfitId: String, location: String?) {
+        guard let index = outfits.firstIndex(where: { $0.id == outfitId }) else { return }
+        let trimmed = location?.trimmingCharacters(in: .whitespacesAndNewlines)
+        outfits[index].location = (trimmed?.isEmpty ?? true) ? nil : trimmed
         persistCache()
     }
 
@@ -510,6 +520,9 @@ class OutfitStore {
             }
             if (outfit.caption ?? "").isEmpty && !(cached.caption ?? "").isEmpty {
                 preserved.caption = cached.caption
+            }
+            if (outfit.location ?? "").isEmpty, let cachedLocation = cached.location, !cachedLocation.isEmpty {
+                preserved.location = cachedLocation
             }
             return preserved
         }

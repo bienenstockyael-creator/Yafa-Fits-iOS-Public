@@ -107,6 +107,10 @@ struct Outfit: Codable, Identifiable, Hashable, Sendable {
     var weather: Weather?
     var products: [Product]?
     var caption: String?
+    /// Free-text place label shown next to the date in the carousel
+    /// detail card (e.g. "NEW YORK"). Optional — older outfits and
+    /// outfits without a captured location simply hide the label.
+    var location: String?
 
     var normalizedFrameExt: String {
         let ext = (frameExt ?? "webp").trimmingCharacters(in: .whitespaces).lowercased()

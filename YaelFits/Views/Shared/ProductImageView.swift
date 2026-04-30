@@ -51,22 +51,26 @@ struct ProductImageView: View {
 }
 
 struct EmptyProductCard: View {
+    var size: CGFloat = 64
+    var cornerRadius: CGFloat = 14
+    var iconSize: CGFloat = 18
+
     var body: some View {
         VStack(spacing: 6) {
             AppIcon(
                 glyph: .plusCircle,
-                size: 18,
+                size: iconSize,
                 color: AppPalette.textMuted.opacity(0.92)
             )
-                .frame(width: 64, height: 64)
-                .appRoundedRect(cornerRadius: 14, shadowRadius: 0, shadowY: 0)
+                .frame(width: size, height: size)
+                .appRoundedRect(cornerRadius: cornerRadius, shadowRadius: 0, shadowY: 0)
 
             Text("Add a product")
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(AppPalette.textMuted)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
-                .frame(width: 88)
+                .frame(width: max(size + 24, 64))
         }
     }
 }

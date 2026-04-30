@@ -34,11 +34,12 @@ struct OutfitService {
         let weatherTempF: Int?
         let weatherTempC: Int?
         let weatherCondition: String?
+        let location: String?
         let isPublic: Bool
         let publishedAt: String?
 
         enum CodingKeys: String, CodingKey {
-            case id, name, date, folder, prefix, scale, tags, activity
+            case id, name, date, folder, prefix, scale, tags, activity, location
             case userId = "user_id"
             case frameCount = "frame_count"
             case frameExt = "frame_ext"
@@ -81,6 +82,15 @@ struct OutfitService {
         try await supabase
             .from("outfits")
             .update(DateUpdate(date: date))
+            .eq("id", value: outfitId)
+            .execute()
+    }
+
+    static func updateOutfitLocation(outfitId: String, location: String?) async throws {
+        struct LocationUpdate: Encodable { let location: String? }
+        try await supabase
+            .from("outfits")
+            .update(LocationUpdate(location: location))
             .eq("id", value: outfitId)
             .execute()
     }
@@ -186,6 +196,7 @@ struct OutfitService {
                 weatherTempF: outfit.weather?.tempF,
                 weatherTempC: outfit.weather?.tempC,
                 weatherCondition: outfit.weather?.condition,
+                location: outfit.location,
                 isPublic: isPublic,
                 publishedAt: isPublic ? ISO8601DateFormatter().string(from: Date()) : nil
             ))

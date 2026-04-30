@@ -56,8 +56,9 @@ struct PublicFeedListView: View {
                             .scaleEffect(hasScrolled ? 1 : 0.3, anchor: .center)
                             .animation(.easeOut(duration: 0.12), value: hasScrolled)
                     }
-                    .padding(.horizontal, LayoutMetrics.screenPadding)
-                    .padding(.bottom, LayoutMetrics.screenPadding)
+                    .padding(.horizontal, 28)
+                    // 16 (vs. favorites' 28) compensates for PFLV's nested layout chain.
+                    .padding(.bottom, 16)
                 }
                 .allowsHitTesting(hasScrolled)
                 .zIndex(4)

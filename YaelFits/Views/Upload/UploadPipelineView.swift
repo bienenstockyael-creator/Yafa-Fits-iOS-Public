@@ -525,10 +525,13 @@ struct UploadPipelineView: View {
         store.uploadJob = newJob
 
         Task {
-            let weather = await UploadWeatherService.shared.fetchCurrentWeather()
+            async let weatherTask = UploadWeatherService.shared.fetchCurrentWeather()
+            async let locationTask = UploadWeatherService.shared.fetchCurrentLocationName()
+            let (weather, location) = await (weatherTask, locationTask)
             await MainActor.run {
                 guard store.uploadJob?.id == newJob.id else { return }
                 newJob.uploadWeather = weather
+                newJob.uploadLocation = location
             }
         }
 
@@ -600,6 +603,9 @@ struct UploadPipelineView: View {
         finalizedOutfit.isRotationReversed = job.isRotationReversed
         if finalizedOutfit.weather == nil {
             finalizedOutfit.weather = job.uploadWeather
+        }
+        if finalizedOutfit.location == nil, let uploadLocation = job.uploadLocation {
+            finalizedOutfit.location = uploadLocation
         }
 
         store.addOutfit(finalizedOutfit)
@@ -747,6 +753,9 @@ struct UploadPipelineView: View {
                 if record.isReviewReady, var remoteOutfit = record.remoteOutfit {
                     remoteOutfit.isRotationReversed = false
                     if remoteOutfit.weather == nil { remoteOutfit.weather = job.uploadWeather }
+                    if remoteOutfit.location == nil, let uploadLocation = job.uploadLocation {
+                        remoteOutfit.location = uploadLocation
+                    }
                     if !job.autoDetectedProducts.isEmpty {
                         let existing = remoteOutfit.products ?? []
                         remoteOutfit.products = existing + job.autoDetectedProducts
@@ -2050,6 +2059,61 @@ private actor UploadWeatherService {
             }
             return nil
         }
+    }
+
+    /// Reverse-geocodes the device's current coordinates into a short
+    /// human label (city, then administrative area). Falls back to an
+    /// IP-based lookup if Core Location is denied. Returns nil if both
+    /// strategies fail or time out.
+    func fetchCurrentLocationName() async -> String? {
+        await withTaskGroup(of: String?.self) { group in
+            group.addTask {
+                try? await Task.sleep(for: .seconds(10))
+                return nil
+            }
+            group.addTask {
+                if let coord = try? await UploadLocationCoordinator().requestLocation().coordinate,
+                   let name = await self.reverseGeocode(latitude: coord.latitude, longitude: coord.longitude) {
+                    return name
+                }
+                return await self.fetchLocationNameFromIP()
+            }
+            for await result in group {
+                if let name = result {
+                    group.cancelAll()
+                    return name
+                }
+            }
+            return nil
+        }
+    }
+
+    private func reverseGeocode(latitude: CLLocationDegrees, longitude: CLLocationDegrees) async -> String? {
+        let geocoder = CLGeocoder()
+        let location = CLLocation(latitude: latitude, longitude: longitude)
+        guard let placemarks = try? await geocoder.reverseGeocodeLocation(location),
+              let placemark = placemarks.first
+        else { return nil }
+        return placemark.locality
+            ?? placemark.subAdministrativeArea
+            ?? placemark.administrativeArea
+            ?? placemark.country
+    }
+
+    private func fetchLocationNameFromIP() async -> String? {
+        struct IPCity: Decodable { let city: String? }
+        let providers = [
+            URL(string: "https://ipapi.co/json/")!,
+            URL(string: "https://ipwho.is/")!,
+        ]
+        for url in providers {
+            guard let (data, _) = try? await session.data(from: url),
+                  let parsed = try? JSONDecoder().decode(IPCity.self, from: data),
+                  let city = parsed.city, !city.isEmpty
+            else { continue }
+            return city
+        }
+        return nil
     }
 
     private func fetchWeatherFromIP() async -> Weather? {
