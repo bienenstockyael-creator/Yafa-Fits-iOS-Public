@@ -77,6 +77,34 @@ struct PersistedPipelineReview: Codable, Sendable {
     let statusTitle: String
     let statusDetail: String
 
+    init(
+        id: String,
+        outfitNum: Int,
+        stagedOutfit: Outfit,
+        uploadWeather: Weather?,
+        uploadLocation: String?,
+        isRotationReversed: Bool,
+        sourceImagePath: String?,
+        serverJobId: UUID?,
+        prompt: String,
+        persistedAt: Date,
+        statusTitle: String,
+        statusDetail: String
+    ) {
+        self.id = id
+        self.outfitNum = outfitNum
+        self.stagedOutfit = stagedOutfit
+        self.uploadWeather = uploadWeather
+        self.uploadLocation = uploadLocation
+        self.isRotationReversed = isRotationReversed
+        self.sourceImagePath = sourceImagePath
+        self.serverJobId = serverJobId
+        self.prompt = prompt
+        self.persistedAt = persistedAt
+        self.statusTitle = statusTitle
+        self.statusDetail = statusDetail
+    }
+
     init?(job: PipelineJob) {
         guard let stagedOutfit = job.stagedOutfit,
               job.step == .review,

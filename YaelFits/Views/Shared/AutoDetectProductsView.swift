@@ -23,42 +23,85 @@ struct AutoDetectProductsView: View {
     @FocusState private var focusedSlotID: UUID?
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                AppPalette.groupedBackground.ignoresSafeArea()
-                VStack(spacing: 0) {
-                    hintBar
-                    canvasArea
-                }
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarColorScheme(.light, for: .navigationBar)
-            .toolbar { toolbarContent }
-            .alert("Couldn't save", isPresented: errorBinding) {
-                Button("OK") { saveError = nil }
-            } message: {
-                Text(saveError ?? "")
-            }
-            .task {
-                if subjectExtents == nil {
-                    subjectExtents = SubjectExtents.build(from: sourceImage)
-                }
-            }
-            .onDisappear {
-                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        ZStack {
+            AppPalette.groupedBackground.ignoresSafeArea()
+            VStack(spacing: 0) {
+                customHeader
+                hintBar
+                canvasArea
             }
         }
+        .alert("Couldn't save", isPresented: errorBinding) {
+            Button("OK") { saveError = nil }
+        } message: {
+            Text(saveError ?? "")
+        }
+        .task {
+            if subjectExtents == nil {
+                subjectExtents = SubjectExtents.build(from: sourceImage)
+            }
+        }
+        .onDisappear {
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        }
+    }
+
+    // MARK: - Header
+
+    private var customHeader: some View {
+        ZStack {
+            Text("ADD PRODUCTS")
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .tracking(2.2)
+                .foregroundStyle(AppPalette.textFaint)
+            HStack {
+                Button {
+                    onDone(existingProducts)
+                    dismiss()
+                } label: {
+                    Text(cancelLabel)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppPalette.textPrimary)
+                        .padding(.horizontal, 18)
+                        .frame(height: 40)
+                        .appCapsule()
+                }
+                .buttonStyle(.plain)
+                Spacer()
+                Button {
+                    Task { await saveAccepted() }
+                } label: {
+                    Group {
+                        if isSaving {
+                            ProgressView().controlSize(.small).tint(AppPalette.textMuted)
+                        } else {
+                            Text("Save")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(hasAcceptedSlot ? AppPalette.textStrong : AppPalette.textFaint)
+                        }
+                    }
+                    .padding(.horizontal, 22)
+                    .frame(height: 40)
+                    .appCapsule()
+                }
+                .buttonStyle(.plain)
+                .disabled(!hasAcceptedSlot || isSaving)
+            }
+        }
+        .padding(.horizontal, LayoutMetrics.medium)
+        .padding(.top, LayoutMetrics.small)
+        .padding(.bottom, LayoutMetrics.xSmall)
     }
 
     // MARK: - Hint
 
     private var hintBar: some View {
         Text(hintText)
-            .font(.system(size: 10, weight: .semibold, design: .monospaced))
-            .tracking(1.6)
+            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+            .tracking(1.8)
             .foregroundStyle(AppPalette.textFaint)
             .multilineTextAlignment(.center)
-            .padding(.vertical, LayoutMetrics.xSmall)
+            .padding(.vertical, LayoutMetrics.small)
             .padding(.horizontal, LayoutMetrics.screenPadding)
     }
 
@@ -106,37 +149,6 @@ struct AutoDetectProductsView: View {
                     .animation(.spring(response: 0.35, dampingFraction: 0.85), value: slot.state.id)
                 }
             }
-        }
-    }
-
-    // MARK: - Toolbar
-
-    @ToolbarContentBuilder
-    private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .topBarLeading) {
-            Button(cancelLabel) {
-                onDone(existingProducts)
-                dismiss()
-            }
-            .foregroundStyle(AppPalette.textMuted)
-        }
-        ToolbarItem(placement: .principal) {
-            Text("ADD PRODUCTS")
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                .tracking(2)
-                .foregroundStyle(AppPalette.textFaint)
-        }
-        ToolbarItem(placement: .topBarTrailing) {
-            Button {
-                Task { await saveAccepted() }
-            } label: {
-                if isSaving {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Text("Save").fontWeight(.semibold).foregroundStyle(AppPalette.textStrong)
-                }
-            }
-            .disabled(!hasAcceptedSlot || isSaving)
         }
     }
 
@@ -534,36 +546,36 @@ private struct SlotWidgetView: View {
     var onRetry: () -> Void
     var onDismiss: () -> Void
 
-    private static let thumbSize: CGFloat = 100
-    private static let cornerRadius: CGFloat = 16
+    private static let thumbSize: CGFloat = 132
+    private static let cornerRadius: CGFloat = 18
     /// Width of the inner content (without the card's horizontal padding).
-    static let widgetWidth: CGFloat = 128
+    static let widgetWidth: CGFloat = 156
     /// Width of the outer card including its horizontal padding. Used by the
     /// parent for screen-edge layout math.
-    static let widgetOuterWidth: CGFloat = 152
+    static let widgetOuterWidth: CGFloat = 188
 
     static func estimatedHeight(for state: SlotState) -> CGFloat {
         switch state {
-        case .naming: return 188
-        case .generating, .accepted: return 144
-        case .readyForReview, .failed: return 168
+        case .naming: return 248
+        case .generating: return 200
+        case .accepted: return 192
+        case .readyForReview: return 220
+        case .failed: return 216
         }
     }
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 12) {
             thumbnailArea
             footerArea
         }
         .frame(width: Self.widgetWidth)
-        .padding(.top, 14)
-        .padding([.bottom, .horizontal], 12)
+        .padding(.top, 16)
+        .padding([.bottom, .horizontal], 16)
         .appCard(cornerRadius: LayoutMetrics.cardCornerRadius)
         .overlay(alignment: .topTrailing) {
-            // Anchored to the outer card corner and sticks out slightly so it
-            // reads as a control for the whole card, not the inner thumbnail.
             cornerButton
-                .offset(x: 8, y: -8)
+                .offset(x: 10, y: -10)
         }
     }
 
@@ -574,19 +586,23 @@ private struct SlotWidgetView: View {
 
     private var cornerButton: some View {
         Button(action: onDismiss) {
-            Image(systemName: isAccepted ? "checkmark" : "xmark")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(isAccepted ? .white : AppPalette.iconPrimary)
-                .frame(width: 40, height: 40)
-                .background {
-                    Circle()
-                        .fill(isAccepted ? AppPalette.uploadGlow : Color.white)
+            ZStack {
+                if isAccepted {
+                    Circle().fill(AppPalette.uploadGlow)
+                        .overlay(Circle().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
+                        .shadow(color: AppPalette.uploadGlow.opacity(0.32), radius: 10, y: 4)
+                        .shadow(color: AppPalette.cardShadow, radius: 8, y: 4)
+                } else {
+                    Color.clear.appCircle()
                 }
-                .overlay(Circle().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
-                .shadow(color: AppPalette.cardShadow, radius: 12, y: 6)
-                .contentTransition(.symbolEffect(.replace.downUp.byLayer))
-                .animation(.spring(response: 0.32, dampingFraction: 0.78), value: isAccepted)
-                .contentShape(Circle())
+                Image(systemName: isAccepted ? "checkmark" : "xmark")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(isAccepted ? .white : AppPalette.iconPrimary)
+                    .contentTransition(.symbolEffect(.replace.downUp.byLayer))
+                    .animation(.spring(response: 0.32, dampingFraction: 0.78), value: isAccepted)
+            }
+            .frame(width: 44, height: 44)
+            .contentShape(Circle())
         }
         .buttonStyle(.plain)
     }
@@ -594,45 +610,46 @@ private struct SlotWidgetView: View {
     @ViewBuilder
     private var thumbnailArea: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
-                .fill(Color.white.opacity(0.55))
-
             switch slot.state {
             case .naming:
-                Image(uiImage: slot.previewCrop)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: Self.thumbSize, height: Self.thumbSize)
-                    .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
+                cropImageWithBackground
             case .generating:
-                Image(uiImage: slot.previewCrop)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: Self.thumbSize, height: Self.thumbSize)
-                    .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
+                cropImageWithBackground
                 Color.white.opacity(0.55)
                     .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
                 ProgressView().tint(AppPalette.textMuted)
             case .readyForReview(let thumb), .accepted(let thumb):
+                // Alpha cutout floats directly on the card surface —
+                // no white background to avoid a card-within-a-card.
                 Image(uiImage: thumb)
                     .resizable()
                     .scaledToFit()
-                    .padding(4)
             case .failed:
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 18))
+                    .font(.system(size: 22, weight: .regular))
                     .foregroundStyle(.orange)
             }
         }
         .frame(width: Self.thumbSize, height: Self.thumbSize)
-        .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
+    }
+
+    private var cropImageWithBackground: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+                .fill(Color.white.opacity(0.55))
+            Image(uiImage: slot.previewCrop)
+                .resizable()
+                .scaledToFill()
+                .frame(width: Self.thumbSize, height: Self.thumbSize)
+                .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
+        }
     }
 
     @ViewBuilder
     private var footerArea: some View {
         switch slot.state {
         case .naming:
-            VStack(spacing: 8) {
+            VStack(spacing: 10) {
                 TextField(
                     "",
                     text: Binding(
@@ -640,84 +657,88 @@ private struct SlotWidgetView: View {
                         set: { onNameChange($0) }
                     ),
                     prompt: Text(slot.placeholderHint)
-                        .foregroundStyle(AppPalette.textMuted)
+                        .foregroundStyle(AppPalette.textFaint)
                 )
-                .font(.system(size: 13))
+                .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(AppPalette.textStrong)
                 .textInputAutocapitalization(.words)
                 .focused($focusedID, equals: slot.id)
                 .submitLabel(.done)
                 .onSubmit { onCommitName() }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
+                .padding(.horizontal, 14)
+                .frame(height: 40)
                 .background(Color.white)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(AppPalette.textFaint.opacity(0.4), lineWidth: 0.75)
-                )
+                .clipShape(Capsule())
+                .overlay(Capsule().strokeBorder(AppPalette.textFaint.opacity(0.3), lineWidth: 0.75))
 
+                let isEmpty = slot.name.trimmingCharacters(in: .whitespaces).isEmpty
                 Button(action: onCommitName) {
                     Text("Done")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(isEmpty ? AppPalette.textFaint : AppPalette.textPrimary)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(slot.name.trimmingCharacters(in: .whitespaces).isEmpty
-                                      ? AppPalette.textFaint.opacity(0.5)
-                                      : AppPalette.textStrong)
+                        .frame(height: 44)
+                        .appCapsule()
+                        // AI-action accent (matches Quick Add halo).
+                        .shadow(
+                            color: isEmpty ? .clear : AppPalette.aiAccent.opacity(0.22),
+                            radius: 10, y: 0
                         )
-                        .foregroundStyle(slot.name.trimmingCharacters(in: .whitespaces).isEmpty
-                                         ? AppPalette.textPrimary
-                                         : .white)
                 }
                 .buttonStyle(.plain)
-                .disabled(slot.name.trimmingCharacters(in: .whitespaces).isEmpty)
+                .disabled(isEmpty)
+                .animation(.easeInOut(duration: 0.18), value: isEmpty)
             }
         case .generating:
-            Text("Generating…")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(AppPalette.textPrimary)
-        case .readyForReview:
             HStack(spacing: 8) {
+                ProgressView().controlSize(.small).tint(AppPalette.textMuted)
+                Text("Generating…")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(AppPalette.textMuted)
+            }
+            .frame(height: 44)
+        case .readyForReview:
+            HStack(spacing: 10) {
                 Button(action: onRetry) {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 16, weight: .semibold))
-                        .frame(maxWidth: .infinity, minHeight: 38)
-                        .background(RoundedRectangle(cornerRadius: 11).fill(Color.white))
-                        .foregroundStyle(AppPalette.textPrimary)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 11)
-                                .strokeBorder(AppPalette.textFaint.opacity(0.45), lineWidth: 0.75)
-                        )
+                        .foregroundStyle(AppPalette.iconPrimary)
+                        .frame(width: 44, height: 44)
+                        .appCircle()
                 }
                 .buttonStyle(.plain)
+
                 Button(action: onAccept) {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 16, weight: .semibold))
-                        .frame(maxWidth: .infinity, minHeight: 38)
-                        .background(RoundedRectangle(cornerRadius: 11).fill(AppPalette.textStrong))
-                        .foregroundStyle(.white)
+                    ZStack {
+                        Circle()
+                            .fill(AppPalette.uploadGlow)
+                            .overlay(Circle().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
+                            .shadow(color: AppPalette.uploadGlow.opacity(0.32), radius: 10, y: 4)
+                            .shadow(color: AppPalette.cardShadow, radius: 8, y: 4)
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(.white)
+                    }
+                    .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.plain)
             }
+            .frame(maxWidth: .infinity, alignment: .center)
         case .accepted:
             Text(slot.name)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(AppPalette.textPrimary)
                 .lineLimit(1)
+                .frame(maxWidth: .infinity)
+                .frame(height: 32)
         case .failed:
             Button(action: onRetry) {
                 Text("Try again")
-                    .font(.system(size: 11, weight: .semibold))
-                    .frame(maxWidth: .infinity, minHeight: 28)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.white))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(AppPalette.textPrimary)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .strokeBorder(AppPalette.textFaint.opacity(0.4), lineWidth: 0.75)
-                    )
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 40)
+                    .appCapsule()
             }
             .buttonStyle(.plain)
         }

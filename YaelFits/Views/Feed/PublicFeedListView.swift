@@ -9,6 +9,7 @@ struct PublicFeedListView: View {
     @State private var commentCounts: [String: Int] = [:]
     @State private var myLikedOutfitIds: Set<String> = []
     @State private var showsNotifications = false
+    @State private var pendingScrollPostId: String?
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -92,14 +93,17 @@ struct PublicFeedListView: View {
                         isInitiallyLiked: myLikedOutfitIds.contains(post.outfitId),
                         onCommentCountChanged: { newCount in
                             commentCounts[post.outfitId] = newCount
+                        },
+                        onCartOpen: {
+                            pendingScrollPostId = post.id
                         }
                     )
                     .id(post.id)
                     .onPreferenceChange(CartBottomKey.self) { bottomY in
-                        guard let bottomY else { return }
+                        guard let bottomY, pendingScrollPostId == post.id else { return }
+                        pendingScrollPostId = nil
                         let screenHeight = UIScreen.main.bounds.height
                         let tabBarTop = screenHeight - LayoutMetrics.tabBarHeight - LayoutMetrics.screenPadding
-                        // Only scroll if cart bottom is below the tab bar
                         if bottomY > tabBarTop {
                             withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.5)) {
                                 proxy.scrollTo("cartBottom-\(post.id)", anchor: .init(x: 0.5, y: 0.88))
@@ -315,6 +319,7 @@ struct FeedPostCard: View {
     var commentCount: Int
     var isInitiallyLiked: Bool
     var onCommentCountChanged: ((Int) -> Void)?
+    var onCartOpen: (() -> Void)?
     @Environment(OutfitStore.self) private var store
     @State private var showComments = false
     @State private var showUserProfile = false
@@ -323,7 +328,6 @@ struct FeedPostCard: View {
     @State private var localLikeAdjustment: Int = 0
     @State private var localCommentCount: Int?
     @State private var cartOpen = false
-    @State private var cartNeedsScroll = false
     @State private var fetchedOutfit: Outfit?
 
     // Use local store first, then prefetch cache, then per-card fetch
@@ -558,7 +562,7 @@ struct FeedPostCard: View {
                             cartOpen.toggle()
                         }
                         if cartOpen {
-                            cartNeedsScroll = true
+                            onCartOpen?()
                         }
                     }
                 }
@@ -596,9 +600,11 @@ struct FeedPostCard: View {
                             )
                         }
                     }
+                    .padding(.horizontal, LayoutMetrics.medium)
                     .padding(.top, LayoutMetrics.xxSmall)
                     .padding(.bottom, LayoutMetrics.xxxSmall)
                 }
+                .padding(.horizontal, -LayoutMetrics.medium)
                 .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .top)))
                 GeometryReader { geo in
                     Color.clear

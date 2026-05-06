@@ -111,6 +111,9 @@ struct Outfit: Codable, Identifiable, Hashable, Sendable {
     /// detail card (e.g. "NEW YORK"). Optional — older outfits and
     /// outfits without a captured location simply hide the label.
     var location: String?
+    /// Device-local owner used to scope on-disk assets and metadata to the
+    /// signed-in account that created the outfit.
+    var localOwnerUserId: String? = nil
 
     var normalizedFrameExt: String {
         let ext = (frameExt ?? "webp").trimmingCharacters(in: .whitespaces).lowercased()

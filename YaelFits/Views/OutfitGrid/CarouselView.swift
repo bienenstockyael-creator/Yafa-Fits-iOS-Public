@@ -858,7 +858,7 @@ struct CarouselDetailCard: View {
                     .frame(height: 36)
                     .appCapsule(shadowRadius: 0, shadowY: 0)
                     // AI-action accent: soft purple halo.
-                    .shadow(color: Color(red: 0.62, green: 0.55, blue: 0.95).opacity(0.18), radius: 8, y: 0)
+                    .shadow(color: AppPalette.aiAccent.opacity(0.18), radius: 8, y: 0)
                 }
                 .buttonStyle(.plain)
                 .disabled(isLoadingAutoDetect)

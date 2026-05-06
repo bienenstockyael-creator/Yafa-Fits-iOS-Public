@@ -48,10 +48,12 @@ targets:
           - PlayfairDisplay-Italic.otf
           - Inter_28pt-MediumItalic.ttf
           - Inter_28pt-SemiBold.ttf
+          - GTFAdieuTRIAL-BlackSlanted.otf
         FALAPIKey: "$(FALAPIKey)"
         NSCameraUsageDescription: "Use the camera to capture a full-body mirror selfie for outfit generation."
         NSUserNotificationsUsageDescription: "Get notified when your interactive fit is ready."
         NSLocationWhenInUseUsageDescription: "Use your location to attach the current weather to uploaded outfits."
+        NSPhotoLibraryAddUsageDescription: "Save dressed avatar looks to your photo library."
         UILaunchScreen: {}
         UIRequiresFullScreen: true
         UIBackgroundModes:
@@ -71,3 +73,16 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         PRODUCT_NAME: Yafa
         CODE_SIGN_ENTITLEMENTS: YaelFits/YaelFits.entitlements
+  YafaTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - YafaTests
+    dependencies:
+      - target: Yafa
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.yafa.YafaTests
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Yafa.app/Yafa"
+        BUNDLE_LOADER: "$(TEST_HOST)"

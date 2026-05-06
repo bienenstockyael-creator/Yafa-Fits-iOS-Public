@@ -268,7 +268,7 @@ struct ContentSource {
 
     static func getAllOutfits(userId: UUID) async -> [Outfit] {
         let remote = await getUserOutfits(userId: userId)
-        let local = getLocalOutfits()
+        let local = getLocalOutfits(userId: userId)
         let remoteIds = Set(remote.map(\.id))
         let uniqueLocal = local.filter { !remoteIds.contains($0.id) }
 
@@ -283,8 +283,8 @@ struct ContentSource {
         return remote + uniqueLocal
     }
 
-    static func getLocalOutfits() -> [Outfit] {
-        LocalOutfitStore.shared.loadOutfits()
+    static func getLocalOutfits(userId: UUID) -> [Outfit] {
+        LocalOutfitStore.shared.loadOutfits(userId: userId)
     }
 
     /// Fetch public outfits for a specific user.

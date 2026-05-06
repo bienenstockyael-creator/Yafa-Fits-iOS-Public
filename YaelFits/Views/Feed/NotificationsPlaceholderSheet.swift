@@ -5,7 +5,7 @@ struct NotificationsPlaceholderSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var items: [NotificationItem] = []
     @State private var isLoading = true
-    @State private var lastSeenDate: Date = UserDefaults.standard.object(forKey: "lastSeenNotificationsAt") as? Date ?? .distantPast
+    @State private var lastSeenDate: Date = .distantPast
 
     var body: some View {
         NavigationStack {
@@ -52,8 +52,8 @@ struct NotificationsPlaceholderSheet: View {
             }
             .task { await loadNotifications() }
             .onDisappear {
-                // Mark as seen on any dismissal (Close button, swipe-down, gesture).
-                UserDefaults.standard.set(Date(), forKey: "lastSeenNotificationsAt")
+                guard let userId = store.userId else { return }
+                NotificationReadState.markSeen(for: userId)
                 store.unreadNotificationCount = 0
             }
         }
@@ -97,6 +97,7 @@ struct NotificationsPlaceholderSheet: View {
             isLoading = false
             return
         }
+        lastSeenDate = NotificationReadState.lastSeenDate(for: userId)
 
         // Get user's outfit IDs
         let userOutfitIds: [String] = (try? await supabase
@@ -105,11 +106,6 @@ struct NotificationsPlaceholderSheet: View {
             .eq("user_id", value: userId.uuidString)
             .execute()
             .value as [IdRow])?.map(\.id) ?? []
-
-        guard !userOutfitIds.isEmpty || true else {
-            isLoading = false
-            return
-        }
 
         var allItems: [NotificationItem] = []
 

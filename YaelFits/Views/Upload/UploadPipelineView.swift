@@ -552,7 +552,9 @@ struct UploadPipelineView: View {
 
         store.cancelUploadTask()
         resetPreviewPlayer()
-        LocalOutfitStore.shared.clearPendingReview()
+        if let userId = store.userId {
+            LocalOutfitStore.shared.clearPendingReview(userId: userId)
+        }
         endGenerationBackgroundActivity()
 
         job.step = .generate
@@ -623,7 +625,9 @@ struct UploadPipelineView: View {
             ? "The new outfit is now in your archive and public feed."
             : "The new outfit is now in the archive."
         store.cancelUploadTask()
-        LocalOutfitStore.shared.clearPendingReview()
+        if let userId = store.userId {
+            LocalOutfitStore.shared.clearPendingReview(userId: userId)
+        }
         endGenerationBackgroundActivity()
 
         if let userId = store.userId {
@@ -820,7 +824,9 @@ struct UploadPipelineView: View {
         discardUnacceptedStagedOutfitIfNeeded()
         selectedPhoto = nil
         store.uploadJob = nil
-        LocalOutfitStore.shared.clearPendingReview()
+        if let userId = store.userId {
+            LocalOutfitStore.shared.clearPendingReview(userId: userId)
+        }
         endGenerationBackgroundActivity()
     }
 
@@ -843,25 +849,32 @@ struct UploadPipelineView: View {
         if let stagedOutfit = currentJob.stagedOutfit {
             currentJob.stagedOutfit = nil
             // Only delete local frames (server-generated outfits have no local frames)
-            if stagedOutfit.remoteBaseURL == nil {
-                LocalOutfitStore.shared.deleteOutfitData(for: stagedOutfit)
+            if stagedOutfit.remoteBaseURL == nil, let userId = store.userId {
+                LocalOutfitStore.shared.deleteOutfitData(for: stagedOutfit, userId: userId)
             }
         }
-        LocalOutfitStore.shared.clearPendingReview()
+        if let userId = store.userId {
+            LocalOutfitStore.shared.clearPendingReview(userId: userId)
+        }
     }
 
     private func nextOutfitNumber() -> Int {
         let maxExisting = store.outfits.compactMap(\.outfitNumber).max() ?? 0
-        return max(maxExisting + 1, LocalOutfitStore.shared.nextOutfitNum())
+        guard let userId = store.userId else { return maxExisting + 1 }
+        return max(maxExisting + 1, LocalOutfitStore.shared.nextOutfitNum(userId: userId))
     }
 
     private func persistPendingReviewIfNeeded(for job: PipelineJob) {
         guard let review = PersistedPipelineReview(job: job) else {
-            LocalOutfitStore.shared.clearPendingReview()
+            if let userId = store.userId {
+                LocalOutfitStore.shared.clearPendingReview(userId: userId)
+            }
             return
         }
 
-        LocalOutfitStore.shared.savePendingReview(review)
+        if let userId = store.userId {
+            LocalOutfitStore.shared.savePendingReview(review, userId: userId)
+        }
     }
 
     private func beginGenerationBackgroundActivity() {

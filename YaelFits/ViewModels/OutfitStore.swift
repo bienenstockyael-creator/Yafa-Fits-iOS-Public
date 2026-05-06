@@ -43,9 +43,67 @@ class OutfitStore {
     var unreadNotificationCount = 0
     var feedScrollToTopTrigger = 0
 
+    func beginSession(for userId: UUID) {
+        UserDefaults.standard.removeObject(forKey: "lastSeenNotificationsAt")
+        let isSwitchingUsers = self.userId != nil && self.userId != userId
+        self.userId = userId
+
+        guard isSwitchingUsers else {
+            isLoading = true
+            return
+        }
+
+        cancelUploadTask()
+        outfits = []
+        feedPosts = []
+        uploadJob = nil
+        likedIds = []
+        savedIds = []
+        followingIds = []
+        isLoading = true
+        selectedOutfitId = nil
+        centeredListOutfitId = nil
+        pendingCalendarScrollOutfitId = nil
+        listOutfitFrames = [:]
+        calendarOutfitFrames = [:]
+        listOutfitFrameIndices = [:]
+        heroAnchorOutfitId = nil
+        viewTransitionPhase = .idle
+        generationReadyForReview = false
+        isCarouselOpen = false
+        unreadNotificationCount = 0
+        currentProfile = nil
+        feedOutfitCache = [:]
+    }
+
+    func resetForSignedOutState() {
+        cancelUploadTask()
+        userId = nil
+        outfits = []
+        feedPosts = []
+        uploadJob = nil
+        likedIds = []
+        savedIds = []
+        followingIds = []
+        isLoading = false
+        selectedOutfitId = nil
+        centeredListOutfitId = nil
+        pendingCalendarScrollOutfitId = nil
+        listOutfitFrames = [:]
+        calendarOutfitFrames = [:]
+        listOutfitFrameIndices = [:]
+        heroAnchorOutfitId = nil
+        viewTransitionPhase = .idle
+        generationReadyForReview = false
+        isCarouselOpen = false
+        unreadNotificationCount = 0
+        currentProfile = nil
+        feedOutfitCache = [:]
+    }
+
     func refreshUnreadNotificationCount() async {
         guard let userId else { return }
-        let lastSeen = UserDefaults.standard.object(forKey: "lastSeenNotificationsAt") as? Date ?? .distantPast
+        let lastSeen = NotificationReadState.lastSeenDate(for: userId)
         let since = ISO8601DateFormatter().string(from: lastSeen)
 
         struct IdRow: Decodable { let id: String }
@@ -95,7 +153,11 @@ class OutfitStore {
             .value) ?? []
         count += follows.count
 
-        await MainActor.run { unreadNotificationCount = count }
+        let finalCount = count
+        await MainActor.run {
+            guard self.userId == userId else { return }
+            unreadNotificationCount = finalCount
+        }
     }
     var hasPlayedInitialListEntrance = false
     var uploadTask: Task<Void, Never>?
@@ -160,7 +222,7 @@ class OutfitStore {
         } else {
             base = bundled
         }
-        let local = ContentSource.getLocalOutfits()
+        let local = ContentSource.getLocalOutfits(userId: userId)
         let baseIds = Set(base.map(\.id))
         let uniqueLocal = local.filter { !baseIds.contains($0.id) }
         let instant = base + uniqueLocal
@@ -172,6 +234,7 @@ class OutfitStore {
         }
 
         await MainActor.run {
+            guard self.userId == userId else { return }
             self.outfits = instant
             self.feedPosts = instantFeed
             self.isLoading = false
@@ -185,6 +248,7 @@ class OutfitStore {
 
         // Refresh feed in background — includes user's own public outfits + followed users
         Task.detached(priority: .utility) {
+            guard self.userId == userId else { return }
             await self.refreshFeed()
         }
 
@@ -235,6 +299,7 @@ class OutfitStore {
         let cachedFollowing = LocalCache.loadFollowingIds(userId: userId) ?? []
 
         await MainActor.run {
+            guard self.userId == userId else { return }
             self.likedIds = cachedLikes
             self.savedIds = cachedSaves
             self.followingIds = cachedFollowing
@@ -248,24 +313,40 @@ class OutfitStore {
             async let profileTask = try? SocialService.getProfile(userId: userId)
             async let followingTask = try? SocialService.getFollowingIds(userId: userId)
 
-            let liked = await likedTask ?? []
-            let saved = await savedTask ?? []
+            let liked = await likedTask
+            let saved = await savedTask
             let profile = await profileTask
-            let following = await followingTask ?? []
+            let following = await followingTask
 
-            LocalCache.saveLikedIds(liked, userId: userId)
-            LocalCache.saveSavedIds(saved, userId: userId)
+            if let liked { LocalCache.saveLikedIds(liked, userId: userId) }
+            if let saved { LocalCache.saveSavedIds(saved, userId: userId) }
             if let profile { LocalCache.saveProfile(profile, userId: userId) }
-            LocalCache.saveFollowingIds(following, userId: userId)
+            if let following { LocalCache.saveFollowingIds(following, userId: userId) }
 
-            // Update live UI with fresh data — critical for first sign-in when cache is empty
             await MainActor.run {
-                if !liked.isEmpty { self.likedIds = liked }
-                if !saved.isEmpty { self.savedIds = saved }
-                if let profile { self.currentProfile = profile }
-                if !following.isEmpty { self.followingIds = following }
+                self.applyFreshSocialData(
+                    liked: liked,
+                    saved: saved,
+                    profile: profile,
+                    following: following,
+                    for: userId
+                )
             }
         }
+    }
+
+    func applyFreshSocialData(
+        liked: Set<String>?,
+        saved: Set<String>?,
+        profile: Profile?,
+        following: Set<UUID>?,
+        for userId: UUID
+    ) {
+        guard self.userId == userId else { return }
+        if let liked { self.likedIds = liked }
+        if let saved { self.savedIds = saved }
+        if let profile { self.currentProfile = profile }
+        if let following { self.followingIds = following }
     }
 
     /// Updates an outfit's caption and products locally after publishing.
@@ -374,12 +455,17 @@ class OutfitStore {
     }
 
     func addOutfit(_ outfit: Outfit) {
-        if let existing = outfits.firstIndex(where: { $0.id == outfit.id }) {
-            outfits[existing] = outfit
-        } else {
-            outfits.append(outfit)
+        guard let userId else { return }
+        var ownedOutfit = outfit
+        if ownedOutfit.localOwnerUserId == nil {
+            ownedOutfit.localOwnerUserId = userId.uuidString
         }
-        LocalOutfitStore.shared.saveOutfit(outfit)
+        if let existing = outfits.firstIndex(where: { $0.id == outfit.id }) {
+            outfits[existing] = ownedOutfit
+        } else {
+            outfits.append(ownedOutfit)
+        }
+        LocalOutfitStore.shared.saveOutfit(ownedOutfit, userId: userId)
     }
 
     func publishOutfitToFeed(_ outfit: Outfit, authorName: String = "You", caption: String? = nil) {
@@ -395,7 +481,9 @@ class OutfitStore {
 
         feedPosts.removeAll { $0.id == post.id || $0.outfitId == post.outfitId }
         feedPosts.insert(post, at: 0)
-        LocalOutfitStore.shared.saveFeedPost(post)
+        if let userId {
+            LocalOutfitStore.shared.saveFeedPost(post, userId: userId)
+        }
     }
 
     func replaceUploadTask(with task: Task<Void, Never>?) {
@@ -409,8 +497,9 @@ class OutfitStore {
     }
 
     func restorePersistedPendingReviewIfNeeded() {
-        guard uploadJob == nil,
-              let review = LocalOutfitStore.shared.loadPendingReview() else {
+        guard let userId,
+              uploadJob == nil,
+              let review = LocalOutfitStore.shared.loadPendingReview(userId: userId) else {
             return
         }
 
@@ -446,7 +535,7 @@ class OutfitStore {
             job.statusDetail = "Your interactive fit is ready for review."
 
             await MainActor.run {
-                guard uploadJob == nil else { return }
+                guard self.userId == userId, uploadJob == nil else { return }
                 uploadJob = job
                 generationReadyForReview = true
             }
@@ -456,7 +545,8 @@ class OutfitStore {
     }
 
     func isLocalOutfit(_ outfit: Outfit) -> Bool {
-        LocalOutfitStore.shared.loadOutfits().contains { $0.id == outfit.id }
+        guard let userId else { return false }
+        return LocalOutfitStore.shared.loadOutfits(userId: userId).contains { $0.id == outfit.id }
     }
 
     func deleteOutfit(_ outfit: Outfit) {
@@ -481,7 +571,9 @@ class OutfitStore {
             pendingCalendarScrollOutfitId = nil
         }
 
-        LocalOutfitStore.shared.deleteOutfitData(for: outfit)
+        if let userId {
+            LocalOutfitStore.shared.deleteOutfitData(for: outfit, userId: userId)
+        }
         persistCache()
         // Also delete from Supabase (handles both uploaded and bundled outfits)
         Task.detached(priority: .utility) {
@@ -527,6 +619,7 @@ class OutfitStore {
             return preserved
         }
         await MainActor.run {
+            guard self.userId == userId else { return }
             self.outfits = merged
         }
         LocalCache.saveOutfits(merged, userId: userId)
@@ -535,11 +628,13 @@ class OutfitStore {
     func refreshFeed() async {
         guard let userId else { return }
         let freshFeed = await ContentSource.getPublicFeed()
+        guard self.userId == userId else { return }
         LocalCache.saveFeedPosts(freshFeed, userId: userId)
 
         guard freshFeed != feedPosts else { return }
 
         await MainActor.run {
+            guard self.userId == userId else { return }
             self.feedPosts = freshFeed
         }
 
@@ -551,10 +646,31 @@ class OutfitStore {
             for post in postsToPreload {
                 guard self.outfitById[post.outfitId] == nil else { continue }
                 if let outfit = await ContentSource.getPublicOutfit(id: post.outfitId) {
-                    await MainActor.run { self.feedOutfitCache[post.outfitId] = outfit }
+                    await MainActor.run {
+                        guard self.userId == userId else { return }
+                        self.feedOutfitCache[post.outfitId] = outfit
+                    }
                     _ = await FrameLoader.shared.frame(for: outfit, index: 0)
                 }
             }
         }
+    }
+}
+
+enum NotificationReadState {
+    private static func key(for userId: UUID) -> String {
+        "lastSeenNotificationsAt-\(userId.uuidString)"
+    }
+
+    static func lastSeenDate(for userId: UUID) -> Date {
+        UserDefaults.standard.object(forKey: key(for: userId)) as? Date ?? .distantPast
+    }
+
+    static func markSeen(for userId: UUID, at date: Date = Date()) {
+        UserDefaults.standard.set(date, forKey: key(for: userId))
+    }
+
+    static func clear(for userId: UUID) {
+        UserDefaults.standard.removeObject(forKey: key(for: userId))
     }
 }

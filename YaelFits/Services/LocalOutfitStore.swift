@@ -1,7 +1,9 @@
 import Foundation
 import UIKit
 
-/// Manages locally created outfits — frames stored on-device.
+/// Manages locally created outfits and any device-only review state.
+/// Metadata is scoped per signed-in user so accounts on the same device
+/// do not see each other's private local content.
 class LocalOutfitStore {
     static let shared = LocalOutfitStore()
 
@@ -9,61 +11,179 @@ class LocalOutfitStore {
     private let pendingReviewFileName = "pending-generation-review.json"
 
     private let fileManager = FileManager.default
-    private let outfitsDir: URL
-    private let metadataFile: URL
-    private let feedMetadataFile: URL
-    private let pendingReviewFile: URL
+    private let rootDir: URL
+    private let userDataRootDir: URL
+    private let legacyMetadataFile: URL
+    private let legacyFeedMetadataFile: URL
+    private let legacyPendingReviewFile: URL
 
     private init() {
         let docs = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        outfitsDir = docs.appendingPathComponent("outfits", isDirectory: true)
-        metadataFile = docs.appendingPathComponent("local-outfits.json")
-        feedMetadataFile = docs.appendingPathComponent("local-feed.json")
-        pendingReviewFile = docs.appendingPathComponent(pendingReviewFileName)
-        try? fileManager.createDirectory(at: outfitsDir, withIntermediateDirectories: true)
+        rootDir = docs.appendingPathComponent("outfits", isDirectory: true)
+        userDataRootDir = docs.appendingPathComponent("local-user-data", isDirectory: true)
+        legacyMetadataFile = docs.appendingPathComponent("local-outfits.json")
+        legacyFeedMetadataFile = docs.appendingPathComponent("local-feed.json")
+        legacyPendingReviewFile = docs.appendingPathComponent(pendingReviewFileName)
+        try? fileManager.createDirectory(at: rootDir, withIntermediateDirectories: true)
+        try? fileManager.createDirectory(at: userDataRootDir, withIntermediateDirectories: true)
     }
 
-    func nextOutfitNum() -> Int {
-        let outfits = loadOutfits()
+    func nextOutfitNum(userId: UUID) -> Int {
+        let outfits = loadOutfits(userId: userId)
         let nums = outfits.compactMap(\.outfitNumber)
         return (nums.max() ?? 0) + 1
     }
 
-    func outfitDirectory(for outfit: Outfit) -> URL {
-        outfitsDir.appendingPathComponent(outfit.folder, isDirectory: true)
+    private func assetOwnerId(for outfit: Outfit, userId: UUID? = nil) -> String? {
+        if let userId {
+            return userId.uuidString
+        }
+        return outfit.localOwnerUserId
     }
 
-    func frameURL(for outfit: Outfit, index: Int) -> URL {
-        let dir = outfitDirectory(for: outfit)
+    private func userDirectory(for userId: UUID) -> URL {
+        let dir = userDataRootDir.appendingPathComponent(userId.uuidString, isDirectory: true)
+        try? fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    private func metadataFile(for userId: UUID) -> URL {
+        userDirectory(for: userId).appendingPathComponent("local-outfits.json")
+    }
+
+    private func feedMetadataFile(for userId: UUID) -> URL {
+        userDirectory(for: userId).appendingPathComponent("local-feed.json")
+    }
+
+    private func pendingReviewFile(for userId: UUID) -> URL {
+        userDirectory(for: userId).appendingPathComponent(pendingReviewFileName)
+    }
+
+    private func migrateLegacyDataIfNeeded(to userId: UUID) {
+        let userMetadataFile = metadataFile(for: userId)
+        let userFeedFile = feedMetadataFile(for: userId)
+        let userPendingReviewFile = pendingReviewFile(for: userId)
+
+        if fileManager.fileExists(atPath: legacyMetadataFile.path),
+           !fileManager.fileExists(atPath: userMetadataFile.path),
+           let data = try? Data(contentsOf: legacyMetadataFile),
+           let outfitData = try? JSONDecoder().decode(OutfitData.self, from: data) {
+            let migratedOutfits = outfitData.outfits.map { outfit -> Outfit in
+                var ownedOutfit = outfit
+                ownedOutfit.localOwnerUserId = userId.uuidString
+                migrateLegacyAssets(for: outfit, to: ownedOutfit, userId: userId)
+                return ownedOutfit
+            }
+            if let encoded = try? JSONEncoder().encode(OutfitData(outfits: migratedOutfits)) {
+                try? encoded.write(to: userMetadataFile, options: .atomic)
+                try? fileManager.removeItem(at: legacyMetadataFile)
+            }
+        }
+
+        if fileManager.fileExists(atPath: legacyFeedMetadataFile.path),
+           !fileManager.fileExists(atPath: userFeedFile.path),
+           let data = try? Data(contentsOf: legacyFeedMetadataFile) {
+            try? data.write(to: userFeedFile, options: .atomic)
+            try? fileManager.removeItem(at: legacyFeedMetadataFile)
+        }
+
+        if fileManager.fileExists(atPath: legacyPendingReviewFile.path),
+           !fileManager.fileExists(atPath: userPendingReviewFile.path),
+           let data = try? Data(contentsOf: legacyPendingReviewFile),
+           var review = try? JSONDecoder().decode(PersistedPipelineReview.self, from: data) {
+            var ownedOutfit = review.stagedOutfit
+            ownedOutfit.localOwnerUserId = userId.uuidString
+            migrateLegacyAssets(for: review.stagedOutfit, to: ownedOutfit, userId: userId)
+            review = PersistedPipelineReview(
+                id: review.id,
+                outfitNum: review.outfitNum,
+                stagedOutfit: ownedOutfit,
+                uploadWeather: review.uploadWeather,
+                uploadLocation: review.uploadLocation,
+                isRotationReversed: review.isRotationReversed,
+                sourceImagePath: review.sourceImagePath,
+                serverJobId: review.serverJobId,
+                prompt: review.prompt,
+                persistedAt: review.persistedAt,
+                statusTitle: review.statusTitle,
+                statusDetail: review.statusDetail
+            )
+            if let encoded = try? JSONEncoder().encode(review) {
+                try? encoded.write(to: userPendingReviewFile, options: .atomic)
+                try? fileManager.removeItem(at: legacyPendingReviewFile)
+            }
+        }
+    }
+
+    private func migrateLegacyAssets(for legacyOutfit: Outfit, to ownedOutfit: Outfit, userId: UUID) {
+        let legacyDir = rootDir.appendingPathComponent(legacyOutfit.folder, isDirectory: true)
+        guard fileManager.fileExists(atPath: legacyDir.path) else { return }
+
+        let destinationDir = outfitDirectory(for: ownedOutfit, userId: userId)
+        guard !fileManager.fileExists(atPath: destinationDir.path) else { return }
+        try? fileManager.createDirectory(at: destinationDir.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? fileManager.moveItem(at: legacyDir, to: destinationDir)
+    }
+
+    func outfitDirectory(for outfit: Outfit, userId: UUID? = nil) -> URL {
+        if let ownerId = assetOwnerId(for: outfit, userId: userId) {
+            let ownerDir = rootDir.appendingPathComponent(ownerId, isDirectory: true)
+            try? fileManager.createDirectory(at: ownerDir, withIntermediateDirectories: true)
+            return ownerDir.appendingPathComponent(outfit.folder, isDirectory: true)
+        }
+        return rootDir.appendingPathComponent(outfit.folder, isDirectory: true)
+    }
+
+    func frameURL(for outfit: Outfit, index: Int, userId: UUID? = nil) -> URL {
+        let dir = outfitDirectory(for: outfit, userId: userId)
         let padded = String(format: "%05d", index)
         return dir.appendingPathComponent("\(outfit.prefix)\(padded).\(outfit.normalizedFrameExt)")
     }
 
-    func previewURL(for outfit: Outfit) -> URL {
-        outfitDirectory(for: outfit).appendingPathComponent("\(previewFileName).webp")
+    func previewURL(for outfit: Outfit, userId: UUID? = nil) -> URL {
+        outfitDirectory(for: outfit, userId: userId).appendingPathComponent("\(previewFileName).webp")
     }
 
-    func hasAssets(for outfit: Outfit) -> Bool {
+    func hasAssets(for outfit: Outfit, userId: UUID? = nil) -> Bool {
         if outfit.resolvedRemoteBaseURL != nil {
             return true
         }
-        let dir = outfitDirectory(for: outfit)
-        guard fileManager.fileExists(atPath: dir.path) else { return false }
-        return fileManager.fileExists(atPath: previewURL(for: outfit).path) ||
-            fileManager.fileExists(atPath: frameURL(for: outfit, index: 0).path)
+
+        let candidateDirs: [URL]
+        if let userId {
+            candidateDirs = [outfitDirectory(for: outfit, userId: userId)]
+        } else if outfit.localOwnerUserId != nil {
+            candidateDirs = [outfitDirectory(for: outfit)]
+        } else {
+            candidateDirs = [outfitDirectory(for: outfit)]
+        }
+
+        for dir in candidateDirs {
+            guard fileManager.fileExists(atPath: dir.path) else { continue }
+
+            let previewPath = dir.appendingPathComponent("\(previewFileName).webp").path
+            let firstFramePath = dir
+                .appendingPathComponent("\(outfit.prefix)\(String(format: "%05d", 0)).\(outfit.normalizedFrameExt)")
+                .path
+            if fileManager.fileExists(atPath: previewPath) || fileManager.fileExists(atPath: firstFramePath) {
+                return true
+            }
+        }
+
+        return false
     }
 
-    func saveFrame(_ imageData: Data, outfit: Outfit, index: Int) throws {
-        let dir = outfitDirectory(for: outfit)
+    func saveFrame(_ imageData: Data, outfit: Outfit, userId: UUID? = nil, index: Int) throws {
+        let dir = outfitDirectory(for: outfit, userId: userId)
         try fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
-        let url = frameURL(for: outfit, index: index)
+        let url = frameURL(for: outfit, index: index, userId: userId)
         try imageData.write(to: url)
     }
 
-    func savePreview(_ imageData: Data, outfit: Outfit) throws {
-        let dir = outfitDirectory(for: outfit)
+    func savePreview(_ imageData: Data, outfit: Outfit, userId: UUID? = nil) throws {
+        let dir = outfitDirectory(for: outfit, userId: userId)
         try fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
-        try imageData.write(to: previewURL(for: outfit))
+        try imageData.write(to: previewURL(for: outfit, userId: userId))
     }
 
     func previewImage(for outfit: Outfit) -> UIImage? {
@@ -84,90 +204,100 @@ class LocalOutfitStore {
         return image
     }
 
-    func loadOutfits() -> [Outfit] {
-        guard let data = try? Data(contentsOf: metadataFile),
+    func loadOutfits(userId: UUID) -> [Outfit] {
+        migrateLegacyDataIfNeeded(to: userId)
+        let url = metadataFile(for: userId)
+        guard let data = try? Data(contentsOf: url),
               let outfitData = try? JSONDecoder().decode(OutfitData.self, from: data) else {
             return []
         }
         return outfitData.outfits
     }
 
-    func saveOutfit(_ outfit: Outfit) {
-        var outfits = loadOutfits()
-        outfits.removeAll { $0.id == outfit.id }
-        outfits.append(outfit)
+    func saveOutfit(_ outfit: Outfit, userId: UUID) {
+        var outfits = loadOutfits(userId: userId)
+        var ownedOutfit = outfit
+        if ownedOutfit.localOwnerUserId == nil {
+            ownedOutfit.localOwnerUserId = userId.uuidString
+        }
+        outfits.removeAll { $0.id == ownedOutfit.id }
+        outfits.append(ownedOutfit)
         let data = OutfitData(outfits: outfits)
         if let encoded = try? JSONEncoder().encode(data) {
-            try? encoded.write(to: metadataFile)
+            try? encoded.write(to: metadataFile(for: userId), options: .atomic)
         }
     }
 
-    func deleteOutfitData(for outfit: Outfit) {
-        let dir = outfitDirectory(for: outfit)
+    func deleteOutfitData(for outfit: Outfit, userId: UUID) {
+        let dir = outfitDirectory(for: outfit, userId: userId)
         try? fileManager.removeItem(at: dir)
 
-        var outfits = loadOutfits()
+        var outfits = loadOutfits(userId: userId)
         outfits.removeAll { $0.id == outfit.id }
         let data = OutfitData(outfits: outfits)
         if let encoded = try? JSONEncoder().encode(data) {
-            try? encoded.write(to: metadataFile)
+            try? encoded.write(to: metadataFile(for: userId), options: .atomic)
         }
 
-        deleteFeedPosts(forOutfitID: outfit.id)
+        deleteFeedPosts(forOutfitID: outfit.id, userId: userId)
     }
 
-    func loadFeedPosts() -> [FeedPost] {
-        guard let data = try? Data(contentsOf: feedMetadataFile),
+    func loadFeedPosts(userId: UUID) -> [FeedPost] {
+        migrateLegacyDataIfNeeded(to: userId)
+        let url = feedMetadataFile(for: userId)
+        guard let data = try? Data(contentsOf: url),
               let feedData = try? JSONDecoder().decode(FeedData.self, from: data) else {
             return []
         }
         return feedData.posts
     }
 
-    func saveFeedPost(_ post: FeedPost) {
-        var posts = loadFeedPosts()
+    func saveFeedPost(_ post: FeedPost, userId: UUID) {
+        var posts = loadFeedPosts(userId: userId)
         posts.removeAll { $0.id == post.id || $0.outfitId == post.outfitId }
         posts.insert(post, at: 0)
         let data = FeedData(posts: posts)
         if let encoded = try? JSONEncoder().encode(data) {
-            try? encoded.write(to: feedMetadataFile)
+            try? encoded.write(to: feedMetadataFile(for: userId), options: .atomic)
         }
     }
 
-    func deleteFeedPosts(forOutfitID outfitId: String) {
-        var posts = loadFeedPosts()
+    func deleteFeedPosts(forOutfitID outfitId: String, userId: UUID) {
+        var posts = loadFeedPosts(userId: userId)
         posts.removeAll { $0.outfitId == outfitId }
         let data = FeedData(posts: posts)
         if let encoded = try? JSONEncoder().encode(data) {
-            try? encoded.write(to: feedMetadataFile)
+            try? encoded.write(to: feedMetadataFile(for: userId), options: .atomic)
         }
     }
 
-    func savePendingReview(_ review: PersistedPipelineReview) {
+    func savePendingReview(_ review: PersistedPipelineReview, userId: UUID) {
         guard let encoded = try? JSONEncoder().encode(review) else { return }
-        try? encoded.write(to: pendingReviewFile)
+        try? encoded.write(to: pendingReviewFile(for: userId), options: .atomic)
     }
 
-    func loadPendingReview() -> PersistedPipelineReview? {
-        guard let data = try? Data(contentsOf: pendingReviewFile),
+    func loadPendingReview(userId: UUID) -> PersistedPipelineReview? {
+        migrateLegacyDataIfNeeded(to: userId)
+        let url = pendingReviewFile(for: userId)
+        guard let data = try? Data(contentsOf: url),
               let review = try? JSONDecoder().decode(PersistedPipelineReview.self, from: data) else {
             return nil
         }
 
-        guard hasAssets(for: review.stagedOutfit) else {
-            clearPendingReview()
+        guard hasAssets(for: review.stagedOutfit, userId: userId) else {
+            clearPendingReview(userId: userId)
             return nil
         }
 
         return review
     }
 
-    func clearPendingReview() {
-        try? fileManager.removeItem(at: pendingReviewFile)
+    func clearPendingReview(userId: UUID) {
+        try? fileManager.removeItem(at: pendingReviewFile(for: userId))
     }
 
     func storageUsed() -> Int64 {
-        guard let enumerator = fileManager.enumerator(at: outfitsDir, includingPropertiesForKeys: [.fileSizeKey]) else {
+        guard let enumerator = fileManager.enumerator(at: rootDir, includingPropertiesForKeys: [.fileSizeKey]) else {
             return 0
         }
         var total: Int64 = 0
@@ -177,5 +307,16 @@ class LocalOutfitStore {
             }
         }
         return total
+    }
+
+    func removeAllData(userId: UUID) {
+        try? fileManager.removeItem(at: userDirectory(for: userId))
+        try? fileManager.removeItem(at: rootDir.appendingPathComponent(userId.uuidString, isDirectory: true))
+    }
+
+    func removeLegacyData() {
+        try? fileManager.removeItem(at: legacyMetadataFile)
+        try? fileManager.removeItem(at: legacyFeedMetadataFile)
+        try? fileManager.removeItem(at: legacyPendingReviewFile)
     }
 }

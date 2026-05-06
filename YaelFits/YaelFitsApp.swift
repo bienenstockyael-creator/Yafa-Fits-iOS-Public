@@ -23,8 +23,7 @@ struct YaelFitsApp: App {
                         .environment(outfitStore)
                         .task(id: authManager.userId) {
                             if let userId = authManager.userId {
-                                outfitStore.userId = userId
-                                outfitStore.isLoading = true
+                                outfitStore.beginSession(for: userId)
                                 async let social: Void = outfitStore.loadSocialData(userId: userId)
                                 async let data: Void = outfitStore.loadData()
                                 _ = await (social, data)
@@ -36,6 +35,9 @@ struct YaelFitsApp: App {
                                 if needsSetup {
                                     await MainActor.run { showProfileSetup = true }
                                 }
+                            } else {
+                                outfitStore.resetForSignedOutState()
+                                await MainActor.run { showProfileSetup = false }
                             }
                         }
                         .sheet(isPresented: $showProfileSetup) {
