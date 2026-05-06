@@ -187,6 +187,23 @@ static half4 coloramaDisplaceCore(
     );
 }
 
+// Icy — white → very light blue → cool slate → black.
+[[ stitchable ]] half4 coloramaDisplacedIcy(
+    float2 position,
+    SwiftUI::Layer layer,
+    float time,
+    float canvasW,
+    float canvasH
+) {
+    return coloramaDisplaceCore(
+        position, layer.sample(position).a, time, canvasW, canvasH,
+        half3(1.000, 1.000, 1.000),
+        half3(0.847, 0.910, 0.961), // #D8E8F5 very light blue
+        half3(0.376, 0.498, 0.604), // cool slate-blue
+        half3(0.000, 0.000, 0.000)
+    );
+}
+
 // Sage — white → light blue → sage → forest green.
 [[ stitchable ]] half4 coloramaDisplacedSage(
     float2 position,

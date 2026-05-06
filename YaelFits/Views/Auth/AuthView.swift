@@ -10,57 +10,54 @@ struct AuthView: View {
     @State private var isSubmitting = false
     @State private var errorMessage: String?
     @State private var showPasswordReset = false
+    @State private var showSignupVerification = false
 
     var body: some View {
         ZStack {
             AppPalette.pageBackground.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                Spacer()
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) {
+                    Color.clear.frame(height: 80)
 
-                logoSection
+                    logoSection
 
-                Spacer().frame(height: 24)
+                    Color.clear.frame(height: LayoutMetrics.xLarge)
 
-                if !showPasswordReset {
-                    modePicker
-                    Spacer().frame(height: 24)
-                } else {
-                    Spacer().frame(height: 40)
-                }
-
-                if showPasswordReset {
-                    PasswordResetView(email: email) {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            showPasswordReset = false
+                    if showPasswordReset {
+                        PasswordResetView(email: email) {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showPasswordReset = false
+                            }
                         }
-                    }
-                } else {
-                    formSection
-
-                    Spacer().frame(height: 20)
-
-                    divider
-
-                    Spacer().frame(height: 20)
-
-                    appleSignInButton
-
-                    if !isSignUp {
+                    } else if showSignupVerification {
+                        SignupVerificationView(email: email) {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showSignupVerification = false
+                            }
+                        }
+                    } else {
+                        modePicker
+                        Color.clear.frame(height: LayoutMetrics.large)
+                        formSection
+                        Color.clear.frame(height: LayoutMetrics.medium)
+                        divider
+                        Color.clear.frame(height: LayoutMetrics.medium)
+                        appleSignInButton
                         forgotPasswordLink
                     }
-                }
 
-                Spacer()
+                    Color.clear.frame(height: LayoutMetrics.xLarge)
+                }
+                .padding(.horizontal, LayoutMetrics.screenPadding + 8)
             }
-            .padding(.horizontal, LayoutMetrics.screenPadding + 8)
         }
     }
 
     // MARK: - Logo
 
     private var logoSection: some View {
-        VStack(spacing: LayoutMetrics.xSmall) {
+        VStack(spacing: LayoutMetrics.small) {
             Group {
                 if let logoURL = Bundle.main.url(forResource: "logo", withExtension: "png"),
                    let data = try? Data(contentsOf: logoURL),
@@ -79,16 +76,18 @@ struct AuthView: View {
                 }
             }
 
-            Text(showPasswordReset ? "Reset your password" : (isSignUp ? "Create your account" : "Welcome back"))
-                .font(.system(size: 13))
-                .foregroundStyle(AppPalette.textMuted)
+            if let subtitle = headerSubtitle {
+                Text(subtitle)
+                    .font(.system(size: 13))
+                    .foregroundStyle(AppPalette.textMuted)
+            }
         }
     }
 
     // MARK: - Form
 
     private var formSection: some View {
-        VStack(spacing: LayoutMetrics.xSmall) {
+        VStack(spacing: LayoutMetrics.small) {
             TextField("", text: $email, prompt: Text("Email").foregroundStyle(AppPalette.textFaint))
                 .keyboardType(.emailAddress)
                 .textContentType(.emailAddress)
@@ -97,7 +96,7 @@ struct AuthView: View {
                 .font(.system(size: 14))
                 .foregroundStyle(AppPalette.textStrong)
                 .padding(.horizontal, 16)
-                .frame(height: 48)
+                .frame(height: 50)
                 .appCard(cornerRadius: 14, shadowRadius: 6, shadowY: 3)
 
             SecureField("", text: $password, prompt: Text("Password").foregroundStyle(AppPalette.textFaint))
@@ -105,7 +104,7 @@ struct AuthView: View {
                 .font(.system(size: 14))
                 .foregroundStyle(AppPalette.textStrong)
                 .padding(.horizontal, 16)
-                .frame(height: 48)
+                .frame(height: 50)
                 .appCard(cornerRadius: 14, shadowRadius: 6, shadowY: 3)
 
             if let errorMessage {
@@ -117,27 +116,25 @@ struct AuthView: View {
                     .padding(.top, 2)
             }
 
-            Button {
-                submitEmail()
-            } label: {
+            Button(action: submitEmail) {
                 Group {
                     if isSubmitting {
                         ProgressView().tint(AppPalette.textMuted)
                     } else {
                         Text(isSignUp ? "SIGN UP" : "SIGN IN")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.system(size: submitActive ? 12 : 11, weight: submitActive ? .semibold : .medium))
                             .tracking(1.8)
-                            .foregroundStyle(AppPalette.textPrimary)
+                            .foregroundStyle(submitActive ? AppPalette.textPrimary : AppPalette.textFaint)
                     }
                 }
                 .frame(maxWidth: .infinity)
-                .frame(height: 48)
-                .appCapsule(shadowRadius: 8, shadowY: 4)
+                .frame(height: 50)
+                .appCapsule(shadowRadius: submitActive ? 8 : 0, shadowY: submitActive ? 4 : 0)
+                .animation(.easeInOut(duration: 0.2), value: submitActive)
             }
-            .disabled(isSubmitting || email.isEmpty || password.isEmpty)
-            .opacity(email.isEmpty || password.isEmpty ? 0.45 : 1)
+            .disabled(isSubmitting || !submitActive)
             .buttonStyle(.plain)
-            .padding(.top, 4)
+            .padding(.top, LayoutMetrics.xSmall)
         }
     }
 
@@ -155,13 +152,15 @@ struct AuthView: View {
                 .foregroundStyle(AppPalette.textMuted)
         }
         .buttonStyle(.plain)
-        .padding(.top, 8)
+        .padding(.top, LayoutMetrics.medium)
+        .opacity(isSignUp ? 0 : 1)
+        .allowsHitTesting(!isSignUp)
     }
 
     // MARK: - Apple Sign In
 
     private var appleSignInButton: some View {
-        SignInWithAppleButton(.signIn) { request in
+        SignInWithAppleButton(isSignUp ? .signUp : .signIn) { request in
             let nonce = auth.prepareAppleSignIn()
             request.requestedScopes = [.email, .fullName]
             request.nonce = nonce
@@ -180,8 +179,8 @@ struct AuthView: View {
             }
         }
         .signInWithAppleButtonStyle(.black)
-        .frame(height: 48)
-        .cornerRadius(24)
+        .frame(height: 50)
+        .cornerRadius(25)
     }
 
     // MARK: - Mode picker (Sign In / Sign Up)
@@ -215,7 +214,7 @@ struct AuthView: View {
         .background(AppPalette.cardBorder.opacity(0.5), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
     }
 
-    // MARK: - Divider & toggle
+    // MARK: - Divider
 
     private var divider: some View {
         HStack(spacing: 12) {
@@ -228,26 +227,6 @@ struct AuthView: View {
         }
     }
 
-    private var toggleSection: some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                isSignUp.toggle()
-                showPasswordReset = false
-                errorMessage = nil
-            }
-        } label: {
-            HStack(spacing: 4) {
-                Text(isSignUp ? "Already have an account?" : "Don't have an account?")
-                    .foregroundStyle(AppPalette.textMuted)
-                Text(isSignUp ? "Sign in" : "Sign up")
-                    .foregroundStyle(AppPalette.textPrimary)
-                    .fontWeight(.semibold)
-            }
-            .font(.system(size: 12))
-        }
-        .buttonStyle(.plain)
-    }
-
     // MARK: - Actions
 
     private func submitEmail() {
@@ -258,9 +237,28 @@ struct AuthView: View {
         Task {
             do {
                 if isSignUp {
-                    try await auth.signUp(email: email, password: password)
+                    let needsVerification = try await auth.signUp(email: email, password: password)
+                    await MainActor.run {
+                        isSubmitting = false
+                        if needsVerification {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showSignupVerification = true
+                            }
+                        }
+                    }
                 } else {
                     try await auth.signIn(email: email, password: password)
+                }
+            } catch AuthError.emailAlreadyRegistered {
+                // Flip the form to Sign In with email pre-filled so the
+                // user can continue without retyping. Preserves password
+                // too in case it's the right one.
+                await MainActor.run {
+                    isSubmitting = false
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isSignUp = false
+                    }
+                    errorMessage = AuthError.emailAlreadyRegistered.errorDescription
                 }
             } catch {
                 await MainActor.run {
@@ -269,5 +267,15 @@ struct AuthView: View {
                 }
             }
         }
+    }
+
+    private var submitActive: Bool {
+        !email.isEmpty && !password.isEmpty
+    }
+
+    private var headerSubtitle: String? {
+        if showPasswordReset { return "Reset your password" }
+        if showSignupVerification { return nil }
+        return isSignUp ? "Create your account" : "Welcome back"
     }
 }

@@ -34,12 +34,50 @@ class AuthManager {
 
     // MARK: - Email Auth
 
-    func signUp(email: String, password: String) async throws {
-        let response = try await supabase.auth.signUp(email: email, password: password)
-        await MainActor.run { self.session = response.session }
-        // Ensure profile row exists
-        if let userId = response.session?.user.id {
-            await SocialService.ensureProfile(userId: userId)
+    /// Signs the user up. Returns `true` when Supabase requires email
+    /// confirmation (no session yet — caller should route to OTP
+    /// verification). Returns `false` when the user is signed in
+    /// immediately. Throws `AuthError.emailAlreadyRegistered` when the
+    /// email belongs to an already-confirmed account so the caller can
+    /// route to Sign In instead of triggering a no-op OTP.
+    ///
+    /// Supabase v2 deliberately obfuscates "email already registered"
+    /// to prevent enumeration: `signUp` returns success with no session
+    /// AND no error in *both* cases — new email AND existing confirmed
+    /// email. The documented way to tell them apart is `user.identities`:
+    /// new/unconfirmed users get a populated array, already-confirmed
+    /// users get an empty array. We use that signal here.
+    ///
+    /// On a retry for an email with an unconfirmed `auth.users` row
+    /// (first attempt landed in spam, user closed the app mid-flow),
+    /// `signUp` also returns no session — but identities is populated.
+    /// In that case we fire an explicit `resend(type: .signup)` so the
+    /// user actually receives a code; `try?` so a transient resend
+    /// rate-limit doesn't block them from reaching the verification view.
+    func signUp(email: String, password: String) async throws -> Bool {
+        do {
+            let response = try await supabase.auth.signUp(email: email, password: password)
+            if let session = response.session {
+                await MainActor.run { self.session = session }
+                await SocialService.ensureProfile(userId: session.user.id)
+                return false
+            }
+            if (response.user.identities ?? []).isEmpty {
+                throw AuthError.emailAlreadyRegistered
+            }
+            try? await supabase.auth.resend(email: email, type: .signup)
+            return true
+        } catch let error as AuthError {
+            throw error
+        } catch {
+            // Older SDK path: signUp threw "User already registered"
+            // instead of returning the obfuscated response. Map to the
+            // same typed error so the UI handles both paths identically.
+            let msg = error.localizedDescription.lowercased()
+            if msg.contains("already") && (msg.contains("registered") || msg.contains("exists")) {
+                throw AuthError.emailAlreadyRegistered
+            }
+            throw error
         }
     }
 
@@ -60,6 +98,17 @@ class AuthManager {
         if let userId = response.session?.user.id {
             await SocialService.ensureProfile(userId: userId)
         }
+    }
+
+    func verifySignupOTP(email: String, otp: String) async throws {
+        let response = try await supabase.auth.verifyOTP(email: email, token: otp, type: .signup)
+        if let userId = response.session?.user.id {
+            await SocialService.ensureProfile(userId: userId)
+        }
+    }
+
+    func resendSignupOTP(email: String) async throws {
+        try await supabase.auth.resend(email: email, type: .signup)
     }
 
     func updatePassword(_ newPassword: String) async throws {
@@ -148,11 +197,14 @@ class AuthManager {
 
 enum AuthError: LocalizedError {
     case appleSignInFailed
+    case emailAlreadyRegistered
 
     var errorDescription: String? {
         switch self {
         case .appleSignInFailed:
             return "Apple Sign In failed. Please try again."
+        case .emailAlreadyRegistered:
+            return "This email is already registered. Sign in below."
         }
     }
 }

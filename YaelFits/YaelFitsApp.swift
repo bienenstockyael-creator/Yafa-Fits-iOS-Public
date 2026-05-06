@@ -7,7 +7,7 @@ struct YaelFitsApp: App {
     @UIApplicationDelegateAdaptor(PushNotificationAppDelegate.self) private var pushAppDelegate
     @State private var outfitStore = OutfitStore()
     @State private var authManager = AuthManager()
-    @State private var showProfileSetup = false
+    @State private var showOnboarding = false
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
@@ -19,42 +19,45 @@ struct YaelFitsApp: App {
                         ProgressView()
                     }
                 } else if authManager.isAuthenticated {
-                    RootView()
-                        .environment(outfitStore)
-                        .task(id: authManager.userId) {
-                            if let userId = authManager.userId {
-                                outfitStore.beginSession(for: userId)
-                                async let social: Void = outfitStore.loadSocialData(userId: userId)
-                                async let data: Void = outfitStore.loadData()
-                                _ = await (social, data)
-                                outfitStore.restorePersistedPendingReviewIfNeeded()
-                                await outfitStore.checkForServerCompletedJob(userId: userId)
-                                await outfitStore.refreshUnreadNotificationCount()
-                                // Show profile setup for new users with no display name
-                                let needsSetup = outfitStore.currentProfile?.username == nil || (outfitStore.currentProfile?.username ?? "").isEmpty
-                                if needsSetup {
-                                    await MainActor.run { showProfileSetup = true }
+                    ZStack {
+                        RootView()
+                            .environment(outfitStore)
+                            .task(id: authManager.userId) {
+                                if let userId = authManager.userId {
+                                    outfitStore.beginSession(for: userId)
+                                    async let social: Void = outfitStore.loadSocialData(userId: userId)
+                                    async let data: Void = outfitStore.loadData()
+                                    _ = await (social, data)
+                                    outfitStore.restorePersistedPendingReviewIfNeeded()
+                                    await outfitStore.checkForServerCompletedJob(userId: userId)
+                                    await outfitStore.refreshUnreadNotificationCount()
+                                    let needsSetup = outfitStore.currentProfile?.username == nil || (outfitStore.currentProfile?.username ?? "").isEmpty
+                                    if needsSetup {
+                                        await MainActor.run {
+                                            withAnimation(.easeInOut(duration: 0.3)) {
+                                                showOnboarding = true
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    outfitStore.resetForSignedOutState()
+                                    await MainActor.run { showOnboarding = false }
                                 }
-                            } else {
-                                outfitStore.resetForSignedOutState()
-                                await MainActor.run { showProfileSetup = false }
                             }
-                        }
-                        .sheet(isPresented: $showProfileSetup) {
-                            if let userId = authManager.userId {
-                                ProfileSetupSheet(
-                                    userId: userId,
-                                    existingDisplayName: outfitStore.currentProfile?.displayName
-                                ) {
-                                    showProfileSetup = false
-                                    Task { await outfitStore.loadSocialData(userId: userId) }
+
+                        if showOnboarding, let userId = authManager.userId {
+                            OnboardingView(
+                                userId: userId,
+                                existingDisplayName: outfitStore.currentProfile?.displayName
+                            ) {
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    showOnboarding = false
                                 }
-                                .presentationDetents([.large])
-                                .presentationDragIndicator(.hidden)
-                                .presentationBackground(AppPalette.pageBackground)
-                                .presentationCornerRadius(20)
+                                Task { await outfitStore.loadSocialData(userId: userId) }
                             }
+                            .transition(.opacity)
                         }
+                    }
                 } else {
                     AuthView()
                 }

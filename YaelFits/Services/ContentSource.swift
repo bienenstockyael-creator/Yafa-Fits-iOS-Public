@@ -454,11 +454,19 @@ struct ContentSource {
             let uniqueUserIds = Array(Set(rows.compactMap(\.userId)))
             var profileMap: [String: Profile] = [:]
             if !uniqueUserIds.isEmpty {
-                let profiles: [Profile] = (try? await supabase
-                    .from("profiles").select()
-                    .in("id", values: uniqueUserIds)
-                    .execute().value) ?? []
-                profileMap = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id.uuidString.lowercased(), $0) })
+                // Surface profile-fetch failures rather than silently
+                // dropping avatars/names — `try?` here was masking
+                // RLS/decoding/network issues that left every post
+                // looking like an unknown author.
+                do {
+                    let profiles: [Profile] = try await supabase
+                        .from("profiles").select()
+                        .in("id", values: uniqueUserIds)
+                        .execute().value
+                    profileMap = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id.uuidString.lowercased(), $0) })
+                } catch {
+                    AppLogger.data.error("getPublicFeed profiles fetch failed: \(error.localizedDescription)")
+                }
             }
 
             return rows.map { row in

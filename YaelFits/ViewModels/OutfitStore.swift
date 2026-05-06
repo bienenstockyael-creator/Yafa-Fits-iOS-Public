@@ -631,7 +631,12 @@ class OutfitStore {
         guard self.userId == userId else { return }
         LocalCache.saveFeedPosts(freshFeed, userId: userId)
 
-        guard freshFeed != feedPosts else { return }
+        // Skip the UI update only when the fetch returned nothing —
+        // we don't want to clear the feed because of a transient
+        // network blip. Otherwise always commit, so updated
+        // avatars/names propagate even when an Equatable diff would
+        // (incorrectly) consider the arrays equivalent.
+        guard !freshFeed.isEmpty else { return }
 
         await MainActor.run {
             guard self.userId == userId else { return }

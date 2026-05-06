@@ -26,7 +26,7 @@ enum ShareCardTemplate: Int, CaseIterable, Identifiable, Hashable {
         switch self {
         case .monoLive:     return "Mono"
         case .electricLive: return "Electric"
-        case .ootdLive:     return "OOTD"
+        case .ootdLive:     return "Editorial"
         case .colorama:     return "Colorama"
         case .layered2:     return "Fits"
         case .layered3:     return "Stats"
@@ -179,28 +179,36 @@ enum ShareCardTemplate: Int, CaseIterable, Identifiable, Hashable {
             // The actual letter-palette colours live in `Colorama.metal`
             // (one stitchable shader function per variant). The fields
             // here just describe the bg gradient + the picker dot tint.
+            // Array index == variant.id; the dispatch in
+            // `coloramaDisplacedShader` switches on that id.
             return [
                 TemplateColorVariant(
                     id: 0,
                     tint: Color(red: 0.74, green: 0.83, blue: 0.96)
                 ),
                 TemplateColorVariant(
-                    id: 1, // pink
+                    id: 1, // icy (black & very light blue)
+                    tint: .black,
+                    backgroundColor: Color(white: 0.10),
+                    gradientTop: Color(red: 0xE8 / 255.0, green: 0xF1 / 255.0, blue: 0xFA / 255.0)
+                ),
+                TemplateColorVariant(
+                    id: 2, // sunset (orange & blue)
+                    tint: Color(red: 0xF5 / 255.0, green: 0xBC / 255.0, blue: 0x73 / 255.0),
+                    backgroundColor: Color(red: 0x2D / 255.0, green: 0x5B / 255.0, blue: 0xA3 / 255.0),
+                    gradientTop: Color(red: 0xF5 / 255.0, green: 0xE5 / 255.0, blue: 0xD0 / 255.0)
+                ),
+                TemplateColorVariant(
+                    id: 3, // pink
                     tint: Color(red: 0xE8 / 255.0, green: 0x3E / 255.0, blue: 0x7C / 255.0),
                     backgroundColor: Color(red: 0xF2 / 255.0, green: 0xA8 / 255.0, blue: 0xC7 / 255.0),
                     gradientTop: Color(red: 0xF5 / 255.0, green: 0xE8 / 255.0, blue: 0xD8 / 255.0)
                 ),
                 TemplateColorVariant(
-                    id: 2, // sage
+                    id: 4, // sage (green)
                     tint: Color(red: 0x82 / 255.0, green: 0xC6 / 255.0, blue: 0x6E / 255.0),
                     backgroundColor: Color(red: 0x6B / 255.0, green: 0x8E / 255.0, blue: 0x5C / 255.0),
                     gradientTop: Color(red: 0xEA / 255.0, green: 0xF5 / 255.0, blue: 0xFC / 255.0)
-                ),
-                TemplateColorVariant(
-                    id: 3, // sunset
-                    tint: Color(red: 0xF5 / 255.0, green: 0xBC / 255.0, blue: 0x73 / 255.0),
-                    backgroundColor: Color(red: 0x2D / 255.0, green: 0x5B / 255.0, blue: 0xA3 / 255.0),
-                    gradientTop: Color(red: 0xF5 / 255.0, green: 0xE5 / 255.0, blue: 0xD0 / 255.0)
                 ),
             ]
         case .layered2, .layered3:
@@ -236,6 +244,17 @@ struct TemplateColorVariant: Identifiable, Hashable {
         self.backgroundColor = backgroundColor
         self.gradientTop = gradientTop
     }
+}
+
+// MARK: - Share format
+
+/// Two ways to lay out a story export. `cardOnWhite` keeps the existing
+/// card-floating-on-grouped-bg composition; `fullScreen` lets the
+/// template fill the entire 9:16 frame edge-to-edge.
+enum ShareCardFormat: String, CaseIterable, Identifiable {
+    case cardOnWhite
+    case fullScreen
+    var id: String { rawValue }
 }
 
 // MARK: - Frosted shape view
@@ -316,6 +335,12 @@ struct ShareCardComposer: View {
     // when the outfit's date actually changes.
     @State private var coloramaTextImage: UIImage?
     @State private var coloramaTextMonth: String?
+    /// Topmost ink-pixel y per column of `coloramaTextImage`, in
+    /// bitmap pixel coords. Computed once when the month bitmap
+    /// changes; used to anchor the day to the LOCAL letter top
+    /// (e.g. above `n` for `jan`) instead of the global bitmap top
+    /// (which would be the j-dot — far higher than `n`).
+    @State private var coloramaMonthInkTopByCol: [Int] = []
     @State private var coloramaDayImage: UIImage?
     @State private var coloramaDayString: String?
     @State private var coloramaWeekdayImage: UIImage?
@@ -330,6 +355,14 @@ struct ShareCardComposer: View {
     // string so it's rendered once and reused across outfits.
     @State private var coloramaOotdImage: UIImage?
     @State private var coloramaOotdStroke: UIImage?
+
+    // Format-picker state. STORY taps on dynamic templates surface a
+    // sheet with two preview thumbnails (card-on-white vs full-screen);
+    // the chosen format is then handed back to `exportAndShareVideo`.
+    @State private var showFormatPicker = false
+    @State private var pendingFormatDestination: ExportDestination?
+    @State private var formatPreviewCard: UIImage?
+    @State private var formatPreviewFull: UIImage?
 
     var body: some View {
         ZStack {
@@ -380,6 +413,22 @@ struct ShareCardComposer: View {
             Button("OK") { exportError = nil }
         } message: {
             Text(exportError ?? "")
+        }
+        .sheet(isPresented: $showFormatPicker) {
+            ShareFormatPickerSheet(
+                cardPreview: formatPreviewCard,
+                fullPreview: formatPreviewFull,
+                onSelect: { format in
+                    showFormatPicker = false
+                    if let dest = pendingFormatDestination {
+                        pendingFormatDestination = nil
+                        activeExport = dest
+                        exportAndShareVideo(destination: dest, format: format)
+                    }
+                }
+            )
+            .presentationDetents([.height(440)])
+            .presentationDragIndicator(.visible)
         }
         .onAppear {
             storyHaptic.prepare()
@@ -612,14 +661,39 @@ struct ShareCardComposer: View {
                         Canvas { context, size in
                             let isElec = template == .electricLive
                             let fontName = isElec ? "PlayfairDisplay-Italic" : "Inter28pt-SemiBold"
-                            let fontSize: CGFloat = isElec ? 457.2 : 304
-                            let kern: CGFloat   = isElec ? -50.3 : -21.3
+                            // The in-app card view is the source of truth.
+                            // Original tuning (304pt mono / 457.2pt electric)
+                            // was for a 345-wide in-app card (iPhone 15
+                            // screen − 48 chrome). Scaling fontSize
+                            // proportionally to view width keeps the glyph
+                            // at the same fraction of the card across all
+                            // render contexts (live carousel, picker
+                            // thumbnail, exported video).
+                            let isFullScreen = (size.height / size.width) > 1.5
+                            // Full-screen multipliers are RELATIVE to the
+                            // card-mode proportion. Mono full-screen
+                            // gets a 20% bump on top of its 0.7 baseline
+                            // (= 0.84 effective). Electric stays at 0.91.
+                            let fullScreenMultiplier: CGFloat = isFullScreen
+                                ? (isElec ? 0.91 : 0.84)
+                                : 1.0
+                            let baselineW: CGFloat = 345
+                            let widthScale = (size.width / baselineW) * fullScreenMultiplier
+                            let fontSize: CGFloat = (isElec ? 457.2 : 304) * widthScale
+                            let kern: CGFloat   = (isElec ? -50.3 : -21.3) * widthScale
 
                             if let img = textToImage(
                                 outfitDayNumber,
                                 fontName: fontName, fontSize: fontSize,
                                 kern: kern, color: dateColor
                             ) {
+                                // Always perfectly centered in the
+                                // canvas — both card and full-screen.
+                                // The MONTH (top) and WEEKDAY (bottom)
+                                // labels move inward in full-screen
+                                // (see `dynamicDateFrontLayer`) which
+                                // tightens the layout without disturbing
+                                // the central digit.
                                 let rect = CGRect(
                                     x: size.width  / 2 - img.size.width  / 2,
                                     y: size.height / 2 - img.size.height / 2,
@@ -642,15 +716,21 @@ struct ShareCardComposer: View {
                                 let logoY: CGFloat = template == .electricLive
                                     ? geo.size.height * 0.95
                                     : geo.size.height - logoW * 0.30 - 20
+                                let logoX = geo.size.width - logoW / 2 - 20
                                 Image(uiImage: logo)
                                     .resizable()
                                     .scaledToFit()
                                     .frame(width: logoW)
                                     .colorMultiply(textColorSwift)
-                                    .position(
-                                        x: geo.size.width - logoW / 2 - 20,
-                                        y: logoY
-                                    )
+                                    .position(x: logoX, y: logoY)
+                                Text("MADE ON YAFA")
+                                    .font(.custom("Inter28pt-MediumItalic", size: 100))
+                                    .tracking(1)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.01)
+                                    .frame(width: logoW)
+                                    .foregroundStyle(textColorSwift)
+                                    .position(x: logoX, y: logoY - logoW * 0.30)
                             }
                         }
                     }
@@ -701,106 +781,156 @@ struct ShareCardComposer: View {
     /// Must match `CYCLE_SECONDS` in `Colorama.metal`.
     private static let coloramaCycleSeconds: Double = 6.0
 
+    /// One MONTH+DAY positioning slot inside the colorama back layer.
+    /// Card mode produces one stack centred on the card; full-screen
+    /// produces three stacks evenly distributed vertically.
+    fileprivate struct ColoramaStack {
+        let monthCenter: CGPoint
+        /// The width to scale the month bitmap into. Determines both the
+        /// month and day display sizes since day is half the month's
+        /// height and inherits the per-stack scale.
+        let monthFitWidth: CGFloat
+        let dayCenter: CGPoint
+        let dayDispW: CGFloat
+        /// Card mode and the first full-screen stack render the day on
+        /// top of the month; subsequent full-screen stacks repeat the
+        /// month only (no day) to make the 4-up pattern clean.
+        let showDay: Bool
+    }
+
+    /// All calibrated layout constants for colorama. Every value here
+    /// was tuned against the in-app `mar 15` reference at the iPhone-15
+    /// 345-pt card width using `GTFAdieuTRIAL-BlackSlanted` at
+    /// fontSize=320/kern=-8. Changing the font, fontSize, kern, or the
+    /// in-app baseline will require re-tuning every value below.
+    private enum ColoramaLayout {
+        // ---- Bitmap geometry ----------------------------------------
+        /// Padding (in points) added inside each text bitmap by
+        /// `textToImage`. Converted to display points via the bitmap-
+        /// to-display scale ratio at use sites.
+        static let bitmapInkPad: CGFloat = 4
+
+        // ---- Sizing -------------------------------------------------
+        /// Calibrated month-block height as a fraction of `monthFitWidth`.
+        /// 0.385 ≈ "mar"'s x-height-to-width ratio for the colorama
+        /// font. Used as a SIZE reference (so the day stays consistent
+        /// across months); positioning still uses the actual bitmap.
+        static let referenceMonthHRatio: CGFloat = 0.385
+        /// Day digit height as a fraction of `referenceMonthH`.
+        /// 0.45 = (mar x-height × 0.5) × 0.9 — half-x-height with a
+        /// 10% reduction so digits feel a touch lighter beside the big
+        /// month wordmark.
+        static let dayHeightRatio: CGFloat = 0.45
+        /// Visible ink-to-ink gap between day's bottom and the highest
+        /// letter pixel beneath it. 6pt felt right empirically.
+        static let dayMonthGap: CGFloat = 6
+
+        // ---- Full-screen month-stack layout -------------------------
+        /// Visible ink-to-ink gap between adjacent month stacks for
+        /// non-cascaded months (clean lowercase or single asc/desc).
+        static let monthGap: CGFloat = 6
+        /// Aspect threshold (bitmap.width / bitmap.height) below which
+        /// we drop from 4 stacks to 3. Above 2.5 = clean lowercase
+        /// (`mar`, `nov`); below = at least one asc or desc letter.
+        static let aspectThreeStackThreshold: CGFloat = 2.5
+        /// Aspect threshold below which we apply the horizontal cascade
+        /// AND tighten the vertical spacing. Below 2.0 ≈ both asc and
+        /// desc present (`jan`, `jun`, `jul`).
+        static let aspectCascadeThreshold: CGFloat = 2.0
+        /// Horizontal offset per stack-step for cascaded months, as
+        /// a fraction of `monthFitWidth`. 0.15 gives ~58pt offset in
+        /// the export render — enough to clear the ~50pt halo blur
+        /// around each j-feature.
+        static let cascadeXRatio: CGFloat = 0.15
+        /// How much adjacent cascaded stacks overlap (in visible-ink
+        /// height units). 0.10 = 10% overlap. The horizontal cascade
+        /// keeps j-tail/j-dot from sharing a column, so the overlap
+        /// is purely visual zone overlap, not glyph collision.
+        static let cascadeOverlapRatio: CGFloat = 0.10
+
+        // ---- Letter-based asc/desc detection (English) --------------
+        /// Lowercase Latin letters with ascenders. `j` is in both sets
+        /// (it has an ascender dot AND a descender tail).
+        static let ascenderLetters: Set<Character> = ["b", "d", "f", "h", "k", "l", "t", "j"]
+        /// Lowercase Latin letters with descenders.
+        static let descenderLetters: Set<Character> = ["g", "j", "p", "q", "y"]
+    }
+
     private func coloramaBigNumber(forcedTime: Double? = nil) -> some View {
-        // Month + day-of-month + weekday, all rendered through a single
-        // shared shader pass so they read as cutouts from one continuous
-        // animated gradient. Bitmaps are cached in @State and only
-        // re-rendered when their source string changes.
+        // Month + day-of-month + weekday + ootd, all rendered through a
+        // single shared shader pass so they read as cutouts from one
+        // continuous animated gradient. Bitmaps are cached in @State
+        // and only re-rendered when their source string changes.
         //
-        // Layout:
-        //   • month: GTF Adieu Black Slanted 320pt, fills card width,
-        //     centred vertically.
-        //   • day:   same font, half the month's size, sits directly
-        //     above the month with its left edge aligned to the month's.
-        //   • weekday: Inter italic at the bottom (unchanged).
+        // Card mode lays out one MONTH+DAY pair centred + ootd/weekday
+        // small labels. Full-screen mode repeats the MONTH+DAY pair
+        // three times stacked vertically and drops the small labels.
         let monthAbbrev = outfit.parsedDate?
             .formatted(.dateTime.month(.abbreviated))
             .lowercased() ?? "—"
         let dayString = outfitDayNumber
         let weekdayString = outfitWeekday
         let smallYPct: CGFloat = 0.08
-        // Visible ink-to-ink gap between day's bottom and month's top.
-        // 0 = day glyph bottom touches month glyph top; negative values
-        // overlap the day into the month's ascender space.
-        let dayMonthGap: CGFloat = 4
-        // Pad inside each text bitmap (from `textToImage`).
-        let bitmapInkPad: CGFloat = 4
 
         return GeometryReader { geo in
             let cardW = geo.size.width
             let cardH = geo.size.height
-
-            // Month occupies the full card width; its displayed height
-            // is derived from the bitmap's aspect ratio.
-            let monthDispH: CGFloat = {
-                guard let s = coloramaTextImage?.size, s.width > 0 else { return 0 }
-                return cardW * s.height / s.width
-            }()
-            let monthCenterX = cardW / 2
-            let monthCenterY = cardH / 2
-            let monthTopY = monthCenterY - monthDispH / 2
-
-            // Day is sized to a consistent HEIGHT — half the displayed
-            // month height. Width follows from the bitmap's aspect ratio
-            // so single-digit days ("1") and double-digit days ("28")
-            // appear at the same visual scale, just with different
-            // widths. Right edge aligned to the card's right edge.
-            let dayDispH: CGFloat = monthDispH * 0.5
-            let dayBitmapAspect: CGFloat = {
-                guard let s = coloramaDayImage?.size, s.height > 0 else { return 0 }
-                return s.width / s.height
-            }()
-            let dayDispW = dayDispH * dayBitmapAspect
-            // Bitmap padding scaled into display space, used to place
-            // glyph-ink against glyph-ink rather than bitmap-edge
-            // against bitmap-edge.
-            let monthPadDisplayed: CGFloat = {
-                guard let s = coloramaTextImage?.size, s.width > 0 else { return 0 }
-                return bitmapInkPad * cardW / s.width
-            }()
-            let dayPadDisplayed: CGFloat = {
-                guard let s = coloramaDayImage?.size, s.height > 0 else { return 0 }
-                return bitmapInkPad * dayDispH / s.height
-            }()
-            let dayCenterX = cardW - dayDispW / 2
-            let dayCenterY = monthTopY
-                + monthPadDisplayed + dayPadDisplayed
-                - dayMonthGap
-                - dayDispH / 2
+            let isFullScreen = (cardH / cardW) > 1.5
+            let stacks = makeColoramaStacks(
+                cardW: cardW, cardH: cardH,
+                isFullScreen: isFullScreen,
+                monthAbbrev: monthAbbrev
+            )
+            // OOTD + weekday small labels render in both modes so the
+            // pattern reads as a real card rather than a naked
+            // repetition.
+            let showSmallLabels = true
+            // Scale fixed-size effects (small-label widths, blur radii)
+            // so thumbnails and exports match the in-app card.
+            let smallScale = cardW / Self.designBaseline
 
             ZStack {
                 // ---- HALOS (static, cached per-text bitmap) ----
                 ZStack {
-                    if let img = coloramaOotdImage {
+                    if showSmallLabels, let img = coloramaOotdImage {
                         coloramaHaloStack(
                             img,
-                            fitWidth: nil,
+                            fitWidth: img.size.width * smallScale,
                             centerX: cardW / 2, centerY: cardH * smallYPct,
-                            blurOuter: 18, blurMid: 9
+                            blurOuter: 18 * smallScale, blurMid: 9 * smallScale
                         )
                     }
-                    if let img = coloramaTextImage {
-                        coloramaHaloStack(
-                            img,
-                            fitWidth: cardW,
-                            centerX: monthCenterX, centerY: monthCenterY,
-                            blurOuter: 65, blurMid: 32
-                        )
+                    ForEach(stacks.indices, id: \.self) { i in
+                        let stack = stacks[i]
+                        // Halo blur radii scale with the per-stack size
+                        // so 3-stack mode (smaller months) gets
+                        // proportionally smaller glows.
+                        let scale = stack.monthFitWidth / cardW
+                        if let img = coloramaTextImage {
+                            coloramaHaloStack(
+                                img,
+                                fitWidth: stack.monthFitWidth,
+                                centerX: stack.monthCenter.x,
+                                centerY: stack.monthCenter.y,
+                                blurOuter: 65 * scale, blurMid: 32 * scale
+                            )
+                        }
+                        if stack.showDay, let img = coloramaDayImage {
+                            coloramaHaloStack(
+                                img,
+                                fitWidth: stack.dayDispW,
+                                centerX: stack.dayCenter.x,
+                                centerY: stack.dayCenter.y,
+                                blurOuter: 22 * scale, blurMid: 11 * scale
+                            )
+                        }
                     }
-                    if let img = coloramaDayImage {
+                    if showSmallLabels, let img = coloramaWeekdayImage {
                         coloramaHaloStack(
                             img,
-                            fitWidth: dayDispW,
-                            centerX: dayCenterX, centerY: dayCenterY,
-                            blurOuter: 22, blurMid: 11
-                        )
-                    }
-                    if let img = coloramaWeekdayImage {
-                        coloramaHaloStack(
-                            img,
-                            fitWidth: nil,
+                            fitWidth: img.size.width * smallScale,
                             centerX: cardW / 2, centerY: cardH * (1 - smallYPct),
-                            blurOuter: 18, blurMid: 9
+                            blurOuter: 18 * smallScale, blurMid: 9 * smallScale
                         )
                     }
                 }
@@ -815,9 +945,8 @@ struct ShareCardComposer: View {
                         coloramaAnimatedBody(
                             t: t,
                             cardW: cardW, cardH: cardH,
-                            dayDispW: dayDispW,
-                            dayCenterX: dayCenterX, dayCenterY: dayCenterY,
-                            monthCenterX: monthCenterX, monthCenterY: monthCenterY,
+                            stacks: stacks,
+                            showSmallLabels: showSmallLabels,
                             smallYPct: smallYPct
                         )
                     } else {
@@ -827,9 +956,8 @@ struct ShareCardComposer: View {
                             coloramaAnimatedBody(
                                 t: t,
                                 cardW: cardW, cardH: cardH,
-                                dayDispW: dayDispW,
-                                dayCenterX: dayCenterX, dayCenterY: dayCenterY,
-                                monthCenterX: monthCenterX, monthCenterY: monthCenterY,
+                                stacks: stacks,
+                                showSmallLabels: showSmallLabels,
                                 smallYPct: smallYPct
                             )
                         }
@@ -838,31 +966,37 @@ struct ShareCardComposer: View {
 
                 // ---- INNER GLOWS (static, cached) ----
                 ZStack {
-                    if let img = coloramaOotdImage {
-                        Image(uiImage: img)
+                    if showSmallLabels, let img = coloramaOotdImage {
+                        scaledLabel(img, scale: smallScale)
                             .colorMultiply(.white)
-                            .blur(radius: 1.5)
+                            .blur(radius: 1.5 * smallScale)
                             .position(x: cardW / 2, y: cardH * smallYPct)
                     }
-                    if let img = coloramaTextImage {
-                        coloramaTintedImage(
-                            img, geo: geo,
-                            color: .white, blur: 5
-                        )
+                    ForEach(stacks.indices, id: \.self) { i in
+                        let stack = stacks[i]
+                        if let img = coloramaTextImage {
+                            Image(uiImage: img)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: stack.monthFitWidth)
+                                .colorMultiply(.white)
+                                .blur(radius: 5 * smallScale)
+                                .position(x: stack.monthCenter.x, y: stack.monthCenter.y)
+                        }
+                        if stack.showDay, let img = coloramaDayImage {
+                            Image(uiImage: img)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: stack.dayDispW)
+                                .colorMultiply(.white)
+                                .blur(radius: 1.5 * smallScale)
+                                .position(x: stack.dayCenter.x, y: stack.dayCenter.y)
+                        }
                     }
-                    if let img = coloramaDayImage {
-                        Image(uiImage: img)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: dayDispW)
+                    if showSmallLabels, let img = coloramaWeekdayImage {
+                        scaledLabel(img, scale: smallScale)
                             .colorMultiply(.white)
-                            .blur(radius: 1.5)
-                            .position(x: dayCenterX, y: dayCenterY)
-                    }
-                    if let img = coloramaWeekdayImage {
-                        Image(uiImage: img)
-                            .colorMultiply(.white)
-                            .blur(radius: 1.5)
+                            .blur(radius: 1.5 * smallScale)
                             .position(x: cardW / 2, y: cardH * (1 - smallYPct))
                     }
                 }
@@ -876,31 +1010,42 @@ struct ShareCardComposer: View {
                 // shader-driven logo at top.
                 if let logo = Self.coloramaLogo {
                     let logoW = cardW * 0.12
+                    let logoX = cardW - logoW / 2 - 20
+                    let logoY = cardH - logoW * 0.30 - 20
                     Image(uiImage: logo)
                         .resizable()
                         .scaledToFit()
                         .frame(width: logoW)
-                        .position(
-                            x: cardW - logoW / 2 - 20,
-                            y: cardH - logoW * 0.30 - 20
-                        )
+                        .position(x: logoX, y: logoY)
+                    Text("MADE ON YAFA")
+                        .font(.custom("Inter28pt-MediumItalic", size: 100))
+                        .tracking(1)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.01)
+                        .frame(width: logoW)
+                        .foregroundStyle(.white)
+                        .position(x: logoX, y: logoY - logoW * 0.30)
                 }
             }
             .compositingGroup()
         }
         .task(id: monthAbbrev) {
             guard coloramaTextMonth != monthAbbrev else { return }
-            coloramaTextImage = textToImage(
+            let bitmap = textToImage(
                 monthAbbrev,
                 fontName: "GTFAdieuTRIAL-BlackSlanted", fontSize: 320,
                 kern: -8.0, color: .white
             )
+            coloramaTextImage = bitmap
             coloramaMonthStroke = textToImage(
                 monthAbbrev,
                 fontName: "GTFAdieuTRIAL-BlackSlanted", fontSize: 320,
                 kern: -8.0, color: .white,
                 strokeWidthPercent: 0.625
             )
+            // Pre-compute the per-column topmost ink y so day positioning
+            // can anchor to the local letter top at the day's x range.
+            coloramaMonthInkTopByCol = bitmap.map(Self.computeInkTopByColumn) ?? []
             coloramaTextMonth = monthAbbrev
         }
         .task(id: dayString) {
@@ -948,6 +1093,156 @@ struct ShareCardComposer: View {
                     strokeWidthPercent: 1.5
                 )
             }
+        }
+    }
+
+    /// Computes the MONTH+DAY positioning for colorama.
+    /// - Card mode → one stack centred.
+    /// - Full-screen → 3 or 4 stacks (depending on whether the month
+    ///   abbreviation has any asc/desc letters), with an optional
+    ///   horizontal cascade for both-asc-and-desc months.
+    ///
+    /// Detection prefers letter-based when `monthAbbrev` is plain
+    /// ASCII Latin (English); falls back to bitmap-aspect heuristics
+    /// for non-Latin locales.
+    ///
+    /// All tuning constants live in `ColoramaLayout`.
+    private func makeColoramaStacks(
+        cardW: CGFloat, cardH: CGFloat,
+        isFullScreen: Bool,
+        monthAbbrev: String
+    ) -> [ColoramaStack] {
+        guard
+            let monthSize = coloramaTextImage?.size,
+            let monthCG = coloramaTextImage?.cgImage,
+            monthSize.width > 0,
+            let daySize = coloramaDayImage?.size,
+            daySize.height > 0
+        else {
+            return []
+        }
+        let monthAspect = monthSize.width / monthSize.height
+        let dayAspect = daySize.width / daySize.height
+        // `coloramaMonthInkTopByCol` is keyed by BITMAP PIXEL column
+        // (cgImage.width = screen-scale × monthSize.width). We must
+        // convert display-points → bitmap-pixels for the lookup and
+        // bitmap-pixel-y → display-points for positioning.
+        let bitmapPxW = CGFloat(monthCG.width)
+        let bitmapPxH = CGFloat(monthCG.height)
+
+        // Card mode → month spans the full card; full-screen → 72%.
+        let monthFitWidth: CGFloat = isFullScreen ? cardW * 0.72 : cardW
+
+        // ACTUAL displayed bitmap height — varies per month due to
+        // asc/desc letters. Used for day POSITION (so the gap from
+        // the nearest letter ink stays the same across months) and
+        // for stack spacing math.
+        let monthDispH = monthFitWidth / monthAspect
+
+        // Day SIZE pinned to a calibrated reference (mar's x-height,
+        // not the per-month bitmap) so digit height stays uniform
+        // regardless of which letters the month abbreviation contains.
+        let referenceMonthH = monthFitWidth * ColoramaLayout.referenceMonthHRatio
+        let dayDispH = referenceMonthH * ColoramaLayout.dayHeightRatio
+        let dayDispW = dayDispH * dayAspect
+
+        let monthPadDisplayed = ColoramaLayout.bitmapInkPad * monthFitWidth / monthSize.width
+        let dayPadDisplayed = ColoramaLayout.bitmapInkPad * dayDispH / daySize.height
+        let monthInkHeight = monthDispH - 2 * monthPadDisplayed
+        let dayInkHeight = dayDispH - 2 * dayPadDisplayed
+
+        // Asc/desc detection — letter-based if the abbreviation is
+        // plain ASCII Latin, bitmap-aspect-based otherwise.
+        let (hasAsc, hasDesc) = Self.detectAscDesc(
+            monthAbbrev: monthAbbrev,
+            aspect: monthAspect
+        )
+        let isTallMonth = hasAsc || hasDesc
+        let isCascaded = isFullScreen && hasAsc && hasDesc
+
+        // Full-screen layout:
+        // - Clean lowercase (`mar`, `nov`)         → 4 stacks, 6pt gap.
+        // - Single asc OR desc                     → 3 stacks, 6pt gap.
+        // - Both asc + desc (`jan`, `jul`, `jun`)  → 3 stacks, cascade
+        //   + ~10% vertical overlap (cascade keeps j-features in
+        //   different columns, so overlap doesn't actually collide).
+        let middleY = cardH / 2
+        let stackCount: Int = isFullScreen ? (isTallMonth ? 3 : 4) : 1
+        let xCascadePerStack: CGFloat = isCascaded
+            ? monthFitWidth * ColoramaLayout.cascadeXRatio
+            : 0
+        let monthGap: CGFloat = isCascaded
+            ? -monthInkHeight * ColoramaLayout.cascadeOverlapRatio
+            : ColoramaLayout.monthGap
+        let stackSpacing = monthInkHeight + monthGap
+        let stackHalf = CGFloat(stackCount - 1) / 2
+        let centerYs: [CGFloat] = isFullScreen
+            ? (0..<stackCount).map { i in
+                middleY + (CGFloat(i) - stackHalf) * stackSpacing
+            }
+            : [cardH * 0.5]
+
+        // bitmap-PIXELS per display-point — used to map the day's
+        // display x-range into bitmap pixel columns so we can sample
+        // the pre-computed per-column ink-top there.
+        let bitmapXScale = bitmapPxW / monthFitWidth
+        // display-points per bitmap pixel — converts the sampled
+        // bitmap-pixel-y back into display y.
+        let displayYScale = monthDispH / bitmapPxH
+
+        return centerYs.enumerated().map { i, centerY in
+            // Asc+desc months get a small left→right cascade — top
+            // stack shifted left, bottom stack shifted right — so the
+            // j-tail/j-dot column doesn't form a crowded vertical seam.
+            let xShift = (CGFloat(i) - stackHalf) * xCascadePerStack
+            let monthCenterX = cardW / 2 + xShift
+            let monthLeftEdge = monthCenterX - monthFitWidth / 2
+            let monthRightEdge = monthCenterX + monthFitWidth / 2
+            let bitmapTopY = centerY - monthDispH / 2
+
+            // Day always sits on the right — card mode and full-screen
+            // share the same alignment as the in-app card design.
+            // Full-screen only shows it on stack 0 (top month);
+            // subsequent stacks are pure month repeats.
+            let showDay = !isFullScreen || i == 0
+            let dayCenterX = monthRightEdge - dayDispW / 2
+
+            // Sample the actual ink top under the day's x-range in the
+            // bitmap. For "jan 31" with day on the right, this picks
+            // up the top of `n` (x-height), not the j-dot at the
+            // bitmap's global top — so day-to-letter spacing matches
+            // "mar 15" visually.
+            let dayLeftBitmapX = (dayCenterX - dayDispW / 2 - monthLeftEdge) * bitmapXScale
+            let dayRightBitmapX = (dayCenterX + dayDispW / 2 - monthLeftEdge) * bitmapXScale
+            let xLo = max(0, Int(dayLeftBitmapX))
+            let xHi = min(coloramaMonthInkTopByCol.count - 1, Int(dayRightBitmapX))
+            let localInkTopBitmapY: Int = {
+                guard !coloramaMonthInkTopByCol.isEmpty, xLo <= xHi else {
+                    return Int(ColoramaLayout.bitmapInkPad)
+                }
+                var minY = Int.max
+                for x in xLo...xHi where coloramaMonthInkTopByCol[x] < minY {
+                    minY = coloramaMonthInkTopByCol[x]
+                }
+                return minY == .max ? Int(ColoramaLayout.bitmapInkPad) : minY
+            }()
+            let localInkTopY = bitmapTopY + CGFloat(localInkTopBitmapY) * displayYScale
+
+            // Day's visible-ink-bottom = local letter top - dayMonthGap.
+            // (Add dayPadDisplayed because the day bitmap has its own
+            // pad below the digit ink.)
+            let dayCenterY = localInkTopY
+                - ColoramaLayout.dayMonthGap
+                - dayDispH / 2
+                + dayPadDisplayed
+
+            return ColoramaStack(
+                monthCenter: CGPoint(x: monthCenterX, y: centerY),
+                monthFitWidth: monthFitWidth,
+                dayCenter: CGPoint(x: dayCenterX, y: dayCenterY),
+                dayDispW: dayDispW,
+                showDay: showDay
+            )
         }
     }
 
@@ -1009,27 +1304,6 @@ struct ShareCardComposer: View {
         .position(x: centerX, y: centerY)
     }
 
-    /// One tinted+blurred copy of the text image, scaled to fill the
-    /// card width and centred in `geo`. Used for the outer halo stack
-    /// and the inner-glow layer; all of them scale together so they
-    /// stay aligned with the masked gradient body.
-    private func coloramaTintedImage(
-        _ img: UIImage,
-        geo: GeometryProxy,
-        color: Color,
-        blur: CGFloat,
-        opacity: Double = 1.0
-    ) -> some View {
-        Image(uiImage: img)
-            .resizable()
-            .scaledToFit()
-            .frame(width: geo.size.width)
-            .colorMultiply(color)
-            .blur(radius: blur)
-            .opacity(opacity)
-            .position(x: geo.size.width / 2, y: geo.size.height / 2)
-    }
-
     /// Animated portion of the colorama composite — the displaced
     /// gradient body + the wave-driven white edge strokes. Pulled out so
     /// both the live `TimelineView` path and the export per-frame path
@@ -1038,19 +1312,17 @@ struct ShareCardComposer: View {
     private func coloramaAnimatedBody(
         t: Double,
         cardW: CGFloat, cardH: CGFloat,
-        dayDispW: CGFloat,
-        dayCenterX: CGFloat, dayCenterY: CGFloat,
-        monthCenterX: CGFloat, monthCenterY: CGFloat,
+        stacks: [ColoramaStack],
+        showSmallLabels: Bool,
         smallYPct: CGFloat
     ) -> some View {
         ZStack {
             // Gradient body with AE-style displacement.
             coloramaLetterShapes(
-                cardW: cardW,
-                dayDispW: dayDispW,
-                dayCenterX: dayCenterX, dayCenterY: dayCenterY,
-                monthCenterX: monthCenterX, monthCenterY: monthCenterY,
-                cardH: cardH, smallYPct: smallYPct
+                cardW: cardW, cardH: cardH,
+                stacks: stacks,
+                showSmallLabels: showSmallLabels,
+                smallYPct: smallYPct
             )
             .frame(width: cardW, height: cardH)
             .layerEffect(
@@ -1059,38 +1331,41 @@ struct ShareCardComposer: View {
             )
 
             // Edge strokes masked by the displaced gradient luminance.
+            let smallScale = cardW / Self.designBaseline
             ZStack {
-                if let img = coloramaOotdStroke {
-                    Image(uiImage: img)
+                if showSmallLabels, let img = coloramaOotdStroke {
+                    scaledLabel(img, scale: smallScale)
                         .position(x: cardW / 2, y: cardH * smallYPct)
                 }
-                if let img = coloramaMonthStroke {
-                    Image(uiImage: img)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: cardW)
-                        .position(x: monthCenterX, y: monthCenterY)
+                ForEach(stacks.indices, id: \.self) { i in
+                    let stack = stacks[i]
+                    if let img = coloramaMonthStroke {
+                        Image(uiImage: img)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: stack.monthFitWidth)
+                            .position(x: stack.monthCenter.x, y: stack.monthCenter.y)
+                    }
+                    if stack.showDay, let img = coloramaDayStroke {
+                        Image(uiImage: img)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: stack.dayDispW)
+                            .position(x: stack.dayCenter.x, y: stack.dayCenter.y)
+                    }
                 }
-                if let img = coloramaDayStroke {
-                    Image(uiImage: img)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: dayDispW)
-                        .position(x: dayCenterX, y: dayCenterY)
-                }
-                if let img = coloramaWeekdayStroke {
-                    Image(uiImage: img)
+                if showSmallLabels, let img = coloramaWeekdayStroke {
+                    scaledLabel(img, scale: smallScale)
                         .position(x: cardW / 2, y: cardH * (1 - smallYPct))
                 }
             }
             .colorMultiply(.white)
             .mask(
                 coloramaLetterShapes(
-                    cardW: cardW,
-                    dayDispW: dayDispW,
-                    dayCenterX: dayCenterX, dayCenterY: dayCenterY,
-                    monthCenterX: monthCenterX, monthCenterY: monthCenterY,
-                    cardH: cardH, smallYPct: smallYPct
+                    cardW: cardW, cardH: cardH,
+                    stacks: stacks,
+                    showSmallLabels: showSmallLabels,
+                    smallYPct: smallYPct
                 )
                 .frame(width: cardW, height: cardH)
                 .layerEffect(
@@ -1108,39 +1383,41 @@ struct ShareCardComposer: View {
     /// source for the edge-stroke luminance lookup.
     @ViewBuilder
     private func coloramaLetterShapes(
-        cardW: CGFloat,
-        dayDispW: CGFloat,
-        dayCenterX: CGFloat, dayCenterY: CGFloat,
-        monthCenterX: CGFloat, monthCenterY: CGFloat,
-        cardH: CGFloat, smallYPct: CGFloat
+        cardW: CGFloat, cardH: CGFloat,
+        stacks: [ColoramaStack],
+        showSmallLabels: Bool,
+        smallYPct: CGFloat
     ) -> some View {
-        let textBlur: CGFloat = 3
-        return ZStack {
-            // OOTD at top-centre — same Inter italic as the weekday at
-            // the bottom, gets the same shader effect as the letters.
-            if let img = coloramaOotdImage {
-                Image(uiImage: img)
+        let smallScale = cardW / Self.designBaseline
+        let textBlur: CGFloat = 3 * smallScale
+        ZStack {
+            // OOTD + weekday small labels.
+            if showSmallLabels, let img = coloramaOotdImage {
+                scaledLabel(img, scale: smallScale)
                     .blur(radius: textBlur)
                     .position(x: cardW / 2, y: cardH * smallYPct)
             }
-            if let img = coloramaTextImage {
-                Image(uiImage: img)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: cardW)
-                    .blur(radius: textBlur)
-                    .position(x: monthCenterX, y: monthCenterY)
+            ForEach(stacks.indices, id: \.self) { i in
+                let stack = stacks[i]
+                if let img = coloramaTextImage {
+                    Image(uiImage: img)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: stack.monthFitWidth)
+                        .blur(radius: textBlur)
+                        .position(x: stack.monthCenter.x, y: stack.monthCenter.y)
+                }
+                if stack.showDay, let img = coloramaDayImage {
+                    Image(uiImage: img)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: stack.dayDispW)
+                        .blur(radius: textBlur)
+                        .position(x: stack.dayCenter.x, y: stack.dayCenter.y)
+                }
             }
-            if let img = coloramaDayImage {
-                Image(uiImage: img)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: dayDispW)
-                    .blur(radius: textBlur)
-                    .position(x: dayCenterX, y: dayCenterY)
-            }
-            if let img = coloramaWeekdayImage {
-                Image(uiImage: img)
+            if showSmallLabels, let img = coloramaWeekdayImage {
+                scaledLabel(img, scale: smallScale)
                     .blur(radius: textBlur)
                     .position(x: cardW / 2, y: cardH * (1 - smallYPct))
             }
@@ -1223,6 +1500,78 @@ struct ShareCardComposer: View {
         }
     }
 
+    /// For each column of the bitmap, returns the topmost y where the
+    /// alpha channel is non-zero. Re-renders the image into a known
+    /// premultipliedLast RGBA8 format so the alpha byte is reliably at
+    /// `offset + 3` regardless of how the source UIImage was stored.
+    /// Used to anchor colorama's day to the LOCAL letter top (the
+    /// nearest-pixel letter under the day) instead of the global
+    /// bitmap top, so months with descenders/ascenders don't introduce
+    /// visual gaps where the day overhangs empty bitmap space.
+    fileprivate static func computeInkTopByColumn(_ image: UIImage) -> [Int] {
+        guard let cgImage = image.cgImage else { return [] }
+        let w = cgImage.width
+        let h = cgImage.height
+        guard w > 0, h > 0 else { return [] }
+
+        var pixels = [UInt8](repeating: 0, count: w * h * 4)
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
+
+        return pixels.withUnsafeMutableBytes { raw -> [Int] in
+            guard let base = raw.baseAddress,
+                  let ctx = CGContext(
+                    data: base,
+                    width: w, height: h,
+                    bitsPerComponent: 8,
+                    bytesPerRow: w * 4,
+                    space: colorSpace,
+                    bitmapInfo: bitmapInfo
+                  )
+            else { return Array(repeating: h, count: w) }
+            ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: w, height: h))
+
+            let bytes = base.assumingMemoryBound(to: UInt8.self)
+            var result = Array(repeating: h, count: w)
+            for x in 0..<w {
+                for y in 0..<h where bytes[(y * w + x) * 4 + 3] > 32 {
+                    result[x] = y
+                    break
+                }
+            }
+            return result
+        }
+    }
+
+    /// Detects whether a month abbreviation has ascender and/or
+    /// descender letters. Prefers explicit Latin-letter inspection so
+    /// English locales (`mar`, `feb`, `jan`) get reliable detection;
+    /// falls back to the bitmap aspect for non-Latin localizations
+    /// where we don't know the letterforms.
+    fileprivate static func detectAscDesc(
+        monthAbbrev: String,
+        aspect: CGFloat
+    ) -> (asc: Bool, desc: Bool) {
+        let isPlainLatin = !monthAbbrev.isEmpty && monthAbbrev.allSatisfy {
+            $0.isLetter && $0.isASCII
+        }
+        if isPlainLatin {
+            return (
+                asc: monthAbbrev.contains(where: ColoramaLayout.ascenderLetters.contains),
+                desc: monthAbbrev.contains(where: ColoramaLayout.descenderLetters.contains)
+            )
+        }
+        // Aspect fallback: <2.0 = treat as both (cascade), [2.0, 2.5)
+        // = treat as one (3 stacks), ≥2.5 = treat as neither (4 stacks).
+        if aspect < ColoramaLayout.aspectCascadeThreshold {
+            return (asc: true, desc: true)
+        } else if aspect < ColoramaLayout.aspectThreeStackThreshold {
+            return (asc: true, desc: false)
+        } else {
+            return (asc: false, desc: false)
+        }
+    }
+
     // MARK: - Dynamic date layers (monoLive / electricLive)
 
     private var dynamicColor: Color {
@@ -1256,9 +1605,23 @@ struct ShareCardComposer: View {
             // Mono ✦:     Inter Medium Italic 52.151pt, -1.565 tracking, 8% from edges
             //             (larger font needs more clearance from edge)
             let isElectric = selectedTemplate == .electricLive
-            let fontSize: CGFloat = isElectric ? 21 : 36
-            let tracking: CGFloat = isElectric ? -0.865 : -1.565
-            let yPct: CGFloat = isElectric ? 0.05 : 0.08
+            // Electric's MONTH + weekday want a 30% boost on the 9:16
+            // frame so they read at a similar visual scale to the giant
+            // italic date in the back layer. Width-scaled against the
+            // 345pt in-app baseline so live carousel, thumbnail, and
+            // export render at the same proportion.
+            let isFullScreen = (geo.size.height / geo.size.width) > 1.5
+            let frontScale: CGFloat = isFullScreen && isElectric ? 1.3 : 1.0
+            let baselineW: CGFloat = 345
+            let widthScale = geo.size.width / baselineW
+            let fontSize: CGFloat = (isElectric ? 21 : 36) * widthScale * frontScale
+            let tracking: CGFloat = (isElectric ? -0.865 : -1.565) * widthScale * frontScale
+            // Full-screen tightens MONTH (top) and WEEKDAY (bottom)
+            // toward the centered DAY number — card mode stays at the
+            // original edge offsets.
+            let yPct: CGFloat = isFullScreen
+                ? (isElectric ? 0.10 : 0.13)
+                : (isElectric ? 0.05 : 0.08)
             let font = Font.custom("Inter28pt-MediumItalic", size: fontSize)
             // Colorama already renders the month huge in the back layer,
             // so we surface the day number at top instead of repeating
@@ -1300,14 +1663,40 @@ struct ShareCardComposer: View {
 
     private let ootdInset: CGFloat = 24
 
-    // Behind outfit: OOTD + YAFA FITS
+    /// In-app card width on iPhone 15 (393 screen − 48 chrome). All
+    /// fixed-pt design metrics are tuned at this width; thumbnail and
+    /// export renders multiply by `cardW / designBaseline` so they
+    /// reproduce the live card 1:1 at any canvas size.
+    private static let designBaseline: CGFloat = 345
+
+    /// Image rendered at `img.size.width * scale` (proportional to the
+    /// design baseline) and aspect-fit to that width. Used everywhere
+    /// a fixed-size text bitmap (OOTD, weekday, etc.) needs to scale
+    /// with the canvas.
+    @ViewBuilder
+    private func scaledLabel(_ img: UIImage, scale: CGFloat) -> some View {
+        Image(uiImage: img)
+            .resizable()
+            .scaledToFit()
+            .frame(width: img.size.width * scale)
+    }
+
+    // Behind outfit: OOTD + MADE WITH YAFA
     private var ootdBackLayer: some View {
         let v = colorVariant(for: .ootdLive)
         let accent = v?.textColor ?? v?.tint ?? cardBlue
         return GeometryReader { geo in
-            let textWidth = geo.size.width - ootdInset * 2
+            // Scale all fixed metrics so thumbnails and exports look
+            // identical to the live card at any canvas size.
+            let scale = geo.size.width / Self.designBaseline
+            let inset = ootdInset * scale
+            let textWidth = geo.size.width - inset * 2
+            // Full-screen drops the OOTD wordmark lower than the
+            // card layout so it doesn't crowd the top edge of the frame.
+            let isFullScreen = (geo.size.height / geo.size.width) > 1.5
+            let topPadding: CGFloat = (isFullScreen ? 5 : -15) * scale
 
-            VStack(alignment: .leading, spacing: -24) {
+            VStack(alignment: .leading, spacing: -24 * scale) {
                 Text("OOTD")
                     .font(.custom("PlayfairDisplay-Italic", size: textWidth * 1.1))
                     .minimumScaleFactor(0.3)
@@ -1315,14 +1704,21 @@ struct ShareCardComposer: View {
                     .foregroundStyle(accent)
                     .frame(width: textWidth, alignment: .center)
 
-                Text("YAFA FITS")
+                Text("MADE ON YAFA")
                     .font(.custom("PlayfairDisplay-Italic", size: textWidth * 0.033))
-                    .tracking(0.8)
+                    .tracking(0.8 * scale)
                     .foregroundStyle(accent)
-                    .padding(.leading, textWidth * 0.73)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .frame(width: textWidth, alignment: .leading)
+                    // Italic O has a left side bearing roughly 6% of its
+                    // own font size; shift the small label right by that
+                    // amount so MADE-ON-YAFA's M lines up with the O's
+                    // visible stroke rather than the glyph-box edge.
+                    .offset(x: textWidth * 0.06)
             }
-            .padding(.horizontal, ootdInset)
-            .padding(.top, -15)
+            .padding(.horizontal, inset)
+            .padding(.top, topPadding)
         }
     }
 
@@ -1332,6 +1728,10 @@ struct ShareCardComposer: View {
         let accent = UIColor(v?.textColor ?? v?.tint ?? cardBlue)
         return GeometryReader { geo in
             let textWidth = geo.size.width - ootdInset * 2
+            // Pulls DAY + MONTH 20pt higher in full-screen so it sits
+            // away from the very bottom edge of the 9:16 frame.
+            let isFullScreen = (geo.size.height / geo.size.width) > 1.5
+            let bottomPadding: CGFloat = isFullScreen ? 28 : 8
 
             // DAY + MONTH in single Canvas for consistent spacing
             Canvas { context, size in
@@ -1368,7 +1768,7 @@ struct ShareCardComposer: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.horizontal, ootdInset)
-            .padding(.bottom, 8)
+            .padding(.bottom, bottomPadding)
         }
     }
 
@@ -1436,9 +1836,19 @@ struct ShareCardComposer: View {
     /// Currently-selected colour variant for the given template. Falls
     /// back to variant 0 when the template has no variants defined or
     /// when the saved index is out of range.
+    ///
+    /// Load-bearing invariant: the value stored in `colorVariantIndex`
+    /// is `variant.id` (set in `templateColorPicker`), but it's used
+    /// here as an array index — which only works as long as
+    /// `variants[i].id == i` for every variant. Asserted in DEBUG so
+    /// any future renumbering trips immediately.
     private func colorVariant(for template: ShareCardTemplate) -> TemplateColorVariant? {
         let variants = template.colorVariants
         guard !variants.isEmpty else { return nil }
+        assert(
+            variants.enumerated().allSatisfy { $0.offset == $0.element.id },
+            "\(template) variants must have id == array index — see colorVariant(for:)"
+        )
         let idx = min(max(0, colorVariantIndex[template] ?? 0), variants.count - 1)
         return variants[idx]
     }
@@ -1455,20 +1865,25 @@ struct ShareCardComposer: View {
     /// mid (brighter, tighter) uses the saturated mid stop.
     private func coloramaHaloColors() -> (outer: Color, mid: Color) {
         switch colorVariantIndex[.colorama] ?? 0 {
-        case 1: // pink
+        case 1: // icy
+            return (
+                Color(white: 0.05),
+                Color(red: 0.376, green: 0.498, blue: 0.604)
+            )
+        case 2: // sunset
+            return (
+                Color(red: 0.200, green: 0.350, blue: 0.580),
+                Color(red: 0.282, green: 0.471, blue: 0.722)
+            )
+        case 3: // pink
             return (
                 Color(red: 0.700, green: 0.180, blue: 0.380),
                 Color(red: 0.910, green: 0.243, blue: 0.486) // #E83E7C
             )
-        case 2: // sage
+        case 4: // sage
             return (
                 Color(red: 0.350, green: 0.580, blue: 0.300),
                 Color(red: 0.510, green: 0.776, blue: 0.431)
-            )
-        case 3: // sunset
-            return (
-                Color(red: 0.200, green: 0.350, blue: 0.580),
-                Color(red: 0.282, green: 0.471, blue: 0.722)
             )
         default: // unchanged default blue
             return (
@@ -1516,9 +1931,10 @@ struct ShareCardComposer: View {
         let argW: Shader.Argument = .float(Float(cardW))
         let argH: Shader.Argument = .float(Float(cardH))
         switch colorVariantIndex[.colorama] ?? 0 {
-        case 1:  return ShaderLibrary.coloramaDisplacedPink(argT, argW, argH)
-        case 2:  return ShaderLibrary.coloramaDisplacedSage(argT, argW, argH)
-        case 3:  return ShaderLibrary.coloramaDisplacedSunset(argT, argW, argH)
+        case 1:  return ShaderLibrary.coloramaDisplacedIcy(argT, argW, argH)
+        case 2:  return ShaderLibrary.coloramaDisplacedSunset(argT, argW, argH)
+        case 3:  return ShaderLibrary.coloramaDisplacedPink(argT, argW, argH)
+        case 4:  return ShaderLibrary.coloramaDisplacedSage(argT, argW, argH)
         default: return ShaderLibrary.coloramaDisplacedDefault(argT, argW, argH)
         }
     }
@@ -1654,9 +2070,14 @@ struct ShareCardComposer: View {
         let exporting = activeExport != nil
         return HStack(spacing: 10) {
             Button {
-                activeExport = .instagramStories
                 storyHaptic.impactOccurred()
-                exportAndShareVideo(destination: .instagramStories)
+                if selectedTemplate.isDynamic {
+                    pendingFormatDestination = .instagramStories
+                    presentFormatPicker()
+                } else {
+                    activeExport = .instagramStories
+                    exportAndShareVideo(destination: .instagramStories, format: .cardOnWhite)
+                }
             } label: {
                 HStack(spacing: 6) {
                     if activeExport == .instagramStories {
@@ -1679,9 +2100,14 @@ struct ShareCardComposer: View {
             .disabled(exporting)
 
             Button {
-                activeExport = .cameraRoll
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                exportAndShareVideo(destination: .cameraRoll)
+                if selectedTemplate.isDynamic {
+                    pendingFormatDestination = .cameraRoll
+                    presentFormatPicker()
+                } else {
+                    activeExport = .cameraRoll
+                    exportAndShareVideo(destination: .cameraRoll, format: .cardOnWhite)
+                }
             } label: {
                 HStack(spacing: 6) {
                     if activeExport == .cameraRoll {
@@ -1793,11 +2219,24 @@ struct ShareCardComposer: View {
     /// OOTD's DAY+MONTH) so it's included in the exported video.
     @MainActor
     private func renderDynamicFrontImage(size: CGSize) -> UIImage? {
+        // Colorama's "front" content lives entirely inside the back
+        // layer's animated gradient pass — the front layer is meant to
+        // be empty. Short-circuit here so we never even ask SwiftUI to
+        // snapshot it: the first snapshot after switching from OOTD
+        // can otherwise carry over OOTD's MARCH/15th front-layer text
+        // until the view tree settles on the next render pass.
+        if selectedTemplate == .colorama { return nil }
+
         let view = cardFrontLayer(for: selectedTemplate)
             .frame(width: size.width, height: size.height)
         let renderer = ImageRenderer(content: view)
         renderer.proposedSize = ProposedViewSize(width: size.width, height: size.height)
-        renderer.scale = 2
+        // Render at 3x to supersample text/edges/halo gradients
+        // before they get downsampled into the 1080×1920 video. The
+        // colorama Metal shader output and blur passes specifically
+        // benefit — IG re-encoding compounds any softness, so we
+        // start sharper.
+        renderer.scale = 3
         return renderer.uiImage
     }
 
@@ -1814,7 +2253,12 @@ struct ShareCardComposer: View {
             .frame(width: size.width, height: size.height)
         let renderer = ImageRenderer(content: view)
         renderer.proposedSize = ProposedViewSize(width: size.width, height: size.height)
-        renderer.scale = 2
+        // Render at 3x to supersample text/edges/halo gradients
+        // before they get downsampled into the 1080×1920 video. The
+        // colorama Metal shader output and blur passes specifically
+        // benefit — IG re-encoding compounds any softness, so we
+        // start sharper.
+        renderer.scale = 3
         return renderer.uiImage
     }
 
@@ -1823,7 +2267,75 @@ struct ShareCardComposer: View {
         case cameraRoll
     }
 
-    private func exportAndShareVideo(destination: ExportDestination = .instagramStories) {
+    // MARK: - Format picker
+
+    /// Renders a still preview of each format using a representative
+    /// outfit frame, then surfaces the picker sheet. The previews are
+    /// pre-rendered (rather than re-snapshotted live) so the sheet feels
+    /// instant — heavy work happens here once instead of every body pass.
+    private func presentFormatPicker() {
+        formatPreviewCard = nil
+        formatPreviewFull = nil
+        showFormatPicker = true
+
+        Task { @MainActor in
+            // Use the first outfit frame as the still — same one the
+            // user sees on the card carousel at rest.
+            guard let frame = await FrameLoader.shared.frame(for: outfit, index: 0) else {
+                return
+            }
+
+            // Lower-res preview canvas — the picker thumbnails are ~120
+            // wide on screen, so a 540×960 still is plenty crisp.
+            let previewCanvas = CGSize(width: 540, height: 960)
+            let renderScale: CGFloat = 0.5
+
+            for format in ShareCardFormat.allCases {
+                let backW: CGFloat
+                let backH: CGFloat
+                switch format {
+                case .cardOnWhite:
+                    backW = previewCanvas.width * 0.82 * renderScale
+                    backH = backW * (480.0 / 342.0)
+                case .fullScreen:
+                    backW = previewCanvas.width * renderScale
+                    backH = previewCanvas.height * renderScale
+                }
+                let backSize = CGSize(width: backW, height: backH)
+
+                let backImage: UIImage? = {
+                    if !selectedTemplate.isDynamic {
+                        return UIImage(named: selectedTemplate.backImageName)
+                    }
+                    return renderDynamicBackImage(size: backSize, time: 0)
+                }()
+                let frontImage: UIImage? = {
+                    if selectedTemplate.isDynamic {
+                        return renderDynamicFrontImage(size: backSize)
+                    }
+                    return selectedTemplate.frontImageName.flatMap { UIImage(named: $0) }
+                }()
+
+                let composed = compositeFrame(
+                    outfitFrame: frame,
+                    backImage: backImage,
+                    frontImage: frontImage,
+                    canvas: previewCanvas,
+                    format: format
+                )
+
+                switch format {
+                case .cardOnWhite: formatPreviewCard = composed
+                case .fullScreen:  formatPreviewFull = composed
+                }
+            }
+        }
+    }
+
+    private func exportAndShareVideo(
+        destination: ExportDestination = .instagramStories,
+        format: ShareCardFormat = .cardOnWhite
+    ) {
         Task {
             // Sleep ~one frame so the SwiftUI re-render that swaps the
             // icon for the spinner actually paints before we grab the
@@ -1839,9 +2351,25 @@ struct ShareCardComposer: View {
             // size. The renderer's scale=2 then gives us underlying
             // pixels that match the full 1080-wide canvas, so the
             // snapshot draws crisp 1:1 at the larger card rect.
+            // Memory budget per back-image (full-screen, the heaviest):
+            //   logical 540×960 × scale=3 = 1620×2880 px × 4 bpp ≈ 18 MB.
+            // For colorama this allocates per video frame (gradient
+            // animates) — peak adds one back-image worth on top of
+            // baseline. Static templates allocate it once.
             let renderCanvasScale: CGFloat = 0.5
-            let cardW = canvas.width * 0.82 * renderCanvasScale
-            let cardH = cardW * (480.0 / 342.0)
+            let cardW: CGFloat
+            let cardH: CGFloat
+            switch format {
+            case .cardOnWhite:
+                cardW = canvas.width * 0.82 * renderCanvasScale
+                cardH = cardW * (480.0 / 342.0)
+            case .fullScreen:
+                // Layers fill the whole 9:16 frame; rendered at half-res
+                // logical, then ImageRenderer scale=3 supersamples for
+                // crisp downsampling into the 1080×1920 video.
+                cardW = canvas.width * renderCanvasScale
+                cardH = canvas.height * renderCanvasScale
+            }
             let backSize = CGSize(width: cardW, height: cardH)
 
             // Only colorama animates per-frame (the gradient cycle).
@@ -1954,7 +2482,8 @@ struct ShareCardComposer: View {
                 let composed = compositeFrame(outfitFrame: outfitFrame,
                                               backImage: frameBackImage,
                                               frontImage: frontImage,
-                                              canvas: canvas)
+                                              canvas: canvas,
+                                              format: format)
                 if let composed, let buffer = pixelBuffer(from: composed, size: canvas) {
                     let time = CMTime(value: CMTimeValue(writtenCount), timescale: CMTimeScale(fps))
                     adaptor.append(buffer, withPresentationTime: time)
@@ -2017,34 +2546,53 @@ struct ShareCardComposer: View {
         outfitFrame: UIImage,
         backImage: UIImage?,
         frontImage: UIImage?,
-        canvas: CGSize
+        canvas: CGSize,
+        format: ShareCardFormat = .cardOnWhite
     ) -> UIImage? {
         UIGraphicsBeginImageContextWithOptions(canvas, true, 1)
         defer { UIGraphicsEndImageContext() }
         guard let ctx = UIGraphicsGetCurrentContext() else { return nil }
+        // Higher-quality downsample of the 3x-rendered back/front
+        // layers into the 1080×1920 video — keeps text edges and
+        // colorama halos crisp instead of bilinear-soft.
+        ctx.interpolationQuality = .high
 
-        // 1. Story background — app's grouped background colour
+        // 1. Story background — only matters for card-on-white; full-screen
+        // overdraws the entire canvas with the back layer in step 3.
         ctx.setFillColor(UIColor(red: 236/255, green: 240/255, blue: 246/255, alpha: 1).cgColor)
         ctx.fill(CGRect(origin: .zero, size: canvas))
 
-        // 2. Card rect — floating, centred, with generous margins
-        // Card aspect matches the in-app card: ~342 × 480 pt
-        let cardW = canvas.width * 0.82
-        let cardH = cardW * (480.0 / 342.0)
-        let cardX = (canvas.width - cardW) / 2
-        let cardY = (canvas.height - cardH) / 2
-        let cardRect = CGRect(x: cardX, y: cardY, width: cardW, height: cardH)
-        let cornerRadius = cardW * (24.0 / 342.0) // proportional to LayoutMetrics.cardCornerRadius
+        // 2. Card rect — card-on-white floats with generous margins
+        // (matches in-app 342×480 aspect); full-screen fills the canvas.
+        let cardRect: CGRect
+        let cornerRadius: CGFloat
+        switch format {
+        case .cardOnWhite:
+            let cardW = canvas.width * 0.82
+            let cardH = cardW * (480.0 / 342.0)
+            cardRect = CGRect(
+                x: (canvas.width - cardW) / 2,
+                y: (canvas.height - cardH) / 2,
+                width: cardW, height: cardH
+            )
+            cornerRadius = cardW * (24.0 / 342.0)
+        case .fullScreen:
+            cardRect = CGRect(origin: .zero, size: canvas)
+            cornerRadius = 0
+        }
 
         let cardPath = UIBezierPath(roundedRect: cardRect, cornerRadius: cornerRadius)
 
-        // Shadow + transparency layer: shadow is applied to the composited card as a whole
+        // Card-on-white draws the card with a soft drop shadow; full-screen
+        // is edge-to-edge so a shadow would clip oddly against the canvas.
         ctx.saveGState()
-        ctx.setShadow(
-            offset: CGSize(width: 0, height: 14),
-            blur: 40,
-            color: UIColor.black.withAlphaComponent(0.30).cgColor
-        )
+        if format == .cardOnWhite {
+            ctx.setShadow(
+                offset: CGSize(width: 0, height: 14),
+                blur: 40,
+                color: UIColor.black.withAlphaComponent(0.30).cgColor
+            )
+        }
         ctx.beginTransparencyLayer(auxiliaryInfo: nil)
 
         // Clip everything inside the card shape
@@ -2053,16 +2601,22 @@ struct ShareCardComposer: View {
         // 3. Back PNG (or fallback)
         if let back = backImage {
             back.draw(in: aspectFillRect(imageSize: back.size, canvasSize: cardRect.size)
-                .offsetBy(dx: cardX, dy: cardY))
+                .offsetBy(dx: cardRect.minX, dy: cardRect.minY))
         } else {
             ctx.setFillColor(UIColor(white: 0.91, alpha: 1).cgColor)
             ctx.fill(cardRect)
         }
 
-        // 4. Outfit — fit inside card while strictly preserving aspect ratio
-        let hPad = cardW * (40.0 / 342.0)
-        let maxW = cardW - hPad * 2
-        let maxH = cardH * 0.88
+        // 4. Outfit — fit while preserving aspect ratio. Card-on-white
+        // mirrors the in-app composition exactly (40pt hpad on a 345pt
+        // card, 384pt outfit height in a 480pt card → 80% maxH).
+        // Full-screen gets tighter padding and more vertical room
+        // because there's no card chrome wrapping it.
+        let hPadRatio: CGFloat = format == .fullScreen ? 60.0 / 345.0 : 40.0 / 345.0
+        let hPad = cardRect.width * hPadRatio
+        let maxW = cardRect.width - hPad * 2
+        let maxHRatio: CGFloat = format == .fullScreen ? 0.78 : 0.80
+        let maxH = cardRect.height * maxHRatio
         let frameAspect = outfitFrame.size.height / max(outfitFrame.size.width, 1)
 
         // Scale to fit: width-constrained first, then height-constrain if needed
@@ -2074,8 +2628,8 @@ struct ShareCardComposer: View {
         }
 
         outfitFrame.draw(in: CGRect(
-            x: cardX + (cardW - outfitW) / 2,
-            y: cardY + (cardH - outfitH) / 2,
+            x: cardRect.minX + (cardRect.width - outfitW) / 2,
+            y: cardRect.minY + (cardRect.height - outfitH) / 2,
             width: outfitW,
             height: outfitH
         ))
@@ -2083,16 +2637,19 @@ struct ShareCardComposer: View {
         // 5. Front PNG overlay
         if let front = frontImage {
             front.draw(in: aspectFillRect(imageSize: front.size, canvasSize: cardRect.size)
-                .offsetBy(dx: cardX, dy: cardY))
+                .offsetBy(dx: cardRect.minX, dy: cardRect.minY))
         }
 
         ctx.endTransparencyLayer()
         ctx.restoreGState()
 
-        // 6. Card border on top (drawn outside the clipped state)
-        ctx.setStrokeColor(UIColor.white.withAlphaComponent(0.85).cgColor)
-        ctx.setLineWidth(1)
-        cardPath.stroke()
+        // 6. Card border on top — only drawn for card-on-white. Full-screen
+        // edge isn't a card edge, just the video boundary.
+        if format == .cardOnWhite {
+            ctx.setStrokeColor(UIColor.white.withAlphaComponent(0.85).cgColor)
+            ctx.setLineWidth(1)
+            cardPath.stroke()
+        }
 
         return UIGraphicsGetImageFromCurrentImageContext()
     }
@@ -2156,5 +2713,82 @@ struct ShareCardComposer: View {
            let root = scene.windows.first?.rootViewController {
             root.present(activityVC, animated: true)
         }
+    }
+}
+
+// MARK: - Format picker sheet
+
+private struct ShareFormatPickerSheet: View {
+    let cardPreview: UIImage?
+    let fullPreview: UIImage?
+    let onSelect: (ShareCardFormat) -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Color.clear.frame(height: 8)
+
+            Text("CHOOSE FORMAT")
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .tracking(2)
+                .foregroundStyle(AppPalette.textFaint)
+                .padding(.top, 14)
+
+            Color.clear.frame(height: LayoutMetrics.medium)
+
+            HStack(spacing: 14) {
+                formatTile(
+                    label: "CARD",
+                    preview: cardPreview,
+                    onTap: { onSelect(.cardOnWhite) }
+                )
+                formatTile(
+                    label: "FULL",
+                    preview: fullPreview,
+                    onTap: { onSelect(.fullScreen) }
+                )
+            }
+            .padding(.horizontal, LayoutMetrics.screenPadding + 8)
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AppPalette.groupedBackground)
+    }
+
+    private func formatTile(
+        label: String,
+        preview: UIImage?,
+        onTap: @escaping () -> Void
+    ) -> some View {
+        Button(action: onTap) {
+            VStack(spacing: 8) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color.white)
+                    if let preview {
+                        Image(uiImage: preview)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    } else {
+                        ProgressView()
+                            .tint(AppPalette.textMuted)
+                    }
+                }
+                .aspectRatio(9.0 / 16.0, contentMode: .fit)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(AppPalette.cardBorder, lineWidth: 0.75)
+                )
+                .shadow(color: Color.black.opacity(0.10), radius: 14, y: 8)
+
+                Text(label)
+                    .font(.system(size: 10, weight: .semibold))
+                    .tracking(1.5)
+                    .foregroundStyle(AppPalette.textMuted)
+            }
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
     }
 }
