@@ -78,11 +78,6 @@ private struct GridTransitionRevealModifier: ViewModifier {
         return 1
     }
 
-    private var targetBlur: CGFloat {
-        if isHiding { return 8 }
-        return 0
-    }
-
     private var staggerDelay: Double {
         if isRevealing { return Double(staggerIndex) * 0.035 }
         if isHiding { return Double(staggerIndex) * 0.015 }
@@ -90,9 +85,14 @@ private struct GridTransitionRevealModifier: ViewModifier {
     }
 
     func body(content: Content) -> some View {
+        // Per-cell BLUR removed — was the dominant flicker source.
+        // `isList` (= currentView == .list) flips mid-transition when
+        // we switch currentView, which made `targetBlur` snap from 8→0
+        // in a single frame, applied to every visible cell. The
+        // staggered opacity reveal stays — that's what gives the
+        // cinematic "cells appear one by one" feel without flicker.
         content
             .opacity(targetOpacity)
-            .blur(radius: targetBlur)
             .animation(
                 isRevealing
                     ? .timingCurve(0.16, 1, 0.3, 1, duration: 0.7).delay(staggerDelay)

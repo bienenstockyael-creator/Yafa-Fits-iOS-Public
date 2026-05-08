@@ -123,7 +123,18 @@ class AuthManager {
         return sha256(nonce)
     }
 
-    func handleAppleSignIn(_ result: Result<ASAuthorization, Error>) async throws {
+    /// Handles Sign in with Apple. Pass `expectingExistingUser: true` when
+    /// invoked from the Sign In tab — if no profile exists for the just-
+    /// authenticated Apple ID (i.e., Supabase had to freshly create the
+    /// account), we sign back out and throw `noExistingAppleAccount` so
+    /// the caller can prompt the user to sign up first / use email instead.
+    /// This catches the duplicate-account trap where a user with an
+    /// existing email/password account taps "Sign in with Apple" and
+    /// accidentally creates a second account.
+    func handleAppleSignIn(
+        _ result: Result<ASAuthorization, Error>,
+        expectingExistingUser: Bool = false
+    ) async throws {
         let authorization = try result.get()
 
         guard let appleCredential = authorization.credential as? ASAuthorizationAppleIDCredential,
@@ -141,17 +152,39 @@ class AuthManager {
             )
         )
 
+        // Duplicate guard — only check when the user came from Sign In.
+        // A returning Apple user has a profile row already; a freshly-
+        // created account does not yet (we haven't called ensureProfile).
+        if expectingExistingUser {
+            let existing = try? await SocialService.getProfile(userId: session.user.id)
+            if existing == nil {
+                // Apple just created a brand-new auth.users entry. Reverse
+                // it locally so the user isn't left signed in to a fresh
+                // empty account, and tell the caller what happened.
+                try? await supabase.auth.signOut()
+                await MainActor.run {
+                    self.session = nil
+                    self.currentNonce = nil
+                }
+                throw AuthError.noExistingAppleAccount
+            }
+        }
+
         await MainActor.run {
             self.session = session
             self.currentNonce = nil
         }
-        // Ensure profile row exists, pre-populate name from Apple if provided
+        // Ensure profile row exists, pre-populate name from Apple if provided.
+        // Email is passed through so the auto-username fallback works even
+        // when Apple sends no name (which is the case for every sign-in
+        // after the first).
         let fullName = appleCredential.fullName
         let displayName = [fullName?.givenName, fullName?.familyName]
             .compactMap { $0 }.joined(separator: " ")
         await SocialService.ensureProfile(
             userId: session.user.id,
-            displayName: displayName.isEmpty ? nil : displayName
+            displayName: displayName.isEmpty ? nil : displayName,
+            email: session.user.email
         )
     }
 
@@ -198,6 +231,7 @@ class AuthManager {
 enum AuthError: LocalizedError {
     case appleSignInFailed
     case emailAlreadyRegistered
+    case noExistingAppleAccount
 
     var errorDescription: String? {
         switch self {
@@ -205,6 +239,8 @@ enum AuthError: LocalizedError {
             return "Apple Sign In failed. Please try again."
         case .emailAlreadyRegistered:
             return "This email is already registered. Sign in below."
+        case .noExistingAppleAccount:
+            return "No existing account found with this Apple ID. Tap Sign Up to create one, or sign in with your email and password."
         }
     }
 }

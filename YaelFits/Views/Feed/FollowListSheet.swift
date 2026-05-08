@@ -69,13 +69,20 @@ struct FollowListSheet: View {
                     shadowY: 1
                 )
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(profile?.displayLabel ?? "User")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(AppPalette.textPrimary)
-                    if let username = profile?.username {
-                        Text("@\(username)")
-                            .font(.system(size: 11))
-                            .foregroundStyle(AppPalette.textFaint)
+                    // Instagram-style: username primary, display name secondary.
+                    if let username = profile?.username, !username.isEmpty {
+                        Text(username)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppPalette.textPrimary)
+                        if let dn = profile?.displayName, !dn.isEmpty {
+                            Text(dn)
+                                .font(.system(size: 11))
+                                .foregroundStyle(AppPalette.textFaint)
+                        }
+                    } else {
+                        Text(profile?.displayLabel ?? "User")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppPalette.textPrimary)
                     }
                 }
                 Spacer()

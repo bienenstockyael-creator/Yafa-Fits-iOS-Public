@@ -11,6 +11,8 @@ struct OnboardingView: View {
     enum Step { case profile }
 
     @State private var step: Step = .profile
+    @Environment(AuthManager.self) private var auth
+    @State private var isSigningOut = false
 
     var body: some View {
         ZStack {
@@ -32,6 +34,28 @@ struct OnboardingView: View {
                             onComplete: onComplete
                         )
                     }
+
+                    Color.clear.frame(height: LayoutMetrics.large)
+
+                    // Escape hatch — if the user landed here on the wrong
+                    // account (e.g., Apple Sign In created a duplicate
+                    // account that doesn't match an existing email
+                    // signup), they can sign out and try again from the
+                    // AuthView with the correct credentials.
+                    Button {
+                        Task {
+                            isSigningOut = true
+                            try? await auth.signOut()
+                            isSigningOut = false
+                        }
+                    } label: {
+                        Text(isSigningOut ? "SIGNING OUT…" : "USE A DIFFERENT ACCOUNT")
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .tracking(1.5)
+                            .foregroundStyle(AppPalette.textMuted)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isSigningOut)
 
                     Color.clear.frame(height: LayoutMetrics.xLarge)
                 }
@@ -80,6 +104,8 @@ private struct ProfileStep: View {
     var existingDisplayName: String?
     var onComplete: () -> Void
 
+    @Environment(AuthManager.self) private var auth
+
     @State private var displayName = ""
     @State private var username = ""
     @State private var isSaving = false
@@ -121,6 +147,19 @@ private struct ProfileStep: View {
         .onAppear {
             if let existing = existingDisplayName, !existing.isEmpty, displayName.isEmpty {
                 displayName = existing
+            }
+            // Auto-suggest a username so users never have to invent one
+            // from scratch and never end up with a null handle. Prefers
+            // sanitized display name → email local-part → random.
+            // The user can edit before submitting if they want a custom
+            // handle. This also handles the legacy-data case where a
+            // user's intended username was saved into `display_name`
+            // (old ProfileView label/binding bug).
+            if username.isEmpty {
+                username = Profile.suggestedUsername(
+                    displayName: existingDisplayName ?? displayName,
+                    email: auth.userEmail
+                )
             }
         }
         .onChange(of: username) { _, newValue in

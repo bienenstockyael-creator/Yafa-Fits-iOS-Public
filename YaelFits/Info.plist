@@ -22,6 +22,8 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>FALAPIKey</key>
 	<string>$(FALAPIKey)</string>
+	<key>OpenAIAPIKey</key>
+	<string>$(OpenAIAPIKey)</string>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>instagram-stories</string>

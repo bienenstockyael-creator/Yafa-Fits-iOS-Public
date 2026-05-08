@@ -147,13 +147,21 @@ struct DiscoverView: View {
                 HStack(spacing: LayoutMetrics.xSmall) {
                     AvatarView(url: profile.avatarUrl, initial: profile.initial, size: 44)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(profile.displayLabel)
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(AppPalette.textStrong)
+                        // Instagram-style: username primary, display name
+                        // secondary. Fall back if no username set.
                         if let username = profile.username, !username.isEmpty {
-                            Text("@\(username)")
-                                .font(.system(size: 11))
-                                .foregroundStyle(AppPalette.textMuted)
+                            Text(username)
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(AppPalette.textStrong)
+                            if let dn = profile.displayName, !dn.isEmpty {
+                                Text(dn)
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(AppPalette.textMuted)
+                            }
+                        } else {
+                            Text(profile.displayLabel)
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(AppPalette.textStrong)
                         }
                     }
                 }

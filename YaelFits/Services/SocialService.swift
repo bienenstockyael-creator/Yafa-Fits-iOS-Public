@@ -4,7 +4,15 @@ struct SocialService {
     // MARK: - Profile
 
     /// Creates a profile row if it doesn't exist yet (idempotent upsert).
-    static func ensureProfile(userId: UUID, displayName: String? = nil) async {
+    /// Always seeds a non-null username — sanitized display name first,
+    /// email local-part fallback, random user-XXXX last resort. Users
+    /// are never left with a null handle. They can customize via the
+    /// onboarding screen or profile editor afterwards.
+    static func ensureProfile(
+        userId: UUID,
+        displayName: String? = nil,
+        email: String? = nil
+    ) async {
         struct ProfileUpsert: Encodable {
             let id: String
             let username: String?
@@ -14,10 +22,11 @@ struct SocialService {
                 case displayName = "display_name"
             }
         }
+        let suggested = Profile.suggestedUsername(displayName: displayName, email: email)
         _ = try? await supabase
             .from("profiles")
             .upsert(
-                ProfileUpsert(id: userId.uuidString, username: displayName.map { Profile.sanitizeUsername($0) }, displayName: displayName),
+                ProfileUpsert(id: userId.uuidString, username: suggested, displayName: displayName),
                 onConflict: "id",
                 ignoreDuplicates: true
             )

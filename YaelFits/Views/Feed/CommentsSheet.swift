@@ -72,7 +72,7 @@ struct CommentsSheet: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
-                    Text(profile?.displayLabel ?? "User")
+                    Text(profile?.handle ?? "User")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(AppPalette.textStrong)
 

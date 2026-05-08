@@ -43,6 +43,12 @@ struct VirtualClosetView: View {
     @State private var savedToRemixes = false
     @State private var showsRemixArchive = false
 
+    /// Per-session model toggle for the dress flow. Initialised from the
+    /// build-time default (`AppConfig.useOpenAIDressModel`) but can be
+    /// flipped at runtime via the header switcher to A/B compare without
+    /// rebuilding.
+    @State private var useOpenAIModel: Bool = AppConfig.useOpenAIDressModel
+
     /// The original (clean) avatar — what we always feed back into nano-banana
     /// so re-dressing doesn't compound artifacts from previous generations.
     private var sourceAvatar: UIImage? { avatar ?? loadedAvatar }
@@ -134,10 +140,13 @@ struct VirtualClosetView: View {
             }
             .buttonStyle(.plain)
             Spacer()
-            Text("VIRTUAL CLOSET")
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                .tracking(2)
-                .foregroundStyle(AppPalette.textFaint)
+            VStack(spacing: 4) {
+                Text("VIRTUAL CLOSET")
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .tracking(2)
+                    .foregroundStyle(AppPalette.textFaint)
+                modelToggle
+            }
             Spacer()
             Button {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -151,6 +160,51 @@ struct VirtualClosetView: View {
         }
         .padding(.horizontal, LayoutMetrics.screenPadding)
         .padding(.top, 8)
+    }
+
+    /// In-app A/B switch between the FAL nano-banana flow and the OpenAI
+    /// gpt-image-1 flow. Disabled while a dress is in flight (changing
+    /// mid-dress would have no effect anyway, since the task captured
+    /// the current value at start).
+    private var modelToggle: some View {
+        HStack(spacing: 0) {
+            modelChip(label: "nano", active: !useOpenAIModel) {
+                if useOpenAIModel {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    useOpenAIModel = false
+                }
+            }
+            modelChip(label: "gpt-image", active: useOpenAIModel) {
+                if !useOpenAIModel {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    useOpenAIModel = true
+                }
+            }
+        }
+        .padding(2)
+        .background(
+            Capsule().fill(Color.white.opacity(0.6))
+        )
+        .overlay(
+            Capsule().strokeBorder(AppPalette.cardBorder, lineWidth: 0.5)
+        )
+        .opacity(isDressing ? 0.4 : 1.0)
+        .allowsHitTesting(!isDressing)
+    }
+
+    private func modelChip(label: String, active: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label)
+                .font(.system(size: 9, weight: active ? .bold : .medium, design: .monospaced))
+                .tracking(0.6)
+                .foregroundStyle(active ? AppPalette.textPrimary : AppPalette.textFaint)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule().fill(active ? Color.white : Color.clear)
+                )
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Stage
@@ -491,15 +545,31 @@ struct VirtualClosetView: View {
         dressStatusDetail = "Dressing your avatar"
         isDressing = true
 
-        dressTask = Task {
+        dressTask = Task { [useOpenAIModel] in
             do {
-                let result = try await FalDressAvatarService.shared.dress(
-                    avatar: source,
-                    topImageURL: topURL,
-                    bottomImageURL: bottomURL,
-                    shoesImageURL: shoesURL
-                ) { progress in
-                    await MainActor.run { dressStatusDetail = progress.detail }
+                // Per-session toggle (header switcher) picks between the
+                // FAL nano-banana flow and the OpenAI gpt-image-1 flow.
+                // Both services share the same dress(...) signature so
+                // the call site stays clean.
+                let result: UIImage
+                if useOpenAIModel {
+                    result = try await OpenAIDressAvatarService.shared.dress(
+                        avatar: source,
+                        topImageURL: topURL,
+                        bottomImageURL: bottomURL,
+                        shoesImageURL: shoesURL
+                    ) { progress in
+                        await MainActor.run { dressStatusDetail = progress.detail }
+                    }
+                } else {
+                    result = try await FalDressAvatarService.shared.dress(
+                        avatar: source,
+                        topImageURL: topURL,
+                        bottomImageURL: bottomURL,
+                        shoesImageURL: shoesURL
+                    ) { progress in
+                        await MainActor.run { dressStatusDetail = progress.detail }
+                    }
                 }
                 if Task.isCancelled { return }
                 await MainActor.run {

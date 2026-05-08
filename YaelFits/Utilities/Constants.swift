@@ -36,6 +36,23 @@ enum AppConfig {
     static let falQueueBaseURL = URL(string: "https://queue.fal.run/")!
     static let falModelPath = "fal-ai/kling-video/v2.5-turbo/pro/image-to-video"
     static let falBackgroundRemovalModelPath = "fal-ai/bria/background/remove"
+
+    /// OpenAI base URL for the gpt-image-1 dress pass.
+    static let openAIBaseURL = URL(string: "https://api.openai.com/v1/")!
+
+    /// When true, the Virtual Closet "Dress Avatar" flow uses OpenAI
+    /// gpt-image-2 (via OpenAIDressAvatarService) instead of FAL nano-
+    /// banana. The in-app header switcher in the Virtual Closet can
+    /// also flip this at runtime; this constant is the build-time
+    /// default that the toggle is initialised from.
+    ///
+    /// Tradeoffs:
+    ///   - OpenAI: better identity preservation but ~$0.04-0.08/image
+    ///     and 20-40s latency.
+    ///   - FAL nano-banana: faster (~10-15s) and ~$0.005/image but
+    ///     identity drift is more common.
+    /// Requires `OPENAI_API_KEY` in the env or `OpenAIAPIKey` in Info.plist.
+    static let useOpenAIDressModel: Bool = false
 }
 
 enum UploadConfig {

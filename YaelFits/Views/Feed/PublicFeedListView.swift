@@ -360,7 +360,25 @@ struct FeedPostCard: View {
             cardActions
         }
         .padding(LayoutMetrics.medium)
+        .holoCard(active: post.isAuthorPro == true)
         .appCard()
+        .overlay {
+            if post.isAuthorPro == true {
+                // Frosty blue rim — slightly thicker plain stroke instead
+                // of stroke+blur. The blur was forcing an offscreen pass
+                // per card; this version is visually nearly identical
+                // and avoids the extra render target.
+                RoundedRectangle(cornerRadius: LayoutMetrics.cardCornerRadius, style: .continuous)
+                    .stroke(Color(red: 0.82, green: 0.94, blue: 1.0).opacity(0.45), lineWidth: 1.5)
+                    .allowsHitTesting(false)
+            }
+        }
+        .shadow(
+            color: post.isAuthorPro == true ? Color(red: 0.82, green: 0.94, blue: 1.0).opacity(0.45) : .clear,
+            radius: 14,
+            y: 0
+        )
+        .proCardTilt(active: post.isAuthorPro == true)
         .opacity(cardVisible ? 1 : 0)
         .scaleEffect(cardVisible ? 1 : 0.96)
         .onChange(of: outfit) { _, newOutfit in
@@ -621,15 +639,29 @@ struct FeedPostCard: View {
     }
 
     private func openShopLink(for product: Product) {
+        // 1. User-entered shop link wins — they have a specific product page in mind.
         if let shopLink = product.shopLink, !shopLink.isEmpty,
            let url = URL(string: shopLink) {
             UIApplication.shared.open(url)
             return
         }
+
+        // 2. Thumbnail → Google Lens visual search. The thumbnail is more
+        //    discriminating than the label alone, so this returns the
+        //    closest visual matches for the actual product image.
+        if let thumbnailURL = product.resolvedImageURL,
+           let encodedThumb = thumbnailURL.absoluteString
+            .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+           let lensURL = URL(string: "https://lens.google.com/uploadbyurl?url=\(encodedThumb)") {
+            UIApplication.shared.open(lensURL)
+            return
+        }
+
+        // 3. Fallback — Google Images text search using the product label.
         let query = product.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty,
               let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: "https://www.google.com/search?tbm=shop&q=\(encoded)")
+              let url = URL(string: "https://www.google.com/search?tbm=isch&q=\(encoded)")
         else { return }
         UIApplication.shared.open(url)
     }

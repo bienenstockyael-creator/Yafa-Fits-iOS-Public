@@ -148,8 +148,22 @@ struct ProfileView: View {
 
     private var formSection: some View {
         VStack(spacing: LayoutMetrics.xSmall) {
-            fieldRow(label: "USERNAME", text: $displayName, placeholder: "Choose a username")
+            // Two distinct fields, Instagram-style:
+            //   NAME     → free text, shown on cards/headers
+            //   USERNAME → sanitized handle, used for mentions/URLs/search
+            // The previous version of this screen had a single field
+            // labelled "USERNAME" that was actually bound to $displayName,
+            // which left users with `display_name` populated but
+            // `username` null — and a stuck onboarding sheet.
+            fieldRow(label: "NAME", text: $displayName, placeholder: "Your name")
+            fieldRow(label: "USERNAME", text: $username, placeholder: "Choose a username")
             bioRow
+        }
+        .onChange(of: username) { _, newValue in
+            // Live-sanitize as the user types so the saved value matches
+            // what they see (lowercase, alphanumeric + . + _).
+            let sanitized = Profile.sanitizeUsername(newValue)
+            if sanitized != newValue { username = sanitized }
         }
     }
 
@@ -191,8 +205,11 @@ struct ProfileView: View {
     private var hasProfileChanges: Bool {
         let profile = store.currentProfile
         let origDisplay = profile?.displayName ?? ""
+        let origUsername = profile?.username ?? ""
         let origBio = profile?.bio ?? ""
-        return displayName != origDisplay || bio != origBio
+        return displayName != origDisplay
+            || username != origUsername
+            || bio != origBio
     }
 
     private var saveButton: some View {
@@ -349,9 +366,12 @@ struct ProfileView: View {
         showSaved = false
 
         Task {
+            // Use the LOCAL `username` state (not the cached store value)
+            // so user edits to the username field actually persist.
+            let sanitizedUsername = Profile.sanitizeUsername(username)
             let profile = Profile(
                 id: userId,
-                username: store.currentProfile?.username,
+                username: sanitizedUsername.isEmpty ? nil : sanitizedUsername,
                 displayName: displayName.isEmpty ? nil : displayName,
                 avatarUrl: store.currentProfile?.avatarUrl,
                 bio: bio.isEmpty ? nil : bio

@@ -104,6 +104,10 @@
 		A95A14866E6CEABC11DBCDDB /* public-feed.json in Resources */ = {isa = PBXBuildFile; fileRef = E9EEE7F7310371BA0DB650A1 /* public-feed.json */; };
 		AB99B2F085034E2A1CBBF77A /* cloudy.json in Resources */ = {isa = PBXBuildFile; fileRef = 8E93326E60084B89CA340A41 /* cloudy.json */; };
 		AC0881DDF6A6508BAB207404 /* OutfitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A2CE7F573582B8F2F582033 /* OutfitService.swift */; };
+		B010E0010001000000000B01 /* OpenAIDressAvatarService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B010E0020001000000000B01 /* OpenAIDressAvatarService.swift */; };
+		B010F0010001000000000A01 /* HoloMotionTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = F010F0010001000000000A01 /* HoloMotionTracker.swift */; };
+		B010F0010002000000000A02 /* Holo.metal in Sources */ = {isa = PBXBuildFile; fileRef = F010F0010002000000000A02 /* Holo.metal */; };
+		B010F0010003000000000A03 /* HoloCardModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = F010F0010003000000000A03 /* HoloCardModifier.swift */; };
 		B0DCE549ACD950AF52F16FD0 /* DressAvatarSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5896B8C8BF7E8A341C74D09E /* DressAvatarSheetView.swift */; };
 		B18E3607CB764CEC45F54677 /* LocalOutfitStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE7400C8E76CC739BA9271FE /* LocalOutfitStore.swift */; };
 		B2AFB7640AE011959778E08F /* placeholder-1.webp in Resources */ = {isa = PBXBuildFile; fileRef = 3FC4F82EC6FC767F44CE9A4B /* placeholder-1.webp */; };
@@ -140,6 +144,7 @@
 		EDEF93D554B05F4556CBEF39 /* CarouselView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EE82713F28FF3FC8E2D62F9 /* CarouselView.swift */; };
 		EEF01751448761FEB4F9D9BC /* ClosetAvatarStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58684B30A094FD812594B873 /* ClosetAvatarStorage.swift */; };
 		F7A15AB6247B925DADE4A0E4 /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81B954E0E1EBF71A99A79927 /* AuthView.swift */; };
+		B020F0010001000000000A01 /* WelcomeTourView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B020F0020001000000000A01 /* WelcomeTourView.swift */; };
 		FA44C3B031072C58E72871BC /* AddProductSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 662419C9FD163590FB593FB1 /* AddProductSheet.swift */; };
 		FB40B9D88FCEC7C1D58FF4BF /* RotatableOutfitImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49B67EDFF1375799A0757796 /* RotatableOutfitImage.swift */; };
 		FB8F78F2E7DA0B20E0921100 /* AutoDetectProductsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AF9B1703DDDA42143804DAE /* AutoDetectProductsView.swift */; };
@@ -230,6 +235,7 @@
 		7F16D58523C3D03D59A3625B /* outfit-20.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-20.webp"; sourceTree = "<group>"; };
 		7F910ED2C981B44BD5AD83CC /* ProductImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductImageView.swift; sourceTree = "<group>"; };
 		81B954E0E1EBF71A99A79927 /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
+		B020F0020001000000000A01 /* WelcomeTourView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeTourView.swift; sourceTree = "<group>"; };
 		81F441EFEB69610857652828 /* outfit-5.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-5.webp"; sourceTree = "<group>"; };
 		8237E6809B27F49EF0A31185 /* outfit-8.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-8.webp"; sourceTree = "<group>"; };
 		82D53C00C365C5679D3D22CD /* outfit-26.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-26.webp"; sourceTree = "<group>"; };
@@ -260,6 +266,7 @@
 		A97A1CA096A532AA1FA2219C /* Inter_28pt-MediumItalic.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter_28pt-MediumItalic.ttf"; sourceTree = "<group>"; };
 		AA9CDA154F7FD6F2F0D57A92 /* VideoFrameSequenceExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFrameSequenceExporter.swift; sourceTree = "<group>"; };
 		AE0BE487007AB6D1CE6EC826 /* FalSegmentationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FalSegmentationService.swift; sourceTree = "<group>"; };
+		B010E0020001000000000B01 /* OpenAIDressAvatarService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIDressAvatarService.swift; sourceTree = "<group>"; };
 		B01D7034E3B52D5B0635EAE8 /* Remix.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Remix.swift; sourceTree = "<group>"; };
 		B0200DA9B94C7FF2FD79D899 /* SocialService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialService.swift; sourceTree = "<group>"; };
 		B2E41DDFCDBAB48448C7B148 /* UploadPipelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadPipelineView.swift; sourceTree = "<group>"; };
@@ -289,9 +296,12 @@
 		E9EEE7F7310371BA0DB650A1 /* public-feed.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "public-feed.json"; sourceTree = "<group>"; };
 		EB4F545B0509DBB35559DD46 /* FalDressAvatarService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FalDressAvatarService.swift; sourceTree = "<group>"; };
 		EDB599797B976DC16F27404F /* YaelFitsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YaelFitsApp.swift; sourceTree = "<group>"; };
-		EE55D6A8AECEEB914A7A26B6 /* YafaTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = YafaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		EE55D6A8AECEEB914A7A26B6 /* YafaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = YafaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		EE8E7C6F4FF612B588212336 /* LocalCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalCache.swift; sourceTree = "<group>"; };
 		EF568E0C17C6FF782B784F3C /* AuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthManager.swift; sourceTree = "<group>"; };
+		F010F0010001000000000A01 /* HoloMotionTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoloMotionTracker.swift; sourceTree = "<group>"; };
+		F010F0010002000000000A02 /* Holo.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = Holo.metal; sourceTree = "<group>"; };
+		F010F0010003000000000A03 /* HoloCardModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoloCardModifier.swift; sourceTree = "<group>"; };
 		F15640B030569340C148E2F4 /* AvatarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarView.swift; sourceTree = "<group>"; };
 		F6B8C9D105280144E32EBE34 /* windy.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = windy.json; sourceTree = "<group>"; };
 		F6BCC4406A27B6BF439BBA9D /* Outfit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Outfit.swift; sourceTree = "<group>"; };
@@ -419,6 +429,7 @@
 			isa = PBXGroup;
 			children = (
 				83E5A43B5B040C02FD0A0D92 /* Colorama.metal */,
+				F010F0010002000000000A02 /* Holo.metal */,
 			);
 			path = Shaders;
 			sourceTree = "<group>";
@@ -429,6 +440,7 @@
 				662419C9FD163590FB593FB1 /* AddProductSheet.swift */,
 				3AF9B1703DDDA42143804DAE /* AutoDetectProductsView.swift */,
 				F15640B030569340C148E2F4 /* AvatarView.swift */,
+				F010F0010003000000000A03 /* HoloCardModifier.swift */,
 				4E4A64387EDDC09043570EF5 /* InteractiveTouchSurface.swift */,
 				FDF9D01E8CA3A29D241E8B17 /* LottieView.swift */,
 				7F910ED2C981B44BD5AD83CC /* ProductImageView.swift */,
@@ -561,11 +573,13 @@
 				F6F605079F2D6968468CCE00 /* FalAvatarStandardizationService.swift */,
 				1A9473A9AC05A63B161719DE /* FalBackgroundRemovalService.swift */,
 				EB4F545B0509DBB35559DD46 /* FalDressAvatarService.swift */,
+				B010E0020001000000000B01 /* OpenAIDressAvatarService.swift */,
 				CB548904A22AE6870200BA7C /* FalProductThumbnailService.swift */,
 				AE0BE487007AB6D1CE6EC826 /* FalSegmentationService.swift */,
 				0EB8B4728A72D35257989791 /* FalVideoGenerationService.swift */,
 				4A3F4701E39853E7B869448A /* FrameLoader.swift */,
 				29E71BBBA1CFBB444044694A /* GenerationJobService.swift */,
+				F010F0010001000000000A01 /* HoloMotionTracker.swift */,
 				3120723AEF223E5E8F3E6FE5 /* ImageEnhancementService.swift */,
 				89B3091DEE0ED4BD08D99CA8 /* ImageMaskingService.swift */,
 				EE8E7C6F4FF612B588212336 /* LocalCache.swift */,
@@ -622,6 +636,7 @@
 			isa = PBXGroup;
 			children = (
 				81B954E0E1EBF71A99A79927 /* AuthView.swift */,
+				B020F0020001000000000A01 /* WelcomeTourView.swift */,
 				9ACE0F1992CD1E1C592E84FE /* PasswordResetView.swift */,
 				338A9578B8C8880B04D01C5A /* SignupVerificationView.swift */,
 			);
@@ -796,6 +811,7 @@
 				815AE7C9B6BFEC7E1E745DCF /* AppModifiers.swift in Sources */,
 				881AEDE759657DFE1757896D /* AuthManager.swift in Sources */,
 				F7A15AB6247B925DADE4A0E4 /* AuthView.swift in Sources */,
+				B020F0010001000000000A01 /* WelcomeTourView.swift in Sources */,
 				FB8F78F2E7DA0B20E0921100 /* AutoDetectProductsView.swift in Sources */,
 				8102360B51D1E0956A25F698 /* AvatarCropView.swift in Sources */,
 				8E2CDB32D67E1D2148CB2192 /* AvatarOnboardingView.swift in Sources */,
@@ -813,6 +829,7 @@
 				4434E9CC224A947D5BC8FD63 /* FalAvatarStandardizationService.swift in Sources */,
 				74AA75019C8C28EDD28CB289 /* FalBackgroundRemovalService.swift in Sources */,
 				E5ACB4190F73659733A47E11 /* FalDressAvatarService.swift in Sources */,
+				B010E0010001000000000B01 /* OpenAIDressAvatarService.swift in Sources */,
 				2BEF362D032320EF0D571E6D /* FalProductThumbnailService.swift in Sources */,
 				2E780798339DDDBADD19DCCB /* FalSegmentationService.swift in Sources */,
 				EC0CA5A8FA12A4B6E8771D0C /* FalVideoGenerationService.swift in Sources */,
@@ -822,6 +839,9 @@
 				25CD0A57BA9A4449422B812F /* FrameSequenceViewModel.swift in Sources */,
 				17E7BA37588835D6831F3AD3 /* GenerationJobRecord.swift in Sources */,
 				4B718F5E1C8680BCBDD7C08F /* GenerationJobService.swift in Sources */,
+				B010F0010002000000000A02 /* Holo.metal in Sources */,
+				B010F0010003000000000A03 /* HoloCardModifier.swift in Sources */,
+				B010F0010001000000000A01 /* HoloMotionTracker.swift in Sources */,
 				4E2CF0F613B1C84D33EEF685 /* ImageEnhancementService.swift in Sources */,
 				5755A53F41F0BBF52E7FDF4A /* ImageMaskingService.swift in Sources */,
 				16C2D83AE59F47AF7304DCCA /* InteractiveTouchSurface.swift in Sources */,
@@ -892,7 +912,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = YaelFits/YaelFits.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 28;
+				CURRENT_PROJECT_VERSION = 30;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = YaelFits/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -998,6 +1018,7 @@
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
+				OpenAIAPIKey = "REDACTED";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
@@ -1014,7 +1035,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = YaelFits/YaelFits.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 28;
+				CURRENT_PROJECT_VERSION = 30;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = YaelFits/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1079,6 +1100,7 @@
 				MARKETING_VERSION = 1.0.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
+				OpenAIAPIKey = "REDACTED";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;

@@ -397,7 +397,10 @@ struct ContentSource {
                 let profile = profileMap[row.userId.lowercased()]
                 return FeedPost(
                     id: "feed-\(row.id)",
-                    authorName: profile?.displayLabel ?? "User",
+                    // Instagram-style: username is the primary identity
+                    // shown on posts. Falls back to displayName if no
+                    // username is set.
+                    authorName: profile?.handle ?? "User",
                     outfitId: row.id,
                     caption: row.caption,
                     height: nil, size: nil,
@@ -473,7 +476,7 @@ struct ContentSource {
                 let profile = row.userId.flatMap { profileMap[$0.lowercased()] }
                 return FeedPost(
                     id: "feed-\(row.id)",
-                    authorName: profile?.displayLabel ?? "Yael",
+                    authorName: profile?.handle ?? "Yael",
                     outfitId: row.id,
                     caption: row.caption,
                     height: nil, size: nil,

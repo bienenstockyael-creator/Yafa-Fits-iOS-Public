@@ -160,9 +160,15 @@ struct CalendarMonthView: View {
         guard let targetOutfitId = store.pendingCalendarScrollOutfitId else { return }
 
         Task { @MainActor in
-            // Yield to let VStack render all content
+            // Yield + brief sleep to let the VStack lay out. Two yields
+            // alone weren't enough on first mount — the LazyVStack hadn't
+            // populated cells yet and reader.scrollTo silently failed,
+            // leaving the calendar at the top with the target outfit
+            // off-screen (causing the hero to land off-screen during
+            // first list→calendar transitions).
             await Task.yield()
             await Task.yield()
+            try? await Task.sleep(for: .milliseconds(40))
 
             if animated {
                 withAnimation(.timingCurve(0.16, 1, 0.3, 1, duration: 0.55)) {
@@ -171,6 +177,11 @@ struct CalendarMonthView: View {
             } else {
                 reader.scrollTo(targetOutfitId, anchor: .center)
             }
+            // Belt-and-suspenders: scroll again after one more frame.
+            // ScrollViewProxy can need a second nudge if the first call
+            // happened before the target row's GeometryReader fired.
+            try? await Task.sleep(for: .milliseconds(50))
+            reader.scrollTo(targetOutfitId, anchor: .center)
 
             try? await Task.sleep(for: .milliseconds(100))
             store.pendingCalendarScrollOutfitId = nil

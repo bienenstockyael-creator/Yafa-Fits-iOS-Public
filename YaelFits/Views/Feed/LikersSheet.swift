@@ -59,13 +59,22 @@ struct LikersSheet: View {
                 shadowY: 1
             )
             VStack(alignment: .leading, spacing: 2) {
-                Text(profile.displayLabel)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(AppPalette.textPrimary)
+                // Instagram-style list row: username primary, display name
+                // secondary. If no username is set, fall back to display
+                // name on the primary line and hide the secondary.
                 if let username = profile.username, !username.isEmpty {
-                    Text("@\(username)")
-                        .font(.system(size: 11))
-                        .foregroundStyle(AppPalette.textFaint)
+                    Text(username)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AppPalette.textPrimary)
+                    if let dn = profile.displayName, !dn.isEmpty {
+                        Text(dn)
+                            .font(.system(size: 11))
+                            .foregroundStyle(AppPalette.textFaint)
+                    }
+                } else {
+                    Text(profile.displayLabel)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AppPalette.textPrimary)
                 }
             }
             Spacer(minLength: 0)

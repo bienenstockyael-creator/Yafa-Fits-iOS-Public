@@ -241,11 +241,13 @@ struct RootView: View {
     }
 
     private var listViewBlur: CGFloat {
-        switch store.viewTransitionPhase {
-        case .idle: return 0
-        case .sourceOut: return store.currentView == .list ? 8 : 0
-        case .targetIn: return store.currentView == .list ? 0 : 0
-        }
+        // Constant zero. Previously: blur was conditionally 8 only when
+        // the source was list — but `currentView` flips mid-transition,
+        // so the blur value abruptly jumped from 8→0 at the same time
+        // the opacity was animating, causing visible flicker. The
+        // opacity crossfade alone is enough; blur added more cost than
+        // visual benefit.
+        0
     }
 
     private var calendarViewOpacity: Double {
@@ -256,13 +258,7 @@ struct RootView: View {
         }
     }
 
-    private var calendarViewBlur: CGFloat {
-        switch store.viewTransitionPhase {
-        case .idle: return 0
-        case .sourceOut: return store.currentView == .calendar ? 8 : 0
-        case .targetIn: return store.currentView == .calendar ? 0 : 0
-        }
-    }
+    private var calendarViewBlur: CGFloat { 0 }
 
     private var viewModeToggle: some View {
         HStack(spacing: 2) {
@@ -344,115 +340,201 @@ struct RootView: View {
     // MARK: - Hero View Transition
 
     private func performViewTransition() {
+        // 1. Cancel + reset prior state synchronously. Stale heroOutfit /
+        // heroFrame from a previous transition was leaking into the next
+        // one, causing the "recalls the first outfit" bug — the new
+        // transition would briefly inherit heroAnchorOutfitId before
+        // replacing it, leading to flicker.
         viewTransitionTask?.cancel()
+        cleanupHero()
 
         let goingToCalendar = !isCalendarActive
-        let anchorId = store.centeredListOutfitId ?? store.sortedOutfits.first?.id
-
-        // Find anchor outfit and its source frame
         let sourceFrames = goingToCalendar ? store.listOutfitFrames : store.calendarOutfitFrames
+
+        // 2. Compute anchor FRESHLY from current frame data. Don't trust
+        // store.centeredListOutfitId — with LazyVGrid the cached value
+        // can lag behind actual scroll position and recall a previously-
+        // centered outfit even after the user has scrolled past it.
+        let freshAnchor = mostCenteredOutfit(in: sourceFrames)
+        let anchorId = freshAnchor
+            ?? store.centeredListOutfitId
+            ?? store.sortedOutfits.first?.id
+
+        // 3. Validate source frame BEFORE starting the hero. If it's
+        // missing or zero-sized (cold first attempt, items not yet
+        // mounted in the LazyVGrid), bail to a clean instant switch
+        // instead of running a hero with no source — that's what was
+        // causing "lands nowhere and disappears".
         guard let anchorId,
-              let outfit = store.outfitById[anchorId]
-        else {
-            // No anchor — just switch view instantly
+              let outfit = store.outfitById[anchorId],
+              let sourceFrame = sourceFrames[anchorId],
+              sourceFrame.width > 0,
+              sourceFrame.height > 0 else {
             store.selectedOutfitId = nil
-            if goingToCalendar {
+            if let anchorId, goingToCalendar {
                 store.pendingCalendarScrollOutfitId = anchorId
             }
             store.currentView = goingToCalendar ? .calendar : .list
             return
         }
 
-        let sourceFrame = sourceFrames[anchorId]
         let frameIndex = store.listOutfitFrameIndices[anchorId] ?? 0
 
         viewTransitionTask = Task { @MainActor in
             // Step 1: Load hero image, hide anchor outfit
+            // === Web-repo flow port ==================================
+            // The web version's order is:
+            //   1. Set view + pre-scroll (no hero yet, no card hidden)
+            //   2. Wait ~180ms for layout
+            //   3. Re-read source rect FRESH at kickoff (don't trust the
+            //      snapshot from tap time — layout may have shifted)
+            //   4. NOW position hero, hide source card, show hero
+            //   5. Poll for STABLE target rect (require 2+ consecutive
+            //      reads matching at single-pixel precision)
+            //   6. Animate hero to stable target
+            //   7. End: clear anchor → next frame → fade hero (rAF
+            //      handoff so real anchor paints before hero disappears)
+            //
+            // iOS now follows the same shape. The previous version was
+            // hiding the source card immediately (causing flicker) and
+            // using a snapshot source rect (causing position errors).
             heroOutfit = outfit
             heroFrameIndex = frameIndex
             heroImage = await FrameLoader.shared.frame(for: outfit, index: frameIndex)
             guard !Task.isCancelled else { return }
 
-            let screenBounds = UIScreen.main.bounds
-            let fallbackFrame = CGRect(
-                x: screenBounds.midX - 50,
-                y: screenBounds.midY - 85,
-                width: 100,
-                height: 170
-            )
-            heroFrame = sourceFrame ?? fallbackFrame
-            store.heroAnchorOutfitId = anchorId
-            heroOpacity = 1
-            heroTransitioning = true
-
-            // Step 2: Cinematic blur-out of the source view
-            withAnimation(.timingCurve(0.4, 0, 0.2, 1, duration: 0.5)) {
+            // Step 2: Source-out animation (no hero yet). Don't hide the
+            // source card or show the hero; just start fading the source
+            // view itself via the phase change.
+            withAnimation(.timingCurve(0.4, 0, 0.2, 1, duration: 0.30)) {
                 store.viewTransitionPhase = .sourceOut
             }
 
-            // Wait for source to blur away
-            try? await Task.sleep(for: .milliseconds(300))
-            guard !Task.isCancelled else { cleanupHero(); return }
+            // Step 3: Switch view + trigger calendar pre-scroll. This
+            // gives the calendar time to scroll the target into view
+            // BEFORE the hero appears, mirroring web's pre-scroll step.
+            try? await Task.sleep(for: .milliseconds(120))
+            guard !Task.isCancelled else { return /* let new task own cleanup */ }
 
-            // Step 3: Switch the underlying view (hidden by blur + hero on top)
             store.selectedOutfitId = nil
             if goingToCalendar {
                 store.pendingCalendarScrollOutfitId = anchorId
             }
             store.currentView = goingToCalendar ? .calendar : .list
 
-            // Step 4: Wait for scroll + layout
-            try? await Task.sleep(for: .milliseconds(350))
-            guard !Task.isCancelled else { cleanupHero(); return }
+            // Step 4: Wait for calendar to settle before polling target.
+            if goingToCalendar {
+                let scrollWaitStart = Date()
+                while store.pendingCalendarScrollOutfitId != nil,
+                      Date().timeIntervalSince(scrollWaitStart) < 0.55 {
+                    try? await Task.sleep(for: .milliseconds(16))
+                    guard !Task.isCancelled else { return /* let new task own cleanup */ }
+                }
+            } else {
+                try? await Task.sleep(for: .milliseconds(120))
+            }
+            guard !Task.isCancelled else { return /* let new task own cleanup */ }
 
-            // Step 5: Find target frame
+            // Step 5: Re-read the SOURCE frame fresh from the store. The
+            // source view has been fading + the user may have scrolled
+            // slightly between tap and this point; the snapshot we
+            // captured at tap may be stale. Falls back to the snapshot
+            // if the live read is gone (LazyVGrid unmounted it).
+            let liveSourceFrames = goingToCalendar ? store.listOutfitFrames : store.calendarOutfitFrames
+            let kickoffSourceFrame: CGRect = {
+                if let live = liveSourceFrames[anchorId],
+                   live.width > 0, live.height > 0 {
+                    return live
+                }
+                return sourceFrame
+            }()
+
+            // Step 6: NOW position hero, hide source card, make hero
+            // visible. Doing this AFTER pre-scroll (and after the source
+            // re-read) eliminates the "card pops, hero appears at wrong
+            // spot" flicker the previous order produced.
+            heroFrame = kickoffSourceFrame
+            store.heroAnchorOutfitId = anchorId
+            heroOpacity = 1
+            heroTransitioning = true
+
+            // Step 7: Poll for STABLE on-screen target. rAF-style 16ms
+            // intervals, require two consecutive matching reads (sub-px),
+            // up to 400ms. If never stable, abort the hero and crossfade.
+            let viewportRect = UIScreen.main.bounds
             var targetFrame: CGRect?
-            for _ in 0..<20 {
+            var lastFrame: CGRect?
+            let pollStart = Date()
+            while Date().timeIntervalSince(pollStart) < 0.40 {
                 let frames = goingToCalendar ? store.calendarOutfitFrames : store.listOutfitFrames
-                if let frame = frames[anchorId], frame.width > 0, frame.height > 0 {
-                    targetFrame = frame
-                    break
+                if let frame = frames[anchorId],
+                   frame.width > 0, frame.height > 0,
+                   frame.intersects(viewportRect) {
+                    if let last = lastFrame,
+                       abs(last.minX - frame.minX) < 0.5,
+                       abs(last.minY - frame.minY) < 0.5,
+                       abs(last.width - frame.width) < 0.5,
+                       abs(last.height - frame.height) < 0.5 {
+                        targetFrame = frame
+                        break
+                    }
+                    lastFrame = frame
                 }
-                try? await Task.sleep(for: .milliseconds(40))
-                guard !Task.isCancelled else { cleanupHero(); return }
+                try? await Task.sleep(for: .milliseconds(16))
+                guard !Task.isCancelled else { return /* let new task own cleanup */ }
+            }
+            if targetFrame == nil { targetFrame = lastFrame }
+            guard !Task.isCancelled else { return /* let new task own cleanup */ }
+
+            guard let targetFrame else {
+                // No usable target landed — abort hero, do a clean
+                // opacity crossfade for the view, settle to idle.
+                withAnimation(.timingCurve(0.16, 1, 0.3, 1, duration: 0.35)) {
+                    store.viewTransitionPhase = .targetIn
+                }
+                withAnimation(.easeOut(duration: 0.12)) {
+                    heroOpacity = 0
+                }
+                try? await Task.sleep(for: .milliseconds(160))
+                store.heroAnchorOutfitId = nil
+                withAnimation(.easeOut(duration: 0.18)) {
+                    store.viewTransitionPhase = .idle
+                }
+                cleanupHero()
+                return
             }
 
-            guard !Task.isCancelled else { cleanupHero(); return }
-
-            // Step 6: Start hero flight
-            if let targetFrame {
-                startHeroRotation(outfit: outfit, startFrame: frameIndex)
-                withAnimation(.timingCurve(0.45, 0, 0.22, 1, duration: 1.0)) {
-                    heroFrame = targetFrame
-                }
+            // Step 6: Hero flight + concurrent target reveal.
+            let flightDuration: Double = 0.65
+            startHeroRotation(outfit: outfit, startFrame: frameIndex)
+            withAnimation(.timingCurve(0.32, 0, 0.24, 1, duration: flightDuration)) {
+                heroFrame = targetFrame
             }
-
-            // Step 7: Cinematic reveal of the target view (staggered, while hero is mid-flight)
-            try? await Task.sleep(for: .milliseconds(350))
-            guard !Task.isCancelled else { cleanupHero(); return }
-
-            withAnimation(.timingCurve(0.16, 1, 0.3, 1, duration: 0.7)) {
+            withAnimation(.timingCurve(0.16, 1, 0.3, 1, duration: 0.45)) {
                 store.viewTransitionPhase = .targetIn
             }
 
-            // Wait for hero to finish landing
-            let remainingFlight: Int = targetFrame != nil ? 650 : 0
-            if remainingFlight > 0 {
-                try? await Task.sleep(for: .milliseconds(remainingFlight))
-            }
-            guard !Task.isCancelled else { cleanupHero(); return }
+            // Wait for hero to finish its arc.
+            try? await Task.sleep(for: .milliseconds(Int(flightDuration * 1000)))
+            guard !Task.isCancelled else { return /* let new task own cleanup */ }
 
-            // Step 8: Reveal real outfit, fade out hero
+            // Step 8: rAF-style handoff (web pattern):
+            //   (a) Clear heroAnchorOutfitId — the real destination cell
+            //       becomes visible at full opacity, BEHIND the hero.
+            //   (b) Wait one frame so the real cell has actually painted.
+            //   (c) Fade the hero clone away over the now-visible cell.
+            // This eliminates the "double image" flicker the previous
+            // order produced (hero faded first → momentary blank where
+            // the cell hadn't appeared yet).
             store.heroAnchorOutfitId = nil
-
-            withAnimation(.easeOut(duration: 0.12)) {
+            try? await Task.sleep(for: .milliseconds(16))  // ~one frame
+            withAnimation(.easeOut(duration: 0.14)) {
                 heroOpacity = 0
             }
+            try? await Task.sleep(for: .milliseconds(160))
 
-            try? await Task.sleep(for: .milliseconds(150))
-
-            // Step 9: Settle to idle
-            withAnimation(.easeOut(duration: 0.2)) {
+            // Step 9: Settle to idle.
+            withAnimation(.easeOut(duration: 0.18)) {
                 store.viewTransitionPhase = .idle
             }
             cleanupHero()
@@ -465,7 +547,9 @@ struct RootView: View {
 
         Task { @MainActor in
             let startTime = CACurrentMediaTime()
-            let duration: Double = 0.9
+            // Match the hero flight duration so rotation finishes as it
+            // lands. Was 0.9s when flight was 1.0s; now 0.6s for 0.65s flight.
+            let duration: Double = 0.6
 
             while heroTransitioning {
                 let elapsed = CACurrentMediaTime() - startTime
@@ -487,6 +571,33 @@ struct RootView: View {
                 try? await Task.sleep(for: .milliseconds(16))
             }
         }
+    }
+
+    /// Picks the outfit whose card center is closest to the screen
+    /// center. Computed freshly at tap time from the most recent
+    /// frame data — this avoids the staleness problem of relying on
+    /// `store.centeredListOutfitId`, which can lag behind LazyVGrid
+    /// scroll state and cause the wrong (previously-centered) outfit
+    /// to be used as the transition anchor.
+    private func mostCenteredOutfit(in frames: [String: CGRect]) -> String? {
+        guard !frames.isEmpty else { return nil }
+        let screenBounds = UIScreen.main.bounds
+        let center = CGPoint(x: screenBounds.midX, y: screenBounds.midY)
+        let valid = frames.filter { _, frame in
+            frame.width > 0 && frame.height > 0
+        }
+        guard !valid.isEmpty else { return nil }
+        return valid.min { lhs, rhs in
+            let lc = CGPoint(x: lhs.value.midX, y: lhs.value.midY)
+            let rc = CGPoint(x: rhs.value.midX, y: rhs.value.midY)
+            return distSq(from: lc, to: center) < distSq(from: rc, to: center)
+        }?.key
+    }
+
+    private func distSq(from lhs: CGPoint, to rhs: CGPoint) -> CGFloat {
+        let dx = lhs.x - rhs.x
+        let dy = lhs.y - rhs.y
+        return dx * dx + dy * dy
     }
 
     private func cleanupHero() {

@@ -11,6 +11,14 @@ struct AuthView: View {
     @State private var errorMessage: String?
     @State private var showPasswordReset = false
     @State private var showSignupVerification = false
+    @State private var isPasswordVisible = false
+
+    #if DEBUG
+    /// Mirrors the AppStorage flag YaelFitsApp uses to gate the welcome
+    /// tour. Setting it to false causes YaelFitsApp to switch back to
+    /// the tour view (no rebuild, no reinstall needed).
+    @AppStorage("hasSeenWelcomeTour") private var hasSeenWelcomeTour = false
+    #endif
 
     var body: some View {
         ZStack {
@@ -44,7 +52,21 @@ struct AuthView: View {
                         divider
                         Color.clear.frame(height: LayoutMetrics.medium)
                         appleSignInButton
+                        if !isSignUp {
+                            // Only on the Sign In tab — nudge users with an
+                            // existing email account away from accidentally
+                            // creating a second account via Apple.
+                            Text("If you already have an email account, sign in above.")
+                                .font(.system(size: 11))
+                                .foregroundStyle(AppPalette.textFaint)
+                                .multilineTextAlignment(.center)
+                                .padding(.top, LayoutMetrics.xSmall)
+                                .padding(.horizontal, LayoutMetrics.medium)
+                        }
                         forgotPasswordLink
+                        #if DEBUG
+                        debugResetTourButton
+                        #endif
                     }
 
                     Color.clear.frame(height: LayoutMetrics.xLarge)
@@ -99,13 +121,40 @@ struct AuthView: View {
                 .frame(height: 50)
                 .appCard(cornerRadius: 14, shadowRadius: 6, shadowY: 3)
 
-            SecureField("", text: $password, prompt: Text("Password").foregroundStyle(AppPalette.textFaint))
-                .textContentType(isSignUp ? .newPassword : .password)
+            ZStack(alignment: .trailing) {
+                Group {
+                    if isPasswordVisible {
+                        TextField("", text: $password, prompt: Text("Password").foregroundStyle(AppPalette.textFaint))
+                            .textContentType(isSignUp ? .newPassword : .password)
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                    } else {
+                        SecureField("", text: $password, prompt: Text("Password").foregroundStyle(AppPalette.textFaint))
+                            .textContentType(isSignUp ? .newPassword : .password)
+                    }
+                }
                 .font(.system(size: 14))
                 .foregroundStyle(AppPalette.textStrong)
                 .padding(.horizontal, 16)
+                .padding(.trailing, password.isEmpty ? 16 : 44)  // room for eye when filled
                 .frame(height: 50)
                 .appCard(cornerRadius: 14, shadowRadius: 6, shadowY: 3)
+
+                // Eye icon — only shown when there's something to reveal.
+                if !password.isEmpty {
+                    Button {
+                        isPasswordVisible.toggle()
+                    } label: {
+                        Image(systemName: isPasswordVisible ? "eye.slash" : "eye")
+                            .font(.system(size: 14))
+                            .foregroundStyle(AppPalette.textMuted)
+                            .frame(width: 44, height: 50)
+                    }
+                    .buttonStyle(.plain)
+                    .transition(.opacity)
+                }
+            }
+            .animation(.easeInOut(duration: 0.15), value: password.isEmpty)
 
             if let errorMessage {
                 Text(errorMessage)
@@ -157,6 +206,24 @@ struct AuthView: View {
         .allowsHitTesting(!isSignUp)
     }
 
+    #if DEBUG
+    /// Dev-only: resets the welcome tour so it shows on next view of the
+    /// app entry point. Stripped from Release builds via `#if DEBUG`.
+    private var debugResetTourButton: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            hasSeenWelcomeTour = false
+        } label: {
+            Text("DEBUG · RESET ONBOARDING TOUR")
+                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                .tracking(1.5)
+                .foregroundStyle(AppPalette.textFaint)
+        }
+        .buttonStyle(.plain)
+        .padding(.top, LayoutMetrics.large)
+    }
+    #endif
+
     // MARK: - Apple Sign In
 
     private var appleSignInButton: some View {
@@ -167,9 +234,13 @@ struct AuthView: View {
         } onCompletion: { result in
             isSubmitting = true
             errorMessage = nil
+            // Tell the AuthManager which tab we came from. On Sign In,
+            // it will reject a fresh Apple account creation (duplicate
+            // guard) and show an error instead of creating an orphan.
+            let expectingExistingUser = !isSignUp
             Task {
                 do {
-                    try await auth.handleAppleSignIn(result)
+                    try await auth.handleAppleSignIn(result, expectingExistingUser: expectingExistingUser)
                 } catch {
                     await MainActor.run {
                         errorMessage = error.localizedDescription

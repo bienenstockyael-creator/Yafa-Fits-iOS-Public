@@ -8,6 +8,11 @@ struct OutfitGridView: View {
     @State private var dragHintVisible = true
     @State private var outfitFrames: [String: CGRect] = [:]
     @State private var outfitFrameIndices: [String: Int] = [:]
+    /// Reference-type tracker so per-frame updates during scrub mutate
+    /// internal state WITHOUT triggering grid re-renders. SwiftUI only
+    /// observes @State value identity; class-internal mutations are
+    /// invisible to it. We only commit to the store on drag-end.
+    @State private var scrubTracker = ScrubFrameTracker()
     @State private var outfitFrameImages: [String: UIImage] = [:]
     @State private var showCarousel = false
     @State private var carouselBackdropVisible = false
@@ -221,13 +226,21 @@ struct OutfitGridView: View {
                 isScrubbing = isDragging
                 if isDragging {
                     dragHintVisible = false
+                } else {
+                    // Drag ended — commit the latest scrubbed frame to
+                    // the store so the next view-transition can start
+                    // the hero at the correct frame instead of frame 0.
+                    // Only fires once at end (not per-frame) so no jitter.
+                    if let frame = scrubTracker.frames[outfit.id] {
+                        store.listOutfitFrameIndices[outfit.id] = frame
+                    }
                 }
             },
-            onFrameChange: { _ in
-                // Intentionally not tracking frame index during rotation —
-                // doing so triggers a grid re-render per frame across all
-                // visible cards, causing jitter when many outfits are visible.
-                // The carousel receives the correct frame via onTap.
+            onFrameChange: { newFrame in
+                // Per-frame updates go into the reference-type tracker
+                // (no @State mutation, no grid re-render). The actual
+                // commit to the store happens on drag end above.
+                scrubTracker.frames[outfit.id] = newFrame
             }
         )
         .blurFadeReveal(active: contentVisible, delay: revealDelay(for: index))
@@ -635,6 +648,14 @@ private struct HeroTransition {
     let outfit: Outfit
     let frameIndex: Int
     let image: UIImage?
+}
+
+/// Reference-type holder for live-scrub frame tracking. Stored as
+/// `@State` for identity persistence, but mutations to its internal
+/// dict are invisible to SwiftUI's observation — we get O(1) per-frame
+/// updates during scrub without re-rendering the grid.
+private final class ScrubFrameTracker {
+    var frames: [String: Int] = [:]
 }
 
 struct CarouselEntryFrame: Equatable {

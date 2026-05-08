@@ -223,7 +223,11 @@ struct NotificationsPlaceholderSheet: View {
         let enriched = allItems.map { item -> NotificationItem in
             var enriched = item
             let profile = profileMap[item.actorId.lowercased()]
-            enriched.actorName = profile?.displayLabel ?? "Someone"
+            // Instagram-style: notifications show the actor's username,
+            // not their display name ("yael liked your post" vs "Yael
+            // Bienenstock liked your post"). Falls back to display name
+            // if no username, then "Someone" as a final guard.
+            enriched.actorName = profile?.handle ?? "Someone"
             enriched.actorAvatarUrl = profile?.avatarUrl
             enriched.actorInitial = profile?.initial ?? "?"
             enriched.isNew = item.date > lastSeenDate
