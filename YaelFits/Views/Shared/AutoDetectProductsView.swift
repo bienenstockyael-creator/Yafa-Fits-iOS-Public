@@ -1,18 +1,42 @@
 import SwiftUI
 import UIKit
 
+/// Identifiable wrapper used by every Quick Add entry point to drive
+/// `.sheet(item:)`. Replaces the per-site Carousel/Calendar/Publish/Upload
+/// source structs that all had identical shape.
+struct QuickAddSource: Identifiable {
+    let id = UUID()
+    let image: UIImage
+}
+
 /// Tap → name → generate flow for product thumbnails. We feed the whole outfit
 /// to nano-banana along with the user-supplied garment name so the model has
 /// full context (length, cut, occlusions) — no segmentation step.
 struct AutoDetectProductsView: View {
     let sourceImage: UIImage
     let userId: UUID
-    var existingProducts: [Product] = []
+    /// Tiny header label above the canvas. Defaults to "ADD PRODUCTS".
+    var headerTitle: String = "ADD PRODUCTS"
+    /// Hint shown when no slots have been placed yet. Other states
+    /// (naming, post-tap) keep their generic copy.
+    var emptyStateHint: String = "TAP A GARMENT ON THE OUTFIT"
     /// Label for the dismiss-without-saving action. Defaults to "Cancel" for
     /// user-initiated entry points; the upload pipeline (which auto-presents
     /// the sheet) uses "Skip / Add later" so it's clear this step is optional.
     var cancelLabel: String = "Cancel"
-    var onDone: ([Product]) -> Void
+    /// When provided, the top-right action button shows "Skip" until
+    /// the user places their first slot, then swaps to the regular
+    /// "Save" affordance. Only the post-greenscreen entry point uses
+    /// this — other sheets pass nil and the top-right button is
+    /// always "Save".
+    var onSkip: (() -> Void)? = nil
+    /// Fires once per uploaded product. The corner checkmark on an
+    /// accepted card calls this for that single product and removes the
+    /// slot; the sheet stays open. The global Save button calls this
+    /// for each remaining accepted slot, then dismisses. Parents
+    /// should append to their own product list — the sheet does not
+    /// dedup.
+    var onProductSaved: (Product) -> Void
 
     @Environment(\.dismiss) private var dismiss
 
@@ -21,6 +45,12 @@ struct AutoDetectProductsView: View {
     @State private var isSaving = false
     @State private var subjectExtents: SubjectExtents?
     @FocusState private var focusedSlotID: UUID?
+    /// Slot most recently tapped or dragged. Rendered above its peers so
+    /// partially-covered cards can be brought forward with one tap.
+    @State private var foregroundedSlotID: UUID?
+    /// In-flight drag deltas keyed by slot id. Committed onto the slot's
+    /// own `dragOffset` when the gesture ends.
+    @State private var liveDragTranslation: [UUID: CGSize] = [:]
 
     var body: some View {
         ZStack {
@@ -37,8 +67,15 @@ struct AutoDetectProductsView: View {
             Text(saveError ?? "")
         }
         .task {
+            // SubjectExtents iterates every pixel, so keep it off the
+            // main thread — otherwise the first tap right after the
+            // sheet appears can stall waiting for this to finish.
             if subjectExtents == nil {
-                subjectExtents = SubjectExtents.build(from: sourceImage)
+                let img = sourceImage
+                let extents = await Task.detached(priority: .userInitiated) {
+                    SubjectExtents.build(from: img)
+                }.value
+                subjectExtents = extents
             }
         }
         .onDisappear {
@@ -50,13 +87,12 @@ struct AutoDetectProductsView: View {
 
     private var customHeader: some View {
         ZStack {
-            Text("ADD PRODUCTS")
+            Text(headerTitle)
                 .font(.system(size: 10, weight: .bold, design: .monospaced))
                 .tracking(2.2)
                 .foregroundStyle(AppPalette.textFaint)
             HStack {
                 Button {
-                    onDone(existingProducts)
                     dismiss()
                 } label: {
                     Text(cancelLabel)
@@ -69,15 +105,28 @@ struct AutoDetectProductsView: View {
                 .buttonStyle(.plain)
                 Spacer()
                 Button {
-                    Task { await saveAccepted() }
+                    if showsSkipAction {
+                        onSkip?()
+                        dismiss()
+                    } else {
+                        Task { await saveAccepted() }
+                    }
                 } label: {
                     Group {
                         if isSaving {
                             ProgressView().controlSize(.small).tint(AppPalette.textMuted)
+                        } else if showsSkipAction {
+                            Text("Skip")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(AppPalette.textStrong)
                         } else {
+                            // Stay visually active even when all products
+                            // have been saved individually — tapping it
+                            // then just dismisses the sheet, which is
+                            // less confusing than a dimmed button.
                             Text("Save")
                                 .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(hasAcceptedSlot ? AppPalette.textStrong : AppPalette.textFaint)
+                                .foregroundStyle(AppPalette.textStrong)
                         }
                     }
                     .padding(.horizontal, 22)
@@ -85,7 +134,7 @@ struct AutoDetectProductsView: View {
                     .appCapsule()
                 }
                 .buttonStyle(.plain)
-                .disabled(!hasAcceptedSlot || isSaving)
+                .disabled(isSaving)
             }
         }
         .padding(.horizontal, LayoutMetrics.medium)
@@ -97,8 +146,8 @@ struct AutoDetectProductsView: View {
 
     private var hintBar: some View {
         Text(hintText)
-            .font(.system(size: 11, weight: .semibold, design: .monospaced))
-            .tracking(1.8)
+            .font(.system(size: 10, weight: .bold, design: .monospaced))
+            .tracking(2.2)
             .foregroundStyle(AppPalette.textFaint)
             .multilineTextAlignment(.center)
             .padding(.vertical, LayoutMetrics.small)
@@ -108,7 +157,7 @@ struct AutoDetectProductsView: View {
     private var hintText: String {
         let hasNamingSlot = slots.contains { if case .naming = $0.state { return true }; return false }
         if hasNamingSlot { return "NAME EACH ITEM, THEN TAP DONE" }
-        if slots.isEmpty { return "TAP A GARMENT ON THE OUTFIT" }
+        if slots.isEmpty { return emptyStateHint }
         return "TAP ANOTHER GARMENT, OR SAVE WHEN DONE"
     }
 
@@ -124,14 +173,22 @@ struct AutoDetectProductsView: View {
                     .frame(width: imageRect.width, height: imageRect.height)
                     .position(x: imageRect.midX, y: imageRect.midY)
 
+                // Tap target — sized to the canvas so we can use a single
+                // unambiguous coord space ("canvas") for the gesture.
+                // We then explicitly translate the tap into image-local
+                // coordinates by subtracting `imageRect.origin`. This
+                // avoids any ambiguity that `.position` introduces around
+                // the gesture's local coord interpretation.
                 Color.clear
-                    .frame(width: imageRect.width, height: imageRect.height)
                     .contentShape(Rectangle())
-                    .position(x: imageRect.midX, y: imageRect.midY)
                     .gesture(
-                        DragGesture(minimumDistance: 0).onEnded { value in
-                            handleTap(at: value.location, imageRect: imageRect)
-                        }
+                        DragGesture(minimumDistance: 0, coordinateSpace: .named("canvas"))
+                            .onEnded { value in
+                                let localX = value.location.x - imageRect.minX
+                                let localY = value.location.y - imageRect.minY
+                                let imageLocal = CGPoint(x: localX, y: localY)
+                                handleTap(at: imageLocal, imageRect: imageRect)
+                            }
                     )
 
                 let positions = computeAllPositions(canvasSize: geo.size, imageRect: imageRect)
@@ -143,17 +200,57 @@ struct AutoDetectProductsView: View {
                         onCommitName: { Task { await commitName(slot.id) } },
                         onAccept: { acceptSlot(slot.id) },
                         onRetry: { Task { await retryGeneration(slot.id) } },
-                        onDismiss: { dismissSlot(slot.id) }
+                        onDismiss: { dismissSlot(slot.id) },
+                        onSaveAccepted: { Task { await saveOne(slot.id) } }
                     )
                     .position(positions[slot.id] ?? .zero)
-                    .animation(.spring(response: 0.35, dampingFraction: 0.85), value: slot.state.id)
+                    .offset(
+                        x: slot.dragOffset.width + (liveDragTranslation[slot.id]?.width ?? 0),
+                        y: slot.dragOffset.height + (liveDragTranslation[slot.id]?.height ?? 0)
+                    )
+                    .zIndex(slot.id == foregroundedSlotID ? 1 : 0)
+                    .onTapGesture { foregroundedSlotID = slot.id }
+                    .gesture(
+                        DragGesture()
+                            .onChanged { value in
+                                liveDragTranslation[slot.id] = value.translation
+                                if foregroundedSlotID != slot.id {
+                                    foregroundedSlotID = slot.id
+                                }
+                            }
+                            .onEnded { value in
+                                if let i = slots.firstIndex(where: { $0.id == slot.id }) {
+                                    slots[i].dragOffset.width += value.translation.width
+                                    slots[i].dragOffset.height += value.translation.height
+                                }
+                                liveDragTranslation[slot.id] = nil
+                            }
+                    )
+                    .transition(
+                        .scale(scale: 0.92).combined(with: .opacity)
+                    )
+                    .animation(.smooth(duration: 0.25), value: slot.state.id)
                 }
             }
+            // Keyboard show/dismiss changes geo.size, which recomputes
+            // imageRect — animate the figure (and slot positions) so it
+            // doesn't hard-cut when the user taps Done or X and the
+            // keyboard goes away.
+            .animation(.smooth(duration: 0.25), value: imageRect)
+            .coordinateSpace(name: "canvas")
         }
     }
 
     private var hasAcceptedSlot: Bool {
         slots.contains { if case .accepted = $0.state { return true }; return false }
+    }
+
+    /// True iff the top-right button should currently be a "Skip" action
+    /// (post-greenscreen sheet, before any garment is tapped). Once the
+    /// user starts placing slots, the button reverts to the standard
+    /// Save affordance.
+    private var showsSkipAction: Bool {
+        onSkip != nil && slots.isEmpty
     }
 
     private var errorBinding: Binding<Bool> {
@@ -165,10 +262,14 @@ struct AutoDetectProductsView: View {
 
     // MARK: - Geometry
 
+    /// Shrinks the rendered figure relative to the canvas so floating slot
+    /// cards have whitespace to sit in instead of overlapping the subject.
+    private static let imageScale: CGFloat = 0.85
+
     private func computeImageRect(in canvasSize: CGSize) -> CGRect {
         let aspect = sourceImage.size.width / max(sourceImage.size.height, 1)
-        let maxWidth = canvasSize.width
-        let maxHeight = canvasSize.height - LayoutMetrics.small
+        let maxWidth = canvasSize.width * Self.imageScale
+        let maxHeight = (canvasSize.height - LayoutMetrics.small) * Self.imageScale
         var w = maxWidth
         var h = w / max(aspect, 0.001)
         if h > maxHeight {
@@ -270,8 +371,12 @@ struct AutoDetectProductsView: View {
             state: .naming,
             name: ""
         )
-        slots.append(slot)
+        withAnimation(.easeOut(duration: 0.18)) {
+            slots.append(slot)
+        }
         focusedSlotID = slot.id
+        // Newest slot wins z-order over any previously foregrounded card.
+        foregroundedSlotID = slot.id
     }
 
     /// Pick an example placeholder based on which third of the subject's
@@ -295,17 +400,63 @@ struct AutoDetectProductsView: View {
         }
     }
 
+    /// Crops a square region of `image` centered on the user's tap.
+    /// Fast path: the desired crop rect fits inside the source image,
+    /// so a single `cgImage.cropping(to:)` call returns the result —
+    /// no full-bitmap render needed, which keeps the tap-to-thumbnail
+    /// latency in the single-digit-millisecond range.
+    /// Edge-case path (tap near the figure's border): crop just the
+    /// visible portion and composite it into a square canvas at the
+    /// right offset so the tap pixel still lands dead center.
     private func cropPreview(around point: CGPoint, from image: UIImage) -> UIImage {
         guard let cg = image.cgImage else { return image }
         let cgW = CGFloat(cg.width)
         let cgH = CGFloat(cg.height)
-        let cropSize: CGFloat = min(cgW, cgH) * 0.35
-        let halfSize = cropSize / 2
-        let originX = max(0, min(point.x - halfSize, cgW - cropSize))
-        let originY = max(0, min(point.y - halfSize, cgH - cropSize))
-        let rect = CGRect(x: originX, y: originY, width: cropSize, height: cropSize)
-        guard let cropped = cg.cropping(to: rect) else { return image }
-        return UIImage(cgImage: cropped, scale: image.scale, orientation: image.imageOrientation)
+        let cropSize = min(cgW, cgH) * 0.28
+        let halfCrop = cropSize / 2
+
+        let scale = image.scale
+        let px = point.x * scale
+        let py = point.y * scale
+
+        let desiredRect = CGRect(
+            x: px - halfCrop,
+            y: py - halfCrop,
+            width: cropSize,
+            height: cropSize
+        )
+        let imageBounds = CGRect(x: 0, y: 0, width: cgW, height: cgH)
+
+        // Fast path — crop fully inside the source image.
+        if imageBounds.contains(desiredRect),
+           let croppedCG = cg.cropping(to: desiredRect) {
+            return UIImage(cgImage: croppedCG, scale: 1, orientation: .up)
+        }
+
+        // Slow path — tap near the image edge, so part of the desired
+        // crop falls outside. Crop the visible portion, then place it
+        // in a square canvas at the offset that keeps the tap centered.
+        let visiblePart = desiredRect.intersection(imageBounds)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = false
+        let renderer = UIGraphicsImageRenderer(
+            size: CGSize(width: cropSize, height: cropSize),
+            format: format
+        )
+        return renderer.image { _ in
+            guard !visiblePart.isEmpty,
+                  let visibleCG = cg.cropping(to: visiblePart) else { return }
+            let visibleUI = UIImage(cgImage: visibleCG, scale: 1, orientation: .up)
+            let drawX = visiblePart.minX - desiredRect.minX
+            let drawY = visiblePart.minY - desiredRect.minY
+            visibleUI.draw(in: CGRect(
+                x: drawX,
+                y: drawY,
+                width: visiblePart.width,
+                height: visiblePart.height
+            ))
+        }
     }
 
     // MARK: - Pipeline
@@ -369,36 +520,101 @@ struct AutoDetectProductsView: View {
     }
 
     private func dismissSlot(_ slotID: UUID) {
-        slots.removeAll { $0.id == slotID }
+        // Clear focus FIRST so the keyboard dismissal starts at the same
+        // moment the slot fades out. Otherwise SwiftUI removes the
+        // focused TextField first, then clears focus, and the figure
+        // scale-up arrives a beat later than the slot disappearance.
+        if focusedSlotID == slotID {
+            focusedSlotID = nil
+        }
+        withAnimation(.easeOut(duration: 0.12)) {
+            slots.removeAll { $0.id == slotID }
+        }
     }
 
     // MARK: - Save
 
+    /// Uploads the thumbnail for a single accepted slot, reports it to
+    /// the parent, and removes the slot from the canvas. Sheet stays
+    /// up. Wired to each card's corner checkmark.
+    private func saveOne(_ slotID: UUID) async {
+        guard let snapshot = await MainActor.run(body: { slots.first(where: { $0.id == slotID }) }) else { return }
+        guard case let .accepted(thumb) = snapshot.state else { return }
+        do {
+            let url = try await ProductThumbnailUploadService.upload(thumb, userId: userId)
+            let product = Product(
+                name: snapshot.name,
+                price: nil,
+                image: url,
+                shopLink: nil,
+                productId: nil,
+                tags: nil
+            )
+            await MainActor.run {
+                onProductSaved(product)
+                withAnimation(.easeOut(duration: 0.12)) {
+                    slots.removeAll { $0.id == slotID }
+                }
+            }
+        } catch {
+            await MainActor.run { saveError = error.localizedDescription }
+        }
+    }
+
+    /// Uploads every still-accepted slot in turn (firing onProductSaved
+    /// for each) and dismisses the sheet. Wired to the global Save
+    /// button.
     private func saveAccepted() async {
         await MainActor.run { isSaving = true }
         defer { Task { @MainActor in isSaving = false } }
 
-        var newProducts: [Product] = []
-        for slot in slots {
-            guard case let .accepted(thumb) = slot.state else { continue }
+        let acceptedIDs = await MainActor.run {
+            slots.compactMap { slot -> UUID? in
+                if case .accepted = slot.state { return slot.id }
+                return nil
+            }
+        }
+
+        for slotID in acceptedIDs {
+            guard let snapshot = await MainActor.run(body: { slots.first(where: { $0.id == slotID }) }) else { continue }
+            guard case let .accepted(thumb) = snapshot.state else { continue }
             do {
                 let url = try await ProductThumbnailUploadService.upload(thumb, userId: userId)
-                newProducts.append(Product(
-                    name: slot.name,
+                let product = Product(
+                    name: snapshot.name,
                     price: nil,
                     image: url,
                     shopLink: nil,
                     productId: nil,
                     tags: nil
-                ))
+                )
+                await MainActor.run { onProductSaved(product) }
             } catch {
                 await MainActor.run { saveError = error.localizedDescription }
                 return
             }
         }
-        await MainActor.run {
-            onDone(existingProducts + newProducts)
-            dismiss()
+        await MainActor.run { dismiss() }
+    }
+}
+
+// MARK: - Quick Add cover-frame loader
+
+extension AutoDetectProductsView {
+    /// Fetches frame 0 of the outfit's CDN-hosted rotation and decodes it
+    /// into a UIImage. Used by every Quick Add entry point that operates on
+    /// an existing outfit (carousel, calendar edit, publish sheet). The
+    /// upload pipeline bypasses this and feeds its in-memory cutout
+    /// directly. Returns nil on any fetch/decode failure so callers can
+    /// surface their own error UI.
+    static func loadCoverFrame(for outfit: Outfit) async -> UIImage? {
+        guard let baseURL = outfit.resolvedRemoteBaseURL else { return nil }
+        let frameURL = outfit.frameURL(index: 0, baseURL: baseURL)
+        do {
+            let (data, _) = try await URLSession.shared.data(from: frameURL)
+            return UIImage(data: data)
+        } catch {
+            return nil
         }
     }
 }
@@ -487,6 +703,11 @@ private struct GarmentSlot: Identifiable {
     let placeholderHint: String
     var state: SlotState
     var name: String
+    /// Manual translation applied on top of auto-placement after the user
+    /// drags the card. Auto-placement keeps using `tapPoint` so other
+    /// cards arrange against the original target, not the dragged-away
+    /// position.
+    var dragOffset: CGSize = .zero
 }
 
 /// Position-based placeholder examples for the name field — picked from the
@@ -545,6 +766,9 @@ private struct SlotWidgetView: View {
     var onAccept: () -> Void
     var onRetry: () -> Void
     var onDismiss: () -> Void
+    /// Tapped when the corner checkmark on an already-accepted slot is
+    /// pressed — commits the save flow rather than removing the slot.
+    var onSaveAccepted: () -> Void
 
     private static let thumbSize: CGFloat = 132
     private static let cornerRadius: CGFloat = 18
@@ -577,6 +801,7 @@ private struct SlotWidgetView: View {
             cornerButton
                 .offset(x: 10, y: -10)
         }
+        .animation(.smooth(duration: 0.25), value: slot.state.id)
     }
 
     private var isAccepted: Bool {
@@ -585,7 +810,7 @@ private struct SlotWidgetView: View {
     }
 
     private var cornerButton: some View {
-        Button(action: onDismiss) {
+        Button(action: { isAccepted ? onSaveAccepted() : onDismiss() }) {
             ZStack {
                 if isAccepted {
                     Circle().fill(AppPalette.uploadGlow)
@@ -607,30 +832,67 @@ private struct SlotWidgetView: View {
         .buttonStyle(.plain)
     }
 
-    @ViewBuilder
     private var thumbnailArea: some View {
         ZStack {
-            switch slot.state {
-            case .naming:
-                cropImageWithBackground
-            case .generating:
-                cropImageWithBackground
-                Color.white.opacity(0.55)
-                    .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
-                ProgressView().tint(AppPalette.textMuted)
-            case .readyForReview(let thumb), .accepted(let thumb):
-                // Alpha cutout floats directly on the card surface —
-                // no white background to avoid a card-within-a-card.
-                Image(uiImage: thumb)
+            // Click-crop background. Stays mounted across all states so
+            // it crossfades into the AI thumbnail rather than hard-cutting
+            // to it. Opacity drops once the AI thumb takes over.
+            cropImageWithBackground
+                .opacity(showsClickCrop ? 1 : 0)
+
+            // Generating veil — sits over the click crop while the
+            // model produces the thumbnail.
+            RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+                .fill(Color.white.opacity(0.55))
+                .opacity(isGenerating ? 1 : 0)
+            if isGenerating {
+                ProgressView()
+                    .tint(AppPalette.textMuted)
+                    .transition(.opacity)
+            }
+
+            // AI thumbnail (review/accepted). Mounted via `if let` so we
+            // only carry the UIImage when needed; .transition gives it a
+            // soft fade in/out as the state flips.
+            if let aiThumb = aiThumbnail {
+                Image(uiImage: aiThumb)
                     .resizable()
                     .scaledToFit()
-            case .failed:
+                    .transition(.opacity)
+            }
+
+            if isFailed {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 22, weight: .regular))
                     .foregroundStyle(.orange)
+                    .transition(.opacity)
             }
         }
         .frame(width: Self.thumbSize, height: Self.thumbSize)
+    }
+
+    private var showsClickCrop: Bool {
+        switch slot.state {
+        case .naming, .generating: return true
+        default: return false
+        }
+    }
+
+    private var isGenerating: Bool {
+        if case .generating = slot.state { return true }
+        return false
+    }
+
+    private var isFailed: Bool {
+        if case .failed = slot.state { return true }
+        return false
+    }
+
+    private var aiThumbnail: UIImage? {
+        switch slot.state {
+        case .readyForReview(let img), .accepted(let img): return img
+        default: return nil
+        }
     }
 
     private var cropImageWithBackground: some View {

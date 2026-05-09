@@ -74,31 +74,19 @@ struct RotatableOutfitImage: View {
         self.onFrameChange = onFrameChange
         self.onDisplayedFrameChange = onDisplayedFrameChange
         self.horizontalDragInset = horizontalDragInset
-        // Born at `initialFrameIndex` if explicitly given; otherwise
-        // fall back to `syncFrameIndex`. Without this fallback, a
-        // lazy-remounted cell whose store-tracked scrub frame is 5
-        // would init at frame 0, then `setFrame(5)` in onAppear would
-        // briefly clear the image and the displayImage fallback would
-        // surface the frame-0 thumbnail — looking like the outfit
-        // "reverted" to its un-scrubbed state for a frame or two.
-        let bornFrame = initialFrameIndex ?? syncFrameIndex ?? 0
-        let bornImage = initialImage ?? syncImage
         self._viewModel = State(
             initialValue: FrameSequenceViewModel(
                 outfit: outfit,
-                initialFrame: bornFrame,
-                initialImage: bornImage
+                initialFrame: initialFrameIndex ?? 0,
+                initialImage: initialImage
             )
         )
 
-        if bornImage != nil {
+        if initialImage != nil {
             self._thumbnail = State(initialValue: nil)
         } else {
-            // Only surface the local preview when actually born at
-            // frame 0 — otherwise the preview would briefly flash
-            // frame 0's image before frame `bornFrame` finishes loading.
             let previewImage: UIImage? =
-                bornFrame == 0 && outfit.resolvedRemoteBaseURL == nil
+                (initialFrameIndex ?? 0) == 0 && outfit.resolvedRemoteBaseURL == nil
                     ? LocalOutfitStore.shared.previewImage(for: outfit)
                     : nil
             self._thumbnail = State(initialValue: previewImage)

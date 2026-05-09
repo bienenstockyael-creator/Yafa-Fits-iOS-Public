@@ -4,6 +4,11 @@ import SwiftUI
 // MARK: - App Configuration
 
 enum FrameConfig {
+    // TODO: revisit wide-pose clipping. Tried 2026-05-09: bumped width
+    // 323→400 + variable export canvas in VideoFrameSequenceExporter.
+    // Couldn't validate the fix without a fresh upload, reverted to
+    // original. When picking this back up, see git history for the
+    // attempt and the diagnostic print scaffolding.
     static let dimensions = CGSize(width: 323, height: 550)
     static let framesPerOutfit = 242
     static let pixelsPerFrame: CGFloat = 1.5
@@ -56,12 +61,10 @@ enum AppConfig {
 
     /// Presents the AutoDetectProductsView sheet immediately after
     /// background-removal completes (i.e. before the Kling rotation
-    /// has finished generating). The intent was to overlap product
-    /// tagging with the Kling wait so the user has nothing to do
-    /// while the orbit video renders. Currently disabled while we
-    /// design the rest of the flow — when re-enabled, see
-    /// `processAndGenerate` and the merge in `runPollingLoop`.
-    static let preReviewProductTaggingEnabled: Bool = false
+    /// has finished generating) so product tagging happens during
+    /// the orbit-video wait instead of after. See `processAndGenerate`
+    /// and the merge in `runPollingLoop`.
+    static let preReviewProductTaggingEnabled: Bool = true
 }
 
 enum UploadConfig {

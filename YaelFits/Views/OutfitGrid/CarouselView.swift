@@ -394,7 +394,7 @@ struct CarouselDetailCard: View {
     @State private var showShareComposer = false
     @State private var showPublishSheet = false
     @State private var showAddProduct = false
-    @State private var autoDetectSource: CarouselAutoDetectSource?
+    @State private var autoDetectSource: QuickAddSource?
     @State private var isLoadingAutoDetect = false
     @State private var isEditing = false
     @State private var editableTags: [String] = []
@@ -708,20 +708,15 @@ struct CarouselDetailCard: View {
             if let userId = store.userId {
                 AutoDetectProductsView(
                     sourceImage: source.image,
-                    userId: userId,
-                    existingProducts: outfit.products ?? []
-                ) { newProducts in
-                    let added = newProducts.filter { newProduct in
-                        !(outfit.products ?? []).contains(where: { $0.name == newProduct.name })
-                    }
-                    if !added.isEmpty {
-                        store.updateOutfit(
-                            outfit.id,
-                            caption: outfit.caption,
-                            products: (outfit.products ?? []) + added
-                        )
-                    }
-                    autoDetectSource = nil
+                    userId: userId
+                ) { newProduct in
+                    let existing = store.outfitById[outfit.id]?.products ?? outfit.products ?? []
+                    guard !existing.contains(where: { $0.name == newProduct.name }) else { return }
+                    store.updateOutfit(
+                        outfit.id,
+                        caption: outfit.caption,
+                        products: existing + [newProduct]
+                    )
                 }
             }
         }
@@ -1062,15 +1057,8 @@ struct CarouselDetailCard: View {
         await MainActor.run { isLoadingAutoDetect = true }
         defer { Task { @MainActor in isLoadingAutoDetect = false } }
 
-        guard let baseURL = outfit.resolvedRemoteBaseURL else { return }
-        let frameURL = outfit.frameURL(index: 0, baseURL: baseURL)
-        do {
-            let (data, _) = try await URLSession.shared.data(from: frameURL)
-            guard let image = UIImage(data: data) else { return }
-            await MainActor.run { autoDetectSource = CarouselAutoDetectSource(image: image) }
-        } catch {
-            // Quiet failure — user can retry by tapping the button again.
-        }
+        guard let image = await AutoDetectProductsView.loadCoverFrame(for: outfit) else { return }
+        await MainActor.run { autoDetectSource = QuickAddSource(image: image) }
     }
 
     private func removeTag(_ tag: String) {
@@ -1237,7 +1225,3 @@ private struct CardHeightKey: PreferenceKey {
     }
 }
 
-private struct CarouselAutoDetectSource: Identifiable {
-    let id = UUID()
-    let image: UIImage
-}

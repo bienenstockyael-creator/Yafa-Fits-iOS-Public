@@ -12,6 +12,10 @@ create table public.profiles (
   display_name text,
   avatar_url text,
   bio text,
+  -- When true, this profile's outfits are only visible in feeds to
+  -- the author themselves and viewers who follow them. Enforced by
+  -- the SELECT policy on public.outfits (see below).
+  is_private boolean not null default false,
   created_at timestamptz default now() not null
 );
 
@@ -81,8 +85,27 @@ create trigger outfits_auto_published_at
   before insert or update on public.outfits
   for each row execute function public.set_published_at_on_publish();
 
-create policy "Public outfits viewable by everyone"
-  on public.outfits for select using (is_public or auth.uid() = user_id);
+create policy "Outfits visible per profile privacy"
+  on public.outfits for select using (
+    -- Authors always see their own outfits, regardless of privacy.
+    auth.uid() = user_id
+    or (
+      is_public
+      and (
+        -- Author profile is not private → visible to everyone.
+        not exists (
+          select 1 from public.profiles p
+          where p.id = outfits.user_id and p.is_private = true
+        )
+        -- Author profile is private but viewer follows them.
+        or exists (
+          select 1 from public.follows f
+          where f.follower_id = auth.uid()
+            and f.following_id = outfits.user_id
+        )
+      )
+    )
+  );
 
 create policy "Users can insert own outfits"
   on public.outfits for insert with check (auth.uid() = user_id);

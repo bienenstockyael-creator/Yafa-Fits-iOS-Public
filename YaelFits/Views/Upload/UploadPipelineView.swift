@@ -15,7 +15,8 @@ struct UploadPipelineView: View {
     @State private var previewLooper: AVPlayerLooper?
     @State private var showingPublishSheet = false
     @State private var outfitToPublish: Outfit?
-    @State private var autoDetectImage: AutoDetectSourceImage?
+    @State private var autoDetectImage: QuickAddSource?
+    @State private var showCancelConfirmation = false
 
     var body: some View {
         GeometryReader { geometry in
@@ -32,7 +33,7 @@ struct UploadPipelineView: View {
                     if showsPipelineLoader {
                         pipelineLoader
                         Button {
-                            resetPipeline()
+                            showCancelConfirmation = true
                         } label: {
                             Text("Cancel")
                                 .font(.system(size: 12, weight: .medium))
@@ -40,6 +41,14 @@ struct UploadPipelineView: View {
                         }
                         .buttonStyle(.plain)
                         .padding(.bottom, LayoutMetrics.small)
+                        .alert("Cancel this upload?", isPresented: $showCancelConfirmation) {
+                            Button("Keep Generating", role: .cancel) {}
+                            Button("Cancel Upload", role: .destructive) {
+                                resetPipeline()
+                            }
+                        } message: {
+                            Text("This will stop the generation and you'll lose your queue spot. The photo can be re-uploaded any time.")
+                        }
                     }
 
                     if let error = job?.error {
@@ -89,11 +98,12 @@ struct UploadPipelineView: View {
                 AutoDetectProductsView(
                     sourceImage: source.image,
                     userId: userId,
-                    existingProducts: [],
-                    cancelLabel: "Skip / Add later"
-                ) { products in
-                    job?.autoDetectedProducts = products
-                    autoDetectImage = nil
+                    onSkip: {}
+                ) { newProduct in
+                    guard var existing = job?.autoDetectedProducts else { return }
+                    guard !existing.contains(where: { $0.name == newProduct.name }) else { return }
+                    existing.append(newProduct)
+                    job?.autoDetectedProducts = existing
                 }
             }
         }
@@ -709,7 +719,7 @@ struct UploadPipelineView: View {
                 // finalised — flip the flag to bring the flow back.
                 if AppConfig.preReviewProductTaggingEnabled,
                    let cutoutImage = UIImage(data: preparedAssets.cutoutPNGData) {
-                    autoDetectImage = AutoDetectSourceImage(image: cutoutImage)
+                    autoDetectImage = QuickAddSource(image: cutoutImage)
                 }
             }
 
@@ -2307,8 +2317,3 @@ private enum UploadWeatherServiceError: Error {
     case locationUnavailable
 }
 
-/// Identifiable wrapper so we can drive the auto-detect sheet via `.sheet(item:)`.
-private struct AutoDetectSourceImage: Identifiable {
-    let id = UUID()
-    let image: UIImage
-}

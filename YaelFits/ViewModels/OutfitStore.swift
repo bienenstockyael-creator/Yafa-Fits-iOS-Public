@@ -42,6 +42,20 @@ class OutfitStore {
     /// fade with the parent view transition (so non-anchor cells don't
     /// fly off-screen toward their destination position).
     var transitionAnchorOutfitId: String?
+    /// During a list↔calendar transition, holds the source-anchor
+    /// cell's currently-displayed frame index so the destination-
+    /// anchor cell can sync to the same frame for the duration of
+    /// the morph (no visual snap mid-transition). Cleared when
+    /// `transitionAnchorOutfitId` clears. Independent of
+    /// `listOutfitFrameIndices` — does NOT persist scrub state
+    /// across views.
+    var transitionAnchorFrameIndex: Int?
+    /// Cells broadcast their currently-displayed frame index here as
+    /// the user scrubs. Used by `switchView` to capture the source
+    /// anchor's frame at transition start. Writes are per-frame
+    /// during scrub but no view body reads this dict, so writes
+    /// don't trigger re-renders.
+    var currentDisplayedFrame: [String: Int] = [:]
     var generationReadyForReview = false
     var isCarouselOpen = false
     var unreadNotificationCount = 0
@@ -73,6 +87,8 @@ class OutfitStore {
         calendarOutfitFrames = [:]
         listOutfitFrameIndices = [:]
         transitionAnchorOutfitId = nil
+        transitionAnchorFrameIndex = nil
+        currentDisplayedFrame = [:]
         generationReadyForReview = false
         isCarouselOpen = false
         unreadNotificationCount = 0
@@ -98,6 +114,8 @@ class OutfitStore {
         calendarOutfitFrames = [:]
         listOutfitFrameIndices = [:]
         transitionAnchorOutfitId = nil
+        transitionAnchorFrameIndex = nil
+        currentDisplayedFrame = [:]
         generationReadyForReview = false
         isCarouselOpen = false
         unreadNotificationCount = 0
@@ -667,6 +685,7 @@ class OutfitStore {
             }
         }
     }
+
 }
 
 enum NotificationReadState {
