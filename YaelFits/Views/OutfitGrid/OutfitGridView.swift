@@ -3,6 +3,10 @@ import UIKit
 
 struct OutfitGridView: View {
     @Environment(OutfitStore.self) private var store
+
+    /// Cross-view transition namespace passed in from RootView.
+    var transitionNamespace: Namespace.ID
+
     @State private var contentVisible = false
     @State private var playsInitialSequence = false
     @State private var dragHintVisible = true
@@ -32,6 +36,12 @@ struct OutfitGridView: View {
     @State private var carouselTargetFrame: CGRect = .null
     @State private var entranceTask: Task<Void, Never>?
     @State private var carouselTransitionTask: Task<Void, Never>?
+    /// Cancellable handle for the in-flight scroll-to-pending task.
+    /// Each new pending-scroll cancels the previous task — without
+    /// this, rapid taps stack overlapping scroll tasks that step on
+    /// each other's `pendingListScrollOutfitId` clears, which confuses
+    /// the transition's Phase-1 wait.
+    @State private var pendingScrollTask: Task<Void, Never>?
 
     private let heroTransitionDuration: Double = 0.32
     private let heroFadeInDuration: Double = 0.12
@@ -147,6 +157,14 @@ struct OutfitGridView: View {
             }
             .onAppear {
                 prepareEntrance()
+                // If we're returning from the calendar with an anchor
+                // outfit selected, scroll so it's centered on screen.
+                // Mirrors CalendarMonthView's onAppear scroll-to-anchor.
+                scrollToPendingListTarget(using: reader)
+            }
+            .onChange(of: store.pendingListScrollOutfitId) { _, newId in
+                guard newId != nil else { return }
+                scrollToPendingListTarget(using: reader)
             }
             .onChange(of: store.isLoading) { _, isLoading in
                 guard !showCarousel else { return }
@@ -215,7 +233,11 @@ struct OutfitGridView: View {
             playEntranceSequence: playsInitialSequence && index < initialVisibleCount,
             entranceSequenceActive: contentVisible,
             entranceSequenceDelay: revealDelay(for: index),
-            syncFrameIndex: outfitFrameIndices[outfit.id],
+            // Local override (set by carousel entry/exit) wins;
+            // otherwise fall back to the shared store so a frame the
+            // user scrubbed-to in the calendar view also shows up here
+            // when they switch back to the archive.
+            syncFrameIndex: outfitFrameIndices[outfit.id] ?? store.listOutfitFrameIndices[outfit.id],
             syncImage: outfitFrameImages[outfit.id],
             onTap: { frameIndex, image in
                 let impact = UIImpactFeedbackGenerator(style: .medium)
@@ -244,15 +266,19 @@ struct OutfitGridView: View {
             }
         )
         .blurFadeReveal(active: contentVisible, delay: revealDelay(for: index))
-        .gridTransitionReveal(
-            phase: store.viewTransitionPhase,
-            isList: store.currentView == .list,
-            staggerIndex: index
-        )
         .id(outfit.id)
+        .anchorTransition(
+            outfitId: outfit.id,
+            namespace: transitionNamespace,
+            isAnchor: store.transitionAnchorOutfitId == outfit.id,
+            viewName: "list",
+            isSource: store.currentView == .list
+        )
         .opacity(
+            // Hide cell only while it's the source of an in-flight
+            // CAROUSEL hero zoom — list↔calendar transition is handled
+            // by matchedGeometryEffect on the cell itself.
             (heroTransition?.outfit.id == outfit.id && revealGridOutfitIdDuringHero != outfit.id)
-                || store.heroAnchorOutfitId == outfit.id
                 ? 0.001
                 : 1
         )
@@ -263,6 +289,15 @@ struct OutfitGridView: View {
                     value: [outfit.id: proxy.frame(in: .global)]
                 )
             }
+        }
+        // When the cell scrolls out of the lazy-render region, drop
+        // its entry from the frames dicts so transition logic can't
+        // pick up a stale (pre-scroll) frame and morph to the wrong
+        // place. SwiftUI's PreferenceKey reducer doesn't reliably
+        // remove entries for unmounted cells, so we do it explicitly.
+        .onDisappear {
+            outfitFrames[outfit.id] = nil
+            store.listOutfitFrames[outfit.id] = nil
         }
     }
 
@@ -611,6 +646,54 @@ struct OutfitGridView: View {
         store.deleteOutfit(outfit)
     }
 
+    /// Mirrors CalendarMonthView.scrollToPendingTarget — when we're
+    /// brought back to the list with an anchor selected (e.g., user
+    /// switched from calendar back to archive), scroll so the anchor
+    /// outfit is centered on screen. Otherwise the hero would land at
+    /// an off-screen position and look like the outfit "disappeared."
+    private func scrollToPendingListTarget(using reader: ScrollViewProxy) {
+        guard let targetOutfitId = store.pendingListScrollOutfitId else { return }
+
+        // Cancel any previous in-flight scroll task before starting
+        // a new one — otherwise overlapping tasks race on the
+        // `pendingListScrollOutfitId` clear and the transition's
+        // Phase-1 wait can exit on the wrong task's clear.
+        pendingScrollTask?.cancel()
+        pendingScrollTask = Task { @MainActor in
+            await Task.yield()
+            await Task.yield()
+            try? await Task.sleep(for: .milliseconds(30))
+            if Task.isCancelled { return }
+            // Three nudges. For long-jump scrolls (calendar-bottom →
+            // archive-bottom), the LazyVGrid hasn't mounted the target
+            // row yet on the first call; each subsequent scrollTo
+            // refines the position as more rows get laid out.
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            for waitMs in [40, 50] {
+                // Authority check — abort if a newer pending target
+                // has taken over (or the flag was cleared). Stronger
+                // than `Task.isCancelled` because a cancelled-but-
+                // still-running task can issue stray synchronous
+                // scrollTos between await points before cancellation
+                // is observed.
+                guard store.pendingListScrollOutfitId == targetOutfitId else { return }
+                withTransaction(transaction) {
+                    reader.scrollTo(targetOutfitId, anchor: .center)
+                }
+                try? await Task.sleep(for: .milliseconds(waitMs))
+            }
+            guard store.pendingListScrollOutfitId == targetOutfitId else { return }
+            withTransaction(transaction) {
+                reader.scrollTo(targetOutfitId, anchor: .center)
+            }
+            try? await Task.sleep(for: .milliseconds(60))
+            // Only null the flag if it still points at OUR target.
+            guard store.pendingListScrollOutfitId == targetOutfitId else { return }
+            store.pendingListScrollOutfitId = nil
+        }
+    }
+
     private func updateCenteredOutfit(from frames: [String: CGRect], viewportFrame: CGRect) {
         guard !frames.isEmpty, !showCarousel, store.currentView == .list else { return }
 
@@ -654,7 +737,7 @@ private struct HeroTransition {
 /// `@State` for identity persistence, but mutations to its internal
 /// dict are invisible to SwiftUI's observation — we get O(1) per-frame
 /// updates during scrub without re-rendering the grid.
-private final class ScrubFrameTracker {
+final class ScrubFrameTracker {
     var frames: [String: Int] = [:]
 }
 

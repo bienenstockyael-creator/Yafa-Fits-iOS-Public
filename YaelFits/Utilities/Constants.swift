@@ -53,6 +53,15 @@ enum AppConfig {
     ///     identity drift is more common.
     /// Requires `OPENAI_API_KEY` in the env or `OpenAIAPIKey` in Info.plist.
     static let useOpenAIDressModel: Bool = false
+
+    /// Presents the AutoDetectProductsView sheet immediately after
+    /// background-removal completes (i.e. before the Kling rotation
+    /// has finished generating). The intent was to overlap product
+    /// tagging with the Kling wait so the user has nothing to do
+    /// while the orbit video renders. Currently disabled while we
+    /// design the rest of the flow — when re-enabled, see
+    /// `processAndGenerate` and the merge in `runPollingLoop`.
+    static let preReviewProductTaggingEnabled: Bool = false
 }
 
 enum UploadConfig {

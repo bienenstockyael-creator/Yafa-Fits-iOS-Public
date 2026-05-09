@@ -6,6 +6,9 @@ struct RootView: View {
 
     private let headerContentInset: CGFloat = 0
 
+    /// Shared namespace for matchedGeometryEffect cross-view transitions.
+    @Namespace private var listCalendarNamespace
+
     @State private var loaderMounted = true
     @State private var loaderVisible = true
     @State private var loaderDismissTask: Task<Void, Never>?
@@ -22,14 +25,16 @@ struct RootView: View {
     @State private var showReviewBanner = false
     @State private var bannerDismissTask: Task<Void, Never>?
 
-    // Hero transition state
-    @State private var heroTransitioning = false
-    @State private var heroOutfit: Outfit?
-    @State private var heroImage: UIImage?
-    @State private var heroFrame: CGRect = .zero
-    @State private var heroOpacity: Double = 0
-    @State private var heroFrameIndex: Int = 0
-    @State private var viewTransitionTask: Task<Void, Never>?
+    /// Per-view opacities for the list↔calendar crossfade. Both views
+    /// stay mounted in a ZStack; opacity controls which is visible.
+    @State private var listOpacity: Double = 1
+    @State private var calendarOpacity: Double = 0
+
+    /// Drives the list↔calendar transition end-to-end: pre-scrolls the
+    /// destination to the anchor, runs the animated swap, then clears
+    /// `transitionAnchorOutfitId` once the morph settles. Held in
+    /// @State so rapid taps cancel the in-flight task cleanly.
+    @State private var transitionTask: Task<Void, Never>?
 
     var body: some View {
         @Bindable var store = store
@@ -40,16 +45,18 @@ struct RootView: View {
             VStack(spacing: 0) {
                 switch store.currentView {
                 case .list, .calendar:
+                    // Both views stay mounted simultaneously; opacity
+                    // controls which one is visible. Keeping both in
+                    // the hierarchy preserves their scroll positions
+                    // and lets `matchedGeometryEffect` connect the
+                    // anchor cells across the two layouts.
                     ZStack {
-                        OutfitGridView()
-                            .opacity(listViewOpacity)
-                            .blur(radius: listViewBlur)
-                            .allowsHitTesting(store.currentView == .list && !heroTransitioning)
-
-                        CalendarMonthView()
-                            .opacity(calendarViewOpacity)
-                            .blur(radius: calendarViewBlur)
-                            .allowsHitTesting(store.currentView == .calendar && !heroTransitioning)
+                        OutfitGridView(transitionNamespace: listCalendarNamespace)
+                            .opacity(listOpacity)
+                            .allowsHitTesting(store.currentView == .list)
+                        CalendarMonthView(transitionNamespace: listCalendarNamespace)
+                            .opacity(calendarOpacity)
+                            .allowsHitTesting(store.currentView == .calendar)
                     }
                 case .upload:
                     UploadPipelineView()
@@ -81,11 +88,6 @@ struct RootView: View {
 
             CalendarDetailOverlayHost()
                 .zIndex(140)
-
-            if let heroOutfit, heroTransitioning {
-                viewTransitionHero(outfit: heroOutfit)
-                    .zIndex(200)
-            }
 
             if showsFloatingButtons {
                 VStack {
@@ -157,8 +159,8 @@ struct RootView: View {
         }
         .onDisappear {
             loaderDismissTask?.cancel()
-            viewTransitionTask?.cancel()
             bannerDismissTask?.cancel()
+            transitionTask?.cancel()
         }
         .sheet(isPresented: $showsFavoritesSheet) {
             FavoritesSheetView()
@@ -231,44 +233,15 @@ struct RootView: View {
         store.currentView == .calendar
     }
 
-    // Cinematic crossfade: source blurs out, target blurs in
-    private var listViewOpacity: Double {
-        switch store.viewTransitionPhase {
-        case .idle: return store.currentView == .list ? 1 : 0
-        case .sourceOut: return store.currentView == .list ? 0 : 0  // source fading out, target not yet in
-        case .targetIn: return store.currentView == .list ? 1 : 0   // target fading in
-        }
-    }
-
-    private var listViewBlur: CGFloat {
-        // Constant zero. Previously: blur was conditionally 8 only when
-        // the source was list — but `currentView` flips mid-transition,
-        // so the blur value abruptly jumped from 8→0 at the same time
-        // the opacity was animating, causing visible flicker. The
-        // opacity crossfade alone is enough; blur added more cost than
-        // visual benefit.
-        0
-    }
-
-    private var calendarViewOpacity: Double {
-        switch store.viewTransitionPhase {
-        case .idle: return store.currentView == .calendar ? 1 : 0
-        case .sourceOut: return store.currentView == .calendar ? 0 : 0
-        case .targetIn: return store.currentView == .calendar ? 1 : 0
-        }
-    }
-
-    private var calendarViewBlur: CGFloat { 0 }
-
     private var viewModeToggle: some View {
         HStack(spacing: 2) {
             viewModeOption(glyph: .grid, isSelected: !isCalendarActive) {
                 guard isCalendarActive else { return }
-                performViewTransition()
+                switchView(to: .list)
             }
             viewModeOption(glyph: .calendar, isSelected: isCalendarActive) {
                 guard !isCalendarActive else { return }
-                performViewTransition()
+                switchView(to: .calendar)
             }
         }
         .padding(2)
@@ -337,307 +310,151 @@ struct RootView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - Hero View Transition
+    // MARK: - List ↔ Calendar transition (matchedGeometryEffect-driven)
 
-    private func performViewTransition() {
-        // 1. Cancel + reset prior state synchronously. Stale heroOutfit /
-        // heroFrame from a previous transition was leaking into the next
-        // one, causing the "recalls the first outfit" bug — the new
-        // transition would briefly inherit heroAnchorOutfitId before
-        // replacing it, leading to flicker.
-        viewTransitionTask?.cancel()
-        cleanupHero()
+    private enum Transition {
+        /// `withAnimation` curve. Subtle settle, no overshoot.
+        static let spring = Animation.spring(response: 0.42, dampingFraction: 0.86)
+        /// Phase 1 — wait this long for the destination's scroll task
+        /// to clear its `pendingScrollOutfitId` flag.
+        static let scrollWaitTimeout: TimeInterval = 0.4
+        /// Phase 2 — wait this long for the destination cell's frame
+        /// to be on-screen and stable across two consecutive samples.
+        static let stabilityPollTimeout: TimeInterval = 0.3
+        /// Render-cycle granularity for both polling loops (~60Hz).
+        static let pollInterval = Duration.milliseconds(16)
+        /// One extra render cycle after Phase 2 succeeds, so the
+        /// final layout commit makes it through before withAnimation.
+        static let postPollSettle = Duration.milliseconds(32)
+        /// Fallback wait when there's no anchor (no visible outfit).
+        /// Gives the destination a beat to lay out initial content.
+        static let noAnchorSettle = Duration.milliseconds(80)
+        /// Tail wait after the spring kicks off, before clearing
+        /// `transitionAnchorOutfitId`. Lets the spring fully settle
+        /// so matchedGeometryEffect doesn't get yanked mid-morph.
+        static let postSpringSettle = Duration.milliseconds(550)
+    }
 
-        let goingToCalendar = !isCalendarActive
+    private func switchView(to target: AppView) {
+        guard target == .list || target == .calendar else { return }
+        let goingToCalendar = target == .calendar
         let sourceFrames = goingToCalendar ? store.listOutfitFrames : store.calendarOutfitFrames
+        let anchorId = mostCenteredOutfitId(in: sourceFrames)
 
-        // 2. Compute anchor FRESHLY from current frame data. Don't trust
-        // store.centeredListOutfitId — with LazyVGrid the cached value
-        // can lag behind actual scroll position and recall a previously-
-        // centered outfit even after the user has scrolled past it.
-        let freshAnchor = mostCenteredOutfit(in: sourceFrames)
-        let anchorId = freshAnchor
-            ?? store.centeredListOutfitId
-            ?? store.sortedOutfits.first?.id
-
-        // 3. Validate source frame BEFORE starting the hero. If it's
-        // missing or zero-sized (cold first attempt, items not yet
-        // mounted in the LazyVGrid), bail to a clean instant switch
-        // instead of running a hero with no source — that's what was
-        // causing "lands nowhere and disappears".
-        guard let anchorId,
-              let outfit = store.outfitById[anchorId],
-              let sourceFrame = sourceFrames[anchorId],
-              sourceFrame.width > 0,
-              sourceFrame.height > 0 else {
-            store.selectedOutfitId = nil
-            if let anchorId, goingToCalendar {
+        store.selectedOutfitId = nil
+        store.transitionAnchorOutfitId = anchorId
+        if let anchorId {
+            if goingToCalendar {
                 store.pendingCalendarScrollOutfitId = anchorId
+            } else {
+                store.pendingListScrollOutfitId = anchorId
             }
-            store.currentView = goingToCalendar ? .calendar : .list
-            return
         }
 
-        let frameIndex = store.listOutfitFrameIndices[anchorId] ?? 0
+        transitionTask?.cancel()
+        transitionTask = Task { @MainActor in
+            if let anchorId {
+                await waitForDestinationScroll(goingToCalendar: goingToCalendar)
+                if Task.isCancelled { return }
 
-        viewTransitionTask = Task { @MainActor in
-            // Step 1: Load hero image, hide anchor outfit
-            // === Web-repo flow port ==================================
-            // The web version's order is:
-            //   1. Set view + pre-scroll (no hero yet, no card hidden)
-            //   2. Wait ~180ms for layout
-            //   3. Re-read source rect FRESH at kickoff (don't trust the
-            //      snapshot from tap time — layout may have shifted)
-            //   4. NOW position hero, hide source card, show hero
-            //   5. Poll for STABLE target rect (require 2+ consecutive
-            //      reads matching at single-pixel precision)
-            //   6. Animate hero to stable target
-            //   7. End: clear anchor → next frame → fade hero (rAF
-            //      handoff so real anchor paints before hero disappears)
-            //
-            // iOS now follows the same shape. The previous version was
-            // hiding the source card immediately (causing flicker) and
-            // using a snapshot source rect (causing position errors).
-            heroOutfit = outfit
-            heroFrameIndex = frameIndex
-            heroImage = await FrameLoader.shared.frame(for: outfit, index: frameIndex)
+                let foundValidTarget = await waitForStableDestinationFrame(
+                    anchorId: anchorId,
+                    goingToCalendar: goingToCalendar
+                )
+                if Task.isCancelled { return }
+
+                if !foundValidTarget {
+                    // Polling never observed a valid on-screen frame —
+                    // destination scroll genuinely failed. Drop the
+                    // anchor so the morph degrades to a clean opacity
+                    // crossfade instead of jumping somewhere wrong.
+                    store.transitionAnchorOutfitId = nil
+                }
+                try? await Task.sleep(for: Transition.postPollSettle)
+            } else {
+                try? await Task.sleep(for: Transition.noAnchorSettle)
+            }
             guard !Task.isCancelled else { return }
 
-            // Step 2: Source-out animation (no hero yet). Don't hide the
-            // source card or show the hero; just start fading the source
-            // view itself via the phase change.
-            withAnimation(.timingCurve(0.4, 0, 0.2, 1, duration: 0.30)) {
-                store.viewTransitionPhase = .sourceOut
+            withAnimation(Transition.spring) {
+                store.currentView = target
+                listOpacity = goingToCalendar ? 0 : 1
+                calendarOpacity = goingToCalendar ? 1 : 0
             }
 
-            // Step 3: Switch view + trigger calendar pre-scroll. This
-            // gives the calendar time to scroll the target into view
-            // BEFORE the hero appears, mirroring web's pre-scroll step.
-            try? await Task.sleep(for: .milliseconds(120))
-            guard !Task.isCancelled else { return /* let new task own cleanup */ }
-
-            store.selectedOutfitId = nil
-            if goingToCalendar {
-                store.pendingCalendarScrollOutfitId = anchorId
-            }
-            store.currentView = goingToCalendar ? .calendar : .list
-
-            // Step 4: Wait for calendar to settle before polling target.
-            if goingToCalendar {
-                let scrollWaitStart = Date()
-                while store.pendingCalendarScrollOutfitId != nil,
-                      Date().timeIntervalSince(scrollWaitStart) < 0.55 {
-                    try? await Task.sleep(for: .milliseconds(16))
-                    guard !Task.isCancelled else { return /* let new task own cleanup */ }
-                }
-            } else {
-                try? await Task.sleep(for: .milliseconds(120))
-            }
-            guard !Task.isCancelled else { return /* let new task own cleanup */ }
-
-            // Step 5: Re-read the SOURCE frame fresh from the store. The
-            // source view has been fading + the user may have scrolled
-            // slightly between tap and this point; the snapshot we
-            // captured at tap may be stale. Falls back to the snapshot
-            // if the live read is gone (LazyVGrid unmounted it).
-            let liveSourceFrames = goingToCalendar ? store.listOutfitFrames : store.calendarOutfitFrames
-            let kickoffSourceFrame: CGRect = {
-                if let live = liveSourceFrames[anchorId],
-                   live.width > 0, live.height > 0 {
-                    return live
-                }
-                return sourceFrame
-            }()
-
-            // Step 6: NOW position hero, hide source card, make hero
-            // visible. Doing this AFTER pre-scroll (and after the source
-            // re-read) eliminates the "card pops, hero appears at wrong
-            // spot" flicker the previous order produced.
-            heroFrame = kickoffSourceFrame
-            store.heroAnchorOutfitId = anchorId
-            heroOpacity = 1
-            heroTransitioning = true
-
-            // Step 7: Poll for STABLE on-screen target. rAF-style 16ms
-            // intervals, require two consecutive matching reads (sub-px),
-            // up to 400ms. If never stable, abort the hero and crossfade.
-            let viewportRect = UIScreen.main.bounds
-            var targetFrame: CGRect?
-            var lastFrame: CGRect?
-            let pollStart = Date()
-            while Date().timeIntervalSince(pollStart) < 0.40 {
-                let frames = goingToCalendar ? store.calendarOutfitFrames : store.listOutfitFrames
-                if let frame = frames[anchorId],
-                   frame.width > 0, frame.height > 0,
-                   frame.intersects(viewportRect) {
-                    if let last = lastFrame,
-                       abs(last.minX - frame.minX) < 0.5,
-                       abs(last.minY - frame.minY) < 0.5,
-                       abs(last.width - frame.width) < 0.5,
-                       abs(last.height - frame.height) < 0.5 {
-                        targetFrame = frame
-                        break
-                    }
-                    lastFrame = frame
-                }
-                try? await Task.sleep(for: .milliseconds(16))
-                guard !Task.isCancelled else { return /* let new task own cleanup */ }
-            }
-            if targetFrame == nil { targetFrame = lastFrame }
-            guard !Task.isCancelled else { return /* let new task own cleanup */ }
-
-            guard let targetFrame else {
-                // No usable target landed — abort hero, do a clean
-                // opacity crossfade for the view, settle to idle.
-                withAnimation(.timingCurve(0.16, 1, 0.3, 1, duration: 0.35)) {
-                    store.viewTransitionPhase = .targetIn
-                }
-                withAnimation(.easeOut(duration: 0.12)) {
-                    heroOpacity = 0
-                }
-                try? await Task.sleep(for: .milliseconds(160))
-                store.heroAnchorOutfitId = nil
-                withAnimation(.easeOut(duration: 0.18)) {
-                    store.viewTransitionPhase = .idle
-                }
-                cleanupHero()
-                return
-            }
-
-            // Step 6: Hero flight + concurrent target reveal.
-            let flightDuration: Double = 0.65
-            startHeroRotation(outfit: outfit, startFrame: frameIndex)
-            withAnimation(.timingCurve(0.32, 0, 0.24, 1, duration: flightDuration)) {
-                heroFrame = targetFrame
-            }
-            withAnimation(.timingCurve(0.16, 1, 0.3, 1, duration: 0.45)) {
-                store.viewTransitionPhase = .targetIn
-            }
-
-            // Wait for hero to finish its arc.
-            try? await Task.sleep(for: .milliseconds(Int(flightDuration * 1000)))
-            guard !Task.isCancelled else { return /* let new task own cleanup */ }
-
-            // Step 8: rAF-style handoff (web pattern):
-            //   (a) Clear heroAnchorOutfitId — the real destination cell
-            //       becomes visible at full opacity, BEHIND the hero.
-            //   (b) Wait one frame so the real cell has actually painted.
-            //   (c) Fade the hero clone away over the now-visible cell.
-            // This eliminates the "double image" flicker the previous
-            // order produced (hero faded first → momentary blank where
-            // the cell hadn't appeared yet).
-            store.heroAnchorOutfitId = nil
-            try? await Task.sleep(for: .milliseconds(16))  // ~one frame
-            withAnimation(.easeOut(duration: 0.14)) {
-                heroOpacity = 0
-            }
-            try? await Task.sleep(for: .milliseconds(160))
-
-            // Step 9: Settle to idle.
-            withAnimation(.easeOut(duration: 0.18)) {
-                store.viewTransitionPhase = .idle
-            }
-            cleanupHero()
+            try? await Task.sleep(for: Transition.postSpringSettle)
+            guard !Task.isCancelled else { return }
+            store.transitionAnchorOutfitId = nil
         }
     }
 
-    private func startHeroRotation(outfit: Outfit, startFrame: Int) {
-        let frameCount = outfit.frameCount
-        guard frameCount > 1 else { return }
-
-        Task { @MainActor in
-            let startTime = CACurrentMediaTime()
-            // Match the hero flight duration so rotation finishes as it
-            // lands. Was 0.9s when flight was 1.0s; now 0.6s for 0.65s flight.
-            let duration: Double = 0.6
-
-            while heroTransitioning {
-                let elapsed = CACurrentMediaTime() - startTime
-                let progress = min(elapsed / duration, 1.0)
-
-                // Smoothstep easing: 65% linear + 35% hermite
-                let smoothStep = progress * progress * (3 - 2 * progress)
-                let eased = progress + (smoothStep - progress) * 0.35
-
-                let frameOffset = Int(eased * Double(frameCount))
-                let newIndex = ((startFrame + frameOffset) % frameCount + frameCount) % frameCount
-
-                if newIndex != heroFrameIndex {
-                    heroFrameIndex = newIndex
-                    heroImage = await FrameLoader.shared.frame(for: outfit, index: newIndex)
-                }
-
-                if progress >= 1.0 { break }
-                try? await Task.sleep(for: .milliseconds(16))
-            }
-        }
+    /// Picks the outfit whose frame is closest to the screen center
+    /// among those currently intersecting the viewport. Returns `nil`
+    /// if no outfit is visible (e.g., scrolled past everything).
+    private func mostCenteredOutfitId(in frames: [String: CGRect]) -> String? {
+        let viewport = UIScreen.main.bounds
+        let center = CGPoint(x: viewport.midX, y: viewport.midY)
+        return frames
+            .filter { _, frame in frame.intersects(viewport) && frame.width > 0 }
+            .min { lhs, rhs in
+                let ld = squaredDistance(from: CGPoint(x: lhs.value.midX, y: lhs.value.midY), to: center)
+                let rd = squaredDistance(from: CGPoint(x: rhs.value.midX, y: rhs.value.midY), to: center)
+                return ld < rd
+            }?.key
     }
 
-    /// Picks the outfit whose card center is closest to the screen
-    /// center. Computed freshly at tap time from the most recent
-    /// frame data — this avoids the staleness problem of relying on
-    /// `store.centeredListOutfitId`, which can lag behind LazyVGrid
-    /// scroll state and cause the wrong (previously-centered) outfit
-    /// to be used as the transition anchor.
-    private func mostCenteredOutfit(in frames: [String: CGRect]) -> String? {
-        guard !frames.isEmpty else { return nil }
-        let screenBounds = UIScreen.main.bounds
-        let center = CGPoint(x: screenBounds.midX, y: screenBounds.midY)
-        let valid = frames.filter { _, frame in
-            frame.width > 0 && frame.height > 0
-        }
-        guard !valid.isEmpty else { return nil }
-        return valid.min { lhs, rhs in
-            let lc = CGPoint(x: lhs.value.midX, y: lhs.value.midY)
-            let rc = CGPoint(x: rhs.value.midX, y: rhs.value.midY)
-            return distSq(from: lc, to: center) < distSq(from: rc, to: center)
-        }?.key
-    }
-
-    private func distSq(from lhs: CGPoint, to rhs: CGPoint) -> CGFloat {
-        let dx = lhs.x - rhs.x
-        let dy = lhs.y - rhs.y
+    private func squaredDistance(from a: CGPoint, to b: CGPoint) -> CGFloat {
+        let dx = a.x - b.x
+        let dy = a.y - b.y
         return dx * dx + dy * dy
     }
 
-    private func cleanupHero() {
-        heroTransitioning = false
-        heroOutfit = nil
-        heroImage = nil
-        heroOpacity = 0
-        heroFrame = .zero
-        heroFrameIndex = 0
-        store.heroAnchorOutfitId = nil
-        if store.viewTransitionPhase != .idle {
-            store.viewTransitionPhase = .idle
+    /// Phase 1 of the transition wait. Polls until the destination
+    /// view's `pendingScrollOutfitId` flag is cleared by its scroll
+    /// task, or 400ms elapses. Without this, we'd start the morph
+    /// before the destination has actually scrolled — and capture a
+    /// stale (pre-scroll) frame as the morph target.
+    @MainActor
+    private func waitForDestinationScroll(goingToCalendar: Bool) async {
+        let deadline = Date().addingTimeInterval(Transition.scrollWaitTimeout)
+        while Date() < deadline {
+            let stillPending = goingToCalendar
+                ? (store.pendingCalendarScrollOutfitId != nil)
+                : (store.pendingListScrollOutfitId != nil)
+            if !stillPending { return }
+            try? await Task.sleep(for: Transition.pollInterval)
+            if Task.isCancelled { return }
         }
     }
 
-    private func viewTransitionHero(outfit: Outfit) -> some View {
-        GeometryReader { geometry in
-            let viewportFrame = geometry.frame(in: .global)
-            let displayFrame = CGRect(
-                x: heroFrame.minX - viewportFrame.minX,
-                y: heroFrame.minY - viewportFrame.minY,
-                width: heroFrame.width,
-                height: heroFrame.height
-            )
-
-            Group {
-                if let heroImage {
-                    Image(uiImage: heroImage)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                } else {
-                    Color.clear
+    /// Phase 2 of the transition wait. Polls the destination cell's
+    /// frame until it's on-screen with non-zero size AND has been
+    /// stable across two consecutive 16ms samples. Returns whether a
+    /// stable frame was actually observed within 300ms.
+    @MainActor
+    private func waitForStableDestinationFrame(
+        anchorId: String,
+        goingToCalendar: Bool
+    ) async -> Bool {
+        let viewport = UIScreen.main.bounds
+        let pollStart = Date()
+        var lastFrame: CGRect?
+        while Date().timeIntervalSince(pollStart) < Transition.stabilityPollTimeout {
+            let frames = goingToCalendar ? store.calendarOutfitFrames : store.listOutfitFrames
+            if let frame = frames[anchorId],
+               frame.width > 0, frame.height > 0,
+               frame.intersects(viewport) {
+                if let last = lastFrame,
+                   abs(last.minX - frame.minX) < 0.5,
+                   abs(last.minY - frame.minY) < 0.5 {
+                    return true
                 }
+                lastFrame = frame
             }
-            .frame(width: displayFrame.width, height: displayFrame.height)
-            .position(x: displayFrame.midX, y: displayFrame.midY)
-            .opacity(heroOpacity)
-            .allowsHitTesting(false)
+            try? await Task.sleep(for: Transition.pollInterval)
+            if Task.isCancelled { return false }
         }
-        .ignoresSafeArea()
+        return false
     }
 
     private var logoView: some View {

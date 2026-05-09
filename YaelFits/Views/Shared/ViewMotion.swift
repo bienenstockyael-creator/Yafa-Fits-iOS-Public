@@ -58,51 +58,49 @@ private struct HeaderProximityFadeModifier: ViewModifier {
     }
 }
 
-// MARK: - Grid Transition Reveal
+// MARK: - Anchor Transition (matchedGeometryEffect on the anchor cell only)
 
-private struct GridTransitionRevealModifier: ViewModifier {
-    let phase: ViewTransitionPhase
-    let isList: Bool
-    let staggerIndex: Int
-
-    private var isRevealing: Bool {
-        phase == .targetIn && isList
-    }
-
-    private var isHiding: Bool {
-        phase == .sourceOut && isList
-    }
-
-    private var targetOpacity: Double {
-        if isHiding { return 0 }
-        return 1
-    }
-
-    private var staggerDelay: Double {
-        if isRevealing { return Double(staggerIndex) * 0.035 }
-        if isHiding { return Double(staggerIndex) * 0.015 }
-        return 0
-    }
+/// Always applies `matchedGeometryEffect` (so view identity is stable —
+/// cells don't remount when the anchor flag flips, which preserves the
+/// morph), but gives non-anchor cells a UNIQUE-PER-VIEW id so they
+/// have no match anywhere in the namespace and don't share state with
+/// any other cell. Only the actual anchor cell uses the shared
+/// `outfitId`, which is what the matching anchor cell in the other
+/// view also uses — so they connect and morph.
+private struct AnchorTransitionModifier: ViewModifier {
+    let outfitId: String
+    let namespace: Namespace.ID
+    let isAnchor: Bool
+    let viewName: String
+    let isSource: Bool
 
     func body(content: Content) -> some View {
-        // Per-cell BLUR removed — was the dominant flicker source.
-        // `isList` (= currentView == .list) flips mid-transition when
-        // we switch currentView, which made `targetBlur` snap from 8→0
-        // in a single frame, applied to every visible cell. The
-        // staggered opacity reveal stays — that's what gives the
-        // cinematic "cells appear one by one" feel without flicker.
-        content
-            .opacity(targetOpacity)
-            .animation(
-                isRevealing
-                    ? .timingCurve(0.16, 1, 0.3, 1, duration: 0.7).delay(staggerDelay)
-                    : .timingCurve(0.4, 0, 0.2, 1, duration: 0.4).delay(staggerDelay),
-                value: phase
-            )
+        content.matchedGeometryEffect(
+            id: isAnchor ? outfitId : "private-\(viewName)-\(outfitId)",
+            in: namespace,
+            anchor: .center,
+            isSource: isSource
+        )
     }
 }
 
 extension View {
+    func anchorTransition(
+        outfitId: String,
+        namespace: Namespace.ID,
+        isAnchor: Bool,
+        viewName: String,
+        isSource: Bool
+    ) -> some View {
+        modifier(AnchorTransitionModifier(
+            outfitId: outfitId,
+            namespace: namespace,
+            isAnchor: isAnchor,
+            viewName: viewName,
+            isSource: isSource
+        ))
+    }
+
     func blurFadeReveal(active: Bool, delay: Double = 0, blurRadius: CGFloat = 12) -> some View {
         modifier(BlurFadeRevealModifier(active: active, delay: delay, blurRadius: blurRadius))
     }
@@ -121,10 +119,6 @@ extension View {
                 appliesBlur: appliesBlur
             )
         )
-    }
-
-    func gridTransitionReveal(phase: ViewTransitionPhase, isList: Bool, staggerIndex: Int) -> some View {
-        modifier(GridTransitionRevealModifier(phase: phase, isList: isList, staggerIndex: staggerIndex))
     }
 
     func headerProximityFade(headerBottom: CGFloat, fadeZone: CGFloat) -> some View {

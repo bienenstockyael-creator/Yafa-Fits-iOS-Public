@@ -1,11 +1,5 @@
 import SwiftUI
 
-enum ViewTransitionPhase: Equatable {
-    case idle
-    case sourceOut   // source view elements fading/blurring out
-    case targetIn    // target view elements fading/blurring in
-}
-
 enum AppView: String, CaseIterable {
     case list = "List"
     case calendar = "Calendar"
@@ -33,11 +27,21 @@ class OutfitStore {
     var selectedOutfitId: String?
     var centeredListOutfitId: String?
     var pendingCalendarScrollOutfitId: String?
+    /// Symmetric to pendingCalendarScrollOutfitId — when switching from
+    /// calendar back to list, OutfitGridView reads this on appearance
+    /// and scrolls so the named outfit is centered. Lets the user land
+    /// on the same outfit they were viewing in the calendar.
+    var pendingListScrollOutfitId: String?
     var listOutfitFrames: [String: CGRect] = [:]
     var calendarOutfitFrames: [String: CGRect] = [:]
     var listOutfitFrameIndices: [String: Int] = [:]
-    var heroAnchorOutfitId: String?
-    var viewTransitionPhase: ViewTransitionPhase = .idle
+    /// The single outfit being "carried" between list and calendar via
+    /// matchedGeometryEffect. Set before the view switch, cleared after
+    /// the animation completes. Only this outfit's cell animates its
+    /// position between the two views — all other cells just opacity-
+    /// fade with the parent view transition (so non-anchor cells don't
+    /// fly off-screen toward their destination position).
+    var transitionAnchorOutfitId: String?
     var generationReadyForReview = false
     var isCarouselOpen = false
     var unreadNotificationCount = 0
@@ -64,11 +68,11 @@ class OutfitStore {
         selectedOutfitId = nil
         centeredListOutfitId = nil
         pendingCalendarScrollOutfitId = nil
+        pendingListScrollOutfitId = nil
         listOutfitFrames = [:]
         calendarOutfitFrames = [:]
         listOutfitFrameIndices = [:]
-        heroAnchorOutfitId = nil
-        viewTransitionPhase = .idle
+        transitionAnchorOutfitId = nil
         generationReadyForReview = false
         isCarouselOpen = false
         unreadNotificationCount = 0
@@ -89,11 +93,11 @@ class OutfitStore {
         selectedOutfitId = nil
         centeredListOutfitId = nil
         pendingCalendarScrollOutfitId = nil
+        pendingListScrollOutfitId = nil
         listOutfitFrames = [:]
         calendarOutfitFrames = [:]
         listOutfitFrameIndices = [:]
-        heroAnchorOutfitId = nil
-        viewTransitionPhase = .idle
+        transitionAnchorOutfitId = nil
         generationReadyForReview = false
         isCarouselOpen = false
         unreadNotificationCount = 0
@@ -569,6 +573,9 @@ class OutfitStore {
         }
         if pendingCalendarScrollOutfitId == outfit.id {
             pendingCalendarScrollOutfitId = nil
+        }
+        if pendingListScrollOutfitId == outfit.id {
+            pendingListScrollOutfitId = nil
         }
 
         if let userId {

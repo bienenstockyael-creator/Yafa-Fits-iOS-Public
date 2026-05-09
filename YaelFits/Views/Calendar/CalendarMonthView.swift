@@ -2,6 +2,10 @@ import SwiftUI
 
 struct CalendarMonthView: View {
     @Environment(OutfitStore.self) private var store
+
+    /// Cross-view transition namespace passed in from RootView.
+    var transitionNamespace: Namespace.ID
+
     private let calendar = Calendar.current
     private let monthTitleColor = AppPalette.textStrong
     private let activeDayColor = AppPalette.textPrimary
@@ -12,6 +16,18 @@ struct CalendarMonthView: View {
     private let fadeZone: CGFloat = 80
 
     @State private var isScrubbing = false
+    /// Reference-type tracker for live-scrub frame updates — same
+    /// pattern as OutfitGridView. Per-frame onFrameChange callbacks
+    /// mutate the tracker (invisible to SwiftUI), and only on drag-end
+    /// do we commit the final frame to the store. Avoids re-rendering
+    /// the entire calendar's LazyVGrid on every scrub frame.
+    @State private var scrubTracker = ScrubFrameTracker()
+    /// Cancellable handle for the in-flight scroll-to-pending task.
+    /// Each new pending-scroll cancels the previous task — without
+    /// this, rapid taps stack overlapping scroll tasks that step on
+    /// each other's `pendingCalendarScrollOutfitId` clears, which
+    /// confuses the transition's Phase-1 wait.
+    @State private var pendingScrollTask: Task<Void, Never>?
 
     private let columns = [
         GridItem(.flexible(), spacing: 28, alignment: .top),
@@ -22,8 +38,8 @@ struct CalendarMonthView: View {
         ScrollViewReader { reader in
             ScrollView {
                 VStack(alignment: .leading, spacing: 34) {
-                    ForEach(Array(monthSections.enumerated()), id: \.element.id) { sectionIndex, section in
-                        monthSection(section, sectionIndex: sectionIndex, globalStaggerBase: sectionIndex * 6)
+                    ForEach(monthSections) { section in
+                        monthSection(section)
                     }
 
                     Color.clear
@@ -46,39 +62,19 @@ struct CalendarMonthView: View {
         }
     }
 
-    // MARK: - Stagger delay for cinematic transition reveals
-
-    private func transitionStagger(for index: Int) -> Double {
-        Double(index) * 0.04
-    }
-
-    private var isTransitionRevealing: Bool {
-        store.viewTransitionPhase == .targetIn && store.currentView == .calendar
-    }
-
     // MARK: - Month & Day rendering
 
-    private func monthSection(_ section: MonthSection, sectionIndex: Int, globalStaggerBase: Int) -> some View {
+    private func monthSection(_ section: MonthSection) -> some View {
         VStack(alignment: .leading, spacing: 22) {
             Text(section.title)
                 .font(.system(size: 24, weight: .bold))
                 .foregroundStyle(monthTitleColor)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .headerProximityFade(headerBottom: headerBottom, fadeZone: fadeZone)
-                .calendarTransitionReveal(
-                    phase: store.viewTransitionPhase,
-                    isCalendar: store.currentView == .calendar,
-                    staggerIndex: globalStaggerBase
-                )
 
             LazyVGrid(columns: columns, spacing: 34) {
-                ForEach(Array(section.days.enumerated()), id: \.element.id) { dayIndex, day in
+                ForEach(Array(section.days.enumerated()), id: \.element.id) { _, day in
                     calendarDay(day)
-                        .calendarTransitionReveal(
-                            phase: store.viewTransitionPhase,
-                            isCalendar: store.currentView == .calendar,
-                            staggerIndex: globalStaggerBase + 1 + dayIndex
-                        )
                 }
             }
         }
@@ -99,6 +95,11 @@ struct CalendarMonthView: View {
                         height: 156,
                         draggable: true,
                         preloadFullSequenceOnAppear: true,
+                        // Mirror the user's scrubbed frame from the
+                        // shared store so an outfit they've rotated
+                        // stays at that frame when it morphs between
+                        // calendar and archive (and vice-versa).
+                        syncFrameIndex: store.listOutfitFrameIndices[outfit.id],
                         onTap: {
                             let impact = UIImpactFeedbackGenerator(style: .medium)
                             impact.impactOccurred()
@@ -106,10 +107,30 @@ struct CalendarMonthView: View {
                         },
                         onHorizontalDragChange: { isDragging in
                             isScrubbing = isDragging
+                            if !isDragging {
+                                // Drag ended — commit the final scrubbed
+                                // frame so the archive picks it up next
+                                // time the user transitions back.
+                                if let frame = scrubTracker.frames[outfit.id] {
+                                    store.listOutfitFrameIndices[outfit.id] = frame
+                                }
+                            }
+                        },
+                        onFrameChange: { newFrame in
+                            // Per-frame updates go into the reference-
+                            // type tracker (no @State mutation, no grid
+                            // re-render). Commit to store on drag-end.
+                            scrubTracker.frames[outfit.id] = newFrame
                         }
                     )
                     .frame(maxWidth: .infinity)
-                    .opacity(store.heroAnchorOutfitId == outfit.id ? 0 : 1)
+                    .anchorTransition(
+                        outfitId: outfit.id,
+                        namespace: transitionNamespace,
+                        isAnchor: store.transitionAnchorOutfitId == outfit.id,
+                        viewName: "calendar",
+                        isSource: store.currentView == .calendar
+                    )
                     .background {
                         GeometryReader { proxy in
                             Color.clear.preference(
@@ -117,6 +138,12 @@ struct CalendarMonthView: View {
                                 value: [outfit.id: proxy.frame(in: .global)]
                             )
                         }
+                    }
+                    // Drop stale frame entries when the cell scrolls
+                    // out of the lazy-render region, so transition
+                    // logic can't pick a frame from a previous scroll.
+                    .onDisappear {
+                        store.calendarOutfitFrames[outfit.id] = nil
                     }
                 } else {
                     Color.clear
@@ -159,31 +186,56 @@ struct CalendarMonthView: View {
     private func scrollToPendingTarget(using reader: ScrollViewProxy, animated: Bool = true) {
         guard let targetOutfitId = store.pendingCalendarScrollOutfitId else { return }
 
-        Task { @MainActor in
-            // Yield + brief sleep to let the VStack lay out. Two yields
-            // alone weren't enough on first mount — the LazyVStack hadn't
-            // populated cells yet and reader.scrollTo silently failed,
-            // leaving the calendar at the top with the target outfit
-            // off-screen (causing the hero to land off-screen during
-            // first list→calendar transitions).
+        // Cancel any previous in-flight scroll task. Without this, a
+        // rapid second pendingScroll request stacks on top of the
+        // first; both tasks issue scrollTo's and both later try to
+        // clear `pendingCalendarScrollOutfitId`, racing with the
+        // transition's Phase-1 wait. Now there's exactly one active
+        // scroll task at a time.
+        pendingScrollTask?.cancel()
+        pendingScrollTask = Task { @MainActor in
             await Task.yield()
             await Task.yield()
-            try? await Task.sleep(for: .milliseconds(40))
+            try? await Task.sleep(for: .milliseconds(30))
+            if Task.isCancelled { return }
 
-            if animated {
-                withAnimation(.timingCurve(0.16, 1, 0.3, 1, duration: 0.55)) {
+            // Always non-animated — the destination view should appear
+            // already at the right scroll position with no scroll
+            // animation, only its own opacity transition.
+            //
+            // Three nudges instead of two: for long jumps (top→bottom),
+            // LazyVStack doesn't know exact cell positions yet, so the
+            // first scroll lands approximately. Each subsequent scroll
+            // refines as more cells get mounted and the size estimate
+            // tightens. Three nudges reliably centers even when going
+            // archive-bottom → calendar-bottom.
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            for waitMs in [40, 50] {
+                // Authority check — abort if our targetOutfitId is no
+                // longer the pending one (i.e., a newer task has taken
+                // over, or the pending state has been cleared
+                // entirely). Stronger than `Task.isCancelled` because
+                // a cancelled-but-still-running task can issue stray
+                // synchronous `scrollTo`s between await points before
+                // cancellation is observed at the next iteration. This
+                // check guarantees we only scroll while we're still
+                // authoritative for the current target.
+                guard store.pendingCalendarScrollOutfitId == targetOutfitId else { return }
+                withTransaction(transaction) {
                     reader.scrollTo(targetOutfitId, anchor: .center)
                 }
-            } else {
+                try? await Task.sleep(for: .milliseconds(waitMs))
+            }
+            guard store.pendingCalendarScrollOutfitId == targetOutfitId else { return }
+            withTransaction(transaction) {
                 reader.scrollTo(targetOutfitId, anchor: .center)
             }
-            // Belt-and-suspenders: scroll again after one more frame.
-            // ScrollViewProxy can need a second nudge if the first call
-            // happened before the target row's GeometryReader fired.
-            try? await Task.sleep(for: .milliseconds(50))
-            reader.scrollTo(targetOutfitId, anchor: .center)
 
-            try? await Task.sleep(for: .milliseconds(100))
+            try? await Task.sleep(for: .milliseconds(60))
+            // Only null out the flag if it's still pointing at OUR
+            // target — never clobber a newer task's pending value.
+            guard store.pendingCalendarScrollOutfitId == targetOutfitId else { return }
             store.pendingCalendarScrollOutfitId = nil
         }
     }
@@ -302,6 +354,8 @@ struct CalendarDetailSheet: View {
     @State private var isTogglingPublish = false
     @State private var showShareComposer = false
     @State private var showAddProduct = false
+    @State private var autoDetectSource: CalendarAutoDetectSource?
+    @State private var isLoadingAutoDetect = false
     @State private var isEditing = false
     @State private var editableTags: [String] = []
     @State private var showingTagInput = false
@@ -558,6 +612,27 @@ struct CalendarDetailSheet: View {
                 }
             }
         }
+        .sheet(item: $autoDetectSource) { source in
+            if let userId = store.userId {
+                AutoDetectProductsView(
+                    sourceImage: source.image,
+                    userId: userId,
+                    existingProducts: outfit.products ?? []
+                ) { newProducts in
+                    let added = newProducts.filter { newProduct in
+                        !(outfit.products ?? []).contains(where: { $0.name == newProduct.name })
+                    }
+                    if !added.isEmpty {
+                        store.updateOutfit(
+                            outfit.id,
+                            caption: outfit.caption,
+                            products: (outfit.products ?? []) + added
+                        )
+                    }
+                    autoDetectSource = nil
+                }
+            }
+        }
         .sheet(isPresented: $showDatePicker) {
             VStack(spacing: 16) {
                 Text("CHANGE DATE")
@@ -606,6 +681,31 @@ struct CalendarDetailSheet: View {
                         .appCircle(shadowRadius: 0, shadowY: 0)
                 }
                 .buttonStyle(.plain)
+
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    Task { await openAutoDetect() }
+                } label: {
+                    HStack(spacing: 6) {
+                        if isLoadingAutoDetect {
+                            ProgressView().controlSize(.small).tint(AppPalette.iconPrimary)
+                        } else {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 13))
+                                .foregroundStyle(AppPalette.iconPrimary)
+                        }
+                        Text("Quick Add")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(AppPalette.textPrimary)
+                    }
+                    .padding(.horizontal, 12)
+                    .frame(height: 36)
+                    .appCapsule(shadowRadius: 0, shadowY: 0)
+                    // AI-action accent: soft purple halo (matches carousel).
+                    .shadow(color: AppPalette.aiAccent.opacity(0.18), radius: 8, y: 0)
+                }
+                .buttonStyle(.plain)
+                .disabled(isLoadingAutoDetect)
 
                 ForEach(outfit.products ?? [], id: \.id) { product in
                     ZStack(alignment: .topTrailing) {
@@ -746,6 +846,26 @@ struct CalendarDetailSheet: View {
         let t = newTagText.trimmingCharacters(in: .whitespaces)
         guard !t.isEmpty, !editableTags.contains(t) else { return }
         editableTags.append(t); newTagText = ""
+    }
+
+    /// Fetches the outfit's cover frame and presents AutoDetectProductsView.
+    /// Mirrors `CarouselView.openAutoDetect` — kept intentionally as a copy
+    /// instead of a shared helper, since extracting would mean a new file
+    /// (which has to be added to the Xcode project explicitly).
+    private func openAutoDetect() async {
+        guard !isLoadingAutoDetect else { return }
+        await MainActor.run { isLoadingAutoDetect = true }
+        defer { Task { @MainActor in isLoadingAutoDetect = false } }
+
+        guard let baseURL = outfit.resolvedRemoteBaseURL else { return }
+        let frameURL = outfit.frameURL(index: 0, baseURL: baseURL)
+        do {
+            let (data, _) = try await URLSession.shared.data(from: frameURL)
+            guard let image = UIImage(data: data) else { return }
+            await MainActor.run { autoDetectSource = CalendarAutoDetectSource(image: image) }
+        } catch {
+            // Quiet failure — user can retry.
+        }
     }
 
     private var likeButton: some View {
@@ -920,52 +1040,9 @@ struct CalendarDetailSheet: View {
 }
 
 
-// MARK: - Calendar Transition Reveal (staggered per element)
-
-private struct CalendarTransitionRevealModifier: ViewModifier {
-    let phase: ViewTransitionPhase
-    let isCalendar: Bool
-    let staggerIndex: Int
-
-    private var isRevealing: Bool {
-        phase == .targetIn && isCalendar
-    }
-
-    private var isHidden: Bool {
-        phase == .sourceOut && isCalendar
-    }
-
-    private var targetOpacity: Double {
-        if isHidden { return 0 }
-        if phase == .targetIn && isCalendar { return 1 }
-        if phase == .idle { return 1 }
-        return 1
-    }
-
-    private var targetBlur: CGFloat {
-        if isHidden { return 6 }
-        return 0
-    }
-
-    private var staggerDelay: Double {
-        isRevealing ? Double(staggerIndex) * 0.03 : 0
-    }
-
-    func body(content: Content) -> some View {
-        content
-            .opacity(targetOpacity)
-            .blur(radius: targetBlur)
-            .animation(
-                .timingCurve(0.16, 1, 0.3, 1, duration: 0.65).delay(staggerDelay),
-                value: phase
-            )
-    }
-}
-
-extension View {
-    func calendarTransitionReveal(phase: ViewTransitionPhase, isCalendar: Bool, staggerIndex: Int) -> some View {
-        modifier(CalendarTransitionRevealModifier(phase: phase, isCalendar: isCalendar, staggerIndex: staggerIndex))
-    }
+private struct CalendarAutoDetectSource: Identifiable {
+    let id = UUID()
+    let image: UIImage
 }
 
 struct CalendarOutfitFramePreferenceKey: PreferenceKey {

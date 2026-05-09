@@ -703,7 +703,12 @@ struct UploadPipelineView: View {
                 // Runs in parallel with Kling — user does products while
                 // the orbit video generates. Auto-detected products are
                 // merged into the staged outfit when Kling finishes.
-                if let cutoutImage = UIImage(data: preparedAssets.cutoutPNGData) {
+                //
+                // Gated on `AppConfig.preReviewProductTaggingEnabled`
+                // (currently false) until the product-tagging UX is
+                // finalised — flip the flag to bring the flow back.
+                if AppConfig.preReviewProductTaggingEnabled,
+                   let cutoutImage = UIImage(data: preparedAssets.cutoutPNGData) {
                     autoDetectImage = AutoDetectSourceImage(image: cutoutImage)
                 }
             }
