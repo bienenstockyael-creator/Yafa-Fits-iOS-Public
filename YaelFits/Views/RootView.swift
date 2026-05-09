@@ -527,7 +527,20 @@ struct RootView: View {
             impact.impactOccurred()
 
             store.selectedOutfitId = nil
-            store.currentView = targetTab
+            // List↔calendar transitions need to go through `switchView`
+            // so the opacity crossfade (and the matchedGeometryEffect
+            // morph) runs. Setting `currentView` alone leaves the
+            // per-view opacities stale, which is why tapping Home
+            // from calendar would flip the toggle but leave the
+            // calendar visible underneath.
+            let isListCalendarSwitch =
+                (store.currentView == .calendar && targetTab == .list) ||
+                (store.currentView == .list && targetTab == .calendar)
+            if isListCalendarSwitch {
+                switchView(to: targetTab)
+            } else {
+                store.currentView = targetTab
+            }
         } label: {
             VStack(spacing: LayoutMetrics.xxxSmall) {
                 ZStack(alignment: .topTrailing) {
