@@ -320,6 +320,17 @@ struct FeedPostCard: View {
     var isInitiallyLiked: Bool
     var onCommentCountChanged: ((Int) -> Void)?
     var onCartOpen: (() -> Void)?
+    /// When set, the card renders in "overlay" mode: a close button
+    /// replaces the in-header weather pill (top-right of the header)
+    /// and the weather pill, if any, floats at the top center of the
+    /// card instead. Used by the profile-grid floating overlay.
+    var onClose: (() -> Void)? = nil
+    /// Suppress the Pro-specific chrome (frosty blue rim overlay, blue
+    /// shadow, holo shader) while keeping the PRO badge in the header.
+    /// Used by the profile-grid floating overlay so Pro users still
+    /// look "Pro" but don't get the double-stroke from the rim
+    /// overlapping appCard's gray border.
+    var hideProChrome: Bool = false
     @Environment(OutfitStore.self) private var store
     @State private var showComments = false
     @State private var showUserProfile = false
@@ -333,6 +344,14 @@ struct FeedPostCard: View {
     // Use local store first, then prefetch cache, then per-card fetch
     private var outfit: Outfit? {
         store.outfitById[post.outfitId] ?? store.feedOutfitCache[post.outfitId] ?? fetchedOutfit
+    }
+
+    /// Pro-chrome elements (holo, frosty rim, blue shadow, gyro tilt)
+    /// gate on this. PRO badge in the header still uses
+    /// `post.isAuthorPro` directly, so identity stays intact when
+    /// `hideProChrome` is set.
+    private var showsProChrome: Bool {
+        post.isAuthorPro == true && !hideProChrome
     }
 
     @State private var cardVisible = false
@@ -360,10 +379,10 @@ struct FeedPostCard: View {
             cardActions
         }
         .padding(LayoutMetrics.medium)
-        .holoCard(active: post.isAuthorPro == true)
+        .holoCard(active: showsProChrome)
         .appCard()
         .overlay {
-            if post.isAuthorPro == true {
+            if showsProChrome {
                 // Frosty blue rim — slightly thicker plain stroke instead
                 // of stroke+blur. The blur was forcing an offscreen pass
                 // per card; this version is visually nearly identical
@@ -374,11 +393,11 @@ struct FeedPostCard: View {
             }
         }
         .shadow(
-            color: post.isAuthorPro == true ? Color(red: 0.82, green: 0.94, blue: 1.0).opacity(0.45) : .clear,
+            color: showsProChrome ? Color(red: 0.82, green: 0.94, blue: 1.0).opacity(0.45) : .clear,
             radius: 14,
             y: 0
         )
-        .proCardTilt(active: post.isAuthorPro == true)
+        .proCardTilt(active: showsProChrome)
         .opacity(cardVisible ? 1 : 0)
         .scaleEffect(cardVisible ? 1 : 0.96)
         .onChange(of: outfit) { _, newOutfit in
@@ -465,8 +484,27 @@ struct FeedPostCard: View {
 
             Spacer()
 
+            // In overlay mode the weather sits right next to the X
+            // (right side). In feed mode there's no X — weather hugs
+            // the right by itself.
             if let weather = outfit?.weather, weather.condition.isEmpty == false {
                 WeatherPill(weather: weather, useFahrenheit: store.useFahrenheit)
+            }
+
+            if let onClose {
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AppPalette.textMuted)
+                        .frame(width: 32, height: 32)
+                        .background(
+                            Circle().fill(AppPalette.cardFill)
+                        )
+                        .overlay(
+                            Circle().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75)
+                        )
+                }
+                .buttonStyle(.plain)
             }
         }
     }
@@ -727,3 +765,5 @@ private struct LongPressIfPresent: ViewModifier {
         }
     }
 }
+
+

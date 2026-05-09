@@ -546,6 +546,20 @@ struct RootView: View {
             if isListCalendarSwitch {
                 switchView(to: targetTab)
             } else {
+                // When the target is list or calendar but we got here
+                // from a different section (upload/feed/profile), the
+                // per-view opacities may still hold their last
+                // list↔calendar values. Snap them so the right layer
+                // is visible (and hit-testable) on arrival — otherwise
+                // returning to Home from upload while the last visit
+                // was Calendar leaves the calendar covering the list.
+                if targetTab == .list {
+                    listOpacity = 1
+                    calendarOpacity = 0
+                } else if targetTab == .calendar {
+                    listOpacity = 0
+                    calendarOpacity = 1
+                }
                 store.currentView = targetTab
             }
         } label: {
