@@ -343,6 +343,12 @@ struct RootView: View {
 
         store.selectedOutfitId = nil
         store.transitionAnchorOutfitId = anchorId
+        // Capture the source anchor's currently-displayed frame so
+        // the destination anchor can render the same frame during
+        // the morph. Independent of any persistent scrub state.
+        store.transitionAnchorFrameIndex = anchorId.flatMap {
+            store.currentDisplayedFrame[$0]
+        }
         if let anchorId {
             if goingToCalendar {
                 store.pendingCalendarScrollOutfitId = anchorId
@@ -385,6 +391,7 @@ struct RootView: View {
             try? await Task.sleep(for: Transition.postSpringSettle)
             guard !Task.isCancelled else { return }
             store.transitionAnchorOutfitId = nil
+            store.transitionAnchorFrameIndex = nil
         }
     }
 

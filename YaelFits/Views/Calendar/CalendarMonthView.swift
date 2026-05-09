@@ -16,12 +16,6 @@ struct CalendarMonthView: View {
     private let fadeZone: CGFloat = 80
 
     @State private var isScrubbing = false
-    /// Reference-type tracker for live-scrub frame updates — same
-    /// pattern as OutfitGridView. Per-frame onFrameChange callbacks
-    /// mutate the tracker (invisible to SwiftUI), and only on drag-end
-    /// do we commit the final frame to the store. Avoids re-rendering
-    /// the entire calendar's LazyVGrid on every scrub frame.
-    @State private var scrubTracker = ScrubFrameTracker()
     /// Cancellable handle for the in-flight scroll-to-pending task.
     /// Each new pending-scroll cancels the previous task — without
     /// this, rapid taps stack overlapping scroll tasks that step on
@@ -95,11 +89,12 @@ struct CalendarMonthView: View {
                         height: 156,
                         draggable: true,
                         preloadFullSequenceOnAppear: true,
-                        // Mirror the user's scrubbed frame from the
-                        // shared store so an outfit they've rotated
-                        // stays at that frame when it morphs between
-                        // calendar and archive (and vice-versa).
-                        syncFrameIndex: store.listOutfitFrameIndices[outfit.id],
+                        // Sync to the source anchor's frame ONLY during
+                        // a list↔calendar transition (so the morph is
+                        // visually continuous). Outside of transitions
+                        // the cell is free to scrub on its own without
+                        // affecting the archive's view.
+                        syncFrameIndex: anchorTransitionFrame(for: outfit.id),
                         onTap: {
                             let impact = UIImpactFeedbackGenerator(style: .medium)
                             impact.impactOccurred()
@@ -107,20 +102,13 @@ struct CalendarMonthView: View {
                         },
                         onHorizontalDragChange: { isDragging in
                             isScrubbing = isDragging
-                            if !isDragging {
-                                // Drag ended — commit the final scrubbed
-                                // frame so the archive picks it up next
-                                // time the user transitions back.
-                                if let frame = scrubTracker.frames[outfit.id] {
-                                    store.listOutfitFrameIndices[outfit.id] = frame
-                                }
-                            }
                         },
                         onFrameChange: { newFrame in
-                            // Per-frame updates go into the reference-
-                            // type tracker (no @State mutation, no grid
-                            // re-render). Commit to store on drag-end.
-                            scrubTracker.frames[outfit.id] = newFrame
+                            // Broadcast for the transition-frame
+                            // capture in switchView. No view body reads
+                            // this dict so writes don't trigger
+                            // re-renders.
+                            store.currentDisplayedFrame[outfit.id] = newFrame
                         }
                     )
                     .frame(maxWidth: .infinity)
@@ -181,6 +169,14 @@ struct CalendarMonthView: View {
             let key = formatter.string(from: date)
             return CalendarDay(date: date, outfit: outfitsByDate[key])
         }
+    }
+
+    /// Returns the in-flight transition's source frame for this cell
+    /// if it's the current anchor, else nil. Keeps the morphing cell
+    /// in sync with the source view's displayed frame.
+    private func anchorTransitionFrame(for outfitId: String) -> Int? {
+        guard store.transitionAnchorOutfitId == outfitId else { return nil }
+        return store.transitionAnchorFrameIndex
     }
 
     private func scrollToPendingTarget(using reader: ScrollViewProxy, animated: Bool = true) {
@@ -354,7 +350,7 @@ struct CalendarDetailSheet: View {
     @State private var isTogglingPublish = false
     @State private var showShareComposer = false
     @State private var showAddProduct = false
-    @State private var autoDetectSource: CalendarAutoDetectSource?
+    @State private var autoDetectSource: QuickAddSource?
     @State private var isLoadingAutoDetect = false
     @State private var isEditing = false
     @State private var editableTags: [String] = []
@@ -616,20 +612,15 @@ struct CalendarDetailSheet: View {
             if let userId = store.userId {
                 AutoDetectProductsView(
                     sourceImage: source.image,
-                    userId: userId,
-                    existingProducts: outfit.products ?? []
-                ) { newProducts in
-                    let added = newProducts.filter { newProduct in
-                        !(outfit.products ?? []).contains(where: { $0.name == newProduct.name })
-                    }
-                    if !added.isEmpty {
-                        store.updateOutfit(
-                            outfit.id,
-                            caption: outfit.caption,
-                            products: (outfit.products ?? []) + added
-                        )
-                    }
-                    autoDetectSource = nil
+                    userId: userId
+                ) { newProduct in
+                    let existing = store.outfitById[outfit.id]?.products ?? outfit.products ?? []
+                    guard !existing.contains(where: { $0.name == newProduct.name }) else { return }
+                    store.updateOutfit(
+                        outfit.id,
+                        caption: outfit.caption,
+                        products: existing + [newProduct]
+                    )
                 }
             }
         }
@@ -848,24 +839,13 @@ struct CalendarDetailSheet: View {
         editableTags.append(t); newTagText = ""
     }
 
-    /// Fetches the outfit's cover frame and presents AutoDetectProductsView.
-    /// Mirrors `CarouselView.openAutoDetect` — kept intentionally as a copy
-    /// instead of a shared helper, since extracting would mean a new file
-    /// (which has to be added to the Xcode project explicitly).
     private func openAutoDetect() async {
         guard !isLoadingAutoDetect else { return }
         await MainActor.run { isLoadingAutoDetect = true }
         defer { Task { @MainActor in isLoadingAutoDetect = false } }
 
-        guard let baseURL = outfit.resolvedRemoteBaseURL else { return }
-        let frameURL = outfit.frameURL(index: 0, baseURL: baseURL)
-        do {
-            let (data, _) = try await URLSession.shared.data(from: frameURL)
-            guard let image = UIImage(data: data) else { return }
-            await MainActor.run { autoDetectSource = CalendarAutoDetectSource(image: image) }
-        } catch {
-            // Quiet failure — user can retry.
-        }
+        guard let image = await AutoDetectProductsView.loadCoverFrame(for: outfit) else { return }
+        await MainActor.run { autoDetectSource = QuickAddSource(image: image) }
     }
 
     private var likeButton: some View {
@@ -1039,11 +1019,6 @@ struct CalendarDetailSheet: View {
     }
 }
 
-
-private struct CalendarAutoDetectSource: Identifiable {
-    let id = UUID()
-    let image: UIImage
-}
 
 struct CalendarOutfitFramePreferenceKey: PreferenceKey {
     static var defaultValue: [String: CGRect] = [:]

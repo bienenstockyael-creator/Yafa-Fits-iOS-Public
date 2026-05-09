@@ -233,11 +233,12 @@ struct OutfitGridView: View {
             playEntranceSequence: playsInitialSequence && index < initialVisibleCount,
             entranceSequenceActive: contentVisible,
             entranceSequenceDelay: revealDelay(for: index),
-            // Local override (set by carousel entry/exit) wins;
-            // otherwise fall back to the shared store so a frame the
-            // user scrubbed-to in the calendar view also shows up here
-            // when they switch back to the archive.
-            syncFrameIndex: outfitFrameIndices[outfit.id] ?? store.listOutfitFrameIndices[outfit.id],
+            // Priority: anchor-frame override (only set during a
+            // list↔calendar transition for the anchor cell) →
+            // carousel local override → nil. The anchor override is
+            // what keeps the morphing cell visually in sync with the
+            // source view's displayed frame.
+            syncFrameIndex: anchorTransitionFrame(for: outfit.id) ?? outfitFrameIndices[outfit.id],
             syncImage: outfitFrameImages[outfit.id],
             onTap: { frameIndex, image in
                 let impact = UIImpactFeedbackGenerator(style: .medium)
@@ -263,6 +264,11 @@ struct OutfitGridView: View {
                 // (no @State mutation, no grid re-render). The actual
                 // commit to the store happens on drag end above.
                 scrubTracker.frames[outfit.id] = newFrame
+                // Broadcast current frame to the store so a list↔
+                // calendar transition can capture the source anchor's
+                // exact displayed frame at switch time. No view body
+                // reads this dict, so writes don't trigger re-renders.
+                store.currentDisplayedFrame[outfit.id] = newFrame
             }
         )
         .blurFadeReveal(active: contentVisible, delay: revealDelay(for: index))
@@ -694,6 +700,14 @@ struct OutfitGridView: View {
         }
     }
 
+    /// Returns the in-flight transition's source frame for this cell
+    /// if it's the current anchor, else nil. Lets the morphing cell
+    /// render the same frame as the source view across the morph.
+    private func anchorTransitionFrame(for outfitId: String) -> Int? {
+        guard store.transitionAnchorOutfitId == outfitId else { return nil }
+        return store.transitionAnchorFrameIndex
+    }
+
     private func updateCenteredOutfit(from frames: [String: CGRect], viewportFrame: CGRect) {
         guard !frames.isEmpty, !showCarousel, store.currentView == .list else { return }
 
@@ -737,7 +751,7 @@ private struct HeroTransition {
 /// `@State` for identity persistence, but mutations to its internal
 /// dict are invisible to SwiftUI's observation — we get O(1) per-frame
 /// updates during scrub without re-rendering the grid.
-final class ScrubFrameTracker {
+private final class ScrubFrameTracker {
     var frames: [String: Int] = [:]
 }
 

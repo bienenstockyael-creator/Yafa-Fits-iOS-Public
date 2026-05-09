@@ -15,7 +15,7 @@ struct PublishSheet: View {
     @State private var isPublishing = false
     @State private var publishError: String?
     @State private var showAddProduct = false
-    @State private var autoDetectSource: PublishAutoDetectSource?
+    @State private var autoDetectSource: QuickAddSource?
     @State private var isLoadingAutoDetect = false
 
     // Shop links available to all users — products only appear on feed if linked
@@ -66,13 +66,10 @@ struct PublishSheet: View {
                 if let userId = store.userId {
                     AutoDetectProductsView(
                         sourceImage: source.image,
-                        userId: userId,
-                        existingProducts: []
-                    ) { products in
-                        for product in products {
-                            taggedProducts.append(ProductWithShopLink(product: product, shopURL: ""))
-                        }
-                        autoDetectSource = nil
+                        userId: userId
+                    ) { newProduct in
+                        guard !taggedProducts.contains(where: { $0.product.name == newProduct.name }) else { return }
+                        taggedProducts.append(ProductWithShopLink(product: newProduct, shopURL: ""))
                     }
                 }
             }
@@ -174,21 +171,11 @@ struct PublishSheet: View {
         await MainActor.run { isLoadingAutoDetect = true }
         defer { Task { @MainActor in isLoadingAutoDetect = false } }
 
-        guard let baseURL = outfit.resolvedRemoteBaseURL else {
-            await MainActor.run { publishError = "This outfit has no remote frames to source from yet." }
+        guard let image = await AutoDetectProductsView.loadCoverFrame(for: outfit) else {
+            await MainActor.run { publishError = "Couldn't load the outfit frame." }
             return
         }
-        let frameURL = outfit.frameURL(index: 0, baseURL: baseURL)
-        do {
-            let (data, _) = try await URLSession.shared.data(from: frameURL)
-            guard let image = UIImage(data: data) else {
-                await MainActor.run { publishError = "Could not decode the outfit frame." }
-                return
-            }
-            await MainActor.run { autoDetectSource = PublishAutoDetectSource(image: image) }
-        } catch {
-            await MainActor.run { publishError = "Couldn't fetch a frame: \(error.localizedDescription)" }
-        }
+        await MainActor.run { autoDetectSource = QuickAddSource(image: image) }
     }
 
     private func productRow(entry: Binding<ProductWithShopLink>) -> some View {
@@ -361,7 +348,3 @@ private struct ProductWithShopLink: Identifiable {
     var shopURL: String
 }
 
-private struct PublishAutoDetectSource: Identifiable {
-    let id = UUID()
-    let image: UIImage
-}
