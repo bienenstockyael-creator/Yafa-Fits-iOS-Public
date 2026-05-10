@@ -412,7 +412,7 @@ struct AutoDetectProductsView: View {
         guard let cg = image.cgImage else { return image }
         let cgW = CGFloat(cg.width)
         let cgH = CGFloat(cg.height)
-        let cropSize = min(cgW, cgH) * 0.28
+        let cropSize = min(cgW, cgH) * 0.5
         let halfCrop = cropSize / 2
 
         let scale = image.scale

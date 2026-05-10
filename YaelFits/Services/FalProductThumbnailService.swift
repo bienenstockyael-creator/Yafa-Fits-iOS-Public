@@ -45,6 +45,7 @@ actor FalProductThumbnailService {
             "If the garment is partially occluded by the model's hand, phone, or hair, infer the natural continuation but stay faithful to the visible portions.",
             "Do not add a hood, collar, pockets, zippers, drawstrings, buttons, prints, patterns, or any other features that are not clearly visible on the \(item) in the input image.",
             "Do not change the garment's colour, length, sleeve length, neckline, or silhouette.",
+            "Orient the garment right-side-up: the top of the garment (collar, neckline, opening, or top edge) at the top of the image; the bottom (hem, cuffs, or sole) at the bottom. Never output a rotated, upside-down, or sideways image.",
         ].joined(separator: " ")
 
         await onUpdate(FalProductThumbnailProgress(title: "Generating thumbnail", detail: "Asking nano-banana for a clean product shot."))
@@ -114,24 +115,41 @@ actor FalProductThumbnailService {
     /// in the app's 72pt product slots without ever cutting off the garment
     /// itself. We do NOT trim any visible pixels — only the surrounding
     /// transparent margin is replaced with a tighter, *square* canvas.
-    nonisolated static func tightCrop(_ image: UIImage, paddingFraction: CGFloat) -> UIImage {
-        guard let cg = image.cgImage else { return image }
+    nonisolated static func tightCrop(_ rawImage: UIImage, paddingFraction: CGFloat) -> UIImage {
+        // Always normalize: redraw via UIKit so the resulting cgImage is
+        // in standard top-down layout matching the visual orientation.
+        // We don't trust the imageOrientation flag — Bria's outputs have
+        // a flag/cgImage mismatch that breaks naive cgImage handling.
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = rawImage.scale
+        format.opaque = false
+        let normalizer = UIGraphicsImageRenderer(size: rawImage.size, format: format)
+        let normalized = normalizer.image { _ in
+            rawImage.draw(in: CGRect(origin: .zero, size: rawImage.size))
+        }
+
+        guard let cg = normalized.cgImage else { return rawImage }
         let w = cg.width
         let h = cg.height
-        guard w > 0, h > 0 else { return image }
+        guard w > 0, h > 0 else { return rawImage }
 
-        var pixels = [UInt8](repeating: 0, count: w * h * 4)
         let cs = CGColorSpaceCreateDeviceRGB()
         let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
-        guard let ctx = CGContext(
+
+        // Read pixels for bbox detection. No Y-flip on the read context: a
+        // CGContext bitmap stores memory rows top-down (row 0 = visual top
+        // of the drawn cgImage). The previous version flipped Y here and
+        // it inverted the bbox — the math expected memory rows in cgImage
+        // py order (top-down) but got bottom-up, which shifted the bbox
+        // off-centre when the result was re-rendered.
+        var pixels = [UInt8](repeating: 0, count: w * h * 4)
+        guard let readCtx = CGContext(
             data: &pixels,
             width: w, height: h,
             bitsPerComponent: 8, bytesPerRow: w * 4,
             space: cs, bitmapInfo: bitmapInfo
-        ) else { return image }
-        ctx.translateBy(x: 0, y: CGFloat(h))
-        ctx.scaleBy(x: 1, y: -1)
-        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        ) else { return rawImage }
+        readCtx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
 
         var minX = w, maxX = -1, minY = h, maxY = -1
         for y in 0..<h {
@@ -145,24 +163,27 @@ actor FalProductThumbnailService {
                 }
             }
         }
-        guard maxX >= minX, maxY >= minY else { return image }
+        guard maxX >= minX, maxY >= minY else { return rawImage }
 
-        let bbox = CGRect(x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1)
-        let pad = max(bbox.width, bbox.height) * paddingFraction
-        let side = max(bbox.width, bbox.height) + pad * 2
+        // Convert bbox from cgImage pixel coords to PT for the renderer.
+        let scale = normalized.scale
+        let bboxPT = CGRect(
+            x: CGFloat(minX) / scale,
+            y: CGFloat(minY) / scale,
+            width: CGFloat(maxX - minX + 1) / scale,
+            height: CGFloat(maxY - minY + 1) / scale
+        )
+        let pad = max(bboxPT.width, bboxPT.height) * paddingFraction
+        let side = max(bboxPT.width, bboxPT.height) + pad * 2
 
-        // Draw the source image into a square canvas, offset so the bbox sits
-        // dead-centre. Anything outside the canvas (which is just the
-        // already-transparent margin) is naturally clipped — we never touch
-        // the visible garment.
-        let format = UIGraphicsImageRendererFormat.default()
-        format.opaque = false
-        format.scale = image.scale
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format)
-        return renderer.image { _ in
-            let drawOriginX = side / 2 - bbox.midX
-            let drawOriginY = side / 2 - bbox.midY
-            image.draw(in: CGRect(x: drawOriginX, y: drawOriginY, width: CGFloat(w), height: CGFloat(h)))
+        // Draw the normalized image into a square canvas, offset so the
+        // bbox sits dead-centre. Use UIImage.draw so orientation is
+        // applied correctly.
+        let outRenderer = UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format)
+        return outRenderer.image { _ in
+            let drawOriginX = side / 2 - bboxPT.midX
+            let drawOriginY = side / 2 - bboxPT.midY
+            normalized.draw(in: CGRect(x: drawOriginX, y: drawOriginY, width: normalized.size.width, height: normalized.size.height))
         }
     }
 

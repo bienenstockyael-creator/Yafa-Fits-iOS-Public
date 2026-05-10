@@ -108,6 +108,7 @@
 		B010F0010001000000000A01 /* HoloMotionTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = F010F0010001000000000A01 /* HoloMotionTracker.swift */; };
 		B010F0010002000000000A02 /* Holo.metal in Sources */ = {isa = PBXBuildFile; fileRef = F010F0010002000000000A02 /* Holo.metal */; };
 		B010F0010003000000000A03 /* HoloCardModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = F010F0010003000000000A03 /* HoloCardModifier.swift */; };
+		B020F0010001000000000A01 /* WelcomeTourView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B020F0020001000000000A01 /* WelcomeTourView.swift */; };
 		B0DCE549ACD950AF52F16FD0 /* DressAvatarSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5896B8C8BF7E8A341C74D09E /* DressAvatarSheetView.swift */; };
 		B18E3607CB764CEC45F54677 /* LocalOutfitStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE7400C8E76CC739BA9271FE /* LocalOutfitStore.swift */; };
 		B2AFB7640AE011959778E08F /* placeholder-1.webp in Resources */ = {isa = PBXBuildFile; fileRef = 3FC4F82EC6FC767F44CE9A4B /* placeholder-1.webp */; };
@@ -144,7 +145,6 @@
 		EDEF93D554B05F4556CBEF39 /* CarouselView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EE82713F28FF3FC8E2D62F9 /* CarouselView.swift */; };
 		EEF01751448761FEB4F9D9BC /* ClosetAvatarStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58684B30A094FD812594B873 /* ClosetAvatarStorage.swift */; };
 		F7A15AB6247B925DADE4A0E4 /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81B954E0E1EBF71A99A79927 /* AuthView.swift */; };
-		B020F0010001000000000A01 /* WelcomeTourView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B020F0020001000000000A01 /* WelcomeTourView.swift */; };
 		FA44C3B031072C58E72871BC /* AddProductSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 662419C9FD163590FB593FB1 /* AddProductSheet.swift */; };
 		FB40B9D88FCEC7C1D58FF4BF /* RotatableOutfitImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49B67EDFF1375799A0757796 /* RotatableOutfitImage.swift */; };
 		FB8F78F2E7DA0B20E0921100 /* AutoDetectProductsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AF9B1703DDDA42143804DAE /* AutoDetectProductsView.swift */; };
@@ -235,7 +235,6 @@
 		7F16D58523C3D03D59A3625B /* outfit-20.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-20.webp"; sourceTree = "<group>"; };
 		7F910ED2C981B44BD5AD83CC /* ProductImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductImageView.swift; sourceTree = "<group>"; };
 		81B954E0E1EBF71A99A79927 /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
-		B020F0020001000000000A01 /* WelcomeTourView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeTourView.swift; sourceTree = "<group>"; };
 		81F441EFEB69610857652828 /* outfit-5.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-5.webp"; sourceTree = "<group>"; };
 		8237E6809B27F49EF0A31185 /* outfit-8.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-8.webp"; sourceTree = "<group>"; };
 		82D53C00C365C5679D3D22CD /* outfit-26.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-26.webp"; sourceTree = "<group>"; };
@@ -269,6 +268,7 @@
 		B010E0020001000000000B01 /* OpenAIDressAvatarService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIDressAvatarService.swift; sourceTree = "<group>"; };
 		B01D7034E3B52D5B0635EAE8 /* Remix.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Remix.swift; sourceTree = "<group>"; };
 		B0200DA9B94C7FF2FD79D899 /* SocialService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialService.swift; sourceTree = "<group>"; };
+		B020F0020001000000000A01 /* WelcomeTourView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeTourView.swift; sourceTree = "<group>"; };
 		B2E41DDFCDBAB48448C7B148 /* UploadPipelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadPipelineView.swift; sourceTree = "<group>"; };
 		B69FF6A4ADDD0BAD4FC7F2E4 /* outfit-12.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-12.webp"; sourceTree = "<group>"; };
 		B807A90E1DD2A35EDCE8EB7A /* StateScopingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateScopingTests.swift; sourceTree = "<group>"; };
@@ -912,7 +912,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = YaelFits/YaelFits.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 30;
+				CURRENT_PROJECT_VERSION = 32;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = YaelFits/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1034,7 +1034,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = YaelFits/YaelFits.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 30;
+				CURRENT_PROJECT_VERSION = 32;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = YaelFits/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (

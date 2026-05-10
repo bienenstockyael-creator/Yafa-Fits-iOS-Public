@@ -2,10 +2,10 @@ import Foundation
 import UIKit
 
 /// Composes the standardised avatar with up to three garment references
-/// (top, bottom, shoes) into a dressed image using OpenAI's
-/// `gpt-image-2-2026-04-21` for the dressing pass, then reuses FAL Bria
-/// for background removal and the same alpha-recenter logic as
-/// `FalDressAvatarService`.
+/// (top, bottom, shoes) into a dressed image using OpenAI's gpt-image-2
+/// model, routed through FAL's hosted endpoint (`openai/gpt-image-2/edit`).
+/// Then reuses FAL Bria for background removal and the same alpha-recenter
+/// logic as `FalDressAvatarService`.
 ///
 /// Parallel implementation to `FalDressAvatarService` — toggle which one
 /// runs via `AppConfig.useOpenAIDressModel` or the in-app header
@@ -13,17 +13,16 @@ import UIKit
 /// identity preservation than nano-banana but is slower (~20-40s) and
 /// costs more per image.
 ///
-/// Auth: looks for `OPENAI_API_KEY` (env), falls back to `OpenAIAPIKey`
-/// in Info.plist.
+/// Auth: uses the same FAL key as every other FAL service in this app.
 actor OpenAIDressAvatarService {
     static let shared = OpenAIDressAvatarService()
 
-    private static let editsPath = "images/edits"
+    private static let editsPath = "openai/gpt-image-2/edit"
 
     private let session: URLSession
 
     init(session: URLSession = .shared) {
-        // gpt-image-1 can take 20-40s per generation; use a session with
+        // gpt-image-2 generations can take 20-40s; use a session with
         // a generous timeout so the request doesn't get cancelled mid-flight.
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 120
@@ -41,17 +40,17 @@ actor OpenAIDressAvatarService {
         guard let avatarJPEG = encodeForAPI(avatar) else {
             throw UploadPipelineError.requestFailed("Could not encode avatar.")
         }
-        let apiKey = try loadOpenAIAPIKey()
+        let apiKey = try loadFalAPIKey()
 
-        // Step 1: gpt-image-1 dress pass.
+        // Step 1: gpt-image-2 dress pass via FAL.
         try Task.checkCancellation()
         await onUpdate(FalDressAvatarProgress(
             title: "Dressing your avatar",
             detail: "Step 1/2: Composing the look (this can take 20-40s)."
         ))
-        let dressedJPEG: Data
+        let dressedData: Data
         do {
-            dressedJPEG = try await runOpenAIDress(
+            dressedData = try await runFalDress(
                 avatarJPEG: avatarJPEG,
                 topImageURL: topImageURL,
                 bottomImageURL: bottomImageURL,
@@ -72,7 +71,7 @@ actor OpenAIDressAvatarService {
         let cleanedData: Data
         do {
             cleanedData = try await FalBackgroundRemovalService.shared
-                .removeBackground(from: dressedJPEG) { _ in }
+                .removeBackground(from: dressedData) { _ in }
         } catch {
             throw labeled(error, step: "Step 2 (bg removal)")
         }
@@ -80,7 +79,7 @@ actor OpenAIDressAvatarService {
             throw UploadPipelineError.decodingFailed
         }
 
-        // Same recenter strategy as the FAL service — gpt-image-1 also
+        // Same recenter strategy as FalDressAvatarService — gpt-image-2 also
         // tends to output a tight body crop, and the closet's avatar
         // styling expects ~80% body framing.
         if let recentered = recenterToMatch(dressed: cleanedImage, source: avatar) {
@@ -89,9 +88,9 @@ actor OpenAIDressAvatarService {
         return cleanedImage
     }
 
-    // MARK: - gpt-image-1 dress pass
+    // MARK: - FAL gpt-image-2 dress pass
 
-    private func runOpenAIDress(
+    private func runFalDress(
         avatarJPEG: Data,
         topImageURL: URL?,
         bottomImageURL: URL?,
@@ -101,24 +100,24 @@ actor OpenAIDressAvatarService {
     ) async throws -> Data {
         // Build the image list + prompt together so the prompt's positional
         // references (`image 2`, `image 3`...) line up with the actual
-        // garment image order.
-        var blobs: [(filename: String, data: Data)] = [("avatar.jpg", avatarJPEG)]
+        // garment image order in image_urls.
+        var dataURIs: [String] = [dataURI(for: avatarJPEG, mimeType: "image/jpeg")]
         var topIndex: Int?, bottomIndex: Int?, shoesIndex: Int?
 
         if let url = topImageURL {
             let data = try await downloadAndShrinkGarment(from: url)
-            blobs.append(("top.jpg", data))
-            topIndex = blobs.count
+            dataURIs.append(dataURI(for: data, mimeType: "image/jpeg"))
+            topIndex = dataURIs.count
         }
         if let url = bottomImageURL {
             let data = try await downloadAndShrinkGarment(from: url)
-            blobs.append(("bottom.jpg", data))
-            bottomIndex = blobs.count
+            dataURIs.append(dataURI(for: data, mimeType: "image/jpeg"))
+            bottomIndex = dataURIs.count
         }
         if let url = shoesImageURL {
             let data = try await downloadAndShrinkGarment(from: url)
-            blobs.append(("shoes.jpg", data))
-            shoesIndex = blobs.count
+            dataURIs.append(dataURI(for: data, mimeType: "image/jpeg"))
+            shoesIndex = dataURIs.count
         }
 
         let prompt = buildDressPrompt(
@@ -127,55 +126,43 @@ actor OpenAIDressAvatarService {
             shoesIndex: shoesIndex
         )
 
-        // Construct multipart body. gpt-image-1 accepts an array of
-        // input images via repeated `image[]` form fields (up to 16).
-        let boundary = "Boundary-\(UUID().uuidString)"
-        var body = Data()
-        appendField(name: "model", value: "gpt-image-2-2026-04-21", to: &body, boundary: boundary)
-        appendField(name: "prompt", value: prompt, to: &body, boundary: boundary)
-        appendField(name: "size", value: "1024x1536", to: &body, boundary: boundary)
-        appendField(name: "n", value: "1", to: &body, boundary: boundary)
-        for blob in blobs {
-            appendFile(
-                name: "image[]",
-                filename: blob.filename,
-                contentType: "image/jpeg",
-                data: blob.data,
-                to: &body,
-                boundary: boundary
-            )
-        }
-        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+        let payload = GPTImageEditRequest(
+            prompt: prompt,
+            image_urls: dataURIs,
+            image_size: GPTImageSize(width: 1024, height: 1536),
+            num_images: 1,
+            quality: "high",
+            output_format: "png"
+        )
 
-        let url = AppConfig.openAIBaseURL.appendingPathComponent(Self.editsPath)
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        request.httpBody = body
+        let submitURL = AppConfig.falQueueBaseURL.appendingPathComponent(Self.editsPath)
+        let submit: GPTImageSubmitResponse = try await performJSONRequest(
+            url: submitURL,
+            method: "POST",
+            payload: payload,
+            apiKey: apiKey
+        )
 
-        await onUpdate(FalDressAvatarProgress(
-            title: "Dressing your avatar",
-            detail: "Step 1/2: gpt-image-1 working..."
-        ))
-
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw UploadPipelineError.requestFailed("Invalid response from OpenAI.")
+        while true {
+            try Task.checkCancellation()
+            let status: GPTImageStatusResponse = try await performRawRequest(url: submit.status_url, apiKey: apiKey)
+            switch status.status.lowercased() {
+            case "completed":
+                let result: GPTImageResult = try await performRawRequest(url: submit.response_url, apiKey: apiKey)
+                guard let url = result.images?.first?.url else {
+                    throw UploadPipelineError.requestFailed("FAL gpt-image-2 returned no image.")
+                }
+                return try await downloadData(from: url, apiKey: apiKey)
+            case "failed", "error":
+                throw UploadPipelineError.requestFailed(status.error?.message ?? "FAL gpt-image-2 failed.")
+            default:
+                await onUpdate(FalDressAvatarProgress(
+                    title: "Dressing your avatar",
+                    detail: status.queue_position.map { "Queue position: \($0)." } ?? "Step 1/2: gpt-image-2 working..."
+                ))
+            }
+            try await Task.sleep(for: .seconds(UploadConfig.falPollingIntervalSeconds))
         }
-        guard (200..<300).contains(http.statusCode) else {
-            let text = String(data: data, encoding: .utf8) ?? "<binary>"
-            throw UploadPipelineError.requestFailed(
-                "OpenAI \(http.statusCode): \(text.prefix(500))"
-            )
-        }
-
-        let result = try JSONDecoder().decode(OpenAIImagesResponse.self, from: data)
-        guard let b64 = result.data.first?.b64_json,
-              let imageData = Data(base64Encoded: b64) else {
-            throw UploadPipelineError.requestFailed("OpenAI returned no image data.")
-        }
-        return imageData
     }
 
     private func buildDressPrompt(topIndex: Int?, bottomIndex: Int?, shoesIndex: Int?) -> String {
@@ -227,8 +214,8 @@ actor OpenAIDressAvatarService {
 
     // MARK: - Image encoding (mirrors FalDressAvatarService helpers)
 
-    /// JPEG-encode at 1024-long-edge / quality 0.85. gpt-image-1 caps
-    /// each input at 4MB; this stays well under that.
+    /// JPEG-encode at 1024-long-edge / quality 0.85. Keeps each base64
+    /// payload small enough to embed comfortably in the FAL JSON body.
     private func encodeForAPI(_ image: UIImage) -> Data? {
         let whiteBacked = compositeOntoWhite(image)
         let maxEdge: CGFloat = 1024
@@ -270,42 +257,65 @@ actor OpenAIDressAvatarService {
         return encodeForAPI(image) ?? data
     }
 
-    // MARK: - Multipart helpers
+    // MARK: - FAL plumbing (mirrors FalProductThumbnailService)
 
-    private func appendField(name: String, value: String, to body: inout Data, boundary: String) {
-        body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n".data(using: .utf8)!)
-        body.append("\(value)\r\n".data(using: .utf8)!)
-    }
-
-    private func appendFile(
-        name: String,
-        filename: String,
-        contentType: String,
-        data: Data,
-        to body: inout Data,
-        boundary: String
-    ) {
-        body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"\(name)\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
-        body.append("Content-Type: \(contentType)\r\n\r\n".data(using: .utf8)!)
-        body.append(data)
-        body.append("\r\n".data(using: .utf8)!)
-    }
-
-    // MARK: - Auth
-
-    private func loadOpenAIAPIKey() throws -> String {
+    private func loadFalAPIKey() throws -> String {
         let env = ProcessInfo.processInfo.environment
-        if let k = env["OPENAI_API_KEY"], !k.isEmpty { return k }
-        if let k = env["OpenAIAPIKey"], !k.isEmpty { return k }
-        if let k = Bundle.main.object(forInfoDictionaryKey: "OpenAIAPIKey") as? String,
+        if let k = env["FALAPIKey"], !k.isEmpty { return k }
+        if let k = env["FAL_API_KEY"], !k.isEmpty { return k }
+        if let k = env["FAL_KEY"], !k.isEmpty { return k }
+        if let k = Bundle.main.object(forInfoDictionaryKey: "FALAPIKey") as? String,
            !k.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return k
         }
-        throw UploadPipelineError.requestFailed(
-            "Missing OPENAI_API_KEY — add to env vars or OpenAIAPIKey in Info.plist."
-        )
+        throw UploadPipelineError.missingFalKey
+    }
+
+    private func dataURI(for data: Data, mimeType: String) -> String {
+        "data:\(mimeType);base64,\(data.base64EncodedString())"
+    }
+
+    private func performJSONRequest<T: Decodable, P: Encodable>(
+        url: URL, method: String, payload: P, apiKey: String
+    ) async throws -> T {
+        let body = try JSONEncoder().encode(payload)
+        return try await performDataRequest(url: url, method: method, body: body, apiKey: apiKey)
+    }
+
+    private func performRawRequest<T: Decodable>(url: URL, apiKey: String) async throws -> T {
+        try await performDataRequest(url: url, method: "GET", body: nil, apiKey: apiKey)
+    }
+
+    private func performDataRequest<T: Decodable>(
+        url: URL, method: String, body: Data?, apiKey: String
+    ) async throws -> T {
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.setValue("Key \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let body {
+            request.httpBody = body
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        }
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            let text = String(data: data, encoding: .utf8) ?? "<binary>"
+            throw UploadPipelineError.requestFailed("FAL \((response as? HTTPURLResponse)?.statusCode ?? -1): \(text.prefix(300))")
+        }
+        guard let decoded = try? JSONDecoder().decode(T.self, from: data) else {
+            throw UploadPipelineError.decodingFailed
+        }
+        return decoded
+    }
+
+    private func downloadData(from url: URL, apiKey: String) async throws -> Data {
+        var request = URLRequest(url: url)
+        request.setValue("Key \(apiKey)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw UploadPipelineError.requestFailed("Dressed image download failed.")
+        }
+        return data
     }
 
     private func labeled(_ error: Error, step: String) -> Error {
@@ -316,10 +326,40 @@ actor OpenAIDressAvatarService {
 
 // MARK: - Wire format
 
-private struct OpenAIImagesResponse: Decodable {
-    let data: [OpenAIImageData]
+private struct GPTImageEditRequest: Encodable {
+    let prompt: String
+    let image_urls: [String]
+    let image_size: GPTImageSize
+    let num_images: Int
+    let quality: String
+    let output_format: String
 }
 
-private struct OpenAIImageData: Decodable {
-    let b64_json: String?
+private struct GPTImageSize: Encodable {
+    let width: Int
+    let height: Int
+}
+
+private struct GPTImageSubmitResponse: Decodable {
+    let request_id: String
+    let response_url: URL
+    let status_url: URL
+}
+
+private struct GPTImageStatusResponse: Decodable {
+    let status: String
+    let queue_position: Int?
+    let error: GPTImageStatusError?
+}
+
+private struct GPTImageStatusError: Decodable {
+    let message: String?
+}
+
+private struct GPTImageResult: Decodable {
+    let images: [GPTImageMedia]?
+}
+
+private struct GPTImageMedia: Decodable {
+    let url: URL
 }
