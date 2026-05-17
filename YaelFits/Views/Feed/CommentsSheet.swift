@@ -8,6 +8,7 @@ struct CommentsSheet: View {
     @State private var newCommentText = ""
     @State private var isLoading = true
     @State private var isSending = false
+    @State private var selectedUserId: UUID?
 
     var body: some View {
         NavigationStack {
@@ -21,6 +22,12 @@ struct CommentsSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.light, for: .navigationBar)
             .task { await loadComments() }
+            .sheet(item: $selectedUserId) { userId in
+                UserProfileSheet(userId: userId)
+                    .environment(store)
+                    .presentationDragIndicator(.visible)
+                    .presentationBackground(AppPalette.groupedBackground)
+            }
         }
     }
 
@@ -64,17 +71,27 @@ struct CommentsSheet: View {
         let isOwn = comment.userId == store.userId
 
         return HStack(alignment: .top, spacing: LayoutMetrics.xSmall) {
-            AvatarView(
-                url: profile?.avatarUrl,
-                initial: profile?.initial ?? "?",
-                size: 32
-            )
+            Button {
+                selectedUserId = comment.userId
+            } label: {
+                AvatarView(
+                    url: profile?.avatarUrl,
+                    initial: profile?.initial ?? "?",
+                    size: 32
+                )
+            }
+            .buttonStyle(.plain)
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
-                    Text(profile?.handle ?? "User")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(AppPalette.textStrong)
+                    Button {
+                        selectedUserId = comment.userId
+                    } label: {
+                        Text(profile?.handle ?? "User")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(AppPalette.textStrong)
+                    }
+                    .buttonStyle(.plain)
 
                     Text(RelativeTime.short(from: comment.createdAt))
                         .font(.system(size: 10))

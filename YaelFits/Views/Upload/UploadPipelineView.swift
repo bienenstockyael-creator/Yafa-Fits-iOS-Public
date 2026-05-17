@@ -923,15 +923,44 @@ struct UploadPipelineView: View {
     }
 
     private func readableError(_ error: Error) -> String {
+        let raw: String
         if let uploadError = error as? UploadPipelineError,
            let description = uploadError.errorDescription {
-            return description
+            raw = description
+        } else if let localizedError = error as? LocalizedError,
+                  let description = localizedError.errorDescription {
+            raw = description
+        } else {
+            raw = error.localizedDescription
         }
-        if let localizedError = error as? LocalizedError,
-           let description = localizedError.errorDescription {
-            return description
+        if Self.looksLikeFalCreditExhaustion(raw) {
+            // Mask FAL "no credit / insufficient balance" errors with a
+            // vague, on-brand message so users don't see an infrastructure
+            // failure. Other 4xx errors (validation, rate limits) still
+            // show their real description.
+            return "The stars aren't aligned right now. Try again shortly."
         }
-        return error.localizedDescription
+        return raw
+    }
+
+    /// Conservative match for FAL credit/balance exhaustion. Catches
+    /// explicit 402s and the common body markers FAL returns when the
+    /// account is out of credits.
+    private static func looksLikeFalCreditExhaustion(_ message: String) -> Bool {
+        if message.contains("FAL 402") { return true }
+        let lower = message.lowercased()
+        let markers = [
+            "insufficient balance",
+            "insufficient credit",
+            "exhausted balance",
+            "exhausted credit",
+            "payment required",
+            "out of credit",
+            "out of credits",
+            "no credit",
+            "quota exceeded",
+        ]
+        return markers.contains { lower.contains($0) }
     }
 }
 

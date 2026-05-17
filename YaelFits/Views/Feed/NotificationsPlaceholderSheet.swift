@@ -6,6 +6,7 @@ struct NotificationsPlaceholderSheet: View {
     @State private var items: [NotificationItem] = []
     @State private var isLoading = true
     @State private var lastSeenDate: Date = .distantPast
+    @State private var selectedUserId: UUID?
 
     var body: some View {
         NavigationStack {
@@ -56,40 +57,54 @@ struct NotificationsPlaceholderSheet: View {
                 NotificationReadState.markSeen(for: userId)
                 store.unreadNotificationCount = 0
             }
+            .sheet(item: $selectedUserId) { userId in
+                UserProfileSheet(userId: userId)
+                    .environment(store)
+                    .presentationDragIndicator(.visible)
+                    .presentationBackground(AppPalette.groupedBackground)
+            }
         }
     }
 
     private func notificationRow(_ item: NotificationItem) -> some View {
-        HStack(spacing: LayoutMetrics.small) {
-            AvatarView(
-                url: item.actorAvatarUrl,
-                initial: item.actorInitial,
-                size: 36,
-                shadowRadius: 2,
-                shadowY: 1
-            )
+        Button {
+            guard let id = UUID(uuidString: item.actorId) else { return }
+            selectedUserId = id
+        } label: {
+            HStack(spacing: LayoutMetrics.small) {
+                AvatarView(
+                    url: item.actorAvatarUrl,
+                    initial: item.actorInitial,
+                    size: 36,
+                    shadowRadius: 2,
+                    shadowY: 1
+                )
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.message)
-                    .font(.system(size: 13, weight: item.isNew ? .semibold : .regular))
-                    .foregroundStyle(AppPalette.textPrimary)
-                    .lineLimit(2)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.message)
+                        .font(.system(size: 13, weight: item.isNew ? .semibold : .regular))
+                        .foregroundStyle(AppPalette.textPrimary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
 
-                Text(item.timeAgo)
-                    .font(.system(size: 10))
-                    .foregroundStyle(AppPalette.textFaint)
+                    Text(item.timeAgo)
+                        .font(.system(size: 10))
+                        .foregroundStyle(AppPalette.textFaint)
+                }
+
+                Spacer(minLength: 0)
+
+                if item.isNew {
+                    Circle()
+                        .fill(Color.blue)
+                        .frame(width: 8, height: 8)
+                }
             }
-
-            Spacer(minLength: 0)
-
-            if item.isNew {
-                Circle()
-                    .fill(Color.blue)
-                    .frame(width: 8, height: 8)
-            }
+            .padding(.horizontal, LayoutMetrics.screenPadding)
+            .padding(.vertical, LayoutMetrics.xSmall)
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, LayoutMetrics.screenPadding)
-        .padding(.vertical, LayoutMetrics.xSmall)
+        .buttonStyle(.plain)
     }
 
     private func loadNotifications() async {

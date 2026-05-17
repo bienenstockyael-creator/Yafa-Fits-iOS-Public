@@ -17,6 +17,11 @@ struct PublishSheet: View {
     @State private var showAddProduct = false
     @State private var autoDetectSource: QuickAddSource?
     @State private var isLoadingAutoDetect = false
+    /// Pending debounced save tasks, keyed by ProductWithShopLink.id. We
+    /// cancel any in-flight task for a row when its shop URL changes,
+    /// then schedule a fresh save 600 ms later — so the URL persists
+    /// even if the user closes the sheet without tapping Publish.
+    @State private var shopLinkSaveTasks: [UUID: Task<Void, Never>] = [:]
 
     // Shop links available to all users — products only appear on feed if linked
 
@@ -243,6 +248,13 @@ struct PublishSheet: View {
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
                 .keyboardType(.URL)
+                .onChange(of: entry.wrappedValue.shopURL) { _, newValue in
+                    scheduleShopLinkSave(
+                        entryId: entry.wrappedValue.id,
+                        product: product,
+                        url: newValue
+                    )
+                }
             }
             .padding(.horizontal, LayoutMetrics.medium)
             .padding(.bottom, LayoutMetrics.xSmall)
@@ -287,6 +299,23 @@ struct PublishSheet: View {
         .buttonStyle(.plain)
         .disabled(isPublishing)
         .background(AppPalette.groupedBackground.ignoresSafeArea())
+    }
+
+    /// Debounced auto-save for a row's shop URL. Cancels any pending save
+    /// for this row and schedules a new one 600 ms later, so a quick paste
+    /// fires once. Failures are swallowed: the URL is still in local state
+    /// and will be picked up by `publish()` if the live save was a no-op
+    /// (e.g. the `outfit_products` row hasn't been created yet).
+    private func scheduleShopLinkSave(entryId: UUID, product: Product, url: String) {
+        shopLinkSaveTasks[entryId]?.cancel()
+        let outfitId = outfit.id
+        shopLinkSaveTasks[entryId] = Task {
+            try? await Task.sleep(for: .milliseconds(600))
+            guard !Task.isCancelled else { return }
+            let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
+            let value: String? = trimmed.isEmpty ? nil : trimmed
+            try? await ProductLibraryService.setShopURL(value, outfitId: outfitId, product: product)
+        }
     }
 
     private func publish() async {

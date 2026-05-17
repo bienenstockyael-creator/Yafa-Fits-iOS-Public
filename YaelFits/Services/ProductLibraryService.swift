@@ -115,6 +115,34 @@ struct ProductLibraryService {
             .execute()
     }
 
+    /// Persists a product's shop URL for live-save flows (e.g. typing in
+    /// PublishSheet). Routes by `product_id` when available, falls back to
+    /// `name` for legacy/manually-added products. Safe to call even if the
+    /// `outfit_products` row hasn't been inserted yet — the UPDATE simply
+    /// matches zero rows in that case, and the URL is picked up later when
+    /// the publish flow creates the row.
+    static func setShopURL(_ url: String?, outfitId: String, product: Product) async throws {
+        struct Update: Encodable {
+            let shopLink: String?
+            enum CodingKeys: String, CodingKey { case shopLink = "shop_link" }
+        }
+        if let productId = product.productId {
+            try await supabase
+                .from("outfit_products")
+                .update(Update(shopLink: url))
+                .eq("outfit_id", value: outfitId)
+                .eq("product_id", value: productId.uuidString)
+                .execute()
+        } else {
+            try await supabase
+                .from("outfit_products")
+                .update(Update(shopLink: url))
+                .eq("outfit_id", value: outfitId)
+                .eq("name", value: product.name)
+                .execute()
+        }
+    }
+
     /// Fetch full product library items tagged on a specific outfit.
     static func fetchTaggedProducts(outfitId: String) async throws -> [ProductLibraryItem] {
         struct Row: Decodable {
