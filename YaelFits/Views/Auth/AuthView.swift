@@ -17,7 +17,6 @@ struct AuthView: View {
     /// Mirrors the AppStorage flag YaelFitsApp uses to gate the welcome
     /// tour. Setting it to false causes YaelFitsApp to switch back to
     /// the tour view (no rebuild, no reinstall needed).
-    @AppStorage("hasSeenWelcomeTour") private var hasSeenWelcomeTour = false
     #endif
 
     var body: some View {
@@ -64,9 +63,6 @@ struct AuthView: View {
                                 .padding(.horizontal, LayoutMetrics.medium)
                         }
                         forgotPasswordLink
-                        #if DEBUG
-                        debugResetTourButton
-                        #endif
                     }
 
                     Color.clear.frame(height: LayoutMetrics.xLarge)
@@ -205,24 +201,6 @@ struct AuthView: View {
         .opacity(isSignUp ? 0 : 1)
         .allowsHitTesting(!isSignUp)
     }
-
-    #if DEBUG
-    /// Dev-only: resets the welcome tour so it shows on next view of the
-    /// app entry point. Stripped from Release builds via `#if DEBUG`.
-    private var debugResetTourButton: some View {
-        Button {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            hasSeenWelcomeTour = false
-        } label: {
-            Text("DEBUG · RESET ONBOARDING TOUR")
-                .font(.system(size: 9, weight: .medium, design: .monospaced))
-                .tracking(1.5)
-                .foregroundStyle(AppPalette.textFaint)
-        }
-        .buttonStyle(.plain)
-        .padding(.top, LayoutMetrics.large)
-    }
-    #endif
 
     // MARK: - Apple Sign In
 

@@ -12,13 +12,15 @@ struct OutfitCardView: View {
     var onHorizontalDragChange: ((Bool) -> Void)? = nil
     var onFrameChange: ((Int) -> Void)? = nil
 
+    private var isRotatable: Bool { outfit.frameCount > 1 }
+
     var body: some View {
         RotatableOutfitImage(
             outfit: outfit,
             height: 168,
-            draggable: true,
+            draggable: isRotatable,
             eagerLoad: eagerLoad,
-            playEntranceSequence: playEntranceSequence,
+            playEntranceSequence: playEntranceSequence && isRotatable,
             entranceSequenceActive: entranceSequenceActive,
             entranceSequenceDelay: entranceSequenceDelay,
             preloadFullSequenceOnAppear: true,
@@ -30,6 +32,7 @@ struct OutfitCardView: View {
         )
         .frame(maxWidth: .infinity, alignment: .center)
         .contentShape(Rectangle())
+        .outfit3DBadge(active: isRotatable)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(outfit.fullDateLabel)
     }

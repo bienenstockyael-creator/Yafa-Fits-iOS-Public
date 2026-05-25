@@ -1,10 +1,13 @@
 import SwiftUI
 
 /// Displays an outfit frame. If `draggable`, horizontal drag rotates through frames.
+/// Drag is silently ignored for 2D outfits (frameCount <= 1) so call sites
+/// don't have to gate every call.
 struct RotatableOutfitImage: View {
     let outfit: Outfit
     var height: CGFloat = FrameConfig.dimensions.height
-    var draggable: Bool = false
+    private let requestedDraggable: Bool
+    var draggable: Bool { requestedDraggable && outfit.frameCount > 1 }
     var eagerLoad: Bool = false
     var autoRotate: Bool = false
     var playEntranceSequence: Bool = false
@@ -24,6 +27,12 @@ struct RotatableOutfitImage: View {
     /// so horizontal swipes near the edges fall through to whatever is
     /// behind (e.g. a parent carousel). Default 0 = full-width hit area.
     var horizontalDragInset: CGFloat = 0
+    /// Fires at the end of a scrub drag with the full release info
+    /// (total translation, excursion range, derived monotonicity).
+    /// Carousel-style parents use it to discriminate scrubs (low
+    /// monotonicity, even if total is large) from page swipes (high
+    /// monotonicity AND large absolute total).
+    var onHorizontalDragRelease: ((HorizontalPanRelease) -> Void)? = nil
 
     @State private var viewModel: FrameSequenceViewModel
     @State private var thumbnail: UIImage?
@@ -53,11 +62,12 @@ struct RotatableOutfitImage: View {
         onHorizontalDragChange: ((Bool) -> Void)? = nil,
         onFrameChange: ((Int) -> Void)? = nil,
         onDisplayedFrameChange: ((Int?) -> Void)? = nil,
-        horizontalDragInset: CGFloat = 0
+        horizontalDragInset: CGFloat = 0,
+        onHorizontalDragRelease: ((HorizontalPanRelease) -> Void)? = nil
     ) {
         self.outfit = outfit
         self.height = height
-        self.draggable = draggable
+        self.requestedDraggable = draggable
         self.eagerLoad = eagerLoad
         self.autoRotate = autoRotate
         self.playEntranceSequence = playEntranceSequence
@@ -74,6 +84,7 @@ struct RotatableOutfitImage: View {
         self.onFrameChange = onFrameChange
         self.onDisplayedFrameChange = onDisplayedFrameChange
         self.horizontalDragInset = horizontalDragInset
+        self.onHorizontalDragRelease = onHorizontalDragRelease
         self._viewModel = State(
             initialValue: FrameSequenceViewModel(
                 outfit: outfit,
@@ -112,7 +123,7 @@ struct RotatableOutfitImage: View {
         .frame(maxWidth: .infinity, maxHeight: height)
         .contentShape(Rectangle())
         .overlay {
-            if draggable || onTap != nil {
+            if draggable || onTap != nil || onTapStateCapture != nil {
                 InteractiveTouchSurface(
                     onTap: handleTap,
                     panEnabled: draggable,
@@ -120,19 +131,27 @@ struct RotatableOutfitImage: View {
                     onHorizontalPanChanged: draggable ? { delta in
                         viewModel.dragChanged(delta: delta)
                     } : nil,
-                    onHorizontalPanEnded: draggable ? {
+                    onHorizontalPanEnded: draggable ? { release in
                         viewModel.dragEnded()
                         endDragIfNeeded()
+                        onHorizontalDragRelease?(release)
                     } : nil
                 )
                 .padding(.horizontal, horizontalDragInset)
             }
         }
         .onAppear {
-            if (eagerLoad || autoRotate || draggable || playEntranceSequence) && !hasLoadedFrames {
-                hasLoadedFrames = true
-                viewModel.ensureCurrentFrameLoaded()
-            }
+            // Always make sure the visible frame is loaded for the
+            // current cell. `ensureCurrentFrameLoaded` is idempotent
+            // (no-op when `displayedImage` is set), so it's safe to
+            // call on every appear. Without this, 2D outfits (and any
+            // cell mounted after another view already cached the full
+            // sequence) stay blank: `synchronizeSequenceState` early-
+            // returns when `isSequenceReady` is true and never triggers
+            // the per-cell frame load. LazyVGrid mounts only visible
+            // cells so this isn't wasteful.
+            hasLoadedFrames = true
+            viewModel.ensureCurrentFrameLoaded()
             if draggable || autoRotate || preloadFullSequenceOnAppear || playEntranceSequence {
                 synchronizeSequenceState(
                     preloadIfNeeded: autoRotate || preloadFullSequenceOnAppear || playEntranceSequence

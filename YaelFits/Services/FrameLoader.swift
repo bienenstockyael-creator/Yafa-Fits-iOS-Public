@@ -76,7 +76,9 @@ actor FrameLoader {
     func frame(for outfit: Outfit, index: Int) async -> UIImage? {
         let cacheKey = outfit.uniqueFrameKey(index: index) as NSString
 
-        if let cached = cache.object(forKey: cacheKey) { return cached }
+        if let cached = cache.object(forKey: cacheKey) {
+            return cached
+        }
         if let pending = pendingTasks[cacheKey as String] { return await pending.value }
 
         let task = Task<UIImage?, Never> {
@@ -116,10 +118,14 @@ actor FrameLoader {
             }
 
             // CDN download — save to disk cache so next load is instant
-            guard let remoteBaseURL = outfit.resolvedRemoteBaseURL else { return nil }
+            guard let remoteBaseURL = outfit.resolvedRemoteBaseURL else {
+                return nil
+            }
             let remoteURL = outfit.frameURL(index: index, baseURL: remoteBaseURL)
             guard let (data, _) = try? await session.data(from: remoteURL),
-                  let image = UIImage(data: data) else { return nil }
+                  let image = UIImage(data: data) else {
+                return nil
+            }
 
             cache.setObject(image, forKey: cacheKey, cost: data.count)
             DiskFrameCache.shared.save(data, for: outfit, index: index)

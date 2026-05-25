@@ -32,6 +32,11 @@ struct CalendarMonthView: View {
         ScrollViewReader { reader in
             ScrollView {
                 VStack(alignment: .leading, spacing: 34) {
+                    // No in-page section header here — on calendar,
+                    // the grid/calendar toggle lives in the top bar
+                    // (RootView) so the calendar layout stays clean
+                    // and matches the grid view's vertical anchor for
+                    // the toggle.
                     ForEach(monthSections) { section in
                         monthSection(section)
                     }
@@ -139,6 +144,12 @@ struct CalendarMonthView: View {
                 }
             }
         }
+        // Apply the 3D badge on the outer VStack so it sits at the
+        // cell's top-right (date-row level) instead of on the image
+        // below. topInset centers the 11pt icon vertically against
+        // the 18pt-tall day-number frame; trailingInset pulls it a
+        // touch inward from the right edge.
+        .outfit3DBadge(active: (day.outfit?.frameCount ?? 0) > 1, topInset: 4, trailingInset: 8)
         .headerProximityFade(headerBottom: headerBottom, fadeZone: fadeZone)
         .id(day.scrollID)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -162,7 +173,10 @@ struct CalendarMonthView: View {
 
         guard let range = calendar.range(of: .day, in: .month, for: month) else { return [] }
 
-        return range.compactMap { day in
+        // Newest day first within each month, matching the grid's
+        // newest-first order so toggling between views doesn't reorder
+        // the user's mental list of outfits.
+        return range.reversed().compactMap { day in
             var components = calendar.dateComponents([.year, .month], from: month)
             components.day = day
             guard let date = calendar.date(from: components) else { return nil }

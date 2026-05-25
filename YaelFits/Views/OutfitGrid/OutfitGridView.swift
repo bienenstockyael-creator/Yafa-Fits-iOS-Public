@@ -7,6 +7,11 @@ struct OutfitGridView: View {
     /// Cross-view transition namespace passed in from RootView.
     var transitionNamespace: Namespace.ID
 
+    /// Fired when the user taps the calendar icon in the section
+    /// header row. RootView wires this to its `switchView(to:)` so
+    /// the existing matchedGeometry transition still drives the swap.
+    var onToggleToCalendar: () -> Void = {}
+
     @State private var contentVisible = false
     @State private var playsInitialSequence = false
     @State private var dragHintVisible = true
@@ -43,6 +48,15 @@ struct OutfitGridView: View {
     /// the transition's Phase-1 wait.
     @State private var pendingScrollTask: Task<Void, Never>?
 
+    /// Measured height of `ProfileHeader` (avatar + name + bio +
+    /// stats). Updated via a `.background { GeometryReader }` reader
+    /// on the header itself. Used by `handleScrollOffset` as the
+    /// pin threshold so longer bios / wrapped display names
+    /// automatically push the pin trigger further down. Defaults to
+    /// 0 (i.e. fall back to the hard-coded 200) until the first
+    /// layout pass lands a measurement.
+    @State private var profileHeaderHeight: CGFloat = 0
+
     private let heroTransitionDuration: Double = 0.32
     private let heroFadeInDuration: Double = 0.12
     private let heroFadeOutDuration: Double = 0.08
@@ -66,13 +80,55 @@ struct OutfitGridView: View {
                 ZStack {
                     ScrollView {
                         VStack(spacing: 0) {
+                            // Match UserProfileView's top clearance —
+                            // just the safe area. The GradientBlurView
+                            // that previously sat above this view was
+                            // removed (it was washing out the avatar
+                            // on first load); the corner buttons have
+                            // their own circle backgrounds so they
+                            // stay legible without it.
                             Color.clear
-                                .frame(height: LayoutMetrics.listTopInset)
+                                .frame(height: LayoutMetrics.safeTop)
+
+                            // Invisible UIKit hook that observes the
+                            // underlying UIScrollView's contentOffset
+                            // via KVO. SwiftUI's preference-key path
+                            // wasn't propagating through this view's
+                            // layout (the listener only ever saw the
+                            // default sentinel), so we drop down to
+                            // UIKit for a deterministic scroll signal.
+                            // Also carries the "archiveTop" anchor
+                            // ID so re-tapping the Profile tab can
+                            // scroll back to it.
+                            ScrollOffsetObserver { offsetY in
+                                handleScrollOffset(offsetY)
+                            }
+                            .frame(width: 0, height: 0)
+                            .id("archiveTop")
+
+                            // Profile-as-home: avatar / username / bio /
+                            // stats scroll with the grid and slide off
+                            // the top naturally. Hidden in calendar view
+                            // (CalendarMonthView does not render this).
+                            // Background GeometryReader measures the
+                            // header's height so the pin threshold
+                            // tracks the actual layout (longer bios /
+                            // wrapped names move the trigger).
+                            ProfileHeader()
+                                .background {
+                                    GeometryReader { proxy in
+                                        Color.clear
+                                            .onAppear { profileHeaderHeight = proxy.size.height }
+                                            .onChange(of: proxy.size.height) { _, new in profileHeaderHeight = new }
+                                    }
+                                }
+
+                            sectionHeader
 
                             if !store.sortedOutfits.isEmpty {
                                 dragHint
-                                    .padding(.top, 28)
-                                    .padding(.bottom, 34)
+                                    .padding(.top, LayoutMetrics.small)
+                                    .padding(.bottom, LayoutMetrics.medium)
                                     .blurFadeReveal(active: contentVisible, delay: 0.06, blurRadius: 10)
                             }
 
@@ -92,11 +148,6 @@ struct OutfitGridView: View {
                                 .blurFadeReveal(active: contentVisible, delay: 0.06, blurRadius: 10)
                         }
                     }
-
-                    GradientBlurView()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                        .ignoresSafeArea(edges: .top)
-                        .allowsHitTesting(false)
 
                     if showCarousel {
                         CarouselView(
@@ -166,6 +217,18 @@ struct OutfitGridView: View {
                 guard newId != nil else { return }
                 scrollToPendingListTarget(using: reader)
             }
+            .onChange(of: store.archiveScrollToTopTrigger) { _, _ in
+                withAnimation(.easeInOut(duration: 0.32)) {
+                    reader.scrollTo("archiveTop", anchor: .top)
+                }
+            }
+            .onChange(of: store.carouselDismissTrigger) { _, _ in
+                // Fired by the global X button in the top bar when
+                // the carousel is open. Only acts if we're the host
+                // currently showing the carousel.
+                guard showCarousel else { return }
+                dismissCarousel(using: reader)
+            }
             .onChange(of: store.isLoading) { _, isLoading in
                 guard !showCarousel else { return }
                 if isLoading {
@@ -191,12 +254,52 @@ struct OutfitGridView: View {
                 entranceTask?.cancel()
                 carouselTransitionTask?.cancel()
                 store.isCarouselOpen = false
+                // Clear the pinned flag so the next view (feed,
+                // upload, profile sheet) doesn't see a stale toggle
+                // in the top bar.
+                store.archiveTogglePinned = false
             }
+            // Opt the whole archive surface out of automatic keyboard
+            // avoidance. The carousel detail card has inline TextFields
+            // for location and tags; without this, focusing them
+            // shoves the parent ZStack (and therefore the carousel)
+            // up by the keyboard height, which dragged the card off
+            // its anchored position. `.ignoresSafeArea(.keyboard)`
+            // applied *here* (the topmost view of this screen) is
+            // what actually stops the shift — applying it lower in
+            // CarouselView only opted that subtree out, while its
+            // parent ZStack was still being inset.
+            .ignoresSafeArea(.keyboard, edges: .bottom)
         }
     }
 
     /// Fixed pattern: [1, 3, 2, 2, 1, 3, 3, 2, 1] — looks random but is stable
     private static let placeholderPattern = [1, 3, 2, 2, 1, 3, 3, 2, 1]
+
+    /// "outfits" label on the left, grid/calendar toggle on the right.
+    /// Sits between the profile header and the grid. The HStack's
+    /// own global minY is bubbled up via `ArchiveToggleMinYKey` so
+    /// the top bar can pin a copy of the toggle once scrolling brings
+    /// the section level with the top bar — at which point the
+    /// in-page toggle fades out via `store.archiveTogglePinned`.
+    private var sectionHeader: some View {
+        HStack(alignment: .center) {
+            Text("outfits")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(AppPalette.textStrong)
+                .padding(.leading, LayoutMetrics.xxSmall)
+
+            Spacer()
+
+            ViewModeTogglePill(isCalendarActive: false) {
+                onToggleToCalendar()
+            }
+            .opacity(store.archiveTogglePinned ? 0 : 1)
+            .animation(.easeInOut(duration: 0.12), value: store.archiveTogglePinned)
+        }
+        .padding(.top, LayoutMetrics.xSmall)
+        .padding(.bottom, LayoutMetrics.xSmall)
+    }
 
     private var outfitsGrid: some View {
         LazyVGrid(columns: columns, spacing: 42) {
@@ -578,6 +681,25 @@ struct OutfitGridView: View {
         }
     }
 
+    /// Fired by `ScrollOffsetObserver` on every contentOffset tick.
+    /// `offsetY = 0` at the top; increases as the user scrolls up.
+    /// We pin once the user has scrolled past the profile header so
+    /// the section toggle would be sitting at the top-bar level.
+    ///
+    /// Threshold is the measured `ProfileHeader` height — when the
+    /// scroll has consumed that much, the section header (which sits
+    /// right below it) is at the top of the visible area. Falls back
+    /// to `200` (a reasonable default for the typical layout) until
+    /// the first height measurement lands.
+    private func handleScrollOffset(_ offsetY: CGFloat) {
+        let pinThreshold = profileHeaderHeight > 0 ? profileHeaderHeight : 200
+        let shouldPin = offsetY > pinThreshold
+        guard store.archiveTogglePinned != shouldPin else { return }
+        withAnimation(.easeInOut(duration: 0.18)) {
+            store.archiveTogglePinned = shouldPin
+        }
+    }
+
     @MainActor
     private func syncGridToCarouselSelection(using reader: ScrollViewProxy) async {
         guard let outfitId = store.sortedOutfits[safe: carouselIndex]?.id else { return }
@@ -592,13 +714,33 @@ struct OutfitGridView: View {
 
     @MainActor
     private func waitForCarouselTargetFrame(fallback: CGRect) async -> CGRect {
-        for _ in 0 ..< 30 {
-            if !carouselTargetFrame.isNull {
-                return carouselTargetFrame
+        // Wait for the slide's reported frame to STABILIZE — same
+        // value across two consecutive 16ms samples within a 0.5pt
+        // tolerance. Returning the first non-null value (the old
+        // behavior) was catching the slide mid-initial-layout, so
+        // the hero animated toward an unsettled position and snapped
+        // when the slide finally landed. Mirrors the calendar/list
+        // transition's `waitForStableDestinationFrame`.
+        let maxIterations = 30
+        var lastFrame: CGRect?
+        for _ in 0 ..< maxIterations {
+            let frame = carouselTargetFrame
+            if !frame.isNull, frame.width > 0, frame.height > 0 {
+                if let last = lastFrame,
+                   abs(last.minX - frame.minX) < 0.5,
+                   abs(last.minY - frame.minY) < 0.5,
+                   abs(last.width - frame.width) < 0.5,
+                   abs(last.height - frame.height) < 0.5 {
+                    return frame
+                }
+                lastFrame = frame
             }
             try? await Task.sleep(for: .milliseconds(16))
         }
-        return fallback
+        // Polling deadline reached without two stable samples.
+        // Prefer the most recent non-null reading if we have one;
+        // otherwise fall back to the source frame (no morph).
+        return lastFrame ?? fallback
     }
 
     @MainActor
@@ -741,12 +883,6 @@ struct OutfitGridView: View {
 
 }
 
-private struct HeroTransition {
-    let outfit: Outfit
-    let frameIndex: Int
-    let image: UIImage?
-}
-
 /// Reference-type holder for live-scrub frame tracking. Stored as
 /// `@State` for identity persistence, but mutations to its internal
 /// dict are invisible to SwiftUI's observation — we get O(1) per-frame
@@ -760,57 +896,10 @@ struct CarouselEntryFrame: Equatable {
     let frameIndex: Int
 }
 
-private struct HeroOutfitImageView: View {
-    let outfit: Outfit
-    let frameIndex: Int
-    let initialImage: UIImage?
-    @State private var image: UIImage?
-
-    init(outfit: Outfit, frameIndex: Int, initialImage: UIImage?) {
-        self.outfit = outfit
-        self.frameIndex = frameIndex
-        self.initialImage = initialImage
-
-        if let initialImage {
-            _image = State(initialValue: initialImage)
-        } else {
-            _image = State(initialValue: nil)
-        }
-    }
-
-    var body: some View {
-        Group {
-            if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-            } else {
-                Color.clear
-            }
-        }
-        .task(id: "\(outfit.id)-\(frameIndex)") {
-            guard initialImage == nil else { return }
-            image = await FrameLoader.shared.frame(for: outfit, index: frameIndex)
-        }
-    }
-}
-
-private struct ListOutfitFramePreferenceKey: PreferenceKey {
-    static var defaultValue: [String: CGRect] = [:]
-
-    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
-        value.merge(nextValue(), uniquingKeysWith: { _, new in new })
-    }
-}
-
 private extension CGRect {
     var center: CGPoint {
         CGPoint(x: midX, y: midY)
     }
 }
 
-private extension Collection {
-    subscript(safe index: Index) -> Element? {
-        indices.contains(index) ? self[index] : nil
-    }
-}
+

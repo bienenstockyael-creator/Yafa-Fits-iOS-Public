@@ -156,6 +156,8 @@ struct UploadPipelineView: View {
             switch currentStep {
             case .upload:
                 uploadStep
+            case .fork:
+                forkStep
             case .generate:
                 generateStep
             case .review:
@@ -273,6 +275,84 @@ struct UploadPipelineView: View {
                 pipelineRecoveryCard
             }
         }
+    }
+
+    private var forkStep: some View {
+        VStack(alignment: .leading, spacing: LayoutMetrics.small) {
+            Text("Pick how to save this fit")
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .tracking(0.8)
+                .foregroundStyle(AppPalette.textMuted)
+                .frame(maxWidth: .infinity, alignment: .center)
+
+            forkPreviewCard
+
+            VStack(spacing: LayoutMetrics.xSmall) {
+                Button {
+                    start3DGeneration()
+                } label: {
+                    VStack(spacing: 2) {
+                        Text("Generate 3D")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text("Uses 1 credit · rotatable carousel")
+                            .font(.system(size: 10))
+                            .foregroundStyle(AppPalette.textMuted)
+                    }
+                    .foregroundStyle(AppPalette.textPrimary)
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: 56)
+                    .appRoundedRect(cornerRadius: 18, shadowRadius: 0, shadowY: 0)
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    start2DSave()
+                } label: {
+                    VStack(spacing: 2) {
+                        Text("Save as 2D")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text("Free · static image")
+                            .font(.system(size: 10))
+                            .foregroundStyle(AppPalette.textMuted)
+                    }
+                    .foregroundStyle(AppPalette.textPrimary)
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: 56)
+                    .appRoundedRect(cornerRadius: 18, shadowRadius: 0, shadowY: 0)
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    resetPipeline()
+                } label: {
+                    Text("Start Fresh")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppPalette.textFaint)
+                        .frame(maxWidth: .infinity)
+                        .frame(minHeight: 30)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(LayoutMetrics.small)
+        .appCard()
+    }
+
+    private var forkPreviewCard: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(Color.white.opacity(0.22))
+
+            if let cutoutData = job?.cutoutImage, let image = UIImage(data: cutoutData) {
+                Image(uiImage: image)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+                    .padding(.horizontal, LayoutMetrics.small)
+                    .padding(.vertical, LayoutMetrics.medium)
+            }
+        }
+        .frame(height: 300)
     }
 
     private var reviewStep: some View {
@@ -407,7 +487,8 @@ struct UploadPipelineView: View {
     }
 
     private var interactiveOutfitReviewCard: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        let isRotatable = (job?.stagedOutfit?.frameCount ?? 0) > 1
+        return VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .bottomTrailing) {
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .fill(Color.white.opacity(0.22))
@@ -416,7 +497,7 @@ struct UploadPipelineView: View {
                     RotatableOutfitImage(
                         outfit: reviewOutfit,
                         height: 300,
-                        draggable: true,
+                        draggable: isRotatable,
                         eagerLoad: true
                     )
                     .id("\(reviewOutfit.id)-\(reviewOutfit.rotationReversed ? 1 : 0)")
@@ -431,20 +512,22 @@ struct UploadPipelineView: View {
                     .foregroundStyle(AppPalette.textMuted)
                 }
 
-                Button {
-                    toggleRotationDirection()
-                } label: {
-                    Text(job?.isRotationReversed == true ? "Use Original" : "Reverse Rotation")
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .tracking(0.5)
-                        .foregroundStyle(AppPalette.textMuted)
-                        .padding(.horizontal, 12)
-                        .frame(height: 32)
-                        .appCapsule(shadowRadius: 0, shadowY: 0)
+                if isRotatable {
+                    Button {
+                        toggleRotationDirection()
+                    } label: {
+                        Text(job?.isRotationReversed == true ? "Use Original" : "Reverse Rotation")
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .tracking(0.5)
+                            .foregroundStyle(AppPalette.textMuted)
+                            .padding(.horizontal, 12)
+                            .frame(height: 32)
+                            .appCapsule(shadowRadius: 0, shadowY: 0)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, LayoutMetrics.small)
+                    .padding(.bottom, LayoutMetrics.small)
                 }
-                .buttonStyle(.plain)
-                .padding(.horizontal, LayoutMetrics.small)
-                .padding(.bottom, LayoutMetrics.small)
             }
             .frame(height: 330)
         }
@@ -641,12 +724,50 @@ struct UploadPipelineView: View {
         endGenerationBackgroundActivity()
 
         if let userId = store.userId {
+            // 2D outfits need their single PNG uploaded to the public
+            // bucket so other users / other devices can render them.
+            // 3D outfits already have frames hosted by the Kling worker
+            // (remoteBaseURL is set when the staged outfit comes back
+            // from polling).
+            let needs2DUpload = finalizedOutfit.frameCount == 1 && finalizedOutfit.remoteBaseURL == nil
+            let cutoutData = job.cutoutImage
             Task {
-                try? await OutfitService.saveArchiveOutfit(finalizedOutfit, userId: userId, isPublic: publishToFeed)
+                var outfitToSave = finalizedOutfit
+                if needs2DUpload, let cutoutData {
+                    do {
+                        let base = try await TwoDOutfitService.uploadFrame(
+                            cutoutData,
+                            outfitId: outfitToSave.id,
+                            userId: userId
+                        )
+                        outfitToSave.remoteBaseURL = base
+                    } catch {
+                        // Bucket upload failed — the outfit still
+                        // persists locally; next launch's loadData
+                        // refresh will reconcile if the user retries.
+                    }
+                }
+                // Last-resort weather/location fetch: the beginPipeline
+                // task may have failed (location denied, API hiccup) or
+                // just been slow. Try again here before persisting so
+                // the row at least gets a chance at the tag.
+                if outfitToSave.weather == nil {
+                    outfitToSave.weather = await UploadWeatherService.shared.fetchCurrentWeather()
+                }
+                if outfitToSave.location == nil {
+                    outfitToSave.location = await UploadWeatherService.shared.fetchCurrentLocationName()
+                }
+                try? await OutfitService.saveArchiveOutfit(outfitToSave, userId: userId, isPublic: publishToFeed)
             }
         }
         if let serverJobId = job.serverJobId {
-            Task { try? await GenerationJobService.shared.markAccepted(jobId: serverJobId, isPublished: publishToFeed) }
+            Task {
+                // Commit the credit (audit only; reserve already debited)
+                // and mark the job accepted. Commit is idempotent so a
+                // background failure here can't double-charge.
+                try? await CreditService.shared.commit(jobId: serverJobId)
+                try? await GenerationJobService.shared.markAccepted(jobId: serverJobId, isPublished: publishToFeed)
+            }
         }
 
         Task.detached(priority: .utility) {
@@ -705,9 +826,15 @@ struct UploadPipelineView: View {
             await MainActor.run {
                 job.cutoutImage = preparedAssets.cutoutPNGData
                 job.greenScreenImage = preparedAssets.greenScreenPNGData
-                job.loaderStage = .creatingInteractiveFit
-                job.statusTitle = "Queued"
-                job.statusDetail = "Uploading green screen and queueing for Kling generation."
+                // Pause the loader and present the 2D-vs-3D fork. The user
+                // picks here whether to consume a credit on Kling (3D) or
+                // save the cutout as-is (2D, free).
+                job.step = .fork
+                job.isProcessing = false
+                job.statusTitle = "Pick how to save"
+                job.statusDetail = "2D is free. 3D uses a credit."
+                store.uploadTask = nil
+                endGenerationBackgroundActivity()
 
                 // Present the auto-detect-products flow over the polling UI.
                 // Runs in parallel with Kling — user does products while
@@ -722,24 +849,6 @@ struct UploadPipelineView: View {
                     autoDetectImage = QuickAddSource(image: cutoutImage)
                 }
             }
-
-            // Step 2: Upload the green screen PNG (not the raw photo) and submit job.
-            // Server skips Bria entirely and goes straight to Kling.
-            let (jobId, sourceImagePath) = try await GenerationJobService.shared.submitJob(
-                imageData: preparedAssets.greenScreenPNGData,
-                userId: userId,
-                outfitNum: job.outfitNum,
-                prompt: job.prompt
-            )
-
-            await MainActor.run {
-                job.serverJobId = jobId
-                job.sourceImagePath = sourceImagePath
-                job.statusTitle = "Queued"
-                job.statusDetail = "Your fit is queued for Kling generation."
-            }
-
-            await runPollingLoop(jobId: jobId, job: job)
         } catch is CancellationError {
             await MainActor.run { endGenerationBackgroundActivity() }
             return
@@ -751,6 +860,139 @@ struct UploadPipelineView: View {
                 endGenerationBackgroundActivity()
             }
         }
+    }
+
+    private func start3DGeneration() {
+        guard let job, let userId = store.userId, let greenScreenData = job.greenScreenImage else {
+            resetPipeline()
+            return
+        }
+
+        job.step = .generate
+        job.loaderStage = .creatingInteractiveFit
+        job.isProcessing = true
+        job.error = nil
+        job.statusTitle = "Queued"
+        job.statusDetail = "Uploading green screen and queueing for Kling generation."
+
+        beginGenerationBackgroundActivity()
+        let task = Task {
+            do {
+                let (jobId, sourceImagePath) = try await GenerationJobService.shared.submitJob(
+                    imageData: greenScreenData,
+                    userId: userId,
+                    outfitNum: job.outfitNum,
+                    prompt: job.prompt
+                )
+
+                await MainActor.run {
+                    job.serverJobId = jobId
+                    job.sourceImagePath = sourceImagePath
+                }
+
+                // Reserve a 3D credit before FAL/Kling charges anything.
+                // 'none' means out of credits — cancel the just-submitted
+                // job and surface a friendly error so the user can pick
+                // 2D instead.
+                let source = try await CreditService.shared.reserve(jobId: jobId)
+                if source == .none {
+                    try? await GenerationJobService.shared.cancelJob(jobId: jobId)
+                    throw UploadPipelineError.outOfCredits
+                }
+
+                await runPollingLoop(jobId: jobId, job: job)
+            } catch is CancellationError {
+                await MainActor.run { endGenerationBackgroundActivity() }
+            } catch {
+                if let serverJobId = job.serverJobId {
+                    try? await CreditService.shared.release(jobId: serverJobId)
+                }
+                await MainActor.run {
+                    job.isProcessing = false
+                    // Out-of-credits returns the user to the fork so they
+                    // can pick 2D; other errors land on the recovery card.
+                    if let pipelineError = error as? UploadPipelineError, case .outOfCredits = pipelineError {
+                        job.step = .fork
+                    }
+                    job.error = readableError(error)
+                    store.uploadTask = nil
+                    endGenerationBackgroundActivity()
+                }
+            }
+        }
+        store.replaceUploadTask(with: task)
+    }
+
+    private func start2DSave() {
+        guard let job, let userId = store.userId, let cutoutData = job.cutoutImage else {
+            resetPipeline()
+            return
+        }
+
+        // Weather/location are kicked off in beginPipeline as fire-and-
+        // forget. For 3D the long Kling poll guarantees they've landed
+        // before save, but a fast 2D tap can beat them — block briefly
+        // here so the outfit gets the tags it deserves.
+        guard job.uploadWeather == nil || job.uploadLocation == nil else {
+            build2DOutfit(job: job, userId: userId, cutoutData: cutoutData)
+            return
+        }
+
+        Task {
+            async let fetchedWeather = UploadWeatherService.shared.fetchCurrentWeather()
+            async let fetchedLocation = UploadWeatherService.shared.fetchCurrentLocationName()
+            let (weather, location) = await (fetchedWeather, fetchedLocation)
+            await MainActor.run {
+                if job.uploadWeather == nil { job.uploadWeather = weather }
+                if job.uploadLocation == nil { job.uploadLocation = location }
+                build2DOutfit(job: job, userId: userId, cutoutData: cutoutData)
+            }
+        }
+    }
+
+    private func build2DOutfit(job: PipelineJob, userId: UUID, cutoutData: Data) {
+        let outfitId = "outfit-\(userId.uuidString.prefix(8))-\(job.outfitNum)"
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        let outfit = Outfit(
+            id: outfitId,
+            name: "Outfit \(job.outfitNum)",
+            date: dateFormatter.string(from: Date()),
+            frameCount: 1,
+            folder: outfitId,
+            prefix: "",
+            frameExt: "png",
+            remoteBaseURL: nil,
+            scale: 1.0,
+            isRotationReversed: false,
+            tags: nil,
+            activity: nil,
+            weather: job.uploadWeather,
+            products: nil,
+            caption: nil,
+            location: job.uploadLocation,
+            localOwnerUserId: userId.uuidString
+        )
+
+        // Persist the single PNG locally so the review screen can render
+        // it via the existing RotatableOutfitImage / FrameLoader path.
+        // The actual bucket upload happens on Accept; if the user
+        // rejects, the local file is discarded with no remote cleanup.
+        do {
+            try LocalOutfitStore.shared.saveFrame(cutoutData, outfit: outfit, userId: userId, index: 0)
+            try LocalOutfitStore.shared.savePreview(cutoutData, outfit: outfit, userId: userId)
+        } catch {
+            job.error = "Couldn't save 2D frame locally."
+            return
+        }
+
+        job.stagedOutfit = outfit
+        job.step = .review
+        job.isProcessing = false
+        job.error = nil
+        job.statusTitle = "Ready"
+        job.statusDetail = "Your 2D fit is ready for review."
+        persistPendingReviewIfNeeded(for: job)
     }
 
     /// Polls the server job every 4 seconds and updates the UI until terminal state.
@@ -771,6 +1013,13 @@ struct UploadPipelineView: View {
             await MainActor.run {
                 if record.isReviewReady, var remoteOutfit = record.remoteOutfit {
                     remoteOutfit.isRotationReversed = false
+                    // The server stamps `date` in UTC when the row is
+                    // generated; override with the device's local date
+                    // so an evening upload in New York doesn't show up
+                    // as tomorrow's date.
+                    let localDateFormatter = DateFormatter()
+                    localDateFormatter.dateFormat = "yyyy-MM-dd"
+                    remoteOutfit.date = localDateFormatter.string(from: Date())
                     if remoteOutfit.weather == nil { remoteOutfit.weather = job.uploadWeather }
                     if remoteOutfit.location == nil, let uploadLocation = job.uploadLocation {
                         remoteOutfit.location = uploadLocation
@@ -792,6 +1041,7 @@ struct UploadPipelineView: View {
                     endGenerationBackgroundActivity()
                     sendGenerationCompleteNotificationIfNeeded()
                 } else {
+                    Task { try? await CreditService.shared.release(jobId: jobId) }
                     job.isProcessing = false
                     job.error = record.error ?? "Generation did not complete."
                     store.uploadTask = nil
@@ -801,6 +1051,7 @@ struct UploadPipelineView: View {
         } catch is CancellationError {
             await MainActor.run { endGenerationBackgroundActivity() }
         } catch {
+            try? await CreditService.shared.release(jobId: jobId)
             await MainActor.run {
                 job.isProcessing = false
                 job.error = readableError(error)
@@ -858,6 +1109,10 @@ struct UploadPipelineView: View {
                 } else {
                     try? await GenerationJobService.shared.markRejected(jobId: serverJobId)
                 }
+                // Refund the reserved credit to whichever bucket it came
+                // from. Idempotent — safe if the credit was never reserved
+                // (e.g. cancel during Bria) or already released.
+                try? await CreditService.shared.release(jobId: serverJobId)
             }
         }
 

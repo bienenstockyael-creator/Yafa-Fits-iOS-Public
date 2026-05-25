@@ -30,6 +30,13 @@ struct AutoDetectProductsView: View {
     /// this — other sheets pass nil and the top-right button is
     /// always "Save".
     var onSkip: (() -> Void)? = nil
+    /// Optional fallback for users who don't want the AI-tap flow:
+    /// renders an "Add manually" pill at the bottom of the screen
+    /// that dismisses the sheet and lets the caller present its own
+    /// manual product-entry surface. Hidden when nil. Declared
+    /// before `onProductSaved` so existing call sites can keep using
+    /// trailing-closure syntax for the save callback.
+    var onAddManually: (() -> Void)? = nil
     /// Fires once per uploaded product. The corner checkmark on an
     /// accepted card calls this for that single product and removes the
     /// slot; the sheet stays open. The global Save button calls this
@@ -59,6 +66,27 @@ struct AutoDetectProductsView: View {
                 customHeader
                 hintBar
                 canvasArea
+            }
+            if let onAddManually {
+                VStack {
+                    Spacer()
+                    Button {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        onAddManually()
+                        dismiss()
+                    } label: {
+                        Text("Add manually")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 24)
+                            .frame(height: 48)
+                            .background(
+                                Capsule(style: .continuous).fill(Color.black)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.bottom, LayoutMetrics.medium)
+                }
             }
         }
         .alert("Couldn't save", isPresented: errorBinding) {

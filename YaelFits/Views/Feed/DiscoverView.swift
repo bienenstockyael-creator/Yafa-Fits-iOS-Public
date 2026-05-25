@@ -29,12 +29,9 @@ struct DiscoverView: View {
                         .foregroundStyle(AppPalette.textPrimary)
                 }
             }
-            .sheet(item: $selectedProfile) { profile in
-                UserProfileSheet(userId: profile.id)
+            .fullScreenCover(item: $selectedProfile) { profile in
+                UserProfileView(userId: profile.id, onDismiss: { selectedProfile = nil })
                     .environment(store)
-                    .presentationDragIndicator(.visible)
-                    .presentationBackground(AppPalette.groupedBackground)
-                    .presentationCornerRadius(20)
             }
         }
     }
