@@ -15,6 +15,14 @@ struct RootView: View {
     @State private var showsFavoritesSheet = false
     @State private var showsVirtualCloset = false
     @State private var showsAvatarOnboarding = false
+    /// Profile-as-home: the gear button on the right of the top bar
+    /// presents the full ProfileView (theme toggles, follow stats,
+    /// edit fields, sign out, Virtual Closet entry, etc.) in a sheet
+    /// instead of taking a tab slot of its own.
+    @State private var showsSettingsSheet = false
+    /// Stub flag for the "add me on Yafa" share button. UI surface
+    /// only for now — share-content rendering is a separate task.
+    @State private var showsShareProfileSheet = false
     /// Standardized closet avatar. Hydrated from disk on appear so a returning
     /// user doesn't have to redo onboarding. Cross-device sync via Supabase
     /// Storage is a follow-up.
@@ -51,7 +59,10 @@ struct RootView: View {
                     // and lets `matchedGeometryEffect` connect the
                     // anchor cells across the two layouts.
                     ZStack {
-                        OutfitGridView(transitionNamespace: listCalendarNamespace)
+                        OutfitGridView(
+                            transitionNamespace: listCalendarNamespace,
+                            onToggleToCalendar: { switchView(to: .calendar) }
+                        )
                             .opacity(listOpacity)
                             .allowsHitTesting(store.currentView == .list)
                         CalendarMonthView(transitionNamespace: listCalendarNamespace)
@@ -131,8 +142,24 @@ struct RootView: View {
             }
         }
         .safeAreaInset(edge: .bottom) {
+            // Keep the tab bar mounted always — toggling its
+            // presence in the safe-area inset changes the bottom
+            // inset by ~46pt, which causes the underlying grid to
+            // visibly "jump down" right as the carousel mounts on
+            // top of it. Fade it out + drop hit-testing instead so
+            // the inset stays stable across the transition.
             tabBar
+                .opacity(store.isCarouselOpen ? 0 : 1)
+                .allowsHitTesting(!store.isCarouselOpen)
         }
+        // Has to sit AFTER `.safeAreaInset(.bottom)` — applied
+        // before it, the inset re-wraps the view and re-introduces
+        // keyboard avoidance (the inset's tab-bar content wants to
+        // stay above the keyboard, which pulls the whole content
+        // up). Applied after, this modifier opts out everything
+        // including the inset, so the carousel detail card stays
+        // anchored when its location/tag TextFields gain focus.
+        .ignoresSafeArea(.keyboard, edges: .bottom)
         .onTapGesture {
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         }
@@ -165,6 +192,52 @@ struct RootView: View {
         .sheet(isPresented: $showsFavoritesSheet) {
             FavoritesSheetView()
                 .environment(store)
+        }
+        .sheet(isPresented: $showsSettingsSheet) {
+            // The full settings/profile screen — theme toggles, follow
+            // stats, profile editing, Virtual Closet, sign out. Lives
+            // here as a sheet now that Profile is no longer a tab.
+            NavigationStack {
+                ProfileView()
+                    .environment(store)
+                    .navigationTitle("Settings")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("Done") { showsSettingsSheet = false }
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(AppPalette.textPrimary)
+                        }
+                    }
+            }
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showsShareProfileSheet) {
+            // Placeholder for the "add me on Yafa" flow. Surface only
+            // — actual share content (card render, deep link, copy) is
+            // a separate task.
+            NavigationStack {
+                VStack(spacing: LayoutMetrics.medium) {
+                    Text("Share your profile")
+                        .font(.system(size: 18, weight: .semibold))
+                    Text("Coming soon — a shareable card so people can find you on Yafa.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(AppPalette.textMuted)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, LayoutMetrics.large)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(AppPalette.groupedBackground)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Done") { showsShareProfileSheet = false }
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(AppPalette.textPrimary)
+                    }
+                }
+            }
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
         }
         .fullScreenCover(isPresented: $showsVirtualCloset) {
             if let userId = store.userId {
@@ -206,22 +279,54 @@ struct RootView: View {
 
     private var topBar: some View {
         HStack {
-            logoView
+            // When the carousel is open, the logo is replaced by an
+            // X that dismisses the carousel — the entire screen
+            // belongs to the outfit detail in that mode. Once the
+            // user enters edit mode, the card grows taller and the
+            // keyboard can push it over this strip, so we hide the
+            // X and temp toggle then. The resting expanded card
+            // sits below them — they stay visible.
+            if store.isCarouselOpen {
+                carouselDismissButton
+                    .opacity(store.isCarouselCardEditing ? 0 : 1)
+                    .allowsHitTesting(!store.isCarouselCardEditing)
+            } else {
+                logoView
+            }
             Spacer()
             HStack(spacing: 8) {
                 if store.currentView == .list || store.currentView == .calendar {
                     if store.isCarouselOpen {
                         tempToggle
-                    } else {
-                        viewModeToggle
-                        if canAccessVirtualCloset {
-                            closetButton
+                            .opacity(store.isCarouselCardEditing ? 0 : 1)
+                            .allowsHitTesting(!store.isCarouselCardEditing)
+                    } else if store.currentView == .calendar {
+                        // On calendar, the grid/calendar toggle takes
+                        // the spot that settings + share occupy on
+                        // grid view. The profile header isn't shown
+                        // here so the toggle has no in-page home.
+                        ViewModeTogglePill(isCalendarActive: true) {
+                            switchView(to: .list)
                         }
+                        .padding(.trailing, 8)
+                    } else if store.archiveTogglePinned {
+                        // The in-page section toggle has scrolled up
+                        // to the top-bar level — swap share + settings
+                        // for the toggle so it appears to pin in
+                        // place. The in-page copy fades out via the
+                        // same flag so it doesn't render twice.
+                        ViewModeTogglePill(isCalendarActive: false) {
+                            switchView(to: .calendar)
+                        }
+                        .padding(.trailing, 8)
+                        .transition(.opacity)
+                    } else {
+                        shareProfileButton
+                        settingsButton
                     }
-                } else if store.currentView == .profile {
-                    tempToggle
                 }
             }
+            .animation(.easeInOut(duration: 0.18), value: store.archiveTogglePinned)
         }
         .padding(.horizontal, LayoutMetrics.screenPadding)
         .padding(.top, 8)
@@ -229,85 +334,56 @@ struct RootView: View {
         .contentShape(Rectangle())
     }
 
-    private var isCalendarActive: Bool {
-        store.currentView == .calendar
+    /// Gear icon on the top-right of the profile-home view. Opens the
+    /// existing `ProfileView` in a sheet so theme toggles, follow
+    /// stats, profile editing, Virtual Closet entry, and sign-out
+    /// live there instead of a dedicated tab. Uses SF Symbol `gearshape`
+    /// directly — AppIcon has no gear glyph and adding one for a
+    /// single use site isn't worth the path code.
+    private var settingsButton: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            showsSettingsSheet = true
+        } label: {
+            Image(systemName: "gearshape")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(AppPalette.iconPrimary)
+                .frame(width: 30, height: 30)
+                .background(Circle().fill(Color(red: 0.95, green: 0.95, blue: 0.96).opacity(0.98)))
+                .overlay(Circle().stroke(Color(red: 0.88, green: 0.89, blue: 0.91).opacity(0.9), lineWidth: 0.8))
+        }
+        .buttonStyle(.plain)
     }
 
-    private var viewModeToggle: some View {
-        HStack(spacing: 2) {
-            viewModeOption(glyph: .grid, isSelected: !isCalendarActive) {
-                guard isCalendarActive else { return }
-                switchView(to: .list)
-            }
-            viewModeOption(glyph: .calendar, isSelected: isCalendarActive) {
-                guard !isCalendarActive else { return }
-                switchView(to: .calendar)
-            }
+    /// "Add me on Yafa" share entry point. The actual share content
+    /// (card render, copy, deep link) is out of scope for this pass —
+    /// the button just opens a placeholder share sheet so the surface
+    /// area is wired up for follow-on work.
+    private var shareProfileButton: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            showsShareProfileSheet = true
+        } label: {
+            AppIcon(glyph: .share, size: 14, color: AppPalette.iconPrimary)
+                .frame(width: 30, height: 30)
+                .background(Circle().fill(Color(red: 0.95, green: 0.95, blue: 0.96).opacity(0.98)))
+                .overlay(Circle().stroke(Color(red: 0.88, green: 0.89, blue: 0.91).opacity(0.9), lineWidth: 0.8))
         }
-        .padding(2)
-        .frame(height: 30)
-        .background(
-            Capsule()
-                .fill(Color(red: 0.95, green: 0.95, blue: 0.96).opacity(0.98))
-        )
-        .overlay(
-            Capsule()
-                .stroke(Color(red: 0.88, green: 0.89, blue: 0.91).opacity(0.9), lineWidth: 0.8)
-        )
-        .padding(8)
-        .contentShape(Rectangle())
-        .animation(.easeInOut(duration: 0.18), value: isCalendarActive)
+        .buttonStyle(.plain)
     }
 
     /// Loads the persisted avatar for the current user if we haven't already
     /// hydrated for that ID this session. Returning users skip onboarding.
+    /// The Virtual Closet itself is now reached via the settings sheet
+    /// rather than a dedicated top-bar button, but the underlying
+    /// state and storage hooks are kept so a settings-row entry can be
+    /// wired up in a follow-up without re-doing the lifecycle plumbing.
     private func hydrateClosetAvatarIfNeeded() {
         guard let userId = store.userId, hydratedAvatarForUserId != userId else { return }
         hydratedAvatarForUserId = userId
         if let stored = ClosetAvatarStorage.load(userId: userId) {
             closetAvatar = stored
         }
-    }
-
-    /// Gates the Virtual Closet entry point to Pro accounts (`profile.isPro`)
-    /// or the archive owner. While Pro is being rolled out, only the owner
-    /// sees the closet — every other account gets the standard list/calendar
-    /// toggle without the closet shortcut.
-    private var canAccessVirtualCloset: Bool {
-        if store.userId?.uuidString.lowercased() == AppConfig.archiveOwnerUserId {
-            return true
-        }
-        return store.currentProfile?.isPro == true
-    }
-
-    /// Entry point into the Virtual Closet. Sits next to the grid/calendar
-    /// toggle on the List & Calendar tabs. First time in: routes through
-    /// avatar onboarding. Subsequent visits go straight to the closet.
-    private var closetButton: some View {
-        Button {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            if closetAvatar == nil {
-                showsAvatarOnboarding = true
-            } else {
-                showsVirtualCloset = true
-            }
-        } label: {
-            AppIcon(glyph: .tshirt, size: 12, color: AppPalette.iconPrimary)
-                .frame(width: 30, height: 30)
-                .background(
-                    Circle()
-                        .fill(Color(red: 0.95, green: 0.95, blue: 0.96).opacity(0.98))
-                )
-                .overlay(
-                    Circle()
-                        .stroke(
-                            Color(red: 0.88, green: 0.89, blue: 0.91).opacity(0.9),
-                            lineWidth: 0.8
-                        )
-                )
-                .padding(8)
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: - List ↔ Calendar transition (matchedGeometryEffect-driven)
@@ -493,14 +569,37 @@ struct RootView: View {
         .buttonStyle(.plain)
     }
 
+    /// X button shown in the top-left while the carousel is open
+    /// (replaces the Yafa logo). Always dismisses the carousel —
+    /// even if the detail card inside it is currently expanded —
+    /// by bumping `carouselDismissTrigger`, which the host view
+    /// (OutfitGridView / UserProfileView) observes.
+    private var carouselDismissButton: some View {
+        Button {
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+            store.carouselDismissTrigger += 1
+        } label: {
+            AppIcon(glyph: .xmark, size: 12, color: AppPalette.iconPrimary)
+                .frame(width: 36, height: 36)
+                .appCircle()
+        }
+        .buttonStyle(.plain)
+        .frame(minHeight: 44)
+    }
+
+
     private var tabBar: some View {
         HStack(spacing: 0) {
-                tabItem(icon: .grid, iconSize: 22, label: "Home", tab: .list)
+                // Profile is now the home tab — the index/archive view
+                // doubles as the user's profile (avatar + bio + grid).
+                // The standalone ProfileView is reached via a settings
+                // sheet from inside this tab, not from the tab bar.
+                tabItem(icon: .person, iconSize: 22, label: "Profile", tab: .list)
                 tabItem(icon: .plusCircle, iconSize: 26, label: "Upload", tab: .upload)
                 tabItem(icon: .globe, iconSize: 24, label: "Public", tab: .feed)
-                tabItem(icon: .person, iconSize: 22, label: "Profile", tab: .profile)
             }
-            .padding(.horizontal, LayoutMetrics.large)
+            .padding(.horizontal, LayoutMetrics.small)
             .padding(.vertical, LayoutMetrics.xxSmall)
             .background {
                 ZStack {
@@ -512,7 +611,14 @@ struct RootView: View {
             .overlay(Capsule(style: .continuous).strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
             .shadow(color: Color.black.opacity(0.12), radius: 20, y: 10)
             .shadow(color: Color.black.opacity(0.06), radius: 6, y: 3)
-            .padding(.horizontal, LayoutMetrics.xLarge)
+            // Cap the pill width and center it. The previous 4-tab
+            // layout used the full screen-minus-padding; with only 3
+            // tabs that left huge gaps between icons. A maxWidth cap
+            // pulls the icons closer together regardless of device
+            // size, and the inner xxSmall padding keeps the icons
+            // visually balanced inside the pill.
+            .frame(maxWidth: 260)
+            .frame(maxWidth: .infinity)
             .padding(.bottom, LayoutMetrics.xxSmall)
     }
 
@@ -521,12 +627,31 @@ struct RootView: View {
         let showsUploadActivity = tab == .upload && store.isUploadInProgress
         return Button {
             let targetTab = (tab == .list && store.currentView == .calendar) ? AppView.list : tab
-            if store.currentView == targetTab {
-                // Already on this tab — refresh feed if on feed
+            // The Profile tab counts as "active" in both `.list` and
+            // `.calendar` (its icon highlights for either), so the
+            // back-to-top short-circuit triggers on a re-tap from
+            // either of those — not just the literal currentView
+            // match. From calendar, that also includes snapping
+            // back to the list layer so the user lands on the
+            // archive at the top.
+            let isProfileTabActive = tab == .list && (store.currentView == .list || store.currentView == .calendar)
+            if store.currentView == targetTab || isProfileTabActive {
+                let impact = UIImpactFeedbackGenerator(style: .light)
+                impact.impactOccurred()
                 if tab == .feed {
-                    let impact = UIImpactFeedbackGenerator(style: .light)
-                    impact.impactOccurred()
                     store.feedScrollToTopTrigger += 1
+                } else if tab == .list {
+                    if store.currentView == .calendar {
+                        // Snap (no morph) — the user's intent is
+                        // "go home and scroll up", not a list↔calendar
+                        // swap. Match the opacity layers so the list
+                        // is the visible one on arrival.
+                        store.selectedOutfitId = nil
+                        listOpacity = 1
+                        calendarOpacity = 0
+                        store.currentView = .list
+                    }
+                    store.archiveScrollToTopTrigger += 1
                 }
                 return
             }
@@ -653,25 +778,6 @@ struct RootView: View {
         .contentShape(Rectangle())
     }
 
-    private func viewModeOption(glyph: AppIconGlyph, isSelected: Bool, action: @escaping () -> Void) -> some View {
-        Button {
-            let impact = UIImpactFeedbackGenerator(style: .light)
-            impact.impactOccurred()
-            action()
-        } label: {
-            AppIcon(glyph: glyph, size: 12, color: isSelected ? AppPalette.textPrimary : AppPalette.textFaint)
-                .frame(width: 40, height: 24)
-                .background {
-                    if isSelected {
-                        Capsule()
-                            .fill(Color.white)
-                            .shadow(color: Color.black.opacity(0.06), radius: 3, y: 1)
-                    }
-                }
-        }
-        .buttonStyle(.plain)
-    }
-
     private func temperatureOption(label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
@@ -708,7 +814,7 @@ struct RootView: View {
         } label: {
             ZStack(alignment: .topTrailing) {
                 AppIcon(
-                    glyph: .heart,
+                    glyph: .bookmark,
                     size: 16,
                     color: AppPalette.iconPrimary,
                     filled: store.likedIds.contains(where: { id in store.outfits.contains { $0.id == id } })

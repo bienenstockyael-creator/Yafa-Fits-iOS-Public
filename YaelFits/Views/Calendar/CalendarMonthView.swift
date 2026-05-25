@@ -32,6 +32,11 @@ struct CalendarMonthView: View {
         ScrollViewReader { reader in
             ScrollView {
                 VStack(alignment: .leading, spacing: 34) {
+                    // No in-page section header here — on calendar,
+                    // the grid/calendar toggle lives in the top bar
+                    // (RootView) so the calendar layout stays clean
+                    // and matches the grid view's vertical anchor for
+                    // the toggle.
                     ForEach(monthSections) { section in
                         monthSection(section)
                     }
@@ -168,7 +173,10 @@ struct CalendarMonthView: View {
 
         guard let range = calendar.range(of: .day, in: .month, for: month) else { return [] }
 
-        return range.compactMap { day in
+        // Newest day first within each month, matching the grid's
+        // newest-first order so toggling between views doesn't reorder
+        // the user's mental list of outfits.
+        return range.reversed().compactMap { day in
             var components = calendar.dateComponents([.year, .month], from: month)
             components.day = day
             guard let date = calendar.date(from: components) else { return nil }

@@ -22,11 +22,9 @@ struct CommentsSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.light, for: .navigationBar)
             .task { await loadComments() }
-            .sheet(item: $selectedUserId) { userId in
-                UserProfileSheet(userId: userId)
+            .fullScreenCover(item: $selectedUserId) { userId in
+                UserProfileView(userId: userId, onDismiss: { selectedUserId = nil })
                     .environment(store)
-                    .presentationDragIndicator(.visible)
-                    .presentationBackground(AppPalette.groupedBackground)
             }
         }
     }

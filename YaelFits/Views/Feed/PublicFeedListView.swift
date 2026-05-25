@@ -471,14 +471,10 @@ struct FeedPostCard: View {
                 }
             }
             .buttonStyle(.plain)
-            .sheet(isPresented: $showUserProfile) {
+            .fullScreenCover(isPresented: $showUserProfile) {
                 if let authorId = post.authorId {
-                    UserProfileSheet(userId: authorId)
+                    UserProfileView(userId: authorId, onDismiss: { showUserProfile = false })
                         .environment(store)
-                        .presentationDetents([.large])
-                        .presentationDragIndicator(.visible)
-                        .presentationBackground(AppPalette.groupedBackground)
-                        .presentationCornerRadius(20)
                 }
             }
 
@@ -637,7 +633,7 @@ struct FeedPostCard: View {
                     HStack(spacing: 16) {
                         ForEach(Array(products.enumerated()), id: \.element.id) { index, product in
                             Button {
-                                openShopLink(for: product)
+                                ProductShopLink.open(product)
                             } label: {
                                 VStack(spacing: 6) {
                                     ProductImageView(product: product, size: 56, cornerRadius: 14)
@@ -681,51 +677,7 @@ struct FeedPostCard: View {
         RelativeTime.label(from: post.publishedDate ?? outfit?.parsedDate)
     }
 
-    private func openShopLink(for product: Product) {
-        // 1. User-entered shop link wins — they have a specific product page
-        //    in mind. Normalise scheme-less URLs (e.g. "amazon.com/x") by
-        //    prefixing https:// so they actually open, instead of falling
-        //    through to Lens.
-        if let raw = product.shopLink?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !raw.isEmpty,
-           let url = normalizedShopURL(raw) {
-            UIApplication.shared.open(url)
-            return
-        }
-
-        // 2. Thumbnail → Google Lens visual search. The thumbnail is more
-        //    discriminating than the label alone, so this returns the
-        //    closest visual matches for the actual product image.
-        if let thumbnailURL = product.resolvedImageURL,
-           let encodedThumb = thumbnailURL.absoluteString
-            .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-           let lensURL = URL(string: "https://lens.google.com/uploadbyurl?url=\(encodedThumb)") {
-            UIApplication.shared.open(lensURL)
-            return
-        }
-
-        // 3. Fallback — Google Images text search using the product label.
-        let query = product.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty,
-              let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: "https://www.google.com/search?tbm=isch&q=\(encoded)")
-        else { return }
-        UIApplication.shared.open(url)
-    }
-
-    /// Returns a launchable https URL for a user-entered shop link. Accepts
-    /// inputs with or without a scheme: "https://amazon.com/x", "amazon.com/x",
-    /// "//amazon.com/x" all map to a valid https URL. Returns nil only if the
-    /// string can't be parsed even after prepending a scheme.
-    private func normalizedShopURL(_ raw: String) -> URL? {
-        // Already has a scheme (https://, http://, etc.) — pass through.
-        if let url = URL(string: raw), url.scheme != nil, !url.scheme!.isEmpty {
-            return url
-        }
-        // Strip a leading "//" if the user pasted a scheme-relative URL.
-        let stripped = raw.hasPrefix("//") ? String(raw.dropFirst(2)) : raw
-        return URL(string: "https://\(stripped)")
-    }
+    // Shop-link resolution moved to `ProductShopLink.open(_:)`.
 
     private func actionButton(
         icon: AppIconGlyph,

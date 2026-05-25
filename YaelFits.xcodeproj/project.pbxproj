@@ -305,6 +305,7 @@
 		4D6451AF108C5BEBF0E1FBB3 /* outfit-65_00224.webp in Resources */ = {isa = PBXBuildFile; fileRef = 3C6DD088B110C40864AEC174 /* outfit-65_00224.webp */; };
 		4DA8C866A1ABEEFF1C4FA238 /* outfit-65_00063.webp in Resources */ = {isa = PBXBuildFile; fileRef = CDE8455A5737EF140635E164 /* outfit-65_00063.webp */; };
 		4DB70E0CFD601FADF568C783 /* OutfitStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3821601E77F4145A9AD831AA /* OutfitStore.swift */; };
+		2026052500000000022FCCCC /* CarouselEditCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2026052500000000023FDDDD /* CarouselEditCoordinator.swift */; };
 		4E6039D273FDBFDD61737918 /* outfit-64_00226.webp in Resources */ = {isa = PBXBuildFile; fileRef = 1D5CCC4CBC3D9B05D90F8597 /* outfit-64_00226.webp */; };
 		4E847283BD8B8B73D20C8B98 /* outfit-46_00090.webp in Resources */ = {isa = PBXBuildFile; fileRef = FF707FE1FCFB6F6469C2BD4E /* outfit-46_00090.webp */; };
 		4E857E2E418DC003876ED910 /* outfit-64_00162.webp in Resources */ = {isa = PBXBuildFile; fileRef = 66D3C3CC0B1BC761317293D5 /* outfit-64_00162.webp */; };
@@ -531,6 +532,8 @@
 		86A7C38B07429F92973FB210 /* outfit-53_00063.webp in Resources */ = {isa = PBXBuildFile; fileRef = 7B3812D6C51C48007AEBB643 /* outfit-53_00063.webp */; };
 		86E0B5067EEE6B17C098B815 /* outfit-64_00059.webp in Resources */ = {isa = PBXBuildFile; fileRef = 1CC6080A428EF68AACDCCE38 /* outfit-64_00059.webp */; };
 		86E41D498DB9EA7BA60BD7F9 /* CarouselView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0754AAC876B1EA504DB4752D /* CarouselView.swift */; };
+		2026052500000000007AAAAA /* CarouselDetailCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2026052500000000008BBBBB /* CarouselDetailCard.swift */; };
+		2026052500000000005EEEEE /* ProductShopLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2026052500000000006FFFFF /* ProductShopLink.swift */; };
 		875A688FC82DFE38E66E45D6 /* outfit-65_00203.webp in Resources */ = {isa = PBXBuildFile; fileRef = 7431E86E9941CBF9E7BB2BDF /* outfit-65_00203.webp */; };
 		875AA571FE2953A6C15C19FC /* outfit-65_00190.webp in Resources */ = {isa = PBXBuildFile; fileRef = 127485233A22F35DFFE7706C /* outfit-65_00190.webp */; };
 		8761102A6F69CC1F4C3B8DBC /* outfit-53_00048.webp in Resources */ = {isa = PBXBuildFile; fileRef = 3A038687390EFAC2513AB3ED /* outfit-53_00048.webp */; };
@@ -1079,6 +1082,8 @@
 		05D30327A7AFD9FD3A0676D2 /* outfit-53_00229.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-53_00229.webp"; sourceTree = "<group>"; };
 		05FA8C4D33983E31DE138678 /* outfit-64_00038.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-64_00038.webp"; sourceTree = "<group>"; };
 		0754AAC876B1EA504DB4752D /* CarouselView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarouselView.swift; sourceTree = "<group>"; };
+		2026052500000000008BBBBB /* CarouselDetailCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarouselDetailCard.swift; sourceTree = "<group>"; };
+		2026052500000000006FFFFF /* ProductShopLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductShopLink.swift; sourceTree = "<group>"; };
 		076BC7E24516325E8A24CAE9 /* outfit-53_00022.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-53_00022.webp"; sourceTree = "<group>"; };
 		076D5EE946F28AE7894EDAE7 /* outfit-46_00190.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-46_00190.webp"; sourceTree = "<group>"; };
 		07A61C7307F4F45691CF53D4 /* outfit-46_00198.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-46_00198.webp"; sourceTree = "<group>"; };
@@ -1270,6 +1275,7 @@
 		3781B58523619085C77BDDD0 /* outfit-53_00116.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-53_00116.webp"; sourceTree = "<group>"; };
 		3785FCE513CD35FB0CA3342C /* outfit-46_00237.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-46_00237.webp"; sourceTree = "<group>"; };
 		3821601E77F4145A9AD831AA /* OutfitStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutfitStore.swift; sourceTree = "<group>"; };
+		2026052500000000023FDDDD /* CarouselEditCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarouselEditCoordinator.swift; sourceTree = "<group>"; };
 		3873BBE582C3FEFC4EB82C29 /* outfit-46_00153.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-46_00153.webp"; sourceTree = "<group>"; };
 		38764B96E914B7D91FA7041B /* outfit-65_00021.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-65_00021.webp"; sourceTree = "<group>"; };
 		388630F243F08F02C4F5C79F /* outfit-46_00169.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-46_00169.webp"; sourceTree = "<group>"; };
@@ -2369,6 +2375,7 @@
 		15962730997AE134C8F0CB2D /* ViewModels */ = {
 			isa = PBXGroup;
 			children = (
+				2026052500000000023FDDDD /* CarouselEditCoordinator.swift */,
 				E3D41179E56A9528B9998E02 /* FrameSequenceViewModel.swift */,
 				3821601E77F4145A9AD831AA /* OutfitStore.swift */,
 			);
@@ -2379,6 +2386,7 @@
 			isa = PBXGroup;
 			children = (
 				76BF059D0E3508F83716562D /* Constants.swift */,
+				2026052500000000006FFFFF /* ProductShopLink.swift */,
 			);
 			path = Utilities;
 			sourceTree = "<group>";
@@ -2945,6 +2953,7 @@
 			isa = PBXGroup;
 			children = (
 				0754AAC876B1EA504DB4752D /* CarouselView.swift */,
+				2026052500000000008BBBBB /* CarouselDetailCard.swift */,
 				6C64D006F1798BE91B91AFEE /* OutfitCardView.swift */,
 				711634C4A66A97CB772F7034 /* OutfitGridView.swift */,
 			);
@@ -4386,6 +4395,8 @@
 			files = (
 				5750B904C6507B1A81620089 /* CalendarMonthView.swift in Sources */,
 				86E41D498DB9EA7BA60BD7F9 /* CarouselView.swift in Sources */,
+				2026052500000000007AAAAA /* CarouselDetailCard.swift in Sources */,
+				2026052500000000005EEEEE /* ProductShopLink.swift in Sources */,
 				3E9A6C57F5441A53B7FCC112 /* Constants.swift in Sources */,
 				48DDC702578FC8BB5597D5FA /* ContentSource.swift in Sources */,
 				0DC830476FC014BF5B33028F /* FalBackgroundRemovalService.swift in Sources */,
@@ -4401,6 +4412,7 @@
 				62F7EA1B66DD8E7BA535C93E /* OutfitCardView.swift in Sources */,
 				749F8273BD2AF49A78954729 /* OutfitGridView.swift in Sources */,
 				4DB70E0CFD601FADF568C783 /* OutfitStore.swift in Sources */,
+				2026052500000000022FCCCC /* CarouselEditCoordinator.swift in Sources */,
 				A9F92D15DC058F0E8165C66F /* PipelineJob.swift in Sources */,
 				E867EEAAEB28E8207840B008 /* PreparedMaskingVariant.swift in Sources */,
 				0A6E932D15FE12A5548D9BF1 /* ProductImageView.swift in Sources */,

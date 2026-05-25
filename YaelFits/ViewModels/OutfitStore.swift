@@ -58,6 +58,33 @@ class OutfitStore {
     var currentDisplayedFrame: [String: Int] = [:]
     var generationReadyForReview = false
     var isCarouselOpen = false
+    /// Set to true while the carousel's detail card is in edit mode.
+    /// RootView's top bar reads this to hide the X dismiss button
+    /// and the temperature toggle in that state — the card grows
+    /// taller in edit mode (and shifts up further when the keyboard
+    /// appears), so it visually covers that strip and they'd
+    /// otherwise show through the card's translucent material. In
+    /// the resting expanded state we keep them visible so the user
+    /// can still see the weather + dismiss the carousel.
+    var isCarouselCardEditing = false
+    /// Set to true once the in-page grid/calendar toggle on the
+    /// profile-home screen has scrolled up to the top-bar threshold.
+    /// RootView's top bar reads this to swap settings + share for the
+    /// pinned toggle; OutfitGridView reads it to fade the in-page
+    /// copy so it doesn't render twice. Reset to false when the
+    /// section scrolls back below the threshold or when leaving the
+    /// list view.
+    var archiveTogglePinned = false
+    /// Increment to ask `OutfitGridView` to scroll back to the top
+    /// (Profile tab tap while already on the archive). Same trigger
+    /// pattern as `feedScrollToTopTrigger`.
+    var archiveScrollToTopTrigger = 0
+    /// Increment to ask the active carousel host (archive or other-
+    /// user profile) to dismiss. Used by the global X button that
+    /// replaces the Yafa logo while the carousel is open, since
+    /// that button lives in `RootView` and can't reach the host's
+    /// internal `dismissCarousel()` directly.
+    var carouselDismissTrigger = 0
     var unreadNotificationCount = 0
     var feedScrollToTopTrigger = 0
 
@@ -199,8 +226,12 @@ class OutfitStore {
     }
 
     var sortedOutfits: [Outfit] {
+        // Newest first (Instagram-style). Outfit numbers increment
+        // monotonically as the user uploads — see
+        // `LocalOutfitStore.nextOutfitNum` — so descending order
+        // surfaces the most recent fit at the top of the grid.
         archiveOutfits.sorted { a, b in
-            (a.outfitNumber ?? 0) < (b.outfitNumber ?? 0)
+            (a.outfitNumber ?? 0) > (b.outfitNumber ?? 0)
         }
     }
 

@@ -137,7 +137,7 @@ enum LayoutMetrics {
     static let compactCornerRadius: CGFloat = 16
     static let cardCornerRadius: CGFloat = 24
 
-    private static var safeTop: CGFloat {
+    static var safeTop: CGFloat {
         UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .first?.windows.first?.safeAreaInsets.top ?? 47

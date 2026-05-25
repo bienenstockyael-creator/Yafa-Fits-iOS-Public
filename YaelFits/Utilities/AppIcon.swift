@@ -31,6 +31,7 @@ enum AppIconGlyph {
     case tshirt
     case sparkles
     case stack
+    case pencil
 }
 
 struct AppIcon: View {
@@ -221,6 +222,24 @@ struct AppIcon: View {
                 roundedRectPath(x: 3, y: 15, width: 18, height: 5, radius: 1.5, in: rect),
                 roundedRectPath(x: 4.5, y: 9.5, width: 15, height: 5, radius: 1.5, in: rect),
                 roundedRectPath(x: 6, y: 4, width: 12, height: 5, radius: 1.5, in: rect),
+            ]
+        case .pencil:
+            // Diagonal pencil — eraser end at top-right, tip at the
+            // bottom-left "open" edge. Matches Lucide's pencil-line
+            // shape minus the underline so the glyph reads as
+            // "edit" rather than "annotate". Coordinates are
+            // shifted (+1.5, +2.5) from the Lucide source so the
+            // visible shape's bounding box is centered in the 24×24
+            // viewbox — without that shift the pencil hugs the
+            // top-left corner when placed in a square button frame.
+            return [
+                polygonPath(points: [
+                    (15.5, 4.5),
+                    (19.5, 8.5),
+                    (8.5, 19.5),
+                    (4.5, 19.5),
+                    (4.5, 15.5),
+                ], in: rect),
             ]
         }
     }
