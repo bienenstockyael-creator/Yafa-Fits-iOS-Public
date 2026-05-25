@@ -244,10 +244,26 @@ class OutfitStore {
         } else {
             base = bundled
         }
+        // Strip locally-tracked outfits that have no local frame and
+        // no remote_base_url before merging — without this, orphans
+        // (failed uploads, deleted Supabase rows) keep rendering as
+        // blank cells.
+        LocalOutfitStore.shared.pruneOrphanedOutfits(userId: userId)
         let local = ContentSource.getLocalOutfits(userId: userId)
         let baseIds = Set(base.map(\.id))
         let uniqueLocal = local.filter { !baseIds.contains($0.id) }
-        let instant = base + uniqueLocal
+        // Stamp localOwnerUserId on every outfit owned by this user
+        // (i.e. everything except bundled). Supabase doesn't store
+        // localOwnerUserId, so cached rows come back with nil and
+        // FrameLoader can't resolve the local frame path.
+        let bundledIds = Set(bundled.map(\.id))
+        let stamped: (Outfit) -> Outfit = { outfit in
+            guard !bundledIds.contains(outfit.id), outfit.localOwnerUserId == nil else { return outfit }
+            var o = outfit
+            o.localOwnerUserId = userId.uuidString
+            return o
+        }
+        let instant = (base + uniqueLocal).map(stamped)
         let instantFeed = cachedFeed ?? ContentSource.getBundledFeed()
         let sorted = instant.sorted { ($0.outfitNumber ?? 0) < ($1.outfitNumber ?? 0) }
 
@@ -309,6 +325,47 @@ class OutfitStore {
                     return preserved
                 }
                 LocalCache.saveOutfits(merged, userId: userId)
+
+                // Reconcile LocalOutfitStore with Supabase: drop local
+                // entries that no longer exist server-side. Compare
+                // against the pure-Supabase fetch (getUserOutfits) —
+                // NOT getAllOutfits, which re-merges local entries in
+                // and would let orphans survive forever.
+                let supabaseOnly = await ContentSource.getUserOutfits(userId: userId)
+                let serverIds = Set(supabaseOnly.map(\.id))
+                LocalOutfitStore.shared.pruneOutfits(notIn: serverIds, userId: userId)
+
+                // Update in-memory list too so removed outfits drop
+                // out of the grid this session without needing a
+                // relaunch. `merged` was built from a pre-prune
+                // snapshot of getAllOutfits (which includes local
+                // entries) — filter it down to Supabase rows plus
+                // bundled so orphan cells don't render blank.
+                let isOwnerAccount = userId.uuidString.lowercased() == AppConfig.archiveOwnerUserId
+                let bundled = isOwnerAccount ? ContentSource.getBundledOutfits() : []
+                let bundledIds = Set(bundled.map(\.id))
+                // Read post-prune LocalOutfitStore so in-flight uploads
+                // (saved locally but Supabase row hasn't landed yet)
+                // aren't filtered out of the in-memory list.
+                let postPruneLocalIds = Set(ContentSource.getLocalOutfits(userId: userId).map(\.id))
+                let keptMerged = merged.filter {
+                    serverIds.contains($0.id) || bundledIds.contains($0.id) || postPruneLocalIds.contains($0.id)
+                }
+                let mergedIds = Set(keptMerged.map(\.id))
+                let bundledExtras = bundled.filter { !mergedIds.contains($0.id) }
+                // Stamp localOwnerUserId on non-bundled outfits — see
+                // matching block in loadData for the rationale.
+                let stampedMerged = keptMerged.map { outfit -> Outfit in
+                    guard !bundledIds.contains(outfit.id), outfit.localOwnerUserId == nil else { return outfit }
+                    var o = outfit
+                    o.localOwnerUserId = userId.uuidString
+                    return o
+                }
+                let updated = stampedMerged + bundledExtras
+                await MainActor.run {
+                    guard self.userId == userId else { return }
+                    self.outfits = updated
+                }
             }
         }
     }
@@ -643,11 +700,26 @@ class OutfitStore {
             }
             return preserved
         }
+
+        // Stamp localOwnerUserId on non-bundled outfits — Supabase
+        // doesn't store this field, so rows that came back via the
+        // remote fetch have nil and FrameLoader can't resolve the
+        // local frame path. Without this, a 2D outfit that was just
+        // accepted goes blank the moment refreshOutfits fires
+        // (e.g. PhotosPicker dismissal → scenePhase .active).
+        let isOwnerAccount = userId.uuidString.lowercased() == AppConfig.archiveOwnerUserId
+        let bundledIds = isOwnerAccount ? Set(ContentSource.getBundledOutfits().map(\.id)) : []
+        let stamped = merged.map { outfit -> Outfit in
+            guard !bundledIds.contains(outfit.id), outfit.localOwnerUserId == nil else { return outfit }
+            var o = outfit
+            o.localOwnerUserId = userId.uuidString
+            return o
+        }
         await MainActor.run {
             guard self.userId == userId else { return }
-            self.outfits = merged
+            self.outfits = stamped
         }
-        LocalCache.saveOutfits(merged, userId: userId)
+        LocalCache.saveOutfits(stamped, userId: userId)
     }
 
     func refreshFeed() async {

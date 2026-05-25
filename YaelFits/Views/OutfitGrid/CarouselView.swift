@@ -247,7 +247,21 @@ struct CarouselView: View {
                 onDisplayedFrameChange: { frameIndex in
                     guard isCurrent else { return }
                     onCurrentDisplayedFrameChange(frameIndex)
-                }
+                },
+                // Drags that start in the slide's side margins (away
+                // from the figure) fall through to the carousel's
+                // page-swipe gesture instead of being captured by the
+                // scrub recognizer — a forgiving swipe zone for users
+                // who don't aim precisely at the outfit.
+                horizontalDragInset: ScrubSwipe.edgeInset,
+                // Distance + monotonicity hand-off. A scrub is small
+                // back-and-forth motion that nets out below the
+                // distance threshold OR has a large excursion range
+                // relative to its net translation. A swipe is a long,
+                // mostly one-direction drag where |net| ≈ range.
+                onHorizontalDragRelease: isCurrent ? { release in
+                    handleScrubRelease(release)
+                } : nil
             )
             .opacity(slideOpacity)
 
@@ -346,6 +360,51 @@ struct CarouselView: View {
             }
         }
         .padding(.horizontal, Self.cardInset)
+    }
+
+    /// Tuning constants for the 3D-scrub → page-swipe hand-off.
+    /// Adjust here rather than at the call sites.
+    private enum ScrubSwipe {
+        /// Side-margin width on each slide where a touch bypasses the
+        /// scrub recognizer entirely and falls through to the page
+        /// gesture — gives users a forgiving swipe zone that doesn't
+        /// require precise aim on the figure.
+        static let edgeInset: CGFloat = 60
+        /// Fraction of slide width the net drag must cover before
+        /// it's even considered a swipe candidate.
+        static let distanceFractionOfSlide: CGFloat = 0.35
+        /// Absolute floor for the distance threshold so very narrow
+        /// slides still demand a deliberate drag.
+        static let distanceFloor: CGFloat = 130
+        /// |net| / excursionRange must be at least this. Purely
+        /// one-direction drag = 1.0; any meaningful reversal drops
+        /// the ratio below this floor, classifying the drag as a
+        /// scrub instead of a swipe.
+        static let monotonicityFloor: CGFloat = 0.80
+        /// Page-swipe animation, matching the carousel's existing
+        /// page-change curve.
+        static let pageChangeAnimation = Animation.timingCurve(0.32, 0.72, 0, 1, duration: 0.56)
+    }
+
+    /// Hand-off from the 3D scrub gesture to the carousel's page
+    /// swipe. Requires BOTH a large absolute translation AND that the
+    /// drag was mostly one-directional — a back-and-forth scrub that
+    /// happens to net out past the distance threshold is filtered out
+    /// by the monotonicity check, so users dialing in a rotation
+    /// angle don't accidentally flip outfits.
+    private func handleScrubRelease(_ release: HorizontalPanRelease) {
+        let distanceThreshold = max(ScrubSwipe.distanceFloor, slideWidth * ScrubSwipe.distanceFractionOfSlide)
+        guard abs(release.totalTranslation) > distanceThreshold else { return }
+        guard release.monotonicityRatio >= ScrubSwipe.monotonicityFloor else { return }
+
+        let direction = release.totalTranslation < 0 ? 1 : -1
+        let proposedIndex = currentIndex + direction
+        guard outfits.indices.contains(proposedIndex) else { return }
+
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        withAnimation(ScrubSwipe.pageChangeAnimation) {
+            currentIndex = proposedIndex
+        }
     }
 
     private func navButton(icon: AppIconGlyph, disabled: Bool, action: @escaping () -> Void) -> some View {

@@ -150,6 +150,10 @@
 		FB8F78F2E7DA0B20E0921100 /* AutoDetectProductsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AF9B1703DDDA42143804DAE /* AutoDetectProductsView.swift */; };
 		FE102BDC0F83DC35A370EAA6 /* OutfitGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DD57D3ECC6A4D838C53FBD9 /* OutfitGridView.swift */; };
 		FF542F98F1BFD9E0DA427831 /* ProductThumbnailUploadService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BD94E7C6117190A4E63A8F5 /* ProductThumbnailUploadService.swift */; };
+		AABBCC10000000000000CCC1 /* CreditService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC10000000000000CCC2 /* CreditService.swift */; };
+		AABBCC20000000000000CCC1 /* TwoDOutfitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC20000000000000CCC2 /* TwoDOutfitService.swift */; };
+		AABBCC30000000000000CCC1 /* Outfit3DGlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC30000000000000CCC2 /* Outfit3DGlow.swift */; };
+		AABBCC40000000000000CCC1 /* SavedOutfitsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC40000000000000CCC2 /* SavedOutfitsSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -308,6 +312,10 @@
 		F6F605079F2D6968468CCE00 /* FalAvatarStandardizationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FalAvatarStandardizationService.swift; sourceTree = "<group>"; };
 		FA749595F4514A6C52C3341B /* GTFAdieuTRIAL-BlackSlanted.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "GTFAdieuTRIAL-BlackSlanted.otf"; sourceTree = "<group>"; };
 		FDF9D01E8CA3A29D241E8B17 /* LottieView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LottieView.swift; sourceTree = "<group>"; };
+		AABBCC10000000000000CCC2 /* CreditService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreditService.swift; sourceTree = "<group>"; };
+		AABBCC20000000000000CCC2 /* TwoDOutfitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TwoDOutfitService.swift; sourceTree = "<group>"; };
+		AABBCC30000000000000CCC2 /* Outfit3DGlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Outfit3DGlow.swift; sourceTree = "<group>"; };
+		AABBCC40000000000000CCC2 /* SavedOutfitsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedOutfitsSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -451,6 +459,7 @@
 				1F9791776DC78094BBB88433 /* UploadLoaderView.swift */,
 				76CA1FE605DB487E84160210 /* ViewMotion.swift */,
 				95B6E39D004DC56E44D4C822 /* WeatherPill.swift */,
+				AABBCC30000000000000CCC2 /* Outfit3DGlow.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -504,6 +513,7 @@
 				1669A9739DE94A4D2C6EB670 /* LikersSheet.swift */,
 				474903917CC828F9A9431A6E /* NotificationsPlaceholderSheet.swift */,
 				DA4DE6289C8151E4168591DB /* PublicFeedListView.swift */,
+				AABBCC40000000000000CCC2 /* SavedOutfitsSheet.swift */,
 				6A852FB7BE96B45E54412928 /* UserProfileSheet.swift */,
 			);
 			path = Feed;
@@ -593,6 +603,8 @@
 				B0200DA9B94C7FF2FD79D899 /* SocialService.swift */,
 				D49292C2B1DF2789A26ECDC7 /* SupabaseClient.swift */,
 				AA9CDA154F7FD6F2F0D57A92 /* VideoFrameSequenceExporter.swift */,
+				AABBCC10000000000000CCC2 /* CreditService.swift */,
+				AABBCC20000000000000CCC2 /* TwoDOutfitService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -890,6 +902,10 @@
 				780F959E205BE16642ED4986 /* VirtualClosetView.swift in Sources */,
 				5BADF890C56B2FFCD1113112 /* WeatherPill.swift in Sources */,
 				BC22750567EDDC797832CD21 /* YaelFitsApp.swift in Sources */,
+				AABBCC10000000000000CCC1 /* CreditService.swift in Sources */,
+				AABBCC20000000000000CCC1 /* TwoDOutfitService.swift in Sources */,
+				AABBCC30000000000000CCC1 /* Outfit3DGlow.swift in Sources */,
+				AABBCC40000000000000CCC1 /* SavedOutfitsSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -912,7 +928,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = YaelFits/YaelFits.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 33;
+				CURRENT_PROJECT_VERSION = 34;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = YaelFits/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1034,7 +1050,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = YaelFits/YaelFits.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 33;
+				CURRENT_PROJECT_VERSION = 34;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = YaelFits/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (

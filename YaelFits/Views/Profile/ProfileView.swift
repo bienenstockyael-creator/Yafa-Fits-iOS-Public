@@ -20,6 +20,7 @@ struct ProfileView: View {
     @State private var followingIds: [UUID] = []
     @State private var showFollowers = false
     @State private var showFollowing = false
+    @State private var showSavedSheet = false
 
     var body: some View {
         ScrollView {
@@ -249,7 +250,10 @@ struct ProfileView: View {
             HStack(spacing: 0) {
                 statItem(count: store.sortedOutfits.count, label: "Outfits")
                 statItem(count: store.likedIds.count, label: "Liked")
-                statItem(count: store.savedIds.count, label: "Saved")
+                Button { showSavedSheet = true } label: {
+                    statItem(count: store.savedIds.count, label: "Saved")
+                }
+                .buttonStyle(.plain)
             }
 
             HStack(spacing: 0) {
@@ -269,6 +273,12 @@ struct ProfileView: View {
         }
         .sheet(isPresented: $showFollowing) {
             FollowListSheet(title: "Following", userIds: followingIds)
+                .environment(store)
+                .presentationDragIndicator(.visible)
+                .presentationBackground(AppPalette.groupedBackground)
+        }
+        .sheet(isPresented: $showSavedSheet) {
+            SavedOutfitsSheet()
                 .environment(store)
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppPalette.groupedBackground)

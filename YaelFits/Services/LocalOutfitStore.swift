@@ -228,6 +228,56 @@ class LocalOutfitStore {
         }
     }
 
+    /// Removes locally-tracked outfits whose IDs are not in the given
+    /// keep set AND have no local frame on disk. Outfits with local
+    /// files are preserved even if missing from `keepIds` — they may
+    /// be in-flight uploads whose Supabase row hasn't landed yet.
+    /// Used to reconcile the local JSON with the source of truth
+    /// (Supabase) without nuking just-created outfits.
+    @discardableResult
+    func pruneOutfits(notIn keepIds: Set<String>, userId: UUID) -> Int {
+        let outfits = loadOutfits(userId: userId)
+        let toRemove = outfits.filter { outfit in
+            guard !keepIds.contains(outfit.id) else { return false }
+            let firstFrame = frameURL(for: outfit, index: 0, userId: userId)
+            return !fileManager.fileExists(atPath: firstFrame.path)
+        }
+        guard !toRemove.isEmpty else { return 0 }
+        let toRemoveIds = Set(toRemove.map(\.id))
+        let kept = outfits.filter { !toRemoveIds.contains($0.id) }
+        for outfit in toRemove {
+            let dir = outfitDirectory(for: outfit, userId: userId)
+            try? fileManager.removeItem(at: dir)
+        }
+        let data = OutfitData(outfits: kept)
+        if let encoded = try? JSONEncoder().encode(data) {
+            try? encoded.write(to: metadataFile(for: userId), options: .atomic)
+        }
+        return toRemove.count
+    }
+
+    /// Removes locally-tracked outfits that have no usable assets: no
+    /// local frame on disk AND no remote_base_url. These accumulate
+    /// when an upload fails mid-flow or the user wipes the Supabase
+    /// row but the local JSON still references the orphan. Returns
+    /// the count pruned for logging.
+    @discardableResult
+    func pruneOrphanedOutfits(userId: UUID) -> Int {
+        let outfits = loadOutfits(userId: userId)
+        let kept = outfits.filter { outfit in
+            if let url = outfit.remoteBaseURL, !url.isEmpty { return true }
+            let firstFrameURL = frameURL(for: outfit, index: 0, userId: userId)
+            return fileManager.fileExists(atPath: firstFrameURL.path)
+        }
+        let pruned = outfits.count - kept.count
+        guard pruned > 0 else { return 0 }
+        let data = OutfitData(outfits: kept)
+        if let encoded = try? JSONEncoder().encode(data) {
+            try? encoded.write(to: metadataFile(for: userId), options: .atomic)
+        }
+        return pruned
+    }
+
     func deleteOutfitData(for outfit: Outfit, userId: UUID) {
         let dir = outfitDirectory(for: outfit, userId: userId)
         try? fileManager.removeItem(at: dir)

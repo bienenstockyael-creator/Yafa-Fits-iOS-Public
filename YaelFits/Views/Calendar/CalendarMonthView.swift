@@ -139,6 +139,12 @@ struct CalendarMonthView: View {
                 }
             }
         }
+        // Apply the 3D badge on the outer VStack so it sits at the
+        // cell's top-right (date-row level) instead of on the image
+        // below. topInset centers the 11pt icon vertically against
+        // the 18pt-tall day-number frame; trailingInset pulls it a
+        // touch inward from the right edge.
+        .outfit3DBadge(active: (day.outfit?.frameCount ?? 0) > 1, topInset: 4, trailingInset: 8)
         .headerProximityFade(headerBottom: headerBottom, fadeZone: fadeZone)
         .id(day.scrollID)
         .frame(maxWidth: .infinity, alignment: .leading)

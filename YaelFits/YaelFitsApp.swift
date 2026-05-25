@@ -8,12 +8,10 @@ struct YaelFitsApp: App {
     @State private var outfitStore = OutfitStore()
     @State private var authManager = AuthManager()
     @State private var showOnboarding = false
-    /// First-time pre-auth feature tour — shown once before AuthView,
-    /// then never again. Skippable. Persisted via AppStorage so it
-    /// survives reinstalls only if the user's UserDefaults survive
-    /// (which they don't on a fresh install — perfect for "show on
-    /// first launch").
-    @AppStorage("hasSeenWelcomeTour") private var hasSeenWelcomeTour = false
+    // Pre-auth WelcomeTourView is parked while it gets redesigned. The
+    // file lives at Views/Auth/WelcomeTourView.swift; to re-enable, restore
+    // the `@AppStorage("hasSeenWelcomeTour")` declaration and the branch
+    // below that gated on it. The stored UserDefaults value is preserved.
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
@@ -64,13 +62,6 @@ struct YaelFitsApp: App {
                             .transition(.opacity)
                         }
                     }
-                } else if !hasSeenWelcomeTour {
-                    WelcomeTourView {
-                        // hasSeenWelcomeTour is set inside the view via
-                        // AppStorage; this closure just exists in case we
-                        // need a side-effect on completion later.
-                    }
-                    .transition(.opacity)
                 } else {
                     AuthView()
                         .transition(.opacity)

@@ -312,6 +312,27 @@ struct ContentSource {
         return rows.map { $0.toOutfit() }
     }
 
+    /// Fetch multiple public outfits by id, returning each with its author
+    /// user_id. Used by the Saved sheet to render feed-style cards that
+    /// route correctly to the original author's profile on tap. Preserves
+    /// the input ordering of `ids` so the saved grid shows newest-saved
+    /// first when the caller passes them in that order.
+    static func getPublicOutfitsByIds(_ ids: [String]) async -> [(outfit: Outfit, authorId: UUID)] {
+        guard !ids.isEmpty else { return [] }
+        let rows: [SupabaseOutfitRow] = (try? await supabase
+            .from("outfits")
+            .select(outfitSelectWithProducts)
+            .in("id", values: ids)
+            .eq("is_public", value: true)
+            .execute()
+            .value) ?? []
+        let byId = Dictionary(uniqueKeysWithValues: rows.compactMap { row -> (String, (Outfit, UUID))? in
+            guard let authorId = UUID(uuidString: row.userId) else { return nil }
+            return (row.id, (row.toOutfit(), authorId))
+        })
+        return ids.compactMap { byId[$0] }
+    }
+
     /// Fetch feed from followed users' public outfits + their profile info.
     /// Fetch a single public outfit with its products — used for feed cards
     /// belonging to other users whose outfits aren't in the local store.

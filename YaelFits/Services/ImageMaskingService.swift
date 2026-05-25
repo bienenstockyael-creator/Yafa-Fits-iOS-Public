@@ -47,13 +47,11 @@ actor ImageMaskingService {
         )
         let refinedMaskedImage = refineMaskedImage(maskedImage, for: backend)
         let enhancedImage = ImageEnhancementService.shared.enhance(refinedMaskedImage)
-        // Keep the subject on the original photo canvas for the compare step so
-        // both removers preserve the same framing and apparent scale.
-        let cutoutCanvas = compositeMaskedImage(
-            enhancedImage,
-            canvasSize: sourceCanvasSize,
-            backgroundColor: .clear
-        )
+        // Standardise the cutout onto the same Kling-style 9:16 canvas
+        // we use for the green screen so the 2D archive thumbnail / fork
+        // preview match what 3D outfits look like (person centered,
+        // properly scaled) instead of a tiny figure on a giant canvas.
+        let cutoutCanvas = composeForArchive(enhancedImage, sourceCanvasSize: sourceCanvasSize)
         let greenScreenCanvas = composeForKling(enhancedImage, sourceCanvasSize: sourceCanvasSize)
 
         guard let cutoutPNGData = ciContext.pngRepresentation(
@@ -193,6 +191,49 @@ actor ImageMaskingService {
         )
 
         return normalizedImage
+            .composited(over: background)
+            .cropped(to: canvasRect)
+    }
+
+    /// Same scaling + centering as `composeForKling` but composites
+    /// onto a transparent canvas and scales the subject to fill the
+    /// canvas (the Kling version leaves headroom for the orbit camera;
+    /// the 2D archive thumbnail has no such constraint). The result
+    /// visually matches Kling's 3D frames in the grid.
+    private func composeForArchive(_ image: CIImage, sourceCanvasSize: CGSize) -> CIImage {
+        // Fill-the-canvas ratios — no orbit-camera headroom needed for
+        // a static thumbnail. ~98% on both axes leaves a tiny safety
+        // margin to avoid clipping anti-aliased edges.
+        let archiveFillRatio: CGFloat = 0.98
+        let archiveSafetyRatio: CGFloat = 1.0
+
+        let canvasRect = CGRect(origin: .zero, size: UploadConfig.compositionDimensions)
+        let background = CIImage(color: .clear).cropped(to: canvasRect)
+        let sourceCanvasImage = compositeMaskedImage(
+            image,
+            canvasSize: sourceCanvasSize,
+            backgroundColor: .clear
+        )
+
+        let boundsImage = expandedBoundsImage(from: sourceCanvasImage)
+        guard let subjectBounds = nonTransparentBounds(in: boundsImage) else {
+            return sourceCanvasImage
+                .composited(over: background)
+                .cropped(to: canvasRect)
+        }
+
+        let scale = min(
+            (canvasRect.width * archiveFillRatio) / (subjectBounds.width * archiveSafetyRatio),
+            (canvasRect.height * archiveFillRatio) / (subjectBounds.height * archiveSafetyRatio)
+        )
+        let xOffset = (canvasRect.midX) - (subjectBounds.midX * scale)
+        let sourceHeight = sourceCanvasSize.height
+        let subjectMidCIY = (sourceHeight - subjectBounds.midY) * scale
+        let yOffset = (canvasRect.midY) - subjectMidCIY
+        let transformedImage = scaledImage(sourceCanvasImage, scaleX: scale, scaleY: scale)
+            .transformed(by: CGAffineTransform(translationX: xOffset, y: yOffset))
+
+        return transformedImage
             .composited(over: background)
             .cropped(to: canvasRect)
     }

@@ -2,6 +2,9 @@ import Foundation
 
 enum PipelineStep: String, CaseIterable {
     case upload = "Upload"
+    /// User picks 2D-or-3D after Bria removes the background. 3D path
+    /// continues to .generate; 2D path jumps straight to .review.
+    case fork = "Choose"
     case generate = "Generate"
     case review = "Review"
     case complete = "Done"
@@ -153,6 +156,7 @@ enum UploadPipelineError: LocalizedError {
     case emptyExport
     case requestFailed(String)
     case decodingFailed
+    case outOfCredits
 
     var errorDescription: String? {
         switch self {
@@ -172,6 +176,8 @@ enum UploadPipelineError: LocalizedError {
             return message
         case .decodingFailed:
             return "The generation response could not be decoded."
+        case .outOfCredits:
+            return "You're out of 3D credits. Save this fit as 2D for free, or top up to keep generating."
         }
     }
 }

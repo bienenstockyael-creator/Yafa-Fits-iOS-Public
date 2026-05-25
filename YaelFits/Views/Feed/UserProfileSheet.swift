@@ -244,7 +244,7 @@ struct UserProfileSheet: View {
                 RotatableOutfitImage(
                     outfit: outfit,
                     height: 160,
-                    draggable: true,
+                    draggable: outfit.frameCount > 1,
                     eagerLoad: true,
                     onTap: {
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -266,6 +266,7 @@ struct UserProfileSheet: View {
                     }
                 )
                 .clipShape(RoundedRectangle(cornerRadius: LayoutMetrics.compactCornerRadius, style: .continuous))
+                .outfit3DBadge(active: outfit.frameCount > 1)
             }
         }
     }

@@ -517,13 +517,18 @@ struct FeedPostCard: View {
     }
 
     private func outfitContent(_ outfit: Outfit) -> some View {
-        RotatableOutfitImage(
+        let isRotatable = outfit.frameCount > 1
+        return RotatableOutfitImage(
             outfit: outfit,
             height: 292,
-            draggable: true,
-            preloadFullSequenceOnAppear: true
+            draggable: isRotatable,
+            preloadFullSequenceOnAppear: isRotatable
         )
         .frame(maxWidth: .infinity)
+    }
+
+    private var is3DOutfit: Bool {
+        (outfit?.frameCount ?? 0) > 1
     }
 
     private var metadataLabels: [String] {
