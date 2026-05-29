@@ -134,4 +134,20 @@ actor GenerationJobService {
 
         return rows.first
     }
+
+    /// All in-flight jobs (queued / processing) the user has running
+    /// server-side. Restore-on-launch uses this to re-attach polling
+    /// to jobs that were mid-flight when the app was killed — without
+    /// this, the server keeps generating but the client never sees
+    /// the result.
+    func fetchInflightJobs(userId: UUID) async throws -> [GenerationJobRecord] {
+        try await supabase
+            .from("generation_jobs")
+            .select()
+            .eq("user_id", value: userId.uuidString)
+            .in("status", values: ["queued", "processing"])
+            .order("created_at", ascending: false)
+            .execute()
+            .value
+    }
 }

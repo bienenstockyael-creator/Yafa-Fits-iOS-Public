@@ -76,6 +76,17 @@ struct GenerationStarField: View {
     // Circle radius as fraction of the shorter screen dimension
     private static let circleRadius: CGFloat = 0.33
 
+    /// Per-star canvas size for the Lottie. Default matches the
+    /// original standalone-sheet sizing (280pt) — the placeholder
+    /// card overrides this with something much smaller (~100pt) so
+    /// the sparkles fit inside an outfit-grid cell.
+    var starSize: CGFloat = 280
+
+    /// Set false to disable the drag-to-spawn gesture. Useful inside
+    /// non-interactive surfaces like the placeholder card, where
+    /// the gesture would steal scroll / tap events from the parent.
+    var interactive: Bool = true
+
     @State private var particles: [StarParticle] = []
     @State private var spawnTask: Task<Void, Never>?
     @State private var circleAngle: Double = 0
@@ -86,7 +97,7 @@ struct GenerationStarField: View {
         GeometryReader { geo in
             ZStack {
                 ForEach(particles) { p in
-                    NeonStarView(animName: p.animName)
+                    NeonStarView(animName: p.animName, size: starSize)
                         .scaleEffect(p.scale)
                         .position(x: p.x * geo.size.width,
                                   y: p.y * geo.size.height)
@@ -95,19 +106,23 @@ struct GenerationStarField: View {
             }
             .animation(.easeInOut(duration: 0.2), value: particles.map(\.id))
             .contentShape(Rectangle())
-            // Drag — continuously spawn sparkles following the finger
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { value in
-                        let now = Date()
-                        guard now.timeIntervalSince(lastDragSpawn) > 0.10 else { return }
-                        lastDragSpawn = now
-                        let nx = (value.location.x / geo.size.width).clamped(to: 0.05...0.95)
-                        let ny = (value.location.y / geo.size.height).clamped(to: 0.05...0.95)
-                        spawnParticle(x: nx, y: ny)
-                        UIImpactFeedbackGenerator(style: .soft).impactOccurred(intensity: 0.25)
-                    }
-            )
+            // Drag — continuously spawn sparkles following the finger.
+            // Disabled in non-interactive surfaces (e.g. placeholder
+            // card in the grid) so it doesn't steal scroll / tap.
+            .if(interactive) { view in
+                view.gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            let now = Date()
+                            guard now.timeIntervalSince(lastDragSpawn) > 0.10 else { return }
+                            lastDragSpawn = now
+                            let nx = (value.location.x / geo.size.width).clamped(to: 0.05...0.95)
+                            let ny = (value.location.y / geo.size.height).clamped(to: 0.05...0.95)
+                            spawnParticle(x: nx, y: ny)
+                            UIImpactFeedbackGenerator(style: .soft).impactOccurred(intensity: 0.25)
+                        }
+                )
+            }
             .onAppear {
                 containerSize = geo.size
                 startSpawning()
@@ -170,21 +185,29 @@ extension Comparable {
 
 private struct NeonStarView: View {
     let animName: String
+    /// Per-star canvas size. Default 280 keeps the original
+    /// standalone-sheet sizing.
+    var size: CGFloat = 280
 
     var body: some View {
         ZStack {
-            // Blurred copy behind — fake glow halo
+            // Blurred copy behind — fake glow halo. Blur scales with
+            // size so smaller stars don't get blurred into nothing.
             LottieView(animation: .named(animName))
                 .playing(loopMode: .playOnce)
-                .frame(width: 280, height: 280)
-                .blur(radius: 10)
+                .frame(width: size, height: size)
+                .blur(radius: max(2, size * 0.036))
                 .opacity(0.85)
 
             // Sharp copy on top
             LottieView(animation: .named(animName))
                 .playing(loopMode: .playOnce)
-                .frame(width: 280, height: 280)
+                .frame(width: size, height: size)
         }
+        // Tint the Lottie's baked-in aqua to the app's softer
+        // baby-blue/grey glow, so the sparkle field matches the
+        // pill glow tone.
+        .colorMultiply(AppPalette.uploadGlow)
     }
 }
 

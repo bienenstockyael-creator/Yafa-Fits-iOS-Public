@@ -12,6 +12,17 @@ struct OutfitGridView: View {
     /// the existing matchedGeometry transition still drives the swap.
     var onToggleToCalendar: () -> Void = {}
 
+    /// Tap on a generation placeholder card (a job that's in
+    /// flight at the top of the grid) — RootView opens the
+    /// expanded card for that job.
+    var onExpandGenerationJob: (PipelineJob) -> Void = { _ in }
+
+    /// Fires when the user starts scrolling the grid. RootView
+    /// uses this to auto-dismiss an open generation card or
+    /// picker so they don't block the content the user is
+    /// trying to reach.
+    var onScrollBegan: () -> Void = {}
+
     @State private var contentVisible = false
     @State private var playsInitialSequence = false
     @State private var dragHintVisible = true
@@ -56,6 +67,11 @@ struct OutfitGridView: View {
     /// 0 (i.e. fall back to the hard-coded 200) until the first
     /// layout pass lands a measurement.
     @State private var profileHeaderHeight: CGFloat = 0
+
+    /// Last seen scroll offset — used to detect "user is actively
+    /// scrolling" (vs. content settling) so `onScrollBegan` only
+    /// fires on real user gestures.
+    @State private var lastObservedScrollOffset: CGFloat = 0
 
     private let heroTransitionDuration: Double = 0.32
     private let heroFadeInDuration: Double = 0.12
@@ -303,10 +319,36 @@ struct OutfitGridView: View {
 
     private var outfitsGrid: some View {
         LazyVGrid(columns: columns, spacing: 42) {
+            // Generation placeholders sit at the top of the grid —
+            // newest selection first — so the user's "I just picked
+            // this" moment lands in the highest-priority visual slot.
+            // Filtered to only the queue jobs whose committed outfit
+            // isn't already in the archive (avoids a duplicate render
+            // during the brief window between accept-2D and queue
+            // removal).
+            ForEach(generationPlaceholderJobs, id: \.id) { job in
+                GenerationPlaceholderCard(
+                    job: job,
+                    phase: store.generationQueue.phase(for: job),
+                    onTap: { onExpandGenerationJob(job) }
+                )
+            }
             ForEach(Array(store.sortedOutfits.enumerated()), id: \.element.id) { index, outfit in
                 gridItem(outfit: outfit, index: index)
             }
         }
+    }
+
+    private var generationPlaceholderJobs: [PipelineJob] {
+        let queue = store.generationQueue
+        let archived = Set(store.outfits.map(\.id))
+        let all = queue.activeJobs + queue.waitingJobs
+        return all
+            .filter { job in
+                guard let resultId = job.resultOutfitId else { return true }
+                return !archived.contains(resultId)
+            }
+            .reversed()
     }
 
     private func placeholderCard(index: Int) -> some View {
@@ -692,6 +734,16 @@ struct OutfitGridView: View {
     /// to `200` (a reasonable default for the typical layout) until
     /// the first height measurement lands.
     private func handleScrollOffset(_ offsetY: CGFloat) {
+        // Notify the host (RootView) that the user is actively
+        // scrolling — used to auto-dismiss an open card / picker
+        // so they don't block the content the user is reaching for.
+        // Filter out tiny KVO bounces (< 4pt) so a settle doesn't
+        // count as scroll.
+        if abs(offsetY - lastObservedScrollOffset) > 4 {
+            onScrollBegan()
+        }
+        lastObservedScrollOffset = offsetY
+
         let pinThreshold = profileHeaderHeight > 0 ? profileHeaderHeight : 200
         let shouldPin = offsetY > pinThreshold
         guard store.archiveTogglePinned != shouldPin else { return }

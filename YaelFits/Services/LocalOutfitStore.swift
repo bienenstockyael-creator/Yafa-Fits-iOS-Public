@@ -239,6 +239,15 @@ class LocalOutfitStore {
         let outfits = loadOutfits(userId: userId)
         let toRemove = outfits.filter { outfit in
             guard !keepIds.contains(outfit.id) else { return false }
+            // Keep outfits whose frames are reachable via Supabase
+            // storage (3D outfits land here): `remoteBaseURL` means the
+            // outfit is renderable even if its archive row hasn't synced
+            // yet. Without this, a freshly-accepted 3D outfit gets
+            // pruned on the next launch when `saveArchiveOutfit` hadn't
+            // completed before the previous app session ended —
+            // `serverIds` (Supabase archive) doesn't include it AND
+            // there's no local first frame (3D frames are remote-only).
+            if let url = outfit.remoteBaseURL, !url.isEmpty { return false }
             let firstFrame = frameURL(for: outfit, index: 0, userId: userId)
             return !fileManager.fileExists(atPath: firstFrame.path)
         }

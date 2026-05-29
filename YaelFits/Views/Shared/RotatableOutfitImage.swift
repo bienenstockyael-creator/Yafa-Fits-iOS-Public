@@ -192,6 +192,15 @@ struct RotatableOutfitImage: View {
         .onChange(of: syncFrameIndex) { _, _ in
             syncDisplayedFrameIfNeeded()
         }
+        .onChange(of: outfit.isRotationReversed) { _, _ in
+            // Push the updated outfit into the viewModel so
+            // `resolvedFrameIndex` picks up the new direction
+            // immediately. The viewModel's outfit is initialised once
+            // in @State; without this sync the review-card "Reverse"
+            // toggle has no visible effect until the cell is remounted.
+            viewModel.outfit = outfit
+            viewModel.loadCurrentFrame()
+        }
         .onChange(of: entranceSequenceActive) { _, isActive in
             guard isActive else {
                 entranceTask?.cancel()

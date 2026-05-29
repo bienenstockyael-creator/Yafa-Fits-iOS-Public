@@ -11,7 +11,11 @@
 		01ED92B84B56FBC3638A34E0 /* ContentSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39E4A1D8BA0D93C038BC46BB /* ContentSource.swift */; };
 		02D1FBB0B2D65E47F77128DF /* outfit-21.webp in Resources */ = {isa = PBXBuildFile; fileRef = A5DEB18E73DD0BBD7EFA3BB1 /* outfit-21.webp */; };
 		077DB02F9473F88E769F9A4C /* placeholder-3.webp in Resources */ = {isa = PBXBuildFile; fileRef = 422DD784B7345E185A3C2C41 /* placeholder-3.webp */; };
-		09F43FDD030E3C5CF0EB3D65 /* UploadPipelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2E41DDFCDBAB48448C7B148 /* UploadPipelineView.swift */; };
+		2026052500000000080EEEEE /* GenerationPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2026052500000000081FFFFF /* GenerationPicker.swift */; };
+		2026052500000000082AAAAA /* GenerationPillStack.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2026052500000000083BBBBB /* GenerationPillStack.swift */; };
+		2026052500000000100CCCCC /* GenerationExpandedCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2026052500000000101DDDDD /* GenerationExpandedCard.swift */; };
+		20260526000000000B0AAAAA /* GenerationChipPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20260526000000000B0BBBBB /* GenerationChipPill.swift */; };
+		20260527000000000C0AAAAA /* GenerationLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20260527000000000C0BBBBB /* GenerationLayout.swift */; };
 		0AE3A5C0D8CDF4B7EED61A53 /* ProductCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07BA71A9CDD13DA6808964BB /* ProductCategory.swift */; };
 		0E7F75E0908D4E70379B08A5 /* ProductLibraryItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8673AF651837F7F8A1A50BD4 /* ProductLibraryItem.swift */; };
 		0E86953BE246048B9B408314 /* outfit-2.webp in Resources */ = {isa = PBXBuildFile; fileRef = 4F45F302477F8DD356FE4B1A /* outfit-2.webp */; };
@@ -41,6 +45,9 @@
 		35714868A98E53BFDA27435D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D777D0976E9C224D8022144C /* Assets.xcassets */; };
 		374B22A95D5450B99FB44DD6 /* OutfitStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9187BA52F7E8139A4E8A30F0 /* OutfitStore.swift */; };
 		2026052500000000020FAAAA /* CarouselEditCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2026052500000000021FBBBB /* CarouselEditCoordinator.swift */; };
+		2026052500000000040CCCCC /* GenerationQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2026052500000000041DDDDD /* GenerationQueue.swift */; };
+		20260527000000000B0AAAAA /* FakeGenerationOrchestrator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20260527000000000B0BBBBB /* FakeGenerationOrchestrator.swift */; };
+		20260527000000000F0AAAAA /* RealGenerationOrchestrator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20260527000000000F0BBBBB /* RealGenerationOrchestrator.swift */; };
 		3943BB1501C305483389E245 /* LottieView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDF9D01E8CA3A29D241E8B17 /* LottieView.swift */; };
 		395534ECE07C62454403ADFE /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99AAD021B4DB43444818F1D3 /* Constants.swift */; };
 		3A4491708C31E6C0FE1817E2 /* ProductImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F910ED2C981B44BD5AD83CC /* ProductImageView.swift */; };
@@ -57,7 +64,9 @@
 		50BBAE6E117C4E9DD1BD4203 /* outfit-25.webp in Resources */ = {isa = PBXBuildFile; fileRef = A00F2962FD5A311E07B489E1 /* outfit-25.webp */; };
 		53ABB30C405F73DE523A34FC /* outfit-3.webp in Resources */ = {isa = PBXBuildFile; fileRef = CD264C9B307D4538A6E1E93A /* outfit-3.webp */; };
 		5755A53F41F0BBF52E7FDF4A /* ImageMaskingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89B3091DEE0ED4BD08D99CA8 /* ImageMaskingService.swift */; };
+		20260527000000001A0AAAAA /* UploadWeatherService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20260527000000001A0BBBBB /* UploadWeatherService.swift */; };
 		5BADF890C56B2FFCD1113112 /* WeatherPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95B6E39D004DC56E44D4C822 /* WeatherPill.swift */; };
+		20260527000000001B0AAAAA /* CameraCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20260527000000001B0BBBBB /* CameraCaptureView.swift */; };
 		5C93E5B05CC173F2FB9C4E3F /* outfit-23.webp in Resources */ = {isa = PBXBuildFile; fileRef = 319C6300B36C3CD5A2A340A9 /* outfit-23.webp */; };
 		5CAE51C5E3A11417EAACAA69 /* AppIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBDABBB7E6689D56A3A999A1 /* AppIcon.swift */; };
 		5DAF5717A963FFECA6DB7582 /* FeedPost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CAEA94C97888E4FB2411D67 /* FeedPost.swift */; };
@@ -146,6 +155,7 @@
 		EDCE9F834080E234A3B809C5 /* outfits.json in Resources */ = {isa = PBXBuildFile; fileRef = 6AF76DDBEC17ACF0DEB5C2B2 /* outfits.json */; };
 		EDEF93D554B05F4556CBEF39 /* CarouselView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EE82713F28FF3FC8E2D62F9 /* CarouselView.swift */; };
 		2026052500000000001AAAAA /* CarouselDetailCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2026052500000000002BBBBB /* CarouselDetailCard.swift */; };
+		2026052500000000060CCCCC /* GenerationPlaceholderCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2026052500000000061DDDDD /* GenerationPlaceholderCard.swift */; };
 		2026052500000000003CCCCC /* ProductShopLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2026052500000000004DDDDD /* ProductShopLink.swift */; };
 		EEF01751448761FEB4F9D9BC /* ClosetAvatarStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58684B30A094FD812594B873 /* ClosetAvatarStorage.swift */; };
 		F7A15AB6247B925DADE4A0E4 /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81B954E0E1EBF71A99A79927 /* AuthView.swift */; };
@@ -229,6 +239,7 @@
 		4E4A64387EDDC09043570EF5 /* InteractiveTouchSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InteractiveTouchSurface.swift; sourceTree = "<group>"; };
 		4EE82713F28FF3FC8E2D62F9 /* CarouselView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarouselView.swift; sourceTree = "<group>"; };
 		2026052500000000002BBBBB /* CarouselDetailCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarouselDetailCard.swift; sourceTree = "<group>"; };
+		2026052500000000061DDDDD /* GenerationPlaceholderCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationPlaceholderCard.swift; sourceTree = "<group>"; };
 		2026052500000000004DDDDD /* ProductShopLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductShopLink.swift; sourceTree = "<group>"; };
 		4F45F302477F8DD356FE4B1A /* outfit-2.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-2.webp"; sourceTree = "<group>"; };
 		504B9DDF13973A533D8925BC /* outfit-1.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-1.webp"; sourceTree = "<group>"; };
@@ -261,6 +272,7 @@
 		870B827D251E84029B685BB1 /* RemixStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemixStorage.swift; sourceTree = "<group>"; };
 		8821036C1F9ED66859189654 /* outfit-10.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-10.webp"; sourceTree = "<group>"; };
 		89B3091DEE0ED4BD08D99CA8 /* ImageMaskingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageMaskingService.swift; sourceTree = "<group>"; };
+		20260527000000001A0BBBBB /* UploadWeatherService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadWeatherService.swift; sourceTree = "<group>"; };
 		8BBAC0B0ACE295E42CFA0EEE /* App.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = App.xcconfig; sourceTree = "<group>"; };
 		8E5E7B65087075120E526293 /* CalendarMonthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarMonthView.swift; sourceTree = "<group>"; };
 		8E93326E60084B89CA340A41 /* cloudy.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = cloudy.json; sourceTree = "<group>"; };
@@ -269,8 +281,12 @@
 		910B2E6A79E169D2A1EE9BFE /* TagPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagPill.swift; sourceTree = "<group>"; };
 		9187BA52F7E8139A4E8A30F0 /* OutfitStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutfitStore.swift; sourceTree = "<group>"; };
 		2026052500000000021FBBBB /* CarouselEditCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarouselEditCoordinator.swift; sourceTree = "<group>"; };
+		2026052500000000041DDDDD /* GenerationQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationQueue.swift; sourceTree = "<group>"; };
+		20260527000000000B0BBBBB /* FakeGenerationOrchestrator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FakeGenerationOrchestrator.swift; sourceTree = "<group>"; };
+		20260527000000000F0BBBBB /* RealGenerationOrchestrator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealGenerationOrchestrator.swift; sourceTree = "<group>"; };
 		9536A3D80F4BDF8F985E374D /* ProductImageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductImageService.swift; sourceTree = "<group>"; };
 		95B6E39D004DC56E44D4C822 /* WeatherPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherPill.swift; sourceTree = "<group>"; };
+		20260527000000001B0BBBBB /* CameraCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraCaptureView.swift; sourceTree = "<group>"; };
 		9819708241DB25B5D00386CD /* rainy.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = rainy.json; sourceTree = "<group>"; };
 		99AAD021B4DB43444818F1D3 /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
 		9ACE0F1992CD1E1C592E84FE /* PasswordResetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordResetView.swift; sourceTree = "<group>"; };
@@ -286,7 +302,11 @@
 		B01D7034E3B52D5B0635EAE8 /* Remix.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Remix.swift; sourceTree = "<group>"; };
 		B0200DA9B94C7FF2FD79D899 /* SocialService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialService.swift; sourceTree = "<group>"; };
 		B020F0020001000000000A01 /* WelcomeTourView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeTourView.swift; sourceTree = "<group>"; };
-		B2E41DDFCDBAB48448C7B148 /* UploadPipelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadPipelineView.swift; sourceTree = "<group>"; };
+		2026052500000000081FFFFF /* GenerationPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationPicker.swift; sourceTree = "<group>"; };
+		2026052500000000083BBBBB /* GenerationPillStack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationPillStack.swift; sourceTree = "<group>"; };
+		2026052500000000101DDDDD /* GenerationExpandedCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationExpandedCard.swift; sourceTree = "<group>"; };
+		20260526000000000B0BBBBB /* GenerationChipPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationChipPill.swift; sourceTree = "<group>"; };
+		20260527000000000C0BBBBB /* GenerationLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationLayout.swift; sourceTree = "<group>"; };
 		B69FF6A4ADDD0BAD4FC7F2E4 /* outfit-12.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-12.webp"; sourceTree = "<group>"; };
 		B807A90E1DD2A35EDCE8EB7A /* StateScopingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateScopingTests.swift; sourceTree = "<group>"; };
 		B847C0AB98D3425BB5BBAFAB /* star-anim-2.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "star-anim-2.json"; sourceTree = "<group>"; };
@@ -477,6 +497,7 @@
 				1F9791776DC78094BBB88433 /* UploadLoaderView.swift */,
 				76CA1FE605DB487E84160210 /* ViewMotion.swift */,
 				95B6E39D004DC56E44D4C822 /* WeatherPill.swift */,
+				20260527000000001B0BBBBB /* CameraCaptureView.swift */,
 				AABBCC30000000000000CCC2 /* Outfit3DGlow.swift */,
 			);
 			path = Shared;
@@ -558,7 +579,10 @@
 			isa = PBXGroup;
 			children = (
 				2026052500000000021FBBBB /* CarouselEditCoordinator.swift */,
+				20260527000000000B0BBBBB /* FakeGenerationOrchestrator.swift */,
+				20260527000000000F0BBBBB /* RealGenerationOrchestrator.swift */,
 				A8D5A078D13851433A0CF2C8 /* FrameSequenceViewModel.swift */,
+				2026052500000000041DDDDD /* GenerationQueue.swift */,
 				9187BA52F7E8139A4E8A30F0 /* OutfitStore.swift */,
 			);
 			path = ViewModels;
@@ -578,6 +602,7 @@
 			children = (
 				4EE82713F28FF3FC8E2D62F9 /* CarouselView.swift */,
 				2026052500000000002BBBBB /* CarouselDetailCard.swift */,
+				2026052500000000061DDDDD /* GenerationPlaceholderCard.swift */,
 				8EBE6BC6F81A484544954195 /* OutfitCardView.swift */,
 				9DD57D3ECC6A4D838C53FBD9 /* OutfitGridView.swift */,
 			);
@@ -613,6 +638,7 @@
 				F010F0010001000000000A01 /* HoloMotionTracker.swift */,
 				3120723AEF223E5E8F3E6FE5 /* ImageEnhancementService.swift */,
 				89B3091DEE0ED4BD08D99CA8 /* ImageMaskingService.swift */,
+				20260527000000001A0BBBBB /* UploadWeatherService.swift */,
 				EE8E7C6F4FF612B588212336 /* LocalCache.swift */,
 				DE7400C8E76CC739BA9271FE /* LocalOutfitStore.swift */,
 				3A2CE7F573582B8F2F582033 /* OutfitService.swift */,
@@ -660,7 +686,11 @@
 		DEB62E5EBF315C41C23E2C56 /* Upload */ = {
 			isa = PBXGroup;
 			children = (
-				B2E41DDFCDBAB48448C7B148 /* UploadPipelineView.swift */,
+				20260526000000000B0BBBBB /* GenerationChipPill.swift */,
+				2026052500000000101DDDDD /* GenerationExpandedCard.swift */,
+				20260527000000000C0BBBBB /* GenerationLayout.swift */,
+				2026052500000000081FFFFF /* GenerationPicker.swift */,
+				2026052500000000083BBBBB /* GenerationPillStack.swift */,
 			);
 			path = Upload;
 			sourceTree = "<group>";
@@ -853,6 +883,7 @@
 				8F72948DEEE2D44825BE68A6 /* CalendarMonthView.swift in Sources */,
 				EDEF93D554B05F4556CBEF39 /* CarouselView.swift in Sources */,
 				2026052500000000001AAAAA /* CarouselDetailCard.swift in Sources */,
+				2026052500000000060CCCCC /* GenerationPlaceholderCard.swift in Sources */,
 				2026052500000000003CCCCC /* ProductShopLink.swift in Sources */,
 				EEF01751448761FEB4F9D9BC /* ClosetAvatarStorage.swift in Sources */,
 				9E637B60E21003847F230FFF /* Colorama.metal in Sources */,
@@ -879,6 +910,7 @@
 				B010F0010001000000000A01 /* HoloMotionTracker.swift in Sources */,
 				4E2CF0F613B1C84D33EEF685 /* ImageEnhancementService.swift in Sources */,
 				5755A53F41F0BBF52E7FDF4A /* ImageMaskingService.swift in Sources */,
+				20260527000000001A0AAAAA /* UploadWeatherService.swift in Sources */,
 				16C2D83AE59F47AF7304DCCA /* InteractiveTouchSurface.swift in Sources */,
 				B3990FC6A6666816801E6B85 /* LikersSheet.swift in Sources */,
 				62B6DF767B86BB73CE229655 /* LocalCache.swift in Sources */,
@@ -892,6 +924,9 @@
 				AC0881DDF6A6508BAB207404 /* OutfitService.swift in Sources */,
 				374B22A95D5450B99FB44DD6 /* OutfitStore.swift in Sources */,
 				2026052500000000020FAAAA /* CarouselEditCoordinator.swift in Sources */,
+				2026052500000000040CCCCC /* GenerationQueue.swift in Sources */,
+				20260527000000000B0AAAAA /* FakeGenerationOrchestrator.swift in Sources */,
+				20260527000000000F0AAAAA /* RealGenerationOrchestrator.swift in Sources */,
 				22B301AC155311EC382BBED1 /* PasswordResetView.swift in Sources */,
 				3BE83880E1AB3494639A8F72 /* PipelineJob.swift in Sources */,
 				7455F2ED8A8525579A233A3D /* PreparedMaskingVariant.swift in Sources */,
@@ -923,12 +958,17 @@
 				8A121EB863834E9BAF340E7A /* TagPill.swift in Sources */,
 				7100FDD58A11CD8E87D341A6 /* UploadLoaderView.swift in Sources */,
 				28ADD037813ECB12F2DF59A4 /* UploadMaskingBackend.swift in Sources */,
-				09F43FDD030E3C5CF0EB3D65 /* UploadPipelineView.swift in Sources */,
+				2026052500000000080EEEEE /* GenerationPicker.swift in Sources */,
+				2026052500000000082AAAAA /* GenerationPillStack.swift in Sources */,
+				2026052500000000100CCCCC /* GenerationExpandedCard.swift in Sources */,
+				20260526000000000B0AAAAA /* GenerationChipPill.swift in Sources */,
+				20260527000000000C0AAAAA /* GenerationLayout.swift in Sources */,
 				9261D38B7469308E9C7E73CF /* UserProfileSheet.swift in Sources */,
 				8C561C0B75E7BF70D820955C /* VideoFrameSequenceExporter.swift in Sources */,
 				84290C7D80CCB0AC505AF5EA /* ViewMotion.swift in Sources */,
 				780F959E205BE16642ED4986 /* VirtualClosetView.swift in Sources */,
 				5BADF890C56B2FFCD1113112 /* WeatherPill.swift in Sources */,
+				20260527000000001B0AAAAA /* CameraCaptureView.swift in Sources */,
 				BC22750567EDDC797832CD21 /* YaelFitsApp.swift in Sources */,
 				AABBCC10000000000000CCC1 /* CreditService.swift in Sources */,
 				AABBCC20000000000000CCC1 /* TwoDOutfitService.swift in Sources */,

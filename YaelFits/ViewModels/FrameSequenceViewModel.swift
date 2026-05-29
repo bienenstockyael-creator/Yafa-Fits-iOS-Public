@@ -3,7 +3,12 @@ import Combine
 
 @Observable
 class FrameSequenceViewModel {
-    let outfit: Outfit
+    /// Mutable so callers (e.g. RotatableOutfitImage) can push in a
+    /// new outfit when its `isRotationReversed` flips during review —
+    /// without that, `resolvedFrameIndex` keeps reading the value
+    /// captured at init time and the reverse-rotation toggle has no
+    /// visible effect until the outfit gets remounted on Accept.
+    var outfit: Outfit
     var currentFrame: Int = 0
     var displayedFrame: Int?
     var displayedImage: UIImage?

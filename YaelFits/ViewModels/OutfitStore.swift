@@ -13,7 +13,54 @@ class OutfitStore {
     var userId: UUID?
     var outfits: [Outfit] = []
     var feedPosts: [FeedPost] = []
-    var uploadJob: PipelineJob?
+    /// Multi-job generation queue. Marked `@ObservationIgnored` so
+    /// `@Observable` doesn't try to wrap it as a computed property
+    /// (which would break `lazy`). SwiftUI views still re-render
+    /// on queue mutations because `GenerationQueue` is itself
+    /// `@Observable`. `lazy` so it isn't constructed until the new
+    /// flow actually needs it — avoids touching the
+    /// closure-captured `outfits` / `userId` during sign-out or
+    /// before the store has loaded.
+    @ObservationIgnored
+    lazy var generationQueue: GenerationQueue = {
+        let q = GenerationQueue(
+            nextOutfitNumber: { [weak self] in
+                guard let self else { return 1 }
+                // Account for *both* committed outfits in the archive
+                // AND in-flight queue jobs. Without the queue check, two
+                // rapid enqueues would each land on the same outfitNum
+                // (because the first hasn't committed yet) → both
+                // PipelineJobs share id "outfit-N" → ForEach collapses
+                // them into one pill + one placeholder.
+                let archiveMax = self.outfits.compactMap(\.outfitNumber).max() ?? 0
+                let queueMax = (self.generationQueue.activeJobs + self.generationQueue.waitingJobs)
+                    .map(\.outfitNum).max() ?? 0
+                let base = max(archiveMax, queueMax)
+                guard let userId = self.userId else { return base + 1 }
+                return max(base + 1, LocalOutfitStore.shared.nextOutfitNum(userId: userId))
+            }
+        )
+        // Wire orchestration: any newly active job (fresh enqueue or
+        // promoted from waiting) kicks off the fake pipeline. Swap
+        // to the real orchestrator when step 8 lands.
+        q.onJobBecameActive = { [weak self] job in
+            self?.generationOrchestrator.start(job)
+        }
+        return q
+    }()
+
+    /// Production orchestrator — runs each `PipelineJob` through
+    /// the real Bria → fork → Kling → poll → review pipeline. The
+    /// fake variant (`FakeGenerationOrchestrator`) is still on disk
+    /// and can be swapped in here for UI iteration without burning
+    /// real credits.
+    @ObservationIgnored
+    lazy var generationOrchestrator: RealGenerationOrchestrator = RealGenerationOrchestrator(
+        queue: generationQueue,
+        userIdProvider: { [weak self] in self?.userId },
+        onAcceptOutfit: { [weak self] outfit in self?.addOutfit(outfit) },
+        onPublishOutfit: { [weak self] outfit in self?.publishOutfitToFeed(outfit) }
+    )
     var currentView: AppView = .list
     var useFahrenheit: Bool = (UserDefaults.standard.object(forKey: "preferredTempUnitFahrenheit") as? Bool) ?? true {
         didSet {
@@ -56,7 +103,6 @@ class OutfitStore {
     /// during scrub but no view body reads this dict, so writes
     /// don't trigger re-renders.
     var currentDisplayedFrame: [String: Int] = [:]
-    var generationReadyForReview = false
     var isCarouselOpen = false
     /// Set to true while the carousel's detail card is in edit mode.
     /// RootView's top bar reads this to hide the X dismiss button
@@ -98,10 +144,8 @@ class OutfitStore {
             return
         }
 
-        cancelUploadTask()
         outfits = []
         feedPosts = []
-        uploadJob = nil
         likedIds = []
         savedIds = []
         followingIds = []
@@ -116,7 +160,6 @@ class OutfitStore {
         transitionAnchorOutfitId = nil
         transitionAnchorFrameIndex = nil
         currentDisplayedFrame = [:]
-        generationReadyForReview = false
         isCarouselOpen = false
         unreadNotificationCount = 0
         currentProfile = nil
@@ -124,11 +167,9 @@ class OutfitStore {
     }
 
     func resetForSignedOutState() {
-        cancelUploadTask()
         userId = nil
         outfits = []
         feedPosts = []
-        uploadJob = nil
         likedIds = []
         savedIds = []
         followingIds = []
@@ -143,7 +184,6 @@ class OutfitStore {
         transitionAnchorOutfitId = nil
         transitionAnchorFrameIndex = nil
         currentDisplayedFrame = [:]
-        generationReadyForReview = false
         isCarouselOpen = false
         unreadNotificationCount = 0
         currentProfile = nil
@@ -209,7 +249,6 @@ class OutfitStore {
         }
     }
     var hasPlayedInitialListEntrance = false
-    var uploadTask: Task<Void, Never>?
     var currentProfile: Profile?
     var feedOutfitCache: [String: Outfit] = [:]
 
@@ -232,23 +271,6 @@ class OutfitStore {
         // surfaces the most recent fit at the top of the grid.
         archiveOutfits.sorted { a, b in
             (a.outfitNumber ?? 0) > (b.outfitNumber ?? 0)
-        }
-    }
-
-    var isUploadInProgress: Bool {
-        uploadJob?.isProcessing == true
-    }
-
-    var uploadIndicatorProgress: Double {
-        guard let uploadJob, isUploadInProgress else { return 0 }
-
-        switch uploadJob.loaderStage {
-        case .removingBackground:
-            return 0.12
-        case .creatingInteractiveFit:
-            return 0.42
-        case .compressing:
-            return min(0.96, 0.5 + (uploadJob.progress ?? 0) * 0.46)
         }
     }
 
@@ -596,62 +618,75 @@ class OutfitStore {
         }
     }
 
-    func replaceUploadTask(with task: Task<Void, Never>?) {
-        uploadTask?.cancel()
-        uploadTask = task
-    }
-
-    func cancelUploadTask() {
-        uploadTask?.cancel()
-        uploadTask = nil
-    }
-
-    func restorePersistedPendingReviewIfNeeded() {
-        guard let userId,
-              uploadJob == nil,
-              let review = LocalOutfitStore.shared.loadPendingReview(userId: userId) else {
-            return
-        }
-
-        uploadJob = review.makePipelineJob()
-        generationReadyForReview = true
-    }
-
-    /// Called on app launch/foreground. Finds any server-completed job waiting for review
-    /// and restores it so the user can accept/retake without losing their generation.
+    /// Called on app launch/foreground. Pulls every server-side job
+    /// the user has running (still polling) *or* sitting in review,
+    /// rebuilds a `PipelineJob` for each, and drops them into the
+    /// generation queue. For in-flight ones the orchestrator's
+    /// `resume(_:)` re-attaches polling — without this, killing the
+    /// app mid-3D-render means the server finishes the job but the
+    /// client never sees it.
     func checkForServerCompletedJob(userId: UUID) async {
-        guard uploadJob == nil else { return }
-
         do {
-            guard let record = try await GenerationJobService.shared.fetchPendingReviewJob(userId: userId),
-                  var remoteOutfit = record.remoteOutfit else { return }
-
-            // If the outfit already exists in the archive the user already accepted it —
-            // mark it accepted on the server and skip restoring the review screen.
-            let alreadyAccepted = outfits.contains { $0.id == remoteOutfit.id }
-            if alreadyAccepted {
-                Task { try? await GenerationJobService.shared.markAccepted(jobId: record.id, isPublished: false) }
-                return
-            }
-
-            remoteOutfit.isRotationReversed = false
-
-            let job = PipelineJob(outfitNum: remoteOutfit.outfitNumber ?? 0)
-            job.step = .review
-            job.isProcessing = false
-            job.serverJobId = record.id
-            job.stagedOutfit = remoteOutfit
-            job.statusTitle = "Ready"
-            job.statusDetail = "Your interactive fit is ready for review."
+            async let inflightTask = GenerationJobService.shared.fetchInflightJobs(userId: userId)
+            async let reviewTask = GenerationJobService.shared.fetchPendingReviewJob(userId: userId)
+            let (inflight, reviewRecord) = try await (inflightTask, reviewTask)
 
             await MainActor.run {
-                guard self.userId == userId, uploadJob == nil else { return }
-                uploadJob = job
-                generationReadyForReview = true
+                guard self.userId == userId else { return }
+
+                let knownJobIds = Set(
+                    (generationQueue.activeJobs + generationQueue.waitingJobs)
+                        .compactMap(\.serverJobId)
+                )
+
+                for record in inflight {
+                    guard !knownJobIds.contains(record.id) else { continue }
+                    let job = restoredJob(from: record, outfit: nil)
+                    generationQueue.adoptFromServer(job)
+                    generationOrchestrator.resume(job)
+                }
+
+                if let record = reviewRecord,
+                   var remoteOutfit = record.remoteOutfit {
+                    // Already in archive → user accepted it on another
+                    // device or pre-rebuild. Mark accepted server-side
+                    // so it stops re-surfacing, don't restore.
+                    if outfits.contains(where: { $0.id == remoteOutfit.id }) {
+                        Task { try? await GenerationJobService.shared.markAccepted(jobId: record.id, isPublished: false) }
+                    } else if !knownJobIds.contains(record.id) {
+                        remoteOutfit.isRotationReversed = false
+                        let job = restoredJob(from: record, outfit: remoteOutfit)
+                        generationQueue.adoptFromServer(job)
+                        // No `resume` — review-ready jobs aren't
+                        // polled; the card just sits waiting for Accept.
+                    }
+                }
             }
         } catch {
             // Non-fatal — user can still manually check
         }
+    }
+
+    private func restoredJob(from record: GenerationJobRecord, outfit: Outfit?) -> PipelineJob {
+        let outfitNum = record.outfitNum
+            ?? outfit?.outfitNumber
+            ?? LocalOutfitStore.shared.nextOutfitNum(userId: userId ?? UUID())
+        let job = PipelineJob(outfitNum: outfitNum)
+        job.serverJobId = record.id
+        job.loaderStage = record.loaderStage
+        if let outfit {
+            job.stagedOutfit = outfit
+            job.step = .review
+            job.isProcessing = false
+            job.statusTitle = "READY TO REVIEW"
+            job.statusDetail = "Spin's ready to view."
+        } else {
+            job.step = .generate
+            job.isProcessing = true
+            job.statusTitle = "GENERATING 3D"
+            job.statusDetail = "Spinning your fit..."
+        }
+        return job
     }
 
     func isLocalOutfit(_ outfit: Outfit) -> Bool {

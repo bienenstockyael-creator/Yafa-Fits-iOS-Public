@@ -32,7 +32,6 @@ struct YaelFitsApp: App {
                                     async let social: Void = outfitStore.loadSocialData(userId: userId)
                                     async let data: Void = outfitStore.loadData()
                                     _ = await (social, data)
-                                    outfitStore.restorePersistedPendingReviewIfNeeded()
                                     await outfitStore.checkForServerCompletedJob(userId: userId)
                                     await outfitStore.refreshUnreadNotificationCount()
                                     let needsSetup = outfitStore.currentProfile?.username == nil || (outfitStore.currentProfile?.username ?? "").isEmpty

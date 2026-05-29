@@ -29,9 +29,69 @@ struct RootView: View {
     @State private var closetAvatar: UIImage?
     @State private var hydratedAvatarForUserId: UUID?
     @State private var feedHasAppeared = false
-    // In-app notification banner
-    @State private var showReviewBanner = false
-    @State private var bannerDismissTask: Task<Void, Never>?
+
+    /// Drives the floating picker (camera roll + camera squares
+    /// above the tab bar). Tapping the upload tab toggles this
+    /// instead of navigating to a separate page.
+    @State private var showGenerationPicker = false
+
+    /// Job id of the currently expanded card. Non-nil = card is
+    /// mounted. Goes nil only after the dismiss morph completes
+    /// (via `withAnimation` completion callback) so the morphing
+    /// view stays in the tree throughout the animation.
+    @State private var expandedJobId: String?
+
+    /// Drives the morph between pill-shape (false) and card-shape
+    /// (true). Flipped inside `withAnimation` after the card mounts
+    /// — that's what the card's `.frame + .position + .clipShape`
+    /// interpolate against.
+    @State private var isCardExpanded: Bool = false
+
+    /// Bottom-relative index of the tapped pill (0 = bottom/newest,
+    /// 1 = above it, etc). The card uses this to compute the
+    /// pill-state rect at the correct Y, so the morph appears to
+    /// originate from the *specific* pill the user tapped — not
+    /// just the bottom of the stack.
+    @State private var expandedPillIndex: Int = 0
+
+    /// Cold-path expand defers the morph one runloop tick so the
+    /// card has a chance to mount at pill rect before .frame /
+    /// .position start interpolating. Held in @State so a rapid
+    /// tap → dismiss can cancel it before it fires (otherwise
+    /// the card jumps open right as the user's closing it).
+    @State private var morphPrepTask: Task<Void, Never>?
+
+    /// Captured reference to the currently-expanded job. The card
+    /// renders off this rather than looking up `expandedJobId` in
+    /// the queue, so when the job is cancelled (and removed from
+    /// the queue async, outside any `withAnimation` block) the
+    /// card stays mounted until the dismiss completion explicitly
+    /// clears it. Without this, the queue-side removal snaps the
+    /// card off mid-morph via the `job(withId:)` lookup failing.
+    @State private var expandedJob: PipelineJob?
+
+
+    /// When the queue has 2+ jobs, the pill stack defaults to a
+    /// collapsed "chip" form (`GenerationChipPill`) showing
+    /// overlapping thumbnails + count. Tapping the chip flips
+    /// this true and the chip explodes into the full
+    /// `GenerationPillStack`. Opening a card flips it false so
+    /// the stack re-collapses into the chip behind the card —
+    /// the card + chip are the two visible elements in card
+    /// state, never the full stack. Swiping the card down or
+    /// tapping the chip flips it true again on the way back.
+    @State private var isChipExpanded: Bool = false
+
+    /// Shared namespace for the chip ↔ stack matched-geometry
+    /// pairing. The bottom pill in the stack and the chip claim
+    /// the same `"compact-pill"` id so their frames morph into
+    /// each other rather than crossfading. Each pill's thumbnail
+    /// and the chip's corresponding thumbnail are also paired by
+    /// `"thumb-<jobId>"`, so upper pills' thumbs fly into the
+    /// chip's thumbnail slots on collapse (and back out on
+    /// expand).
+    @Namespace private var pillsNamespace
+
 
     /// Per-view opacities for the list↔calendar crossfade. Both views
     /// stay mounted in a ZStack; opacity controls which is visible.
@@ -61,16 +121,26 @@ struct RootView: View {
                     ZStack {
                         OutfitGridView(
                             transitionNamespace: listCalendarNamespace,
-                            onToggleToCalendar: { switchView(to: .calendar) }
+                            onToggleToCalendar: { switchView(to: .calendar) },
+                            onExpandGenerationJob: { job in expandPill(job: job) },
+                            onScrollBegan: { dismissOverlaysOnScroll() }
                         )
                             .opacity(listOpacity)
                             .allowsHitTesting(store.currentView == .list)
-                        CalendarMonthView(transitionNamespace: listCalendarNamespace)
+                        CalendarMonthView(
+                            transitionNamespace: listCalendarNamespace,
+                            onExpandGenerationJob: { job in expandPill(job: job) },
+                            onScrollBegan: { dismissOverlaysOnScroll() }
+                        )
                             .opacity(calendarOpacity)
                             .allowsHitTesting(store.currentView == .calendar)
                     }
                 case .upload:
-                    UploadPipelineView()
+                    // Dead branch — the upload tab no longer routes
+                    // to a navigation target; tapping it opens the
+                    // floating `GenerationPicker` above the tab
+                    // bar. Kept for the `AppView` enum exhaustiveness.
+                    EmptyView()
                 case .profile:
                     ProfileView()
                 default:
@@ -131,26 +201,163 @@ struct RootView: View {
                     .zIndex(999)
             }
 
-            // In-app review notification banner
-            if showReviewBanner {
-                VStack {
-                    reviewBanner
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                    Spacer()
-                }
-                .zIndex(500)
+            // Floating camera-roll / camera picker — sits above the
+            // tab bar with a tap-outside scrim.
+            if showGenerationPicker {
+                GenerationPicker(
+                    isPresented: $showGenerationPicker,
+                    onImagePicked: handlePickedImage
+                )
+                .zIndex(600)
+            }
+
+            // Tap-outside backdrop for the expanded chip stack OR
+            // expanded card. Lives at the outer ZStack level so it
+            // stays full-screen regardless of the card's
+            // interpolated frame. Visible whenever the stack is
+            // exploded (chip → pills) or the card is open;
+            // tapping it fully collapses everything back to the
+            // chip — distinct from swipe-down or tap-chip which
+            // both go through `returnCardToStack` and only undo
+            // one level at a time.
+            if isChipExpanded || isCardExpanded {
+                Color.black.opacity(0.18)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture { fullyCollapse() }
+                    .transition(.opacity)
+                    .zIndex(605)
+            }
+
+            // Generation expanded card. Mounted whenever
+            // `expandedJob` is set; unmounted after dismiss
+            // animation completes. Morph state driven by
+            // `isCardExpanded`.
+            if let job = expandedJob {
+                // Chip is hidden when there's only one job in the
+                // queue (the one being expanded). With >1 job the
+                // chip stays visible behind the card as a queue
+                // indicator — so the card needs to know whether
+                // there's a chip below to anchor against, or
+                // whether to center in the viewport.
+                let totalJobs = store.generationQueue.activeJobs.count + store.generationQueue.waitingJobs.count
+                GenerationExpandedCard(
+                    job: job,
+                    phase: store.generationQueue.phase(for: job),
+                    isExpanded: isCardExpanded,
+                    pillIndexFromBottom: expandedPillIndex,
+                    hasChipBehind: totalJobs > 1,
+                    onCancel: {
+                        // Dismiss the card first, then cancel the
+                        // orchestrator + remove the job from the
+                        // queue after the morph has settled. The
+                        // delay keeps the chip behind visible
+                        // throughout the morph so the snap unmount
+                        // lands on matching chrome (instead of an
+                        // empty space when the queue suddenly
+                        // empties mid-morph).
+                        returnCardToStack()
+                        store.generationOrchestrator.cancel(job)
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 350_000_000)
+                            await store.generationQueue.cancel(job)
+                        }
+                    },
+                    onSave2D: {
+                        returnCardToStack()
+                        store.generationOrchestrator.saveAs2D(job)
+                    },
+                    onMake3D: {
+                        // Don't dismiss — the user wants to stay
+                        // on the card to watch the 3D render. The
+                        // orchestrator advances the job's phase,
+                        // which flips the card's content from
+                        // `decisionContent` to `inProgressContent`
+                        // (rendering3D) automatically.
+                        store.generationOrchestrator.make3D(job)
+                    },
+                    onAccept: {
+                        returnCardToStack()
+                        store.generationOrchestrator.accept(job)
+                    },
+                    onAcceptAndPublish: {
+                        returnCardToStack()
+                        store.generationOrchestrator.acceptAndPublish(job)
+                    },
+                    onRetake: {
+                        store.generationOrchestrator.retake(job)
+                    },
+                    onReverseRotation: {
+                        // Toggle on the job AND mirror to the
+                        // staged outfit so `RotatableOutfitImage`
+                        // (which reads from the outfit) actually
+                        // reverses. Just toggling the job had no
+                        // visible effect.
+                        guard var staged = job.stagedOutfit else { return }
+                        let newValue = !job.isRotationReversed
+                        job.isRotationReversed = newValue
+                        staged.isRotationReversed = newValue
+                        job.stagedOutfit = staged
+                    },
+                    // Swipe-down: card → pill in stack. Different
+                    // from tapping the backdrop, which goes all
+                    // the way to the chip via `fullyCollapse`.
+                    onDismiss: { returnCardToStack() }
+                )
+                .zIndex(610)
+                .transition(.opacity)
             }
         }
         .safeAreaInset(edge: .bottom) {
-            // Keep the tab bar mounted always — toggling its
-            // presence in the safe-area inset changes the bottom
-            // inset by ~46pt, which causes the underlying grid to
-            // visibly "jump down" right as the carousel mounts on
-            // top of it. Fade it out + drop hit-testing instead so
-            // the inset stays stable across the transition.
-            tabBar
-                .opacity(store.isCarouselOpen ? 0 : 1)
-                .allowsHitTesting(!store.isCarouselOpen)
+            // Pill area + tab bar live in the safe-area inset.
+            // The pill area is wrapped in a *fixed-height* slot
+            // (`Color.clear.frame(height: 52)`) so the inset
+            // doesn't reflow when the chip toggles between
+            // collapsed (52pt) and expanded stack (52-164pt).
+            // Anything anchored to the safe area (the floating
+            // bookmark button, the bottom gradient) used to
+            // bounce up and down on every chip ↔ stack swap;
+            // with the slot pinned, the inset height stays
+            // constant and the expanded stack extends *upward*
+            // over the main content via `.overlay(alignment:
+            // .bottom)` — it overlays the grid rather than
+            // pushing the safe area up.
+            let hasJobs = !store.generationQueue.activeJobs.isEmpty
+                || !store.generationQueue.waitingJobs.isEmpty
+            VStack(spacing: LayoutMetrics.xxSmall) {
+                if hasJobs {
+                    Color.clear
+                        .frame(height: 52)
+                        .overlay(alignment: .bottom) {
+                            pillsArea
+                        }
+                        // Scale + opacity removal so the chip / pill
+                        // inside the slot softly shrinks and fades
+                        // as the last job leaves the queue — no
+                        // hard cut. Anchored .bottom so the shrink
+                        // collapses toward the tab bar, mirroring
+                        // the slot's bottom-aligned overlay.
+                        .transition(
+                            .asymmetric(
+                                insertion: .opacity,
+                                removal: .scale(scale: 0.6, anchor: .bottom).combined(with: .opacity)
+                            )
+                        )
+                }
+                tabBar
+            }
+            // Animate the inset's 1 ↔ 0 jobs reflow. Without
+            // this, canceling the last in-flight job (where the
+            // queue update lands async, outside any withAnimation
+            // block) would snap the safe-area inset's height —
+            // and everything anchored to the safe area (the
+            // bookmark button, the bottom gradient) along with it.
+            // Scoped to `hasJobs` so other state changes inside
+            // the VStack (chip ↔ stack swap, opacity toggles)
+            // run on their own curves.
+            .animation(.spring(response: 0.35, dampingFraction: 0.85), value: hasJobs)
+            .opacity(store.isCarouselOpen ? 0 : 1)
+            .allowsHitTesting(!store.isCarouselOpen)
         }
         // Has to sit AFTER `.safeAreaInset(.bottom)` — applied
         // before it, the inset re-wraps the view and re-introduces
@@ -164,7 +371,6 @@ struct RootView: View {
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         }
         .onAppear {
-            store.restorePersistedPendingReviewIfNeeded()
             syncLoadingOverlay(isLoading: store.isLoading)
             hydrateClosetAvatarIfNeeded()
             Task {
@@ -177,17 +383,10 @@ struct RootView: View {
         .onChange(of: store.isLoading) { _, isLoading in
             syncLoadingOverlay(isLoading: isLoading)
         }
-        .onChange(of: store.generationReadyForReview) { _, ready in
-            guard ready else { return }
-            store.generationReadyForReview = false
-            if store.currentView != .upload {
-                presentReviewBanner()
-            }
-        }
         .onDisappear {
             loaderDismissTask?.cancel()
-            bannerDismissTask?.cancel()
             transitionTask?.cancel()
+            morphPrepTask?.cancel()
         }
         .sheet(isPresented: $showsFavoritesSheet) {
             FavoritesSheetView()
@@ -275,6 +474,261 @@ struct RootView: View {
         !store.isLoading
             && store.selectedOutfitId == nil
             && (store.currentView == .list || store.currentView == .calendar)
+    }
+
+    /// Picker callback. Encodes the selected `UIImage` to JPEG data
+    /// and enqueues a new generation. Weather + location are stamped
+    /// later by `RealGenerationOrchestrator` via `UploadWeatherService`.
+    private func handlePickedImage(_ image: UIImage) {
+        guard let data = image.jpegData(compressionQuality: 1) else { return }
+
+        // Take the user to where the new placeholder will appear.
+        // If on Calendar, swap to the index first; if on Feed,
+        // Profile, etc., the user is on the relevant surface
+        // already (the placeholder lives in the archive grid).
+        // Leave non-archive surfaces alone — the brief said only
+        // the index/calendar should be affected.
+        if store.currentView == .calendar {
+            switchView(to: .list)
+        }
+        // Wrap enqueue in withAnimation so the chip's first
+        // appearance (queue going from empty to 1 job, which
+        // triggers both the safe-area inset's slot to appear and
+        // the chip's `.transition(.opacity)` to fade in) is
+        // smooth. Without this, the enqueue lands as a bare
+        // synchronous state change and the chip pops in with a
+        // hard cut even though the chip view itself has a
+        // transition modifier.
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+            store.generationQueue.enqueue(
+                sourceImage: data,
+                weather: nil,
+                location: nil
+            )
+        }
+        // Scroll to top so the new placeholder is in view. Slight
+        // delay so the placeholder is mounted before the scroll
+        // command fires.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            store.archiveScrollToTopTrigger += 1
+        }
+    }
+
+    /// Single morph curve for everything — open, close, chip ↔
+    /// stack reflow, backdrop fade. This curve (response 0.3,
+    /// damping 0.78) was the "snappy + a bit of spring" config
+    /// that felt right.
+    /// Spring curve the user explicitly preferred earlier in
+    /// development — "ok nicer!!" with response 0.3, damping
+    /// 0.78. Has a tiny natural bounce that reads as fluid rather
+    /// than mechanical. The shorter `.snappy` / `.smooth` curves
+    /// we tried later felt clipped.
+    private static let cardMorphAnimation: Animation = .spring(response: 0.3, dampingFraction: 0.78)
+
+    /// Chip ↔ stack conditional. The chip is the default
+    /// "minimized" form and handles 1+ jobs — for 1 job it
+    /// renders like a single pill (one thumb + status text), and
+    /// for 2+ it grows additional thumbnails and switches to
+    /// `+N` once the count exceeds 3. The stack only renders
+    /// when the user explicitly expands the chip (or has a card
+    /// open via the warm path). Both branches participate in
+    /// the shared `pillsNamespace` matched-geometry pairing so
+    /// chip ↔ stack morphs frames rather than crossfading.
+    @ViewBuilder
+    private var pillsArea: some View {
+        let jobs = store.generationQueue.activeJobs + store.generationQueue.waitingJobs
+        Group {
+            if jobs.isEmpty {
+                EmptyView()
+            } else if isChipExpanded && jobs.count >= 2 {
+                GenerationPillStack(
+                    queue: store.generationQueue,
+                    expandedJobId: expandedJobId,
+                    isCardExpanded: isCardExpanded,
+                    namespace: pillsNamespace
+                ) { job in
+                    UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+                    expandPill(job: job)
+                }
+                // Fade-only transition: the matched-geometry on the
+                // bottom pill ↔ chip handles the frame morph, and
+                // the per-thumbnail matched-geometry handles thumb
+                // movement. .opacity is the residual fade for the
+                // rest of the pill chrome / upper pills which have
+                // no chip counterpart.
+                .transition(.opacity)
+            } else {
+                GenerationChipPill(
+                    jobs: jobs,
+                    queue: store.generationQueue,
+                    namespace: pillsNamespace,
+                    isHostingExpandedCard: expandedJobId != nil
+                ) {
+                    UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+                    handleChipTap(jobs: jobs)
+                }
+                // Scale + opacity so the chip softly shrinks out
+                // when the last job completes / is cancelled,
+                // instead of cutting away.
+                .transition(.scale(scale: 0.6).combined(with: .opacity))
+            }
+        }
+    }
+
+    private func expandPill(job: PipelineJob) {
+        let all = store.generationQueue.activeJobs + store.generationQueue.waitingJobs
+        let newPillIndex: Int
+        if let arrayIndex = all.firstIndex(where: { $0.id == job.id }) {
+            newPillIndex = all.count - 1 - arrayIndex
+        } else {
+            newPillIndex = 0
+        }
+
+        // Warm path — a card is already mounted (currently
+        // expanded, mid-expand, or mid-dismiss). Swap content +
+        // target in one withAnimation so we never race a stale
+        // dismiss completion against the new expand. The card
+        // re-renders with the new job's content and morphs to
+        // card state in the same gesture.
+        if expandedJobId != nil {
+            morphPrepTask?.cancel()
+            withAnimation(Self.cardMorphAnimation) {
+                expandedJob = job
+                expandedJobId = job.id
+                expandedPillIndex = newPillIndex
+                isCardExpanded = true
+                isChipExpanded = false
+            }
+            return
+        }
+
+        // Cold path — mount card at pill rect sync, then schedule
+        // the morph on the next runloop tick. The chip-collapse
+        // (isChipExpanded = false) happens inside the same
+        // withAnimation as the card morph so the stack folds back
+        // into the chip in lockstep with the pill growing into
+        // the card. Held in a cancellable Task so a rapid tap →
+        // dismiss before the morph fires kills it cleanly.
+        expandedJob = job
+        expandedJobId = job.id
+        expandedPillIndex = newPillIndex
+        morphPrepTask?.cancel()
+        morphPrepTask = Task { @MainActor in
+            // 1-frame sleep (16ms) rather than `Task.yield()` —
+            // yield wasn't reliable enough to guarantee SwiftUI
+            // had rendered the pill-rect mount before the morph
+            // started, and the card sometimes appeared at card
+            // state directly with no morph visible.
+            try? await Task.sleep(nanoseconds: 16_000_000)
+            guard !Task.isCancelled, expandedJobId == job.id else { return }
+            withAnimation(Self.cardMorphAnimation) {
+                isCardExpanded = true
+                isChipExpanded = false
+            }
+        }
+    }
+
+    /// Chip tap dispatch. Three cases:
+    /// - Card open → behaves like swipe-down: card morphs back
+    ///   to its pill and the chip explodes into the stack.
+    /// - Single job in the queue → skip the stack-of-one and
+    ///   open that job's card directly. There's nothing to
+    ///   "expand into" when there's only one pill.
+    /// - 2+ jobs → expand the chip into the full stack.
+    /// Called by the grid (and other scrollable surfaces) when the
+    /// user starts scrolling. Collapses an open generation card /
+    /// picker / expanded stack so they don't block the content the
+    /// user is reaching for — no need to tap out first.
+    private func dismissOverlaysOnScroll() {
+        if expandedJobId != nil {
+            returnCardToStack()
+            return
+        }
+        if showGenerationPicker {
+            withAnimation(.spring(response: 0.2, dampingFraction: 0.75)) {
+                showGenerationPicker = false
+            }
+            return
+        }
+        if isChipExpanded {
+            withAnimation(Self.cardMorphAnimation) {
+                isChipExpanded = false
+            }
+        }
+    }
+
+    private func handleChipTap(jobs: [PipelineJob]) {
+        // Picker and chip-driven UI share the same slot above the
+        // tab bar — chip taps always dismiss the picker first.
+        if showGenerationPicker {
+            withAnimation(.spring(response: 0.2, dampingFraction: 0.75)) {
+                showGenerationPicker = false
+            }
+        }
+        if expandedJobId != nil {
+            returnCardToStack()
+        } else if jobs.count == 1, let job = jobs.first {
+            expandPill(job: job)
+        } else {
+            withAnimation(Self.cardMorphAnimation) {
+                isChipExpanded = true
+            }
+        }
+    }
+
+    /// Card → pill-in-stack. Morph back to pill rect via
+    /// `withAnimation`, then snap the unmount in the completion
+    /// handler. Snap is invisible when there's a chip / real pill
+    /// behind with matching chrome (the common case). For the
+    /// cancel-last-job edge case the card just disappears at the
+    /// end of the morph — handled separately by delaying the
+    /// queue.remove in `onCancel`.
+    ///
+    /// `isChipExpanded` flips true only when 2+ jobs remain. For
+    /// 1 job there's no stack to return to — the chip *is* the
+    /// stack of one — so we stay in chip mode.
+    private func returnCardToStack() {
+        morphPrepTask?.cancel()
+        let jobBeingDismissed = expandedJobId
+        let jobsCount = store.generationQueue.activeJobs.count
+            + store.generationQueue.waitingJobs.count
+        withAnimation(Self.cardMorphAnimation) {
+            isCardExpanded = false
+            isChipExpanded = jobsCount >= 2
+        } completion: {
+            guard expandedJobId == jobBeingDismissed, !isCardExpanded else { return }
+            expandedJob = nil
+            expandedJobId = nil
+        }
+    }
+
+    /// Card and/or stack → chip. The user's "harder" dismiss:
+    /// tap anywhere outside both. Card morphs back to its pill
+    /// rect and the stack folds into the chip in one motion;
+    /// if only the stack was open (no card), just the chip
+    /// re-collapse runs.
+    ///
+    /// `expandedPillIndex = 0` retargets the card's morph back
+    /// to the bottom slot — the chip's position. Without this,
+    /// the card would morph back to whichever slot it came from
+    /// (potentially 2-3 slots above the chip), unmount in empty
+    /// space, and the chip would still be sitting at slot 0
+    /// below. The retarget makes the card visually "merge into"
+    /// the chip.
+    private func fullyCollapse() {
+        morphPrepTask?.cancel()
+        let jobBeingDismissed = expandedJobId
+        withAnimation(Self.cardMorphAnimation) {
+            isCardExpanded = false
+            isChipExpanded = false
+            if expandedJobId != nil {
+                expandedPillIndex = 0
+            }
+        } completion: {
+            guard expandedJobId == jobBeingDismissed, !isCardExpanded else { return }
+            expandedJob = nil
+            expandedJobId = nil
+        }
     }
 
     private var topBar: some View {
@@ -624,8 +1078,41 @@ struct RootView: View {
 
     private func tabItem(icon: AppIconGlyph, iconSize: CGFloat = 24, label: String, tab: AppView) -> some View {
         let isActive = store.currentView == tab || (tab == .list && store.currentView == .calendar)
-        let showsUploadActivity = tab == .upload && store.isUploadInProgress
+        // Count any active or waiting generations from the queue.
+        // Drives the upload tab icon's glow ring and the small
+        // badge bubble in the corner.
+        let inFlightGenerations = store.generationQueue.inFlightCount
+        let showsUploadActivity = tab == .upload && inFlightGenerations > 0
         return Button {
+            // Upload tab is no longer a navigation target — it's an
+            // action that opens the floating picker above the tab
+            // bar. Skip the normal currentView routing entirely.
+            if tab == .upload {
+                UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+                // Minimize any open card back to its pill first —
+                // the picker buttons (camera / camera roll) sit
+                // just above the pill area, and a card on screen
+                // would cover them. `returnCardToStack` runs the
+                // card morph on its own animation curve; the
+                // picker toggle's spring runs in parallel.
+                if expandedJobId != nil {
+                    returnCardToStack()
+                }
+                withAnimation(.spring(response: 0.2, dampingFraction: 0.75)) {
+                    showGenerationPicker.toggle()
+                    // When the picker opens, collapse any expanded
+                    // stack back to the chip — the picker buttons
+                    // sit just above the pill area, and a tall
+                    // stack would push them up or overlap. The
+                    // chip is a constant 52pt slot so the picker
+                    // has a stable visual anchor.
+                    if showGenerationPicker {
+                        isChipExpanded = false
+                    }
+                }
+                return
+            }
+
             let targetTab = (tab == .list && store.currentView == .calendar) ? AppView.list : tab
             // The Profile tab counts as "active" in both `.list` and
             // `.calendar` (its icon highlights for either), so the
@@ -694,7 +1181,7 @@ struct RootView: View {
                         UploadTabIconView(
                             isActive: isActive,
                             isAnimating: showsUploadActivity,
-                            progress: store.uploadIndicatorProgress
+                            progress: store.generationQueue.aggregateUploadProgress
                         )
                     } else {
                         AppIcon(
@@ -724,7 +1211,7 @@ struct RootView: View {
                     }
 
                     if showsUploadActivity {
-                        Text("1")
+                        Text("\(max(inFlightGenerations, 1))")
                             .font(.system(size: 9, weight: .bold))
                             .foregroundStyle(AppPalette.uploadGlow)
                             .frame(width: 18, height: 18)
@@ -743,6 +1230,7 @@ struct RootView: View {
                             }
                             .overlay(Circle().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
                             .offset(x: 8, y: -5)
+                            .contentTransition(.numericText(value: Double(inFlightGenerations)))
                     }
                 }
                 .frame(width: 36, height: 36)
@@ -880,50 +1368,6 @@ struct RootView: View {
             try? await Task.sleep(for: .milliseconds(Int(AppConfig.loaderFadeDuration * 1000)))
             guard !Task.isCancelled else { return }
             loaderMounted = false
-        }
-    }
-
-    // MARK: - Review Notification Banner
-
-    private var reviewBanner: some View {
-        Button {
-            dismissReviewBanner()
-            let impact = UIImpactFeedbackGenerator(style: .light)
-            impact.impactOccurred()
-            store.currentView = .upload
-        } label: {
-            HStack(spacing: 6) {
-                AppIcon(glyph: .check, size: 12, color: AppPalette.uploadGlow)
-                Text("Your fit is ready")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(AppPalette.uploadGlow)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .appCapsule()
-            .shadow(color: AppPalette.uploadGlow.opacity(0.2), radius: 8, y: 2)
-        }
-        .buttonStyle(.plain)
-        .padding(.top, 54)
-        .scaleEffect(showReviewBanner ? 1 : 0.85)
-    }
-
-    private func presentReviewBanner() {
-        bannerDismissTask?.cancel()
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-            showReviewBanner = true
-        }
-        bannerDismissTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(5))
-            guard !Task.isCancelled else { return }
-            dismissReviewBanner()
-        }
-    }
-
-    private func dismissReviewBanner() {
-        bannerDismissTask?.cancel()
-        withAnimation(.timingCurve(0.4, 0, 0.2, 1, duration: 0.3)) {
-            showReviewBanner = false
         }
     }
 

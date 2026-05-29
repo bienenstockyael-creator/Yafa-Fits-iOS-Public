@@ -6,6 +6,17 @@ struct CalendarMonthView: View {
     /// Cross-view transition namespace passed in from RootView.
     var transitionNamespace: Namespace.ID
 
+    /// Tap on a generation placeholder card — RootView opens the
+    /// expanded card for that job. Same callback shape as
+    /// `OutfitGridView.onExpandGenerationJob`.
+    var onExpandGenerationJob: (PipelineJob) -> Void = { _ in }
+
+    /// Fired when the user starts scrolling the calendar. RootView
+    /// uses this to morph an open generation card / picker / stack
+    /// back to its pill — matching the grid view's behavior so the
+    /// dismiss never reads as a hard cut.
+    var onScrollBegan: () -> Void = {}
+
     private let calendar = Calendar.current
     private let monthTitleColor = AppPalette.textStrong
     private let activeDayColor = AppPalette.textPrimary
@@ -22,6 +33,7 @@ struct CalendarMonthView: View {
     /// each other's `pendingCalendarScrollOutfitId` clears, which
     /// confuses the transition's Phase-1 wait.
     @State private var pendingScrollTask: Task<Void, Never>?
+    @State private var lastObservedScrollOffset: CGFloat = 0
 
     private let columns = [
         GridItem(.flexible(), spacing: 28, alignment: .top),
@@ -32,11 +44,29 @@ struct CalendarMonthView: View {
         ScrollViewReader { reader in
             ScrollView {
                 VStack(alignment: .leading, spacing: 34) {
+                    // Zero-height KVO probe on the underlying
+                    // UIScrollView's contentOffset. Mirrors
+                    // OutfitGridView's setup so calendar scroll also
+                    // dismisses an open card / picker via the same
+                    // morph animation (instead of a hard cut on
+                    // tab-switch / scroll).
+                    ScrollOffsetObserver { offsetY in
+                        if abs(offsetY - lastObservedScrollOffset) > 4 {
+                            onScrollBegan()
+                        }
+                        lastObservedScrollOffset = offsetY
+                    }
+                    .frame(width: 0, height: 0)
+
                     // No in-page section header here — on calendar,
                     // the grid/calendar toggle lives in the top bar
                     // (RootView) so the calendar layout stays clean
                     // and matches the grid view's vertical anchor for
-                    // the toggle.
+                    // the toggle. In-flight generation placeholders
+                    // render inline in today's calendar slot (see
+                    // `calendarDay`) rather than as a separate strip,
+                    // so a freshly-kicked-off job lands at the right
+                    // date instead of floating above the months.
                     ForEach(monthSections) { section in
                         monthSection(section)
                     }
@@ -59,6 +89,30 @@ struct CalendarMonthView: View {
                 scrollToPendingTarget(using: reader, animated: false)
             }
         }
+    }
+
+    // MARK: - Generation placeholders
+
+    /// In-flight generation jobs whose committed outfit hasn't
+    /// landed in the archive yet. Filtering matches `OutfitGridView`
+    /// so a job briefly between accept and queue-removal doesn't
+    /// double-render.
+    private var generationPlaceholderJobs: [PipelineJob] {
+        let queue = store.generationQueue
+        let archived = Set(store.outfits.map(\.id))
+        let all = queue.activeJobs + queue.waitingJobs
+        return all.filter { job in
+            guard let resultId = job.resultOutfitId else { return true }
+            return !archived.contains(resultId)
+        }
+    }
+
+    /// First in-flight job to surface in today's calendar slot.
+    /// The calendar grid is one cell per day, so we can't show
+    /// every queued job inline — additional placeholders stay
+    /// accessible via the floating pill stack.
+    private var todayPlaceholderJob: PipelineJob? {
+        generationPlaceholderJobs.first
     }
 
     // MARK: - Month & Day rendering
@@ -138,6 +192,19 @@ struct CalendarMonthView: View {
                     .onDisappear {
                         store.calendarOutfitFrames[outfit.id] = nil
                     }
+                } else if calendar.isDateInToday(day.date),
+                          let placeholder = todayPlaceholderJob {
+                    // In-flight generation kicked off today — sits in
+                    // today's calendar cell so the placeholder lives
+                    // at the right date instead of as a top-of-page
+                    // strip.
+                    GenerationPlaceholderCard(
+                        job: placeholder,
+                        phase: store.generationQueue.phase(for: placeholder),
+                        onTap: { onExpandGenerationJob(placeholder) },
+                        compact: true
+                    )
+                    .frame(height: 156)
                 } else {
                     Color.clear
                         .frame(height: 156)
@@ -157,13 +224,28 @@ struct CalendarMonthView: View {
 
     private var monthSections: [MonthSection] {
         let grouped = Dictionary(grouping: store.sortedOutfits) { $0.monthBucket ?? .distantPast }
-
-        return grouped.keys
+        var sections = grouped.keys
             .sorted(by: >)
             .map { month in
                 let outfits = grouped[month] ?? []
                 return MonthSection(month: month, days: days(for: month, outfits: outfits))
             }
+
+        // If there's an in-flight job today but no outfits exist for
+        // the current month yet, the current month wouldn't appear at
+        // all and the placeholder would have nowhere to render. Add
+        // a synthetic empty month so today's slot can host the
+        // placeholder card.
+        if todayPlaceholderJob != nil,
+           let currentMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: Date())),
+           !sections.contains(where: { calendar.isDate($0.month, equalTo: currentMonth, toGranularity: .month) }) {
+            sections.insert(
+                MonthSection(month: currentMonth, days: days(for: currentMonth, outfits: [])),
+                at: 0
+            )
+        }
+
+        return sections
     }
 
     private func days(for month: Date, outfits: [Outfit]) -> [CalendarDay] {

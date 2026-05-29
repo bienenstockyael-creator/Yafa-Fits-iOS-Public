@@ -659,14 +659,11 @@ struct CarouselDetailCard: View {
     }
 
     /// Sibling of `publishButton` — same capsule style, placeholder
-    /// action. Phase 3 wires this to route into `UploadPipelineView`
-    /// seeded with the current 2D frame.
+    /// action. Not yet wired to promote a 2D outfit to 3D via the
+    /// generation queue.
     private var make3DButton: some View {
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            // TODO Phase 3: present UploadPipelineView seeded with the
-            // currently-displayed frame so the user can promote a 2D
-            // outfit to 3D.
         } label: {
             Text("Make 3D")
                 .font(.system(size: 13, weight: .semibold))

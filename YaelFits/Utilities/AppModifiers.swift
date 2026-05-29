@@ -4,12 +4,48 @@ import UIKit
 struct LightBlurView: UIViewRepresentable {
     let style: UIBlurEffect.Style
 
+    func makeCoordinator() -> Coordinator {
+        Coordinator(style: style)
+    }
+
     func makeUIView(context: Context) -> UIVisualEffectView {
         UIVisualEffectView(effect: UIBlurEffect(style: style))
     }
 
     func updateUIView(_ uiView: UIVisualEffectView, context: Context) {
+        // Only re-create the blur effect if the style actually
+        // changed. The previous unconditional `uiView.effect =
+        // UIBlurEffect(style: style)` re-instantiated the blur on
+        // EVERY SwiftUI render — and assigning a new
+        // `UIBlurEffect` forces UIKit to tear down and re-sample
+        // the entire backdrop. With multiple blur views on screen
+        // (pill stack, chin, card) this was the dominant lag
+        // source during animations: every frame, every blur view
+        // was being rebuilt from scratch.
+        guard context.coordinator.lastStyle != style else { return }
         uiView.effect = UIBlurEffect(style: style)
+        context.coordinator.lastStyle = style
+    }
+
+    final class Coordinator {
+        var lastStyle: UIBlurEffect.Style
+        init(style: UIBlurEffect.Style) { self.lastStyle = style }
+    }
+}
+
+/// Drop-in replacement for `.buttonStyle(.plain)` on frosted-glass
+/// surfaces. `.plain` still fades the entire label (including its
+/// `.background` slot) on press, which exposes the page background
+/// through any `LightBlurView` chrome — the pill/picker buttons
+/// briefly look transparent on tap. This style keeps the label at
+/// full opacity and replaces the dim with a subtle scale-down for
+/// tactile feedback. Haptics in the action closures provide the
+/// rest of the press signal.
+struct SolidPressButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .animation(.spring(response: 0.2, dampingFraction: 0.8), value: configuration.isPressed)
     }
 }
 

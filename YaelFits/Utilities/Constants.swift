@@ -173,7 +173,7 @@ enum AppPalette {
     static let cardFill = Color.white.opacity(0.48)
     static let cardBorder = Color.white.opacity(0.92)
     static let cardShadow = Color.black.opacity(0.08)
-    static let uploadGlow = Color(red: 0.0, green: 0.8, blue: 0.75)
+    static let uploadGlow = Color(red: 0.5, green: 0.82, blue: 1.0)
     /// Accent for AI-powered actions (Quick Add halo, generation buttons).
     static let aiAccent = Color(red: 0.62, green: 0.55, blue: 0.95)
     static let textStrong = Color(red: 17 / 255, green: 24 / 255, blue: 39 / 255)
