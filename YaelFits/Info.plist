@@ -30,6 +30,8 @@
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>Use the camera to capture a full-body mirror selfie for outfit generation.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Find your friends who are already on Yafa.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Use your location to attach the current weather to uploaded outfits.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

@@ -453,23 +453,37 @@ struct OutfitGridView: View {
     }
 
     private var emptyStatePrompt: some View {
-        Button {
-            let impact = UIImpactFeedbackGenerator(style: .light)
-            impact.impactOccurred()
-            store.currentView = .upload
-        } label: {
-            HStack(spacing: 6) {
-                AppIcon(glyph: .plusCircle, size: 14, color: AppPalette.textPrimary)
-                Text("CREATE YOUR FIRST OUTFIT")
-                    .font(.system(size: 12, weight: .semibold))
-                    .tracking(1.5)
-                    .foregroundStyle(AppPalette.textPrimary)
+        // Bias the button into the lower portion of the viewport so
+        // it sits between the "outfits" section header (which scrolls
+        // away with the profile area at the top) and the tab bar —
+        // not at the geometric centre of the full scroll viewport,
+        // which would put it right under the profile stats.
+        VStack(spacing: 0) {
+            Spacer()
+            Spacer()
+            Button {
+                let impact = UIImpactFeedbackGenerator(style: .light)
+                impact.impactOccurred()
+                // Trigger RootView's floating generation picker. The
+                // tab bar's "+" tap funnels through the same picker,
+                // so the empty state's CTA stays in sync with the
+                // primary entry point automatically.
+                store.generationPickerOpenTrigger += 1
+            } label: {
+                HStack(spacing: 6) {
+                    AppIcon(glyph: .plusCircle, size: 14, color: AppPalette.textPrimary)
+                    Text("CREATE YOUR FIRST OUTFIT")
+                        .font(.system(size: 12, weight: .semibold))
+                        .tracking(1.5)
+                        .foregroundStyle(AppPalette.textPrimary)
+                }
+                .frame(height: 48)
+                .padding(.horizontal, 28)
+                .appCapsule(shadowRadius: 8, shadowY: 4)
             }
-            .frame(height: 48)
-            .padding(.horizontal, 28)
-            .appCapsule(shadowRadius: 8, shadowY: 4)
+            .buttonStyle(.plain)
+            Spacer()
         }
-        .buttonStyle(.plain)
     }
 
     private var dragHint: some View {

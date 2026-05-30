@@ -150,11 +150,15 @@ struct ProfileHeader: View {
     }
 
     private var initialFallback: some View {
-        ZStack {
-            Color.clear
-            Text(String(displayName.prefix(1)).uppercased())
+        let initial = String(displayName.prefix(1)).uppercased()
+        return ZStack {
+            // Match the gradient fallback from `AvatarView` so users
+            // without a profile photo get a consistent look across
+            // every surface they appear on.
+            AvatarGradients.gradient(for: initial)
+            Text(initial)
                 .font(.system(size: 32, weight: .semibold))
-                .foregroundStyle(AppPalette.textPrimary)
+                .foregroundStyle(AppPalette.textStrong)
         }
     }
 

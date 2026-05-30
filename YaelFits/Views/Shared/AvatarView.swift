@@ -35,11 +35,115 @@ struct AvatarView: View {
 
     private var fallback: some View {
         ZStack {
-            Color.clear
+            AvatarGradients.gradient(for: initial)
             Text(initial)
                 .font(.system(size: size * 0.35, weight: .semibold))
-                .foregroundStyle(AppPalette.textPrimary)
+                .foregroundStyle(AppPalette.textStrong)
         }
+    }
+}
+
+// MARK: - Avatar gradients
+
+/// Curated palette for the fallback (no-photo) avatar circles —
+/// named gradients from uigradients.com with the originals kept in
+/// comments so they're searchable on the site. Where the original
+/// 2-stop pair would produce a muddy midpoint at avatar size, I've
+/// added an intermediate stop that holds the hue through the blend.
+/// Picked deterministically from the initial so the same letter
+/// always reads as the same gradient, like Gmail.
+enum AvatarGradients {
+    /// Each entry is the colour stops for a top-leading → bottom-
+    /// trailing linear gradient. All gradients are interpolated in
+    /// perceptual colour space so midpoints stay vivid instead of
+    /// turning gray (especially important on the harsher hue pairs).
+    /// All twelve gradients stay in the cool half of the colour wheel
+    /// (blues, teals, greens, lavenders, cool pinks) AND in the light
+    /// half of the value range — every stop sits around 75–88%
+    /// lightness, no saturated dark tops. The visible gradient motion
+    /// comes from hue progression (sky → mint, lavender → sky, etc.)
+    /// rather than dark-to-light contrast. Direction is vertical
+    /// (top → bottom) for that smooth horizon banding.
+    private static let palette: [[Color]] = [
+        // Sky → Mint
+        [Color(hex: 0xA8D0E5), Color(hex: 0xBFD8D0), Color(hex: 0xD5E0C5)],
+        // Lavender → Sky
+        [Color(hex: 0xD0BFE8), Color(hex: 0xC8C5E8), Color(hex: 0xB5D0E5)],
+        // Aqua → Lavender
+        [Color(hex: 0xB5DCD5), Color(hex: 0xC8C8DC), Color(hex: 0xDCBFE5)],
+        // Mint → Aqua
+        [Color(hex: 0xCCE0C5), Color(hex: 0xBFDCD0), Color(hex: 0xACD5D5)],
+        // Cool Pink → Lavender
+        [Color(hex: 0xE5C5D5), Color(hex: 0xD5C5DC), Color(hex: 0xC5C5E5)],
+        // Sage → Mint
+        [Color(hex: 0xB5D5BC), Color(hex: 0xC5DCC5), Color(hex: 0xD5E0CC)],
+        // Sky → Lighter Sky
+        [Color(hex: 0xA8CCE5), Color(hex: 0xBFD5E5), Color(hex: 0xD2E0E5)],
+        // Lilac → Pearl
+        [Color(hex: 0xCCBFDC), Color(hex: 0xD0CCDC), Color(hex: 0xD8D8DC)],
+        // Periwinkle → Mint
+        [Color(hex: 0xBCC5E5), Color(hex: 0xC8CCD8), Color(hex: 0xD0DCCC)],
+        // Teal → Lilac
+        [Color(hex: 0xACD0CC), Color(hex: 0xC5CCD5), Color(hex: 0xDCC5E5)],
+        // Pale Sky → Lavender
+        [Color(hex: 0xACCFE5), Color(hex: 0xC8CCE5), Color(hex: 0xD8C0E5)],
+        // Mint → Sky
+        [Color(hex: 0xC8DCC8), Color(hex: 0xBCD8D5), Color(hex: 0xACD5E5)],
+    ]
+
+    /// Stable hash of the seed → palette index. Uses unicode scalar
+    /// summation rather than `String.hashValue` so the result is
+    /// consistent across app launches (Swift randomises hashValue).
+    ///
+    /// (iOS 18+ would let us apply `Gradient.ColorSpace.perceptual`
+    /// here for even smoother midpoints on distant hue pairs; our
+    /// deployment target is iOS 17 so we lean on hand-tuned
+    /// intermediate stops in the palette above to achieve the same
+    /// effect.)
+    @ViewBuilder
+    static func gradient(for seed: String) -> some View {
+        let normalized = seed.isEmpty ? "?" : seed
+        let sum = normalized.unicodeScalars.reduce(0) { $0 + Int($1.value) }
+        let colors = palette[sum % palette.count]
+        ZStack {
+            // Base linear gradient — vertical top→bottom for the soft
+            // "horizon" banding the reference design uses.
+            LinearGradient(
+                colors: colors,
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            // Radial brightness overlay that holds the centre at the
+            // base gradient's value but lightens the outer rim with a
+            // soft white halo. Result: the lightest tones sit at the
+            // edges, the saturated tones stay in the middle, and the
+            // circle reads as a 3D-ish lit sphere rather than a flat
+            // disc. The white opacity ramps in from 55% out to the
+            // edge so the centre stays untouched.
+            RadialGradient(
+                gradient: Gradient(stops: [
+                    .init(color: Color.white.opacity(0.0), location: 0.0),
+                    .init(color: Color.white.opacity(0.0), location: 0.55),
+                    .init(color: Color.white.opacity(0.45), location: 1.0),
+                ]),
+                center: .center,
+                startRadius: 0,
+                endRadius: 100  // overshoots the avatar size; clipped
+                                // by the parent Circle either way.
+            )
+        }
+    }
+}
+
+private extension Color {
+    /// Hex literal initialiser so the uigradients.com palette stays
+    /// readable in code. Pass a 24-bit hex like `0xDE6262`.
+    init(hex: UInt32) {
+        self.init(
+            red: Double((hex >> 16) & 0xFF) / 255,
+            green: Double((hex >> 8) & 0xFF) / 255,
+            blue: Double(hex & 0xFF) / 255
+        )
     }
 }
 

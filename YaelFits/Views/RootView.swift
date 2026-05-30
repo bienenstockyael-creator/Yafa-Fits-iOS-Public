@@ -383,6 +383,19 @@ struct RootView: View {
         .onChange(of: store.isLoading) { _, isLoading in
             syncLoadingOverlay(isLoading: isLoading)
         }
+        .onChange(of: store.generationPickerOpenTrigger) { _, _ in
+            // Cross-view bridge from the archive empty state's
+            // "Create your first outfit" CTA. Mirrors the spring used
+            // by the tab bar "+" so the picker animates in the same
+            // way regardless of entry point.
+            if expandedJobId != nil {
+                returnCardToStack()
+            }
+            withAnimation(.spring(response: 0.2, dampingFraction: 0.75)) {
+                showGenerationPicker = true
+                isChipExpanded = false
+            }
+        }
         .onDisappear {
             loaderDismissTask?.cancel()
             transitionTask?.cancel()
@@ -1034,8 +1047,10 @@ struct RootView: View {
             impact.impactOccurred()
             store.carouselDismissTrigger += 1
         } label: {
-            AppIcon(glyph: .xmark, size: 12, color: AppPalette.iconPrimary)
-                .frame(width: 36, height: 36)
+            // Sized to match the carousel's nav chevrons + the rest
+            // of the app's floating buttons (44pt — `touchTarget`).
+            AppIcon(glyph: .xmark, size: 16, color: AppPalette.iconPrimary)
+                .frame(width: LayoutMetrics.touchTarget, height: LayoutMetrics.touchTarget)
                 .appCircle()
         }
         .buttonStyle(.plain)
@@ -1051,7 +1066,7 @@ struct RootView: View {
                 // sheet from inside this tab, not from the tab bar.
                 tabItem(icon: .person, iconSize: 22, label: "Profile", tab: .list)
                 tabItem(icon: .plusCircle, iconSize: 26, label: "Upload", tab: .upload)
-                tabItem(icon: .globe, iconSize: 24, label: "Public", tab: .feed)
+                tabItem(icon: .globe, iconSize: 24, label: "Friends", tab: .feed)
             }
             .padding(.horizontal, LayoutMetrics.small)
             .padding(.vertical, LayoutMetrics.xxSmall)

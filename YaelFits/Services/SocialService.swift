@@ -53,6 +53,20 @@ struct SocialService {
             .value
     }
 
+    /// Write just the phone hash on the caller's profile.
+    /// Separate from `updateProfile` so it can be called from
+    /// the contacts flow without touching unrelated fields
+    /// (display name, bio, etc.) and without needing the full
+    /// profile object in hand.
+    static func updatePhoneHash(userId: UUID, hash: String?) async throws {
+        struct PhoneUpdate: Encodable { let phone_e164_hash: String? }
+        try await supabase
+            .from("profiles")
+            .update(PhoneUpdate(phone_e164_hash: hash))
+            .eq("id", value: userId.uuidString)
+            .execute()
+    }
+
     static func updateProfile(_ profile: Profile) async throws {
         struct ProfileUpsertFull: Encodable {
             let id: String
@@ -303,5 +317,53 @@ struct SocialService {
             .limit(30)
             .execute()
             .value
+    }
+
+    /// Tier 0 suggested-profiles ranking for the empty-friends feed.
+    /// Fetches profiles + their follower counts, excludes self and
+    /// anyone the user already follows, sorts by follower count desc
+    /// (ties broken randomly so the same handful of accounts don't
+    /// always dominate), and returns the top `limit`.
+    ///
+    /// No new server schema — composes existing `profiles` +
+    /// `follow_counts` view client-side. Future tiers (contact
+    /// matching, friends-of-friends) layer on top of the same call site.
+    static func getSuggestedProfiles(
+        excluding: Set<UUID>,
+        currentUserId: UUID?,
+        limit: Int = 20
+    ) async throws -> [Profile] {
+        let profiles: [Profile] = try await supabase
+            .from("profiles")
+            .select()
+            .limit(200)
+            .execute()
+            .value
+
+        let filtered = profiles.filter { profile in
+            profile.id != currentUserId && !excluding.contains(profile.id)
+        }
+        guard !filtered.isEmpty else { return [] }
+
+        // Batch-fetch follower counts; tolerate missing rows (profile
+        // with zero followers may not have a follow_counts entry).
+        let ids = filtered.map(\.id.uuidString)
+        let counts: [FollowCounts] = (try? await supabase
+            .from("follow_counts")
+            .select()
+            .in("user_id", values: ids)
+            .execute()
+            .value) ?? []
+        let countById = Dictionary(uniqueKeysWithValues: counts.map { ($0.userId, $0.followerCount) })
+
+        return filtered
+            .sorted { a, b in
+                let lhs = countById[a.id] ?? 0
+                let rhs = countById[b.id] ?? 0
+                if lhs == rhs { return Bool.random() }
+                return lhs > rhs
+            }
+            .prefix(limit)
+            .map { $0 }
     }
 }

@@ -8,6 +8,12 @@ struct Profile: Codable, Identifiable, Hashable, Sendable {
     var bio: String?
     var isPro: Bool?
     var createdAt: Date?
+    /// SHA-256 hash of the user's normalized E.164 phone number,
+    /// used by the contacts matching RPC. RLS hides this column
+    /// from other users — only the row's owner can SELECT it
+    /// directly. Always nil when decoded for someone else's
+    /// profile.
+    var phoneE164Hash: String?
 
     enum CodingKeys: String, CodingKey {
         case id, username, bio
@@ -15,6 +21,7 @@ struct Profile: Codable, Identifiable, Hashable, Sendable {
         case avatarUrl = "avatar_url"
         case isPro = "is_pro"
         case createdAt = "created_at"
+        case phoneE164Hash = "phone_e164_hash"
     }
 
     /// Used in places where the display name should be primary

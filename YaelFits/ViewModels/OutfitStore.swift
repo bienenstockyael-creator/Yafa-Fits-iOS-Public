@@ -133,6 +133,11 @@ class OutfitStore {
     var carouselDismissTrigger = 0
     var unreadNotificationCount = 0
     var feedScrollToTopTrigger = 0
+    /// Increment to ask `RootView` to open the floating generation
+    /// picker. Used by the archive empty state's "Create your first
+    /// outfit" button — the picker lives in `RootView`, so a trigger
+    /// counter is the cleanest cross-view bridge.
+    var generationPickerOpenTrigger = 0
 
     func beginSession(for userId: UUID) {
         UserDefaults.standard.removeObject(forKey: "lastSeenNotificationsAt")
