@@ -72,7 +72,7 @@ struct CarouselView: View {
     /// Baking the 1.2 into the layout frame (instead of the visual
     /// scale) means the hero target rect matches the rendered rect —
     /// the entry transition lands without a "pop".
-    private static let slideHeightFactor: CGFloat = 0.66 * 1.2
+    private static let slideHeightFactor: CGFloat = 0.58 * 1.2
 
     @State private var viewWidth: CGFloat = UIScreen.main.bounds.width
     @State private var slideHeight: CGFloat = 318

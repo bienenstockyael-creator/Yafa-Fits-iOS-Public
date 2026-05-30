@@ -164,16 +164,28 @@ struct AuthView: View {
             Button(action: submitEmail) {
                 Group {
                     if isSubmitting {
-                        ProgressView().tint(AppPalette.textMuted)
+                        ProgressView().tint(submitActive ? .white : AppPalette.textMuted)
                     } else {
                         Text(isSignUp ? "SIGN UP" : "SIGN IN")
                             .font(.system(size: submitActive ? 12 : 11, weight: submitActive ? .semibold : .medium))
                             .tracking(1.8)
-                            .foregroundStyle(submitActive ? AppPalette.textPrimary : AppPalette.textFaint)
+                            .foregroundStyle(submitActive ? Color.white : AppPalette.textFaint)
                     }
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 50)
+                .background(
+                    Group {
+                        if submitActive {
+                            Capsule(style: .continuous).fill(Color.black)
+                        } else {
+                            Color.clear
+                        }
+                    }
+                )
+                // Fall back to the standard glass capsule when inactive
+                // so the unfilled state still has the same chrome as
+                // every other button in the auth flow.
                 .appCapsule(shadowRadius: submitActive ? 8 : 0, shadowY: submitActive ? 4 : 0)
                 .animation(.easeInOut(duration: 0.2), value: submitActive)
             }

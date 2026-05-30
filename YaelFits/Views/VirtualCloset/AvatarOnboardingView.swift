@@ -66,10 +66,12 @@ struct AvatarOnboardingView: View {
     private var header: some View {
         HStack {
             Button(action: onClose) {
+                // Sized to match other floating buttons in the app
+                // (44pt — `touchTarget`).
                 Image(systemName: "xmark")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(AppPalette.textPrimary)
-                    .frame(width: 36, height: 36)
+                    .frame(width: LayoutMetrics.touchTarget, height: LayoutMetrics.touchTarget)
                     .appCircle(shadowRadius: 0, shadowY: 0)
             }
             .buttonStyle(.plain)

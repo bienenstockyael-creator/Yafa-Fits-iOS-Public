@@ -10,6 +10,12 @@ struct ProfileView: View {
     @State private var bio = ""
     @State private var isSaving = false
     @State private var showSaved = false
+    /// Local input + state for the phone-management row. Phone
+    /// has its own save flow (separate write to `phone_e164_hash`)
+    /// because the main "Save" button doesn't touch hashes.
+    @State private var phoneInput: String = ""
+    @State private var isSavingPhone = false
+    @State private var phoneError: String?
     @State private var showSignOutConfirmation = false
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var avatarImage: UIImage?
@@ -31,6 +37,7 @@ struct ProfileView: View {
                     avatarSection
                     formSection
                     saveButton
+                    phoneSection
                     statsSection
                     signOutSection
                 }
@@ -140,10 +147,13 @@ struct ProfileView: View {
 
     private var initialFallback: some View {
         ZStack {
-            Color.clear
+            // Match the gradient fallback from `AvatarView` so users
+            // without a profile photo get a consistent look across
+            // every surface they appear on.
+            AvatarGradients.gradient(for: avatarInitial)
             Text(avatarInitial)
                 .font(.system(size: 24, weight: .semibold))
-                .foregroundStyle(AppPalette.textPrimary)
+                .foregroundStyle(AppPalette.textStrong)
         }
     }
 
@@ -200,6 +210,149 @@ struct ProfileView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
                 .appCard(cornerRadius: 14, shadowRadius: 4, shadowY: 2)
+        }
+    }
+
+    /// Phone-number management row. The profile only stores the
+    /// SHA-256 hash, not the original number, so when a phone is
+    /// already saved we can show "Added" + a Remove action but
+    /// can't display the digits. Adding a new number from this
+    /// screen overwrites the existing hash.
+    private var phoneSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("PHONE NUMBER")
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(1.2)
+                .foregroundStyle(AppPalette.textFaint)
+
+            if store.currentProfile?.phoneE164Hash != nil {
+                phoneSavedRow
+            } else {
+                phoneEntryRow
+            }
+
+            if let phoneError {
+                Text(phoneError)
+                    .font(.system(size: 12))
+                    .foregroundStyle(AppPalette.textMuted)
+                    .padding(.top, 2)
+            }
+        }
+    }
+
+    private var phoneSavedRow: some View {
+        HStack(spacing: 12) {
+            AppIcon(glyph: .check, size: 14, color: AppPalette.textPrimary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Phone number saved")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(AppPalette.textStrong)
+                Text("Friends with your number can find you on Yafa.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(AppPalette.textMuted)
+            }
+            Spacer(minLength: 8)
+            Button {
+                Task { await removePhone() }
+            } label: {
+                if isSavingPhone {
+                    ProgressView()
+                        .tint(AppPalette.textMuted)
+                        .controlSize(.small)
+                } else {
+                    Text("Remove")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AppPalette.textMuted)
+                }
+            }
+            .disabled(isSavingPhone)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .appCard(cornerRadius: 14, shadowRadius: 4, shadowY: 2)
+    }
+
+    private var phoneEntryRow: some View {
+        HStack(spacing: 8) {
+            TextField(
+                "",
+                text: $phoneInput,
+                prompt: Text("Phone number").foregroundStyle(AppPalette.textFaint)
+            )
+            .keyboardType(.phonePad)
+            .textContentType(.telephoneNumber)
+            .font(.system(size: 14))
+            .foregroundStyle(AppPalette.textStrong)
+            .padding(.horizontal, 16)
+            .frame(height: 44)
+            .appCard(cornerRadius: 14, shadowRadius: 4, shadowY: 2)
+
+            Button {
+                Task { await savePhone() }
+            } label: {
+                Group {
+                    if isSavingPhone {
+                        ProgressView().tint(.white).controlSize(.small)
+                    } else {
+                        Text("Save")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.white)
+                    }
+                }
+                .frame(width: 64, height: 44)
+                .background(
+                    Capsule().fill(
+                        canSavePhone
+                            ? AppPalette.textStrong
+                            : AppPalette.textStrong.opacity(0.35)
+                    )
+                )
+            }
+            .disabled(!canSavePhone)
+        }
+    }
+
+    private var canSavePhone: Bool {
+        !isSavingPhone && PhoneNumber.normalizeToE164(phoneInput) != nil
+    }
+
+    private func savePhone() async {
+        guard let userId = store.userId,
+              let hash = ContactsService.hashOwnPhoneNumber(phoneInput)
+        else { return }
+
+        isSavingPhone = true
+        phoneError = nil
+        do {
+            try await SocialService.updatePhoneHash(userId: userId, hash: hash)
+            await MainActor.run {
+                store.currentProfile?.phoneE164Hash = hash
+                phoneInput = ""
+                isSavingPhone = false
+            }
+        } catch {
+            await MainActor.run {
+                phoneError = "Couldn't save. Try again."
+                isSavingPhone = false
+            }
+        }
+    }
+
+    private func removePhone() async {
+        guard let userId = store.userId else { return }
+        isSavingPhone = true
+        phoneError = nil
+        do {
+            try await SocialService.updatePhoneHash(userId: userId, hash: nil)
+            await MainActor.run {
+                store.currentProfile?.phoneE164Hash = nil
+                isSavingPhone = false
+            }
+        } catch {
+            await MainActor.run {
+                phoneError = "Couldn't remove. Try again."
+                isSavingPhone = false
+            }
         }
     }
 

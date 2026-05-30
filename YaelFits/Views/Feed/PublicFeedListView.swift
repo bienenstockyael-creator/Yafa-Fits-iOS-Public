@@ -10,19 +10,93 @@ struct PublicFeedListView: View {
     @State private var myLikedOutfitIds: Set<String> = []
     @State private var showsNotifications = false
     @State private var pendingScrollPostId: String?
+    @State private var selectedDiscoveryProfile: Profile?
+    /// Two-Bool state machine so the discovery decision is bulletproof
+    /// against re-renders. `hasEvaluatedEntry` flips true the first
+    /// time `.onAppear` fires for this tab visit; `discoveryLocked`
+    /// captures whether the user came in with zero follows at that
+    /// moment. Once locked, in-session follows do NOT flip the view
+    /// out from under the user. Reset on tab leave.
+    @State private var hasEvaluatedEntry = false
+    @State private var discoveryLocked = false
+    /// Belt-and-suspenders: flips true the moment `EmptyFollowingView`
+    /// has ever been rendered in this tab visit. Even if some other
+    /// state race tried to flip `discoveryLocked` off (or skipped
+    /// `.onAppear` entirely), this flag keeps the discovery surface
+    /// pinned for the rest of the session.
+    @State private var everShownDiscovery = false
+    /// Contacts pre-permission popup state. The alert appears
+    /// when the user taps "Find your people" — we ask in our own
+    /// voice first, then trigger iOS's system permission alert
+    /// only if they tap "Share Contacts."
+    @State private var showContactsPrompt = false
+    /// Profiles matched from the user's contact list, passed to
+    /// the hero to repopulate its floating avatars. `nil` means
+    /// "no contacts shared yet" (or no matches found, in which
+    /// case the existing suggestion fetch is preserved).
+    @State private var contactMatches: [Profile]? = nil
+    /// Flipped true the first time the user is shown the
+    /// contacts pre-permission popup in this session — whether
+    /// they end up sharing, denying, or dismissing. After that,
+    /// tapping "Find your people" opens the search sheet
+    /// directly. Don't pester them with the same prompt.
+    @State private var hasShownContactsPrompt = false
+    /// True while we're requesting permission, reading contacts
+    /// off the device, and asking the backend to match them.
+    /// Overlays the Jaffa-style loader so the user has feedback
+    /// during the gap between tapping Allow and the avatars
+    /// repopulating.
+    @State private var isResolvingContacts = false
+    /// True when we should present the post-grant phone capture
+    /// sheet — i.e. user just granted contacts permission and
+    /// their own profile has no phone hash yet, so we ask them
+    /// to add one (so contacts of theirs find them in reverse).
+    @State private var showPhoneCapturePrompt = false
 
     var body: some View {
         ZStack(alignment: .top) {
             // Layer 1: Background
             AppPalette.groupedBackground.ignoresSafeArea()
 
-            // Layer 2: Header
+            // Layer 2: Header — same z-ordering as the friends
+            // feed (cards at zIndex 2 sit ABOVE the header at
+            // zIndex 1). The content scrolls visually over the
+            // logo position when the user scrolls down.
             feedHeader
                 .zIndex(1)
 
             // Layer 3: Cards (above header)
             Group {
-                if store.feedPosts.isEmpty {
+                // Lock the discovery surface for the duration of this
+                // tab visit. Three independent guards in order: an
+                // ever-shown flag (set the first time EmptyFollowingView
+                // appears, immune to any state race), the explicit
+                // .onAppear snapshot, and the live `isEmpty` fallback
+                // for the very first body call before .onAppear fires.
+                let showsDiscovery = everShownDiscovery
+                    || (hasEvaluatedEntry ? discoveryLocked : store.followingIds.isEmpty)
+                if showsDiscovery {
+                    // No outer top padding — the scroll content
+                    // extends behind the floating header (same as
+                    // `feedList`). Internal top padding inside
+                    // `EmptyFollowingView` keeps the hero visible
+                    // below the header on first paint.
+                    EmptyFollowingView(
+                        onFindFriendsTap: {
+                            if hasShownContactsPrompt {
+                                Analytics.log("find_your_people_tapped_post_prompt")
+                                showDiscover = true
+                            } else {
+                                hasShownContactsPrompt = true
+                                showContactsPrompt = true
+                                Analytics.log("contacts_prompt_shown")
+                            }
+                        },
+                        onProfileTap: { selectedDiscoveryProfile = $0 },
+                        seedProfiles: contactMatches
+                    )
+                    .onAppear { everShownDiscovery = true }
+                } else if store.feedPosts.isEmpty {
                     emptyState
                 } else {
                     feedList
@@ -45,6 +119,21 @@ struct PublicFeedListView: View {
             }
             .allowsHitTesting(!hasScrolled)
             .zIndex(3)
+
+            // Contacts-resolving overlay. Sits above the hero so
+            // the user has visible feedback during the iOS
+            // permission alert + contact enumeration + backend
+            // match round-trip. Dimmed background blocks input
+            // until the request finishes.
+            if isResolvingContacts {
+                ZStack {
+                    Color.black.opacity(0.25)
+                        .ignoresSafeArea()
+                    UploadLoaderView(size: 160)
+                }
+                .transition(.opacity)
+                .zIndex(4)
+            }
 
             // Layer 5: Floating search (bottom right, fades in on scroll)
             if !store.feedPosts.isEmpty {
@@ -71,9 +160,58 @@ struct PublicFeedListView: View {
             await store.refreshFeed()
             await loadCounts()
         }
+        .onAppear {
+            // Capture once per tab visit so live `followingIds`
+            // changes mid-session don't reshape the screen.
+            if !hasEvaluatedEntry {
+                discoveryLocked = store.followingIds.isEmpty
+                hasEvaluatedEntry = true
+            }
+        }
+        .onChange(of: store.currentView) { _, newView in
+            // Re-arm the per-visit evaluation guard so the next
+            // `.onAppear` re-checks `followingIds.isEmpty` for a
+            // first-load scenario. We intentionally do NOT reset
+            // `everShownDiscovery` — once the user has landed on
+            // the discovery surface in this app session, it stays
+            // their feed for the whole session. No auto-transition
+            // to the friends feed after they follow someone, even
+            // across tab cycles. Clears only on app restart.
+            if newView != .feed {
+                hasEvaluatedEntry = false
+            }
+        }
         .sheet(isPresented: $showDiscover) {
             DiscoverView()
                 .environment(store)
+        }
+        .alert("Find your friends on Yafa", isPresented: $showContactsPrompt) {
+            Button("Share Contacts") {
+                Analytics.log("contacts_prompt_share_tapped")
+                Task { await handleContactsAccess() }
+            }
+            Button("Not now", role: .cancel) {
+                Analytics.log("contacts_prompt_not_now_tapped")
+                showDiscover = true
+            }
+        } message: {
+            Text("We'll match your contacts to people who are already on Yafa so you can follow them.")
+        }
+        .sheet(isPresented: $showPhoneCapturePrompt) {
+            PhoneCapturePromptView(
+                onSubmit: { e164 in await savePhoneHash(e164) },
+                onSkip: { Analytics.log("phone_capture_skipped") }
+            )
+            .presentationDetents([.height(380)])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(AppPalette.groupedBackground)
+        }
+        .fullScreenCover(item: $selectedDiscoveryProfile) { profile in
+            UserProfileView(
+                userId: profile.id,
+                onDismiss: { selectedDiscoveryProfile = nil }
+            )
+            .environment(store)
         }
     }
 
@@ -293,6 +431,105 @@ struct PublicFeedListView: View {
         .padding(.horizontal, LayoutMetrics.screenPadding)
     }
 
+    /// Drives the "Share Contacts" path of the pre-permission
+    /// popup. Triggers the iOS system permission alert, fetches
+    /// contacts on grant, asks the backend which ones are Yafa
+    /// users, and stashes the matches in `contactMatches` —
+    /// which the hero observes via `.onChange(of: seedProfiles)`
+    /// and uses to repopulate its floating avatars.
+    ///
+    /// Fallbacks at every failure step land on the existing
+    /// `DiscoverView` sheet so the user always reaches a way to
+    /// find people, even if contacts are denied or no matches
+    /// are found.
+    private func handleContactsAccess() async {
+        await MainActor.run { isResolvingContacts = true }
+
+        let result = await ContactsService.requestAccess()
+        guard result == .granted else {
+            Analytics.log(
+                "contacts_permission_denied",
+                properties: ["reason": .string(String(describing: result))]
+            )
+            await MainActor.run {
+                isResolvingContacts = false
+                showDiscover = true
+            }
+            return
+        }
+        Analytics.log("contacts_permission_granted")
+
+        let contacts: [ContactsService.DeviceContact]
+        do {
+            contacts = try await ContactsService.fetchAllContacts()
+        } catch {
+            Analytics.log("contacts_fetch_failed")
+            await MainActor.run {
+                isResolvingContacts = false
+                showDiscover = true
+            }
+            return
+        }
+
+        let matches: [Profile]
+        do {
+            matches = try await ContactsService.findMatchingProfiles(from: contacts)
+            Analytics.log(
+                "contacts_match_completed",
+                properties: [
+                    "contact_count": .int(contacts.count),
+                    "match_count": .int(matches.count),
+                ]
+            )
+        } catch {
+            Analytics.log(
+                "contacts_match_failed",
+                properties: ["contact_count": .int(contacts.count)]
+            )
+            matches = []
+        }
+
+        await MainActor.run {
+            isResolvingContacts = false
+
+            let needsPhone = store.currentProfile?.phoneE164Hash == nil
+
+            if !matches.isEmpty {
+                contactMatches = matches
+            }
+
+            // Sheet priority: phone capture wins over discover
+            // (SwiftUI only presents one sheet at a time). User
+            // can find more people by tapping "Find your people"
+            // again — that goes straight to DiscoverView from
+            // here on, since `hasShownContactsPrompt` is true.
+            if needsPhone {
+                Analytics.log("phone_capture_shown")
+                showPhoneCapturePrompt = true
+            } else if matches.isEmpty {
+                showDiscover = true
+            }
+        }
+    }
+
+    /// Hashes the user-provided phone number and saves it on
+    /// their profile so contact-matching by other users can
+    /// find them. Called from the PhoneCapturePromptView's
+    /// submit action.
+    private func savePhoneHash(_ e164: String) async {
+        guard let userId = store.userId else { return }
+        let hash = PhoneNumber.sha256(e164)
+        do {
+            try await SocialService.updatePhoneHash(userId: userId, hash: hash)
+            await MainActor.run {
+                store.currentProfile?.phoneE164Hash = hash
+            }
+            Analytics.log("phone_capture_saved")
+        } catch {
+            Analytics.log("phone_capture_save_failed")
+        }
+    }
+
     private func loadCounts() async {
         let outfitIds = store.feedPosts.map(\.outfitId)
         guard !outfitIds.isEmpty, let userId = store.userId else { return }
@@ -331,6 +568,10 @@ struct FeedPostCard: View {
     /// look "Pro" but don't get the double-stroke from the rim
     /// overlapping appCard's gray border.
     var hideProChrome: Bool = false
+    /// When true, renders a compact Follow / Following pill in the
+    /// card header so users can follow without leaving the feed.
+    /// Used by the empty-following Community section.
+    var showFollowAction: Bool = false
     @Environment(OutfitStore.self) private var store
     @State private var showComments = false
     @State private var showUserProfile = false
@@ -480,10 +721,20 @@ struct FeedPostCard: View {
 
             Spacer()
 
+            if showFollowAction,
+               let authorId = post.authorId,
+               authorId != store.userId {
+                inlineFollowPill(authorId: authorId)
+            }
+
             // In overlay mode the weather sits right next to the X
             // (right side). In feed mode there's no X — weather hugs
-            // the right by itself.
-            if let weather = outfit?.weather, weather.condition.isEmpty == false {
+            // the right by itself. The community section suppresses
+            // weather entirely so the follow pill stands alone as the
+            // primary action on each card.
+            if !showFollowAction,
+               let weather = outfit?.weather,
+               weather.condition.isEmpty == false {
                 WeatherPill(weather: weather, useFahrenheit: store.useFahrenheit)
             }
 
@@ -510,6 +761,28 @@ struct FeedPostCard: View {
             url: post.avatarUrl,
             initial: String(post.authorName.prefix(1)).uppercased()
         )
+    }
+
+    /// Compact follow toggle. Becomes a muted "FOLLOWING" capsule
+    /// once tapped so users can still un-follow without leaving the
+    /// feed — matches the casing of the profile-sheet follow button.
+    private func inlineFollowPill(authorId: UUID) -> some View {
+        let isFollowing = store.followingIds.contains(authorId)
+        return Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            withAnimation(.easeInOut(duration: 0.18)) {
+                store.toggleFollow(authorId)
+            }
+        } label: {
+            Text(isFollowing ? "FOLLOWING" : "FOLLOW")
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(1.2)
+                .foregroundStyle(isFollowing ? AppPalette.textMuted : AppPalette.textPrimary)
+                .padding(.horizontal, 12)
+                .frame(height: 28)
+                .appCapsule(shadowRadius: 2, shadowY: 1)
+        }
+        .buttonStyle(.plain)
     }
 
     private func outfitContent(_ outfit: Outfit) -> some View {

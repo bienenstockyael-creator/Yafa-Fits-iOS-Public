@@ -116,7 +116,11 @@ struct CarouselDetailCard: View {
 
             if isEditing {
                 editableTagRow
-            } else if let tags = outfit.tags, !tags.isEmpty {
+            } else if !viewOnly, let tags = outfit.tags, !tags.isEmpty {
+                // Tags only render on the owner's own carousel — they
+                // were exposing the author's organisational scheme on
+                // other users' outfits, which felt like leaking
+                // private metadata into someone else's surface.
                 FlowLayout(spacing: 6) {
                     ForEach(tags, id: \.self) { tag in
                         Button {
@@ -525,12 +529,16 @@ struct CarouselDetailCard: View {
                 VStack(spacing: 8) {
                     archiveProductImage(product)
 
+                    // Force two lines worth of height so single-line
+                    // names don't collapse the row — keeps the BUY
+                    // buttons below all sitting on the same baseline
+                    // across the product strip.
                     Text(product.displayName)
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(AppPalette.textMuted)
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
-                        .frame(width: 100)
+                        .frame(width: 100, height: 32, alignment: .top)
                 }
             }
             .buttonStyle(.plain)

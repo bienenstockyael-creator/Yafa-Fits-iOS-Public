@@ -116,21 +116,25 @@ private struct ProfileStep: View {
 
     var body: some View {
         VStack(spacing: LayoutMetrics.small) {
-            field(
-                placeholder: "Display name",
-                text: $displayName,
-                capitalization: .words,
-                focus: .displayName,
-                nextFocus: .username
-            )
+            labeledField(eyebrow: "DISPLAY NAME") {
+                field(
+                    placeholder: "Display name",
+                    text: $displayName,
+                    capitalization: .words,
+                    focus: .displayName,
+                    nextFocus: .username
+                )
+            }
 
-            field(
-                placeholder: "Username",
-                text: $username,
-                capitalization: .never,
-                focus: .username,
-                nextFocus: nil
-            )
+            labeledField(eyebrow: "USERNAME") {
+                field(
+                    placeholder: "Username",
+                    text: $username,
+                    capitalization: .never,
+                    focus: .username,
+                    nextFocus: nil
+                )
+            }
 
             if let errorMessage {
                 Text(errorMessage)
@@ -217,6 +221,24 @@ private struct ProfileStep: View {
                     isSaving = false
                 }
             }
+        }
+    }
+
+    /// Wraps a field with a small uppercase eyebrow label above it,
+    /// matching the auth flow's "OR" divider type style so the profile
+    /// step doesn't read as a generic form.
+    @ViewBuilder
+    private func labeledField<Content: View>(
+        eyebrow: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(eyebrow)
+                .font(.system(size: 10, weight: .medium))
+                .tracking(1.2)
+                .foregroundStyle(AppPalette.textFaint)
+                .padding(.leading, 4)
+            content()
         }
     }
 
