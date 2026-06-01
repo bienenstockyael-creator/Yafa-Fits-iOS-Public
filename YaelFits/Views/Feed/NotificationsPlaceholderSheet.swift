@@ -21,7 +21,7 @@ struct NotificationsPlaceholderSheet: View {
                         Text("No notifications yet")
                             .font(.system(size: 13))
                             .foregroundStyle(AppPalette.textMuted)
-                        Text("Likes, comments, and follows will show up here.")
+                        Text("Likes, comments, vibes, and follows will show up here.")
                             .font(.system(size: 12))
                             .foregroundStyle(AppPalette.textFaint)
                             .multilineTextAlignment(.center)
@@ -66,17 +66,14 @@ struct NotificationsPlaceholderSheet: View {
 
     private func notificationRow(_ item: NotificationItem) -> some View {
         Button {
-            guard let id = UUID(uuidString: item.actorId) else { return }
+            // System notifications (free-gen-earned) have no actor
+            // to navigate to. Tap is a no-op for those.
+            guard item.type != .freeGenEarned,
+                  let id = UUID(uuidString: item.actorId) else { return }
             selectedUserId = id
         } label: {
             HStack(spacing: LayoutMetrics.small) {
-                AvatarView(
-                    url: item.actorAvatarUrl,
-                    initial: item.actorInitial,
-                    size: 36,
-                    shadowRadius: 2,
-                    shadowY: 1
-                )
+                avatarOrSystemIcon(for: item)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.message)
@@ -103,6 +100,65 @@ struct NotificationsPlaceholderSheet: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    /// Vibe-received rows show the actor's avatar with a small
+    /// gradient flame badge (matches the morph + popup gradient)
+    /// so the row reads as a vibe at a glance. Free-gen-earned
+    /// rows have no actor — they render a system-icon circle
+    /// (sparkles) since there's nobody to attribute the reward to.
+    @ViewBuilder
+    private func avatarOrSystemIcon(for item: NotificationItem) -> some View {
+        switch item.type {
+        case .freeGenEarned:
+            ZStack {
+                Circle()
+                    .fill(AppPalette.cardFill)
+                    .frame(width: 36, height: 36)
+                    .overlay(
+                        Circle().stroke(AppPalette.cardBorder, lineWidth: 1)
+                    )
+                    .shadow(color: AppPalette.uploadGlow.opacity(0.35), radius: 4, y: 1)
+                AppIcon(
+                    glyph: .sparkles,
+                    size: 18,
+                    color: AppPalette.uploadGlow,
+                    filled: true
+                )
+            }
+            .frame(width: 36, height: 36)
+        case .vibe:
+            AvatarView(
+                url: item.actorAvatarUrl,
+                initial: item.actorInitial,
+                size: 36,
+                shadowRadius: 2,
+                shadowY: 1
+            )
+            .overlay(alignment: .bottomTrailing) {
+                ZStack {
+                    Circle()
+                        .fill(.white)
+                        .frame(width: 16, height: 16)
+                        .shadow(color: .black.opacity(0.15), radius: 1.5, y: 0.5)
+                    AppIcon(
+                        glyph: .flame,
+                        size: 10,
+                        color: AppPalette.uploadGlow,
+                        filled: true
+                    )
+                }
+                .offset(x: 2, y: 2)
+            }
+        case .like, .comment, .follow:
+            AvatarView(
+                url: item.actorAvatarUrl,
+                initial: item.actorInitial,
+                size: 36,
+                shadowRadius: 2,
+                shadowY: 1
+            )
+        }
     }
 
     private func loadNotifications() async {
@@ -190,6 +246,57 @@ struct NotificationsPlaceholderSheet: View {
             }
         }
 
+        // Vibes received on the user's outfits. One notification per
+        // vibe (same shape as likes). The 5-vibe → free-gen milestone
+        // is derived separately below, after we have the full vibe
+        // timeline.
+        var vibesReceived: [VibeReceivedRow] = []
+        if !userOutfitIds.isEmpty {
+            vibesReceived = (try? await supabase
+                .from("vibes")
+                .select("giver_id, outfit_id, created_at")
+                .in("outfit_id", values: userOutfitIds)
+                .neq("giver_id", value: userId.uuidString)
+                .order("created_at", ascending: false)
+                .limit(50)
+                .execute()
+                .value) ?? []
+
+            for vibe in vibesReceived {
+                allItems.append(NotificationItem(
+                    id: "vibe-\(vibe.giverId)-\(vibe.outfitId)",
+                    type: .vibe,
+                    actorId: vibe.giverId,
+                    createdAt: vibe.createdAt,
+                    detail: nil
+                ))
+            }
+        }
+
+        // Free-gen-earned milestones. Each crossing of a 5-vibe
+        // threshold (5th, 10th, 15th, ...) emits one notification
+        // dated at the timestamp of that boundary vibe. Use
+        // ascending chronological order so the 5th vibe is found
+        // at index 4.
+        //
+        // `vibesReceived` is the most-recent-50 window — sufficient
+        // here because the notification list itself is capped, and
+        // the user's lifetime vibe count is shown elsewhere
+        // (profile chip).
+        let ascending = vibesReceived.sorted { $0.createdAt < $1.createdAt }
+        for (index, vibe) in ascending.enumerated() {
+            let ordinal = index + 1
+            guard ordinal % 5 == 0 else { continue }
+            let freeGensSoFar = ordinal / 5
+            allItems.append(NotificationItem(
+                id: "freegen-\(freeGensSoFar)",
+                type: .freeGenEarned,
+                actorId: "",
+                createdAt: vibe.createdAt,
+                detail: nil
+            ))
+        }
+
         // Follows
         struct FollowRow: Decodable {
             let followerId: String
@@ -219,8 +326,11 @@ struct NotificationsPlaceholderSheet: View {
             ))
         }
 
-        // Fetch all actor profiles
-        let actorIds = Array(Set(allItems.map(\.actorId)))
+        // Fetch all actor profiles. Drop empty IDs since
+        // free-gen-earned rows have no actor — including an
+        // empty string in the `.in("id", values:)` filter would
+        // be a wasted Supabase round-trip.
+        let actorIds = Array(Set(allItems.map(\.actorId)).filter { !$0.isEmpty })
         var profileMap: [String: Profile] = [:]
         if !actorIds.isEmpty {
             let profiles: [Profile] = (try? await supabase
@@ -235,11 +345,15 @@ struct NotificationsPlaceholderSheet: View {
         // Enrich items with profile info and sort
         let enriched = allItems.map { item -> NotificationItem in
             var enriched = item
+            // Free-gen-earned rows have no actor — keep the
+            // placeholder values from the struct init and just
+            // compute `isNew`.
+            if item.type == .freeGenEarned {
+                enriched.isNew = item.date > lastSeenDate
+                return enriched
+            }
             let profile = profileMap[item.actorId.lowercased()]
-            // Instagram-style: notifications show the actor's username,
-            // not their display name ("yael liked your post" vs "Yael
-            // Bienenstock liked your post"). Falls back to display name
-            // if no username, then "Someone" as a final guard.
+            // Instagram-style: handle, not display name.
             enriched.actorName = profile?.handle ?? "Someone"
             enriched.actorAvatarUrl = profile?.avatarUrl
             enriched.actorInitial = profile?.initial ?? "?"
@@ -257,8 +371,19 @@ struct NotificationsPlaceholderSheet: View {
 
 private struct IdRow: Decodable { let id: String }
 
+private struct VibeReceivedRow: Decodable {
+    let giverId: String
+    let outfitId: String
+    let createdAt: String
+    enum CodingKeys: String, CodingKey {
+        case giverId = "giver_id"
+        case outfitId = "outfit_id"
+        case createdAt = "created_at"
+    }
+}
+
 private enum NotificationType {
-    case like, comment, follow
+    case like, comment, follow, vibe, freeGenEarned
 }
 
 private struct NotificationItem: Identifiable {
@@ -284,6 +409,9 @@ private struct NotificationItem: Identifiable {
         case .like:    return "\(actorName) liked your outfit"
         case .comment: return "\(actorName): \(detail?.prefix(60) ?? "commented")"
         case .follow:  return "\(actorName) started following you"
+        case .vibe:    return "\(actorName) vibed your outfit"
+        case .freeGenEarned:
+            return "You earned a free 3D generation"
         }
     }
 

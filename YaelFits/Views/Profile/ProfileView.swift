@@ -27,6 +27,16 @@ struct ProfileView: View {
     @State private var showFollowers = false
     @State private var showFollowing = false
     @State private var showSavedSheet = false
+    /// Vibes + 3D credit balances surfaced under the stats row.
+    /// Refreshed in `.task` alongside follower/following counts.
+    @State private var vibesReceived: Int = 0
+    @State private var vibesRemainingThisWeek: Int = 0
+    @State private var freeCredits3D: Int = 0
+    @State private var showVibersOnMe = false
+    /// Host that drives the credit-chip explainer modals at root
+    /// level (rendered globally in `YaelFitsApp`, so they sit
+    /// above the Settings sheet and stay viewport-centered).
+    @Environment(VibesEffectHost.self) private var vibesHost
 
     var body: some View {
         ScrollView {
@@ -36,8 +46,8 @@ struct ProfileView: View {
                 VStack(spacing: LayoutMetrics.large) {
                     avatarSection
                     formSection
-                    saveButton
                     phoneSection
+                    saveButton
                     statsSection
                     signOutSection
                 }
@@ -48,6 +58,14 @@ struct ProfileView: View {
         .scrollIndicators(.hidden)
         .scrollDismissesKeyboard(.interactively)
         .background(AppPalette.pageBackground)
+        // Credit-chip explainer modal — mounted INSIDE the sheet
+        // (rather than at the app root) because SwiftUI sheets
+        // present in a separate hosting context. A root-level
+        // overlay would render BELOW the sheet, hidden. Mounting
+        // it here puts it in the sheet's window so it appears
+        // above the Settings content. Backdrop `.ignoresSafeArea()`
+        // extends it past the sheet's grab-handle area.
+        .overlay { InfoExplainerModal() }
         .onAppear { loadProfile() }
         .alert("Sign out?", isPresented: $showSignOutConfirmation) {
             Button("Sign Out", role: .destructive) { signOut() }
@@ -272,71 +290,28 @@ struct ProfileView: View {
         .appCard(cornerRadius: 14, shadowRadius: 4, shadowY: 2)
     }
 
+    /// Phone-entry text field only — no inline "Save" button.
+    /// The main Settings save button saves the phone too (see
+    /// `saveProfile()`).
     private var phoneEntryRow: some View {
-        HStack(spacing: 8) {
-            TextField(
-                "",
-                text: $phoneInput,
-                prompt: Text("Phone number").foregroundStyle(AppPalette.textFaint)
-            )
-            .keyboardType(.phonePad)
-            .textContentType(.telephoneNumber)
-            .font(.system(size: 14))
-            .foregroundStyle(AppPalette.textStrong)
-            .padding(.horizontal, 16)
-            .frame(height: 44)
-            .appCard(cornerRadius: 14, shadowRadius: 4, shadowY: 2)
-
-            Button {
-                Task { await savePhone() }
-            } label: {
-                Group {
-                    if isSavingPhone {
-                        ProgressView().tint(.white).controlSize(.small)
-                    } else {
-                        Text("Save")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.white)
-                    }
-                }
-                .frame(width: 64, height: 44)
-                .background(
-                    Capsule().fill(
-                        canSavePhone
-                            ? AppPalette.textStrong
-                            : AppPalette.textStrong.opacity(0.35)
-                    )
-                )
-            }
-            .disabled(!canSavePhone)
-        }
+        TextField(
+            "",
+            text: $phoneInput,
+            prompt: Text("Phone number").foregroundStyle(AppPalette.textFaint)
+        )
+        .keyboardType(.phonePad)
+        .textContentType(.telephoneNumber)
+        .font(.system(size: 14))
+        .foregroundStyle(AppPalette.textStrong)
+        .padding(.horizontal, 16)
+        .frame(height: 44)
+        .appCard(cornerRadius: 14, shadowRadius: 4, shadowY: 2)
     }
 
-    private var canSavePhone: Bool {
-        !isSavingPhone && PhoneNumber.normalizeToE164(phoneInput) != nil
-    }
-
-    private func savePhone() async {
-        guard let userId = store.userId,
-              let hash = ContactsService.hashOwnPhoneNumber(phoneInput)
-        else { return }
-
-        isSavingPhone = true
-        phoneError = nil
-        do {
-            try await SocialService.updatePhoneHash(userId: userId, hash: hash)
-            await MainActor.run {
-                store.currentProfile?.phoneE164Hash = hash
-                phoneInput = ""
-                isSavingPhone = false
-            }
-        } catch {
-            await MainActor.run {
-                phoneError = "Couldn't save. Try again."
-                isSavingPhone = false
-            }
-        }
-    }
+    // `savePhone()` and `canSavePhone` removed — phone saving is
+    // now part of the main `saveProfile()` flow, triggered by the
+    // single Settings save button. The `removePhone()` helper
+    // below is still used by the saved-row's Remove action.
 
     private func removePhone() async {
         guard let userId = store.userId else { return }
@@ -361,9 +336,15 @@ struct ProfileView: View {
         let origDisplay = profile?.displayName ?? ""
         let origUsername = profile?.username ?? ""
         let origBio = profile?.bio ?? ""
+        // Phone counts as a change if there's text in the field
+        // AND it parses to a valid E.164 number. Empty input or
+        // garbage doesn't enable the save button.
+        let hasPhoneToSave = !phoneInput.isEmpty
+            && PhoneNumber.normalizeToE164(phoneInput) != nil
         return displayName != origDisplay
             || username != origUsername
             || bio != origBio
+            || hasPhoneToSave
     }
 
     private var saveButton: some View {
@@ -416,7 +397,49 @@ struct ProfileView: View {
                 Button { showFollowing = true } label: {
                     statItem(count: followingIds.count, label: "Following")
                 }.buttonStyle(.plain)
+                if vibesReceived > 0 {
+                    Button {
+                        Analytics.log("profile_vibes_stat_tapped")
+                        showVibersOnMe = true
+                    } label: {
+                        statItem(count: vibesReceived, label: "Vibes")
+                    }.buttonStyle(.plain)
+                }
             }
+
+            // Credits — vibes left to give this week + free 3D
+            // gens. Now tappable: each chip opens an explainer
+            // modal describing what that credit system is.
+            HStack(spacing: LayoutMetrics.small) {
+                Button {
+                    Analytics.log("profile_vibes_credit_chip_tapped")
+                    vibesHost.showInfoModal(.vibes)
+                } label: {
+                    creditChip(
+                        icon: .flame,
+                        value: "\(vibesRemainingThisWeek)",
+                        label: vibesRemainingThisWeek == 1
+                            ? "vibe left"
+                            : "vibes left this week"
+                    )
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    Analytics.log("profile_3d_credit_chip_tapped")
+                    vibesHost.showInfoModal(.gen3D)
+                } label: {
+                    creditChip(
+                        icon: .sparkles,
+                        value: "\(freeCredits3D)",
+                        label: freeCredits3D == 1
+                            ? "free 3D gen"
+                            : "free 3D gens"
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.top, LayoutMetrics.xSmall)
         }
         .sheet(isPresented: $showFollowers) {
             FollowListSheet(title: "Followers", userIds: followerIds)
@@ -436,15 +459,62 @@ struct ProfileView: View {
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppPalette.groupedBackground)
         }
-        .task {
-            guard let userId = store.userId else { return }
-            let frs = (try? await SocialService.getFollowerIds(userId: userId)) ?? []
-            let fng = (try? await SocialService.getFollowingIds(userId: userId)) ?? []
-            await MainActor.run {
-                followerIds = Array(frs)
-                followingIds = Array(fng)
+        .sheet(isPresented: $showVibersOnMe) {
+            if let userId = store.userId {
+                VibersListSheet(source: .user(userId))
+                    .environment(store)
+                    .presentationDragIndicator(.visible)
+                    .presentationBackground(AppPalette.groupedBackground)
             }
         }
+        .task {
+            guard let userId = store.userId else { return }
+            async let frsTask: [UUID] = {
+                let ids = (try? await SocialService.getFollowerIds(userId: userId)) ?? []
+                return Array(ids)
+            }()
+            async let fngTask: [UUID] = {
+                let ids = (try? await SocialService.getFollowingIds(userId: userId)) ?? []
+                return Array(ids)
+            }()
+            async let receivedTask = VibesService.receivedCount(userId: userId)
+            async let remainingTask = VibesService.remainingThisWeek()
+            async let balanceTask: CreditService.Balance? = try? await CreditService.shared.balance(userId: userId)
+
+            let frs = await frsTask
+            let fng = await fngTask
+            let received = await receivedTask
+            let remaining = await remainingTask
+            let balance = await balanceTask
+
+            await MainActor.run {
+                followerIds = frs
+                followingIds = fng
+                vibesReceived = received
+                vibesRemainingThisWeek = remaining
+                freeCredits3D = balance?.gen_credits_free_balance ?? 0
+            }
+        }
+    }
+
+    private func creditChip(
+        icon: AppIconGlyph,
+        value: String,
+        label: String
+    ) -> some View {
+        HStack(spacing: 6) {
+            AppIcon(glyph: icon, size: 14, color: AppPalette.textMuted)
+            Text(value)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(AppPalette.textStrong)
+                .monospacedDigit()
+            Text(label)
+                .font(.system(size: 12))
+                .foregroundStyle(AppPalette.textMuted)
+        }
+        .padding(.horizontal, LayoutMetrics.small)
+        .padding(.vertical, 6)
+        .appCard(cornerRadius: 12, shadowRadius: 3, shadowY: 1)
     }
 
     private func statItem(count: Int, label: String) -> some View {
@@ -527,10 +597,31 @@ struct ProfileView: View {
         guard let userId = auth.userId else { return }
         isSaving = true
         showSaved = false
+        phoneError = nil
 
         Task {
-            // Use the LOCAL `username` state (not the cached store value)
-            // so user edits to the username field actually persist.
+            // 1. Save phone hash separately if there's a valid
+            //    new phone in the input field. Phone is stored as
+            //    a SHA-256 hash via a dedicated endpoint, not as a
+            //    Profile field, so it needs its own write.
+            if !phoneInput.isEmpty,
+               let hash = ContactsService.hashOwnPhoneNumber(phoneInput) {
+                do {
+                    try await SocialService.updatePhoneHash(userId: userId, hash: hash)
+                    await MainActor.run {
+                        store.currentProfile?.phoneE164Hash = hash
+                        phoneInput = ""
+                    }
+                } catch {
+                    await MainActor.run {
+                        phoneError = "Couldn't save phone. Try again."
+                    }
+                }
+            }
+
+            // 2. Save profile fields. Use the LOCAL `username` state
+            //    (not the cached store value) so user edits to the
+            //    username field actually persist.
             let sanitizedUsername = Profile.sanitizeUsername(username)
             let profile = Profile(
                 id: userId,
@@ -542,7 +633,12 @@ struct ProfileView: View {
             try? await SocialService.updateProfile(profile)
             LocalCache.saveProfile(profile, userId: userId)
             await MainActor.run {
-                store.currentProfile = profile
+                // Preserve the phone hash that was just written
+                // (or any pre-existing hash) — the Profile init
+                // above doesn't carry it.
+                var updated = profile
+                updated.phoneE164Hash = store.currentProfile?.phoneE164Hash
+                store.currentProfile = updated
                 isSaving = false
                 showSaved = true
             }

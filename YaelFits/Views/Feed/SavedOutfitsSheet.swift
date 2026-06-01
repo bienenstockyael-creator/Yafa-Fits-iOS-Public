@@ -19,6 +19,9 @@ struct SavedOutfitsSheet: View {
     @State private var likeCounts: [String: Int] = [:]
     @State private var commentCounts: [String: Int] = [:]
     @State private var myLikedOutfitIds: Set<String> = []
+    @State private var vibeCounts: [String: Int] = [:]
+    @State private var vibedOutfitIds: Set<String> = []
+    @State private var vibesRemainingThisWeek: Int = 3
     @State private var isLoading = true
 
     @State private var selectedOutfit: Outfit?
@@ -118,7 +121,10 @@ struct SavedOutfitsSheet: View {
                     commentCounts[outfit.id] = newCount
                 },
                 onClose: { dismissOverlay() },
-                hideProChrome: true
+                hideProChrome: true,
+                vibeCountInitial: vibeCounts[outfit.id] ?? 0,
+                isVibedByMeInitial: vibedOutfitIds.contains(outfit.id),
+                vibesRemainingThisWeek: $vibesRemainingThisWeek
             )
             .padding(.horizontal, LayoutMetrics.xxSmall)
             .padding(.top, LayoutMetrics.medium)
@@ -189,24 +195,34 @@ struct SavedOutfitsSheet: View {
             isLoading = false
         }
 
-        // Pre-fetch like + comment counts so tapping a card shows the
-        // correct numbers immediately, not a "0 likes" flash.
+        // Pre-fetch like + comment + vibe counts so tapping a card
+        // shows the correct numbers immediately, not a "0" flash.
         let outfitIds = resolvedOutfits.map(\.id)
         if !outfitIds.isEmpty {
             async let likesTask = try? SocialService.getLikeCounts(outfitIds: outfitIds)
             async let cmtsTask = try? SocialService.getCommentCounts(outfitIds: outfitIds)
+            async let vibeCountsTask = VibesService.vibeCounts(outfitIds: outfitIds)
+            async let vibesRemainingTask = VibesService.remainingThisWeek()
             let mine: Set<String>
+            let vibedSet: Set<String>
             if let viewerId = store.userId {
                 mine = (try? await SocialService.getLikedOutfitIds(userId: viewerId)) ?? []
+                vibedSet = await VibesService.vibedOutfitIds(currentUserId: viewerId)
             } else {
                 mine = []
+                vibedSet = []
             }
             let likes = (await likesTask) ?? [:]
             let cmts = (await cmtsTask) ?? [:]
+            let vibeCountsResult = await vibeCountsTask
+            let vibesRemainingResult = await vibesRemainingTask
             await MainActor.run {
                 likeCounts = likes
                 commentCounts = cmts
                 myLikedOutfitIds = mine
+                vibeCounts = vibeCountsResult
+                vibedOutfitIds = vibedSet
+                vibesRemainingThisWeek = vibesRemainingResult
             }
         }
     }

@@ -7,6 +7,8 @@ struct YaelFitsApp: App {
     @UIApplicationDelegateAdaptor(PushNotificationAppDelegate.self) private var pushAppDelegate
     @State private var outfitStore = OutfitStore()
     @State private var authManager = AuthManager()
+    @State private var vibesEffectHost = VibesEffectHost()
+    @State private var vibesIncomingManager = VibesIncomingManager()
     @State private var showOnboarding = false
     // Pre-auth WelcomeTourView is parked while it gets redesigned. The
     // file lives at Views/Auth/WelcomeTourView.swift; to re-enable, restore
@@ -16,6 +18,11 @@ struct YaelFitsApp: App {
 
     var body: some Scene {
         WindowGroup {
+            ZStack {
+            // Main UI wrapped in the vibes wave-shader modifier
+            // — when `host.waveShader` is non-nil, the entire
+            // app distorts + glows via Metal. Idle case is a
+            // straight pass-through with zero cost.
             Group {
                 if authManager.isLoading {
                     ZStack {
@@ -66,9 +73,68 @@ struct YaelFitsApp: App {
                         .transition(.opacity)
                 }
             }
+
+            // Vibes wave overlay — paints iridescent rings as
+            // its own transparent layer on top of the UI. NOT a
+            // layerEffect on the content (that breaks on
+            // UIViewRepresentables like LightBlurView and
+            // LottieAnimationView, which the feed uses heavily).
+            VibesWaveOverlay()
+
+            // Hero icon morph layer — renders the tapped vibe
+            // button's flame morph (outline → gradient → filled
+            // with a scale bloom) above the wave-shader snapshot.
+            // Without this above-snapshot layer the morph happens
+            // INSIDE the button but is hidden by the snapshot,
+            // resulting in "outline → suddenly filled" with no
+            // visible morph.
+            VibesMorphLayer()
+
+            // Vibes particle layer — exploding fire-burst flames
+            // render ABOVE the entire wave effect AND the morph
+            // icon. Sibling of the main content inside the ZStack
+            // — NOT an overlay modifier, since `.environment(...)`
+            // after `.overlay {...}` doesn't reliably propagate
+            // into the overlay's children. Input-transparent so it
+            // never steals taps from the UI below.
+            VibesParticleLayer()
+
+            // Generic vibe-banner layer for short notices like
+            // "Out of vibes — refreshes Monday". Anchored at the
+            // top, never steals taps.
+            VibesBannerLayer()
+
+            // Incoming-vibe toast sits above the particle layer
+            // so the "{user} vibed your fit" banner can't be
+            // covered by a burst that fires simultaneously.
+            IncomingVibeToast()
+
+            // First-vibe explainer modal — shown once per device
+            // when the user gives their first vibe. Sits at the
+            // very top of the view tree so its backdrop covers
+            // the burst + wave + toast layers underneath.
+            VibesFirstUseModal()
+
+            // NOTE: The profile credit-chip InfoExplainerModal is
+            // NOT mounted here at root — it must be inside the
+            // Settings sheet's view hierarchy to render above the
+            // sheet (SwiftUI sheets present in a separate
+            // hosting context, so root-level overlays sit BELOW
+            // the sheet, not above). It's mounted inside
+            // `ProfileView` as an `.overlay`, which ensures it
+            // sits in the same window as the sheet content.
+
+            }
             .environment(authManager)
+            .environment(vibesEffectHost)
+            .environment(vibesIncomingManager)
             .task(id: authManager.userId) {
                 await PushNotificationCoordinator.shared.setUserId(authManager.userId)
+                if let userId = authManager.userId {
+                    vibesIncomingManager.start(for: userId)
+                } else {
+                    vibesIncomingManager.stop()
+                }
             }
             .task {
                 await authManager.initialize()

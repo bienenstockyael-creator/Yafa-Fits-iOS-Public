@@ -29,6 +29,7 @@ struct UserProfileView: View {
     @State private var followingIds: [UUID] = []
     @State private var showFollowers = false
     @State private var showFollowing = false
+    @State private var vibesReceived: Int = 0
 
     // Carousel + hero-transition state. Same shape as OutfitGridView.
     @State private var outfitFrames: [String: CGRect] = [:]
@@ -317,6 +318,17 @@ struct UserProfileView: View {
                 statSegment(count: followerIds.count, label: followerIds.count == 1 ? "follower" : "followers")
             }
             .buttonStyle(.plain)
+
+            if vibesReceived > 0 {
+                Text("·")
+                    .font(.system(size: 13))
+                    .foregroundStyle(AppPalette.textFaint)
+
+                statSegment(
+                    count: vibesReceived,
+                    label: vibesReceived == 1 ? "vibe" : "vibes"
+                )
+            }
         }
     }
 
@@ -661,17 +673,20 @@ struct UserProfileView: View {
             async let outfitsTask = ContentSource.getPublicOutfits(forUser: userId)
             async let followerIdsTask = try SocialService.getFollowerIds(userId: userId)
             async let followingIdsTask = try SocialService.getFollowingIds(userId: userId)
+            async let vibesReceivedTask = VibesService.receivedCount(userId: userId)
 
             let p = try await profileTask
             let userOutfits = await outfitsTask
             let frs = (try? await followerIdsTask) ?? []
             let fng = (try? await followingIdsTask) ?? []
+            let vibes = await vibesReceivedTask
 
             await MainActor.run {
                 profile = p
                 outfits = userOutfits
                 followerIds = Array(frs)
                 followingIds = Array(fng)
+                vibesReceived = vibes
                 isLoading = false
             }
         } catch {

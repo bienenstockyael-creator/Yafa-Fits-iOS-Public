@@ -1,6 +1,19 @@
 import SwiftUI
 import Lottie
 
+/// Shared scroll-offset model for the empty-following hero. Holding
+/// the offset on an `@Observable` lets the leaf avatar + button
+/// subviews read it directly — when the value changes, only those
+/// leaves re-evaluate, not the parent hero body. Previously the
+/// hero took `scrollOffset` as a prop, which meant every scroll
+/// tick re-evaluated the entire hero body and rebuilt all 5
+/// AvatarBubble structs + closures. Now the hero body is stable
+/// during scroll; only the leaves update their modifier chains.
+@Observable
+final class HeroScrollState {
+    var offset: CGFloat = 0
+}
+
 /// Top half of the empty-friends feed: four organic avatar bubbles
 /// surround a "Find your friends" capsule. Tapping the "+" badge on
 /// an avatar follows that user (animate out + refill from a queued
@@ -12,11 +25,12 @@ struct EmptyFollowingHeroView: View {
 
     let onFindFriendsTap: () -> Void
     let onProfileTap: (Profile) -> Void
-    /// Absolute scroll offset (pt) passed in by the parent. Each
-    /// element computes its own visibility relative to where the
-    /// first community card lands at this scroll position — bottom
-    /// avatars react first, button next, top avatars last.
-    var scrollOffset: CGFloat = 0
+    /// Scroll state shared with the leaf avatar + button subviews.
+    /// The hero body itself does NOT read `scrollState.offset` —
+    /// only `AvatarSlotView` and `FriendsButtonView` do — so the
+    /// hero body never re-evaluates on scroll. Each scroll-tick
+    /// invalidation is contained to the leaves.
+    @Bindable var scrollState: HeroScrollState
     /// When the parent supplies a non-empty list, the floating
     /// avatars are replaced with these profiles (used after the
     /// user shares their contacts and we match them to existing
@@ -39,18 +53,12 @@ struct EmptyFollowingHeroView: View {
     /// spring; `opacity` fades from 0→1.
     @State private var discoBallScale: CGFloat = 0
     @State private var discoBallOpacity: Double = 0
-    /// Current Lottie playback speed. Ramps from 3.0 → 1.0 over
-    /// the first second of pop-in (via a short-lived Task — see
-    /// `animateDiscoBallEntry`), then stays constant. Driving
-    /// this via a state value rather than a `TimelineView` means
-    /// SwiftUI stops re-rendering the button entirely once the
-    /// ramp completes — no per-frame overhead for the lifetime
-    /// of the view.
-    @State private var discoBallSpeed: Double = 3.0
-    /// Handle for the speed-ramp task so each new entry (e.g.
-    /// tab return) can cancel any in-flight ramp before starting
-    /// a fresh one.
-    @State private var speedRampTask: Task<Void, Never>?
+    /// Lottie playback speed for the disco ball. Held constant at
+    /// 1.0 — the spin-up ramp was contributing main-thread overhead
+    /// during the avatar entry window (per-frame Task writes +
+    /// disco-ball Lottie running at 3× speed competed with the
+    /// staggered avatar springs and dropped frames).
+    @State private var discoBallSpeed: Double = 1.0
     /// Bumped at the instant the disco ball pops in. Applied as
     /// `.id()` on the sparkle Lottie so SwiftUI recreates it,
     /// which restarts the Lottie from frame 0 — and since all
@@ -74,52 +82,13 @@ struct EmptyFollowingHeroView: View {
     /// on every scroll cycle.
     @State private var hasStartedFloat = false
 
-    /// Per-avatar visibility based on how close the first community
-    /// card is to that avatar's Y position. Returns 1 when the card
-    /// is still safely below the avatar, 0 once the card has passed
-    /// it. Each avatar reacts only when the card "gets near" it —
-    /// bottom avatars trigger first, top avatars last.
-    private func avatarVisibility(forSlotY y: CGFloat) -> CGFloat {
-        // Hero is 380pt tall, centred so the button sits at y = 0.
-        // The first community card sits at hero-coord ≈ +190 when
-        // scroll is 0 and rises by `scrollOffset` as the user
-        // scrolls up.
-        let cardY = 190 - scrollOffset
-        let distance = cardY - y
-        let triggerDistance: CGFloat = 50
-        let fadeRange: CGFloat = 60
-        if distance >= triggerDistance { return 1 }
-        if distance <= triggerDistance - fadeRange { return 0 }
-        return (distance - (triggerDistance - fadeRange)) / fadeRange
-    }
-
-    /// Quicker fade for the button — matches the snappy fade of the
-    /// "Find your people" search pill on the populated friends feed.
-    private var buttonScrollVisibility: CGFloat {
-        let cardY = 190 - scrollOffset
-        let distance = cardY  // button at y = 0
-        let triggerDistance: CGFloat = 60
-        let fadeRange: CGFloat = 30
-        if distance >= triggerDistance { return 1 }
-        if distance <= triggerDistance - fadeRange { return 0 }
-        return (distance - (triggerDistance - fadeRange)) / fadeRange
-    }
-
-    /// Coarse "is anything still visible" gate for hit testing —
-    /// turns off touches once every element has scrolled out.
-    private var anyVisible: Bool {
-        scrollOffset < 400
-    }
-
-    /// True once the button (and the disco-ball Lottie inside it)
-    /// has scrolled fully behind the community section. Used to
-    /// pause both Lotties — they render at opacity 0 either way
-    /// but Lottie keeps animating invisibly, burning CPU/GPU,
-    /// unless we explicitly set `animationSpeed = 0`.
-    private var buttonOffScreen: Bool {
-        buttonScrollVisibility == 0
-    }
-
+    // Per-avatar / per-button visibility math has moved into the
+    // leaf views (AvatarSlotView, FriendsButtonView) so reading
+    // `scrollState.offset` only invalidates those leaves, not the
+    // hero body. The `.allowsHitTesting(scrollOffset < 400)` gate
+    // and the `.offset(y: scrollOffset)` pin also moved up to the
+    // parent (`PinnedHero` in EmptyFollowingView) — both read the
+    // scroll state, but neither passes through the hero body.
 
     var body: some View {
         // GeometryReader so we can lay out each bubble at its slot
@@ -134,52 +103,44 @@ struct EmptyFollowingHeroView: View {
             let offsets = slotOffsets(for: geo.size.width)
             ZStack {
                 ForEach(0..<offsets.count, id: \.self) { index in
-                    let slotY = offsets[index].height
-                    let slotX = offsets[index].width
-                    let scrollVis = avatarVisibility(forSlotY: slotY)
-                    avatarSlot(at: index)
-                        .frame(
-                            width: slotDiameters[index],
-                            height: slotDiameters[index]
-                        )
-                        .scaleEffect(
-                            entryProgresses[index] * scrollVis,
-                            anchor: .center
-                        )
-                        .opacity(entryProgresses[index] * scrollVis)
-                        // `.position` BEFORE `.modifier(FloatEffect)`
-                        // so the scaleEffect's anchor is calculated
-                        // against the positioned-at-slot layout, not
-                        // the parent's origin. With FloatEffect first,
-                        // the GeometryEffect's projection was being
-                        // applied before the position resolved, which
-                        // dragged the scaleEffect anchor back toward
-                        // the parent centre (the button location).
-                        // Position-then-translate gives the correct
-                        // anchor at the bubble's own centre.
-                        .position(
-                            x: geo.size.width / 2 + slotX,
-                            y: geo.size.height / 2 + slotY
-                        )
-                        .modifier(FloatEffect(
-                            time: floatTime,
-                            phase: Double(index) * 1.7,
-                            amplitude: driftAmplitude
-                        ))
+                    AvatarSlotView(
+                        scrollState: scrollState,
+                        index: index,
+                        slotX: offsets[index].width,
+                        slotY: offsets[index].height,
+                        diameter: slotDiameters[index],
+                        entryProgress: entryProgresses[index],
+                        floatTime: floatTime,
+                        driftAmplitude: driftAmplitude,
+                        containerSize: geo.size,
+                        profile: slots[index],
+                        onProfileTap: {
+                            if let profile = slots[index] {
+                                onProfileTap(profile)
+                            }
+                        },
+                        onFollow: {
+                            if let profile = slots[index] {
+                                handleFollow(profile, at: index)
+                            }
+                        }
+                    )
                 }
 
-                findYourFriendsButton
-                    .scaleEffect((entryProgresses.last ?? 0) * buttonScrollVisibility)
-                    .opacity((entryProgresses.last ?? 0) * buttonScrollVisibility)
-                    .position(
-                        x: geo.size.width / 2,
-                        y: geo.size.height / 2
-                    )
+                FriendsButtonView(
+                    scrollState: scrollState,
+                    entryProgress: entryProgresses.last ?? 0,
+                    discoBallScale: discoBallScale,
+                    discoBallOpacity: discoBallOpacity,
+                    discoBallSpeed: discoBallSpeed,
+                    sparkleResetId: sparkleResetId,
+                    containerSize: geo.size,
+                    onTap: onFindFriendsTap
+                )
             }
         }
         .frame(maxWidth: .infinity)
         .frame(height: 420)
-        .allowsHitTesting(anyVisible)
         .task {
             // Order matters: button entry fires immediately so the
             // page isn't blank during the network fetch. THEN we
@@ -296,14 +257,9 @@ struct EmptyFollowingHeroView: View {
         guard !hasStartedDiscoEntry else { return }
         hasStartedDiscoEntry = true
 
-        // Cancel any in-flight ramp from a previous entry so the
-        // two don't race each other writing to `discoBallSpeed`.
-        speedRampTask?.cancel()
-
         Task { @MainActor in
             discoBallScale = 0
             discoBallOpacity = 0
-            discoBallSpeed = 3.0
 
             try? await Task.sleep(nanoseconds: 300_000_000)
 
@@ -314,25 +270,6 @@ struct EmptyFollowingHeroView: View {
             withAnimation(.spring(response: 0.45, dampingFraction: 0.55)) {
                 discoBallScale = 1.0
                 discoBallOpacity = 1.0
-            }
-
-            // Ramp speed 3.0 → 1.0 over 1s at ~60fps, then stop.
-            // Once the loop exits, SwiftUI re-renders nothing
-            // until the next entry (or an external state change).
-            speedRampTask = Task { @MainActor in
-                let start = Date()
-                let duration: Double = 1.0
-                while !Task.isCancelled {
-                    let elapsed = Date().timeIntervalSince(start)
-                    if elapsed >= duration {
-                        discoBallSpeed = 1.0
-                        return
-                    }
-                    let t = elapsed / duration
-                    let eased = 1.0 - (1.0 - t) * (1.0 - t)
-                    discoBallSpeed = 3.0 - 2.0 * eased
-                    try? await Task.sleep(nanoseconds: 16_666_666)
-                }
             }
         }
     }
@@ -354,6 +291,17 @@ struct EmptyFollowingHeroView: View {
     /// Staggered pop-in for the five avatars. Called once the
     /// suggestion data has landed so the springs animate visible
     /// bubbles rather than empty slots.
+    ///
+    /// Animations are issued in a single synchronous loop using
+    /// `.delay()` on each spring's animation curve, instead of
+    /// awaiting between iterations. Two reasons:
+    ///   1. Each `withAnimation { entryProgresses[i] = 1 }` triggers
+    ///      a body invalidation. Issuing them in the same run-loop
+    ///      tick lets SwiftUI batch all 5 into a single body
+    ///      re-evaluation rather than 5 sequential re-evaluations.
+    ///   2. The visual stagger is preserved by `.delay(i * 0.08)`,
+    ///      which is interpreted by SwiftUI's animation system —
+    ///      the springs still kick off 80ms apart.
     private func animateAvatarsEntry() {
         for i in 0..<5 { entryProgresses[i] = 0 }
         Task { @MainActor in
@@ -362,10 +310,12 @@ struct EmptyFollowingHeroView: View {
             // and the bubbles snap in flat).
             try? await Task.sleep(nanoseconds: 16_000_000)
             for i in 0..<5 {
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                withAnimation(
+                    .spring(response: 0.5, dampingFraction: 0.7)
+                        .delay(Double(i) * 0.08)
+                ) {
                     entryProgresses[i] = 1
                 }
-                try? await Task.sleep(nanoseconds: 80_000_000)
             }
         }
     }
@@ -429,67 +379,10 @@ struct EmptyFollowingHeroView: View {
 
     // MARK: - Subviews
 
-    private var findYourFriendsButton: some View {
-        // Light glass capsule chrome — matches the rest of the app's
-        // lighter buttons (CREATE YOUR FIRST OUTFIT, the inline
-        // FOLLOW pill, etc) via `appCapsule()`. Dark text for
-        // contrast on the blur background.
-        //
-        // Trailing icon is the disco ball, which pops in via a
-        // spring (scale + fade) while spinning at 3× speed; once
-        // the pop settles, the speed eases back to 1× and the
-        // ball spins normally from there. Three sparkle layers
-        // (single Lottie, baked-in) overlay on top.
-        Button(action: onFindFriendsTap) {
-            HStack(spacing: 2) {
-                Text("Find your people")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(AppPalette.textPrimary)
-
-                LottieView(animation: .named("DiscoBall"))
-                    .looping()
-                    .animationSpeed(buttonOffScreen ? 0 : discoBallSpeed)
-                    .overlay(
-                        LottieView(animation: .named("disco-ball-sparkles"))
-                            .looping()
-                            .animationSpeed(buttonOffScreen ? 0 : 1.0)
-                            .frame(width: 150, height: 150)
-                            .allowsHitTesting(false)
-                            .id(sparkleResetId)
-                    )
-                    .frame(width: 32, height: 32)
-                    .scaleEffect(discoBallScale)
-                    .opacity(discoBallOpacity)
-            }
-            .padding(.leading, 24)
-            .padding(.trailing, 16)
-            .frame(height: 48)
-            .appCapsule(shadowRadius: 8, shadowY: 4)
-        }
-        .buttonStyle(.plain)
-    }
-
-    @ViewBuilder
-    private func avatarSlot(at index: Int) -> some View {
-        if let profile = slots[index] {
-            // No `.transition` on the bubble itself — the follow
-            // shrink/grow animation is driven explicitly through
-            // `entryProgresses[index]` in `handleFollow`, which
-            // feeds the outer `.scaleEffect` whose anchor is known
-            // to land on the bubble's own centre. `.transition`'s
-            // scale was running in a coordinate system that hadn't
-            // yet been positioned to the slot, which is why the
-            // shrink visually emanated from the parent's centre
-            // (the button) instead of the bubble's own location.
-            AvatarBubble(
-                profile: profile,
-                diameter: slotDiameters[index],
-                onAvatarTap: { onProfileTap(profile) },
-                onFollowTap: { handleFollow(profile, at: index) }
-            )
-            .id(profile.id)
-        }
-    }
+    // `findYourFriendsButton` and `avatarSlot(at:)` moved into
+    // `FriendsButtonView` and `AvatarSlotView` below — both leaf
+    // views own their own scroll-offset reads so the hero body
+    // doesn't observe `scrollState.offset`.
 
     // MARK: - Data
 
@@ -501,8 +394,22 @@ struct EmptyFollowingHeroView: View {
                 currentUserId: userId,
                 limit: 20
             )
+            let shuffled = suggestions.shuffled()
+            let displayed = Array(shuffled.prefix(slots.count))
+
+            // Decode the 5 displayed avatars BEFORE setting slot
+            // @state, so when the bubbles mount their
+            // `CachedRemoteImage`s hit the sync cache path on
+            // first render — no placeholder→image swap, no body
+            // re-evaluation per bubble mid-spring.
+            //
+            // Capped at 700ms so a single slow image can't block
+            // the entire hero — if a URL is still in flight past
+            // the cap, we proceed; that bubble falls back to the
+            // placeholder→image swap (one bubble, not all five).
+            await prewarmAvatarImages(for: displayed, timeoutNanos: 700_000_000)
+
             await MainActor.run {
-                let shuffled = suggestions.shuffled()
                 for i in 0..<slots.count where i < shuffled.count {
                     slots[i] = shuffled[i]
                 }
@@ -512,6 +419,61 @@ struct EmptyFollowingHeroView: View {
             // Silent failure — the empty hero still renders (just
             // button + drift). User can still tap into discovery.
         }
+    }
+
+    /// Pre-warm `RemoteImageCache` for the displayed avatars and
+    /// `await` the decodes (with a hard time cap) before returning.
+    /// Matches the `maxPixelSize` `AvatarView` uses
+    /// (`max(size, 80) * scale`) so the cache hit doesn't trigger a
+    /// re-decode at a different size. Bubble diameter is 100pt; on
+    /// @3× devices that's 300px.
+    ///
+    /// `timeoutNanos` bounds the total wait so one slow URL can't
+    /// delay the entire hero render — decodes that haven't finished
+    /// when the timeout fires continue running in the background and
+    /// will be picked up by the bubble's own `CachedRemoteImage`
+    /// `.task` on the next render.
+    private func prewarmAvatarImages(
+        for profiles: [Profile],
+        timeoutNanos: UInt64
+    ) async {
+        let scale = UIScreen.main.scale
+        let maxPixelSize = max(100, 80) * scale
+        let urls = profiles.compactMap { profile -> URL? in
+            guard let urlString = profile.avatarUrl else { return nil }
+            return URL(string: urlString)
+        }
+        guard !urls.isEmpty else { return }
+
+        // Race "all decodes done" against "timeout fired". Whichever
+        // wins returns; the loser is cancelled. Underlying
+        // URLSession requests keep running on cancellation, so a
+        // slow image still lands in the cache for the bubble's own
+        // `CachedRemoteImage.task` on the next render.
+        let decodeAll = Task(priority: .userInitiated) {
+            await withTaskGroup(of: Void.self) { group in
+                for url in urls {
+                    group.addTask(priority: .userInitiated) {
+                        _ = await RemoteImageCache.shared.load(
+                            url,
+                            maxPixelSize: maxPixelSize
+                        )
+                    }
+                }
+                for await _ in group {}
+            }
+        }
+        let timeout = Task {
+            try? await Task.sleep(nanoseconds: timeoutNanos)
+        }
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { await decodeAll.value }
+            group.addTask { await timeout.value }
+            await group.next()
+            group.cancelAll()
+        }
+        decodeAll.cancel()
+        timeout.cancel()
     }
 
     private func handleFollow(_ profile: Profile, at index: Int) {
@@ -542,6 +504,148 @@ struct EmptyFollowingHeroView: View {
                 entryProgresses[index] = 1
             }
         }
+    }
+}
+
+// MARK: - AvatarSlotView
+
+/// One avatar slot in the floating hero. Reads `scrollState.offset`
+/// directly to compute its own scale + opacity fade, so a scroll
+/// tick only invalidates this leaf (not the surrounding hero body).
+///
+/// Layout responsibility:
+///   - Positions itself at the slot offset within the container,
+///   - Applies the entry-spring scale/opacity via `entryProgress`,
+///   - Multiplies that by `avatarVisibility()` for scroll fade,
+///   - Applies the `FloatEffect` drift modifier last so the
+///     position is already resolved.
+private struct AvatarSlotView: View {
+    @Bindable var scrollState: HeroScrollState
+    let index: Int
+    let slotX: CGFloat
+    let slotY: CGFloat
+    let diameter: CGFloat
+    let entryProgress: CGFloat
+    let floatTime: Double
+    let driftAmplitude: CGFloat
+    let containerSize: CGSize
+    let profile: Profile?
+    let onProfileTap: () -> Void
+    let onFollow: () -> Void
+
+    var body: some View {
+        let scrollVis = avatarVisibility()
+        avatarBody
+            .frame(width: diameter, height: diameter)
+            .scaleEffect(entryProgress * scrollVis, anchor: .center)
+            .opacity(entryProgress * scrollVis)
+            .position(
+                x: containerSize.width / 2 + slotX,
+                y: containerSize.height / 2 + slotY
+            )
+            .modifier(FloatEffect(
+                time: floatTime,
+                phase: Double(index) * 1.7,
+                amplitude: driftAmplitude
+            ))
+    }
+
+    @ViewBuilder
+    private var avatarBody: some View {
+        if let profile {
+            AvatarBubble(
+                profile: profile,
+                diameter: diameter,
+                onAvatarTap: onProfileTap,
+                onFollowTap: onFollow
+            )
+            .id(profile.id)
+        }
+    }
+
+    /// Same fade math as the previous hero-body version. Reads
+    /// `scrollState.offset` here so only this leaf re-evaluates
+    /// when the offset changes — the hero body is unaware.
+    private func avatarVisibility() -> CGFloat {
+        let cardY = 190 - scrollState.offset
+        let distance = cardY - slotY
+        let triggerDistance: CGFloat = 50
+        let fadeRange: CGFloat = 60
+        if distance >= triggerDistance { return 1 }
+        if distance <= triggerDistance - fadeRange { return 0 }
+        return (distance - (triggerDistance - fadeRange)) / fadeRange
+    }
+}
+
+// MARK: - FriendsButtonView
+
+/// "Find your people" pill button with disco-ball Lottie. Reads
+/// `scrollState.offset` directly to drive its scroll-fade scale +
+/// opacity AND to pause the two Lotties (`animationSpeed = 0`)
+/// once the button has scrolled fully behind the community
+/// section. By owning these reads internally, scroll ticks
+/// invalidate this leaf only.
+private struct FriendsButtonView: View {
+    @Bindable var scrollState: HeroScrollState
+    let entryProgress: CGFloat
+    let discoBallScale: CGFloat
+    let discoBallOpacity: Double
+    let discoBallSpeed: Double
+    let sparkleResetId: Int
+    let containerSize: CGSize
+    let onTap: () -> Void
+
+    var body: some View {
+        let buttonVis = buttonScrollVisibility()
+        let offScreen = buttonVis == 0
+
+        Button(action: onTap) {
+            HStack(spacing: 2) {
+                Text("Find your people")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppPalette.textPrimary)
+
+                LottieView(animation: .named("DiscoBall"))
+                    .looping()
+                    .animationSpeed(offScreen ? 0 : discoBallSpeed)
+                    .overlay(
+                        LottieView(animation: .named("disco-ball-sparkles"))
+                            .looping()
+                            .animationSpeed(offScreen ? 0 : 1.0)
+                            .frame(width: 150, height: 150)
+                            .shadow(color: AppPalette.uploadGlow.opacity(0.8), radius: 6)
+                            .allowsHitTesting(false)
+                            .id(sparkleResetId)
+                    )
+                    .frame(width: 32, height: 32)
+                    .scaleEffect(discoBallScale)
+                    .opacity(discoBallOpacity)
+            }
+            .padding(.leading, 24)
+            .padding(.trailing, 16)
+            .frame(height: 48)
+            .appCapsule(shadowRadius: 8, shadowY: 4)
+        }
+        .buttonStyle(.plain)
+        .scaleEffect(entryProgress * buttonVis)
+        .opacity(entryProgress * buttonVis)
+        .position(
+            x: containerSize.width / 2,
+            y: containerSize.height / 2
+        )
+    }
+
+    /// Quicker fade than the avatars — matches the snappy fade of
+    /// the "Find your people" search pill on the populated friends
+    /// feed.
+    private func buttonScrollVisibility() -> CGFloat {
+        let cardY = 190 - scrollState.offset
+        let distance = cardY  // button at y = 0
+        let triggerDistance: CGFloat = 60
+        let fadeRange: CGFloat = 30
+        if distance >= triggerDistance { return 1 }
+        if distance <= triggerDistance - fadeRange { return 0 }
+        return (distance - (triggerDistance - fadeRange)) / fadeRange
     }
 }
 

@@ -8,6 +8,13 @@ struct PublicFeedListView: View {
     @State private var likeCounts: [String: Int] = [:]
     @State private var commentCounts: [String: Int] = [:]
     @State private var myLikedOutfitIds: Set<String> = []
+    /// Vibe state for the cards. Counts are per-outfit, vibed
+    /// set tracks which outfits the current user has already
+    /// vibed, and remainingThisWeek is the shared quota binding
+    /// every card writes through.
+    @State private var vibeCounts: [String: Int] = [:]
+    @State private var vibedOutfitIds: Set<String> = []
+    @State private var vibesRemainingThisWeek: Int = 3
     @State private var showsNotifications = false
     @State private var pendingScrollPostId: String?
     @State private var selectedDiscoveryProfile: Profile?
@@ -159,6 +166,7 @@ struct PublicFeedListView: View {
             hasRefreshedFeed = true
             await store.refreshFeed()
             await loadCounts()
+            await loadVibes()
         }
         .onAppear {
             // Capture once per tab visit so live `followingIds`
@@ -234,7 +242,10 @@ struct PublicFeedListView: View {
                         },
                         onCartOpen: {
                             pendingScrollPostId = post.id
-                        }
+                        },
+                        vibeCountInitial: vibeCounts[post.outfitId] ?? 0,
+                        isVibedByMeInitial: vibedOutfitIds.contains(post.outfitId),
+                        vibesRemainingThisWeek: $vibesRemainingThisWeek
                     )
                     .id(post.id)
                     .onPreferenceChange(CartBottomKey.self) { bottomY in
@@ -281,6 +292,7 @@ struct PublicFeedListView: View {
                 hasRefreshedFeed = false
                 await store.refreshFeed()
                 await loadCounts()
+                await loadVibes()
             }
         }
         } // ScrollViewReader
@@ -530,6 +542,29 @@ struct PublicFeedListView: View {
         }
     }
 
+    /// Batch-load vibe state for the feed: per-outfit counts,
+    /// which outfits the current user has already vibed, and
+    /// the user's remaining quota for this ISO week. Runs in
+    /// parallel — three independent reads.
+    private func loadVibes() async {
+        let outfitIds = store.feedPosts.map(\.outfitId)
+        guard let userId = store.userId else { return }
+
+        async let countsTask = VibesService.vibeCounts(outfitIds: outfitIds)
+        async let vibedTask = VibesService.vibedOutfitIds(currentUserId: userId)
+        async let remainingTask = VibesService.remainingThisWeek()
+
+        let counts = await countsTask
+        let vibed = await vibedTask
+        let remaining = await remainingTask
+
+        await MainActor.run {
+            vibeCounts = counts
+            vibedOutfitIds = vibed
+            vibesRemainingThisWeek = remaining
+        }
+    }
+
     private func loadCounts() async {
         let outfitIds = store.feedPosts.map(\.outfitId)
         guard !outfitIds.isEmpty, let userId = store.userId else { return }
@@ -572,6 +607,15 @@ struct FeedPostCard: View {
     /// card header so users can follow without leaving the feed.
     /// Used by the empty-following Community section.
     var showFollowAction: Bool = false
+    /// Initial vibe count + whether the current user vibed this
+    /// outfit. Loaded in batch by the feed list and passed in
+    /// as initial values; local state overrides after the user
+    /// taps so the UI updates optimistically.
+    var vibeCountInitial: Int = 0
+    var isVibedByMeInitial: Bool = false
+    /// User's remaining-this-week vibe quota. Shared across all
+    /// cards in the feed via a Binding to the parent list.
+    var vibesRemainingThisWeek: Binding<Int>?
     @Environment(OutfitStore.self) private var store
     @State private var showComments = false
     @State private var showUserProfile = false
@@ -581,6 +625,9 @@ struct FeedPostCard: View {
     @State private var localCommentCount: Int?
     @State private var cartOpen = false
     @State private var fetchedOutfit: Outfit?
+    @State private var localVibeCount: Int? = nil
+    @State private var localIsVibedByMe: Bool? = nil
+    @State private var showVibers = false
 
     // Use local store first, then prefetch cache, then per-card fetch
     private var outfit: Outfit? {
@@ -646,10 +693,27 @@ struct FeedPostCard: View {
             withAnimation(.easeOut(duration: 0.3)) { cardVisible = true }
         }
         .onAppear {
-            if outfit != nil { cardVisible = true }
+            // Animate the fade-in even when outfit is already
+            // resolved at appear time (i.e., cache hit). Previously
+            // this set `cardVisible = true` without `withAnimation`,
+            // which meant cache-hit cards snapped on while
+            // cache-miss cards (where `.onChange(of: outfit)` fires
+            // later) faded in. That asymmetry was visible on the
+            // community section of the empty-following feed, where
+            // outfits are typically pre-cached — cards there
+            // popped in without the friends-feed fade. Animating
+            // both paths makes the entry consistent.
+            guard outfit != nil, !cardVisible else { return }
+            withAnimation(.easeOut(duration: 0.3)) { cardVisible = true }
         }
         .sheet(isPresented: $showLikers) {
             LikersSheet(outfitId: post.outfitId)
+        }
+        .sheet(isPresented: $showVibers) {
+            VibersListSheet(source: .outfit(post.outfitId))
+                .environment(store)
+                .presentationDragIndicator(.visible)
+                .presentationBackground(AppPalette.groupedBackground)
         }
         .sheet(isPresented: $showComments, onDismiss: {
             Task {
@@ -839,8 +903,59 @@ struct FeedPostCard: View {
         localCommentCount ?? commentCount
     }
 
+    private var vibeCountBinding: Binding<Int> {
+        Binding(
+            get: { localVibeCount ?? vibeCountInitial },
+            set: { localVibeCount = $0 }
+        )
+    }
+
+    private var isVibedByMeBinding: Binding<Bool> {
+        Binding(
+            get: { localIsVibedByMe ?? isVibedByMeInitial },
+            set: { localIsVibedByMe = $0 }
+        )
+    }
+
+    /// Bridge for the case where the host doesn't provide a
+    /// shared quota binding (e.g. preview / profile-grid
+    /// overlay). Falls back to a local @State that's never
+    /// shared — quota will desync from the rest of the app but
+    /// the card still functions.
+    @State private var fallbackVibesRemaining: Int = 3
+    private var vibesRemainingBinding: Binding<Int> {
+        vibesRemainingThisWeek ?? $fallbackVibesRemaining
+    }
+
     private var hasProducts: Bool {
         outfit?.products?.isEmpty == false
+    }
+
+    /// True when the current user authored this post — used to
+    /// hide the vibe button on your own outfits (you can't
+    /// vibe yourself; the server blocks it via the RPC's
+    /// `self_vibe` error, but no button = no confusion).
+    private var isOwnPost: Bool {
+        guard let myId = store.userId,
+              let authorId = post.authorId else { return false }
+        return myId == authorId
+    }
+
+    private var vibeButtonInline: some View {
+        VibeButton(
+            outfitId: post.outfitId,
+            vibeCount: vibeCountBinding,
+            isVibedByMe: isVibedByMeBinding,
+            remainingThisWeek: vibesRemainingBinding
+        )
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.4)
+                .onEnded { _ in
+                    if vibeCountBinding.wrappedValue > 0 {
+                        showVibers = true
+                    }
+                }
+        )
     }
 
     private var cardActions: some View {
@@ -898,6 +1013,14 @@ struct FeedPostCard: View {
                 }
 
                 Spacer()
+
+                // Vibes — bottom-right reaction. Hidden on the
+                // user's own posts (you can't vibe yourself —
+                // the server blocks it, and showing a tappable
+                // button that always errors would be confusing).
+                if !isOwnPost {
+                    vibeButtonInline
+                }
             }
             .padding(.top, LayoutMetrics.xxxSmall)
 

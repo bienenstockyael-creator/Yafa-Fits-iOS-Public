@@ -20,6 +20,7 @@ struct ProfileHeader: View {
     @State private var pendingCropImage: IdentifiableImage?
     @State private var followerIds: [UUID] = []
     @State private var showFollowers = false
+    @State private var vibesReceived: Int = 0
 
     private var displayName: String {
         let profile = store.currentProfile
@@ -60,8 +61,14 @@ struct ProfileHeader: View {
         .padding(.bottom, LayoutMetrics.medium)
         .task {
             guard let userId = store.userId else { return }
-            let frs = (try? await SocialService.getFollowerIds(userId: userId)) ?? []
-            await MainActor.run { followerIds = Array(frs) }
+            async let frsTask = (try? await SocialService.getFollowerIds(userId: userId)) ?? []
+            async let vibesTask = VibesService.receivedCount(userId: userId)
+            let frs = await frsTask
+            let vibes = await vibesTask
+            await MainActor.run {
+                followerIds = Array(frs)
+                vibesReceived = vibes
+            }
         }
         .onChange(of: selectedPhoto) { _, newValue in
             guard let newValue else { return }
@@ -178,6 +185,17 @@ struct ProfileHeader: View {
                 statSegment(count: followerIds.count, label: followerIds.count == 1 ? "follower" : "followers")
             }
             .buttonStyle(.plain)
+
+            if vibesReceived > 0 {
+                Text("·")
+                    .font(.system(size: 13))
+                    .foregroundStyle(AppPalette.textFaint)
+
+                statSegment(
+                    count: vibesReceived,
+                    label: vibesReceived == 1 ? "vibe" : "vibes"
+                )
+            }
         }
     }
 

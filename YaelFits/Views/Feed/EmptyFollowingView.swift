@@ -23,7 +23,22 @@ struct EmptyFollowingView: View {
     @State private var commentCounts: [String: Int] = [:]
     @State private var myLikedOutfitIds: Set<String> = []
     @State private var hasLoadedCommunity = false
-    @State private var scrollOffset: CGFloat = 0
+    /// Shared scroll state for the hero. Holding the offset on an
+    /// `@Observable` (rather than `@State` + prop drilling) means
+    /// only the leaf hero subviews that actually read the offset
+    /// re-evaluate on each scroll tick — this view body stays
+    /// stable, so the closures it creates for the hero don't
+    /// churn and the hero body itself doesn't re-evaluate either.
+    @State private var heroScrollState = HeroScrollState()
+    /// Vibe state for the community cards. Same structure as
+    /// PublicFeedListView — the two surfaces don't share state
+    /// since they're mutually exclusive at any moment, but
+    /// every mount re-fetches `remainingThisWeek` from the
+    /// backend so a vibe given in community then a switch to
+    /// the friends feed shows the correct quota.
+    @State private var vibeCounts: [String: Int] = [:]
+    @State private var vibedOutfitIds: Set<String> = []
+    @State private var vibesRemainingThisWeek: Int = 3
 
     // No global collapseProgress anymore — `EmptyFollowingHeroView`
     // computes per-element triggers internally from the raw
@@ -40,29 +55,29 @@ struct EmptyFollowingView: View {
                 // view's hierarchy", which is exactly what was
                 // blocking the collapse animation here.
                 ScrollOffsetObserver { offsetY in
-                    scrollOffset = max(0, offsetY)
+                    // Coalesce scroll updates: round to nearest 2pt
+                    // and skip writes when the bucketed value hasn't
+                    // changed (fade range is 30–60pt so 2pt steps
+                    // are imperceptible). Writes target
+                    // `heroScrollState.offset`; since this view's
+                    // body doesn't read that property, the update
+                    // never re-evaluates this body. Only `PinnedHero`
+                    // (which reads it for the `.offset(y:)` pin) and
+                    // the hero's leaf subviews re-evaluate.
+                    let next = max(0, offsetY)
+                    let bucketed = (next / 2).rounded() * 2
+                    if bucketed != heroScrollState.offset {
+                        heroScrollState.offset = bucketed
+                    }
                 }
                 .frame(width: 0, height: 0)
 
-                EmptyFollowingHeroView(
+                PinnedHero(
+                    scrollState: heroScrollState,
                     onFindFriendsTap: onFindFriendsTap,
                     onProfileTap: onProfileTap,
-                    scrollOffset: scrollOffset,
                     seedProfiles: seedProfiles
                 )
-                .frame(height: 380)
-                .padding(.top, LayoutMetrics.feedTopInset)
-                // Counter-scroll offset pins the hero visually in
-                // place. The hero still occupies its full layout
-                // slot in the scroll content, so the community
-                // section below scrolls up exactly as before — but
-                // the hero's avatars and button stay anchored on
-                // screen until their per-element fade triggers fire
-                // as the community card "gets near" each one. As
-                // the cards slide over the hero region, the elements
-                // are already faded out, so visually the cards take
-                // over the space cleanly.
-                .offset(y: scrollOffset)
 
                 communitySection
             }
@@ -74,7 +89,9 @@ struct EmptyFollowingView: View {
         // hide the Yafa logo (which we want visible at top,
         // matching the friends-feed behavior).
         .task {
-            await loadCommunityIfNeeded()
+            // Track view-mount time so the community apply can
+            // wait out the hero's entry-animation window.
+            await loadCommunityIfNeeded(viewMountedAt: Date())
         }
     }
 
@@ -112,7 +129,10 @@ struct EmptyFollowingView: View {
                         // (mockup shows no gradient glow even on Pro
                         // authors).
                         hideProChrome: true,
-                        showFollowAction: true
+                        showFollowAction: true,
+                        vibeCountInitial: vibeCounts[post.outfitId] ?? 0,
+                        isVibedByMeInitial: vibedOutfitIds.contains(post.outfitId),
+                        vibesRemainingThisWeek: $vibesRemainingThisWeek
                     )
                     .id(post.id)
                 }
@@ -124,13 +144,41 @@ struct EmptyFollowingView: View {
 
     // MARK: - Data
 
-    private func loadCommunityIfNeeded() async {
+    private func loadCommunityIfNeeded(viewMountedAt mountTime: Date) async {
         guard !hasLoadedCommunity else { return }
         hasLoadedCommunity = true
 
+        // Apply community posts as soon as the fetch returns, so
+        // the cards' entry animation aligns with the hero's avatar
+        // entry. (Earlier I held the apply until ~1.1s post-mount
+        // to keep the LazyVStack from competing with the avatar
+        // springs for main-thread time — but that made the cards
+        // visibly lag the avatars, and the OTHER optimizations
+        // we've layered in since (batched entry animations, image
+        // pre-warm, killed disco-ball 3× ramp) are doing most of
+        // the work keeping the springs smooth.)
+        _ = mountTime  // retained on the signature for future use
         let posts = await ContentSource.getPublicFeed()
         await MainActor.run { communityPosts = posts }
         await loadCounts(for: posts.map(\.outfitId))
+        await loadVibes(for: posts.map(\.outfitId))
+    }
+
+    private func loadVibes(for outfitIds: [String]) async {
+        guard let userId = store.userId else { return }
+        async let countsTask = VibesService.vibeCounts(outfitIds: outfitIds)
+        async let vibedTask = VibesService.vibedOutfitIds(currentUserId: userId)
+        async let remainingTask = VibesService.remainingThisWeek()
+
+        let counts = await countsTask
+        let vibed = await vibedTask
+        let remaining = await remainingTask
+
+        await MainActor.run {
+            vibeCounts = counts
+            vibedOutfitIds = vibed
+            vibesRemainingThisWeek = remaining
+        }
     }
 
     private func loadCounts(for outfitIds: [String]) async {
@@ -156,5 +204,42 @@ private struct EmptyFollowingScrollKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = nextValue()
+    }
+}
+
+// MARK: - PinnedHero
+
+/// Thin wrapper that hosts the hero, applies the counter-scroll
+/// pin (`.offset(y:)`), and gates hit testing once the hero has
+/// scrolled out of view. By isolating the `scrollState.offset`
+/// reads here, neither the outer `EmptyFollowingView` body nor
+/// the inner `EmptyFollowingHeroView` body observes the offset —
+/// so on each scroll tick, only this small wrapper re-evaluates
+/// (along with the hero's leaf subviews that need new fade
+/// values). The hero body, ForEach iterations, and AvatarBubble
+/// closure construction stay stable during scroll.
+private struct PinnedHero: View {
+    @Bindable var scrollState: HeroScrollState
+    let onFindFriendsTap: () -> Void
+    let onProfileTap: (Profile) -> Void
+    let seedProfiles: [Profile]?
+
+    var body: some View {
+        EmptyFollowingHeroView(
+            onFindFriendsTap: onFindFriendsTap,
+            onProfileTap: onProfileTap,
+            scrollState: scrollState,
+            seedProfiles: seedProfiles
+        )
+        .frame(height: 380)
+        .padding(.top, LayoutMetrics.feedTopInset)
+        // Counter-scroll pin: the hero still occupies its full
+        // layout slot in the scroll content, but visually stays
+        // anchored on screen until per-element fade triggers
+        // dismiss it. The community cards slide over the hero
+        // region cleanly because the elements are already faded.
+        .offset(y: scrollState.offset)
+        // Stop intercepting taps once everything is off-screen.
+        .allowsHitTesting(scrollState.offset < 400)
     }
 }
