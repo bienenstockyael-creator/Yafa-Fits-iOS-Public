@@ -234,6 +234,55 @@ class OutfitStore {
                 .execute()
                 .value) ?? []
             count += comments.count
+
+            // Vibes count toward the unread badge the same way
+            // likes do. Each vibe = one notification row.
+            struct VibeRow: Decodable {
+                let outfitId: String
+                let createdAt: String
+                enum CodingKeys: String, CodingKey {
+                    case outfitId = "outfit_id"
+                    case createdAt = "created_at"
+                }
+            }
+            let recentVibes: [VibeRow] = (try? await supabase
+                .from("vibes")
+                .select("outfit_id, created_at")
+                .in("outfit_id", values: userOutfitIds)
+                .neq("giver_id", value: userId.uuidString)
+                .gt("created_at", value: since)
+                .execute()
+                .value) ?? []
+            count += recentVibes.count
+
+            // Free-gen-earned milestones: every 5th lifetime vibe
+            // received is its own notification. To know whether
+            // any new milestones were crossed since `lastSeen`,
+            // compare milestones-now vs milestones-before.
+            //
+            // We fetch the lightweight `(outfit_id)` projection
+            // for both queries; per-user lifetime vibe rows top
+            // out in the hundreds (limited by give-vibe quota),
+            // so the bandwidth is negligible and the queries
+            // stay consistent with the rest of this file's style.
+            let allVibes: [OutfitIdRow] = (try? await supabase
+                .from("vibes")
+                .select("outfit_id")
+                .in("outfit_id", values: userOutfitIds)
+                .neq("giver_id", value: userId.uuidString)
+                .execute()
+                .value) ?? []
+            let vibesBeforeSince: [OutfitIdRow] = (try? await supabase
+                .from("vibes")
+                .select("outfit_id")
+                .in("outfit_id", values: userOutfitIds)
+                .neq("giver_id", value: userId.uuidString)
+                .lte("created_at", value: since)
+                .execute()
+                .value) ?? []
+            let milestonesNow = allVibes.count / 5
+            let milestonesBefore = vibesBeforeSince.count / 5
+            count += max(0, milestonesNow - milestonesBefore)
         }
 
         struct FollowIdRow: Decodable { let follower_id: String }

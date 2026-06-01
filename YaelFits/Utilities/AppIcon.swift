@@ -32,6 +32,7 @@ enum AppIconGlyph {
     case sparkles
     case stack
     case pencil
+    case flame
 }
 
 struct AppIcon: View {
@@ -241,6 +242,8 @@ struct AppIcon: View {
                     (4.5, 15.5),
                 ], in: rect),
             ]
+        case .flame:
+            return [flamePath(in: rect)]
         }
     }
 
@@ -248,6 +251,7 @@ struct AppIcon: View {
         switch glyph {
         case .heart: return heartPath(in: rect)
         case .bookmark: return bookmarkPath(in: rect)
+        case .flame: return flamePath(in: rect)
         default: return nil
         }
     }
@@ -317,6 +321,53 @@ struct AppIcon: View {
         p.addLine(to: point(19, 20, in: rect))
         p.addLine(to: point(19, 5, in: rect))
         p.addQuadCurve(to: point(17, 3, in: rect), control: point(19, 3, in: rect))
+        p.closeSubpath()
+        return p
+    }
+
+    /// Asymmetric flame outline, slightly leaning right with a
+    /// small wave on the left side — reads as a candle/match
+    /// flame at any size. Stroked only (no fill path returned),
+    /// matching the rest of the app's outline glyph style.
+    private func flamePath(in rect: CGRect) -> Path {
+        var p = Path()
+        p.move(to: point(12, 22, in: rect))
+        // Left side sweep up from base
+        p.addCurve(
+            to: point(4, 14, in: rect),
+            control1: point(5, 22, in: rect),
+            control2: point(3, 18, in: rect)
+        )
+        // Left lobe rising to upper area, with a slight inner
+        // dip that suggests the flame's "wave"
+        p.addCurve(
+            to: point(11, 6, in: rect),
+            control1: point(5, 9, in: rect),
+            control2: point(8, 8, in: rect)
+        )
+        p.addCurve(
+            to: point(12, 9, in: rect),
+            control1: point(12, 7, in: rect),
+            control2: point(11.5, 8, in: rect)
+        )
+        // Top tip — narrow and tilted slightly right
+        p.addCurve(
+            to: point(15, 3, in: rect),
+            control1: point(13.5, 7, in: rect),
+            control2: point(13, 5, in: rect)
+        )
+        // Right side coming back down — fuller curve since the
+        // right lobe is the wider half
+        p.addCurve(
+            to: point(20, 14, in: rect),
+            control1: point(17, 5, in: rect),
+            control2: point(20, 9, in: rect)
+        )
+        p.addCurve(
+            to: point(12, 22, in: rect),
+            control1: point(20, 19, in: rect),
+            control2: point(17, 22, in: rect)
+        )
         p.closeSubpath()
         return p
     }

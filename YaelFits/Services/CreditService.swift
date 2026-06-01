@@ -45,4 +45,34 @@ actor CreditService {
             .rpc("release_3d_credit", params: JobParams(p_job_id: jobId.uuidString))
             .execute()
     }
+
+    /// Current free + paid balances for a user, used by the
+    /// profile settings page to surface "X gens left" without
+    /// the user having to start a generation to find out.
+    ///
+    /// Calls `refresh_free_credits_if_due` first so a monthly
+    /// reset that's "owed" gets applied before we read — that
+    /// way the surfaced number is always current.
+    struct Balance: Decodable, Sendable {
+        let gen_credits_free_balance: Int
+        let gen_credits_paid_balance: Int
+    }
+
+    func balance(userId: UUID) async throws -> Balance {
+        struct UserParams: Encodable { let p_user_id: String }
+        try? await supabase
+            .rpc(
+                "refresh_free_credits_if_due",
+                params: UserParams(p_user_id: userId.uuidString)
+            )
+            .execute()
+        let row: Balance = try await supabase
+            .from("profiles")
+            .select("gen_credits_free_balance, gen_credits_paid_balance")
+            .eq("id", value: userId.uuidString)
+            .single()
+            .execute()
+            .value
+        return row
+    }
 }
