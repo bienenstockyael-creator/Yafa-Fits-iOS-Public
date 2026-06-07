@@ -67,6 +67,33 @@ struct SocialService {
             .execute()
     }
 
+    /// Atomically updates the three columns that drive the
+    /// customizable profile header: style choice, accent color,
+    /// and the bg-removed avatar URL. Passing nil for any field
+    /// clears it (used when switching back to `minimal`, which
+    /// shouldn't carry forward a stale accent color).
+    static func updateHeaderCustomization(
+        userId: UUID,
+        style: ProfileHeaderStyle,
+        accentColorHex: String?,
+        cutoutURL: String?
+    ) async throws {
+        struct HeaderUpdate: Encodable {
+            let header_style: String
+            let header_accent_color: String?
+            let avatar_cutout_url: String?
+        }
+        try await supabase
+            .from("profiles")
+            .update(HeaderUpdate(
+                header_style: style.rawValue,
+                header_accent_color: accentColorHex,
+                avatar_cutout_url: cutoutURL
+            ))
+            .eq("id", value: userId.uuidString)
+            .execute()
+    }
+
     static func updateProfile(_ profile: Profile) async throws {
         struct ProfileUpsertFull: Encodable {
             let id: String

@@ -63,6 +63,11 @@
 		202605302700000B000001 /* VibesFirstUseModal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605302700000A000001 /* VibesFirstUseModal.swift */; };
 		202605302800000B000001 /* InfoExplainerModal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605302800000A000001 /* InfoExplainerModal.swift */; };
 		202606011200000B000001 /* AIProxyClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202606011200000A000001 /* AIProxyClient.swift */; };
+		202606061000000B000001 /* ProfileHeaderStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202606061000000A000001 /* ProfileHeaderStyle.swift */; };
+		202606061100000B000001 /* CurvedUsernamePill.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202606061100000A000001 /* CurvedUsernamePill.swift */; };
+		202606061200000B000001 /* HighlighterUsername.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202606061200000A000001 /* HighlighterUsername.swift */; };
+		202606061300000B000001 /* ProfileHeaderStylePreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202606061300000A000001 /* ProfileHeaderStylePreview.swift */; };
+		202606061400000B000001 /* ProfileHeaderCustomizeSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202606061400000A000001 /* ProfileHeaderCustomizeSheet.swift */; };
 		22B301AC155311EC382BBED1 /* PasswordResetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9ACE0F1992CD1E1C592E84FE /* PasswordResetView.swift */; };
 		24CE8DD298136439F5078DFA /* PlayfairDisplay-Italic.otf in Resources */ = {isa = PBXBuildFile; fileRef = 60A31063DA222A97AF101191 /* PlayfairDisplay-Italic.otf */; };
 		25CD0A57BA9A4449422B812F /* FrameSequenceViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8D5A078D13851433A0CF2C8 /* FrameSequenceViewModel.swift */; };
@@ -260,6 +265,11 @@
 		202605302700000A000001 /* VibesFirstUseModal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibesFirstUseModal.swift; sourceTree = "<group>"; };
 		202605302800000A000001 /* InfoExplainerModal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InfoExplainerModal.swift; sourceTree = "<group>"; };
 		202606011200000A000001 /* AIProxyClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIProxyClient.swift; sourceTree = "<group>"; };
+		202606061000000A000001 /* ProfileHeaderStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileHeaderStyle.swift; sourceTree = "<group>"; };
+		202606061100000A000001 /* CurvedUsernamePill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurvedUsernamePill.swift; sourceTree = "<group>"; };
+		202606061200000A000001 /* HighlighterUsername.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HighlighterUsername.swift; sourceTree = "<group>"; };
+		202606061300000A000001 /* ProfileHeaderStylePreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileHeaderStylePreview.swift; sourceTree = "<group>"; };
+		202606061400000A000001 /* ProfileHeaderCustomizeSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileHeaderCustomizeSheet.swift; sourceTree = "<group>"; };
 		251414A04E6CDF8175AC3872 /* ProductLibraryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductLibraryService.swift; sourceTree = "<group>"; };
 		257C2FEEAA3F033C9F7D2A1D /* outfit-27.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-27.webp"; sourceTree = "<group>"; };
 		29E71BBBA1CFBB444044694A /* GenerationJobService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationJobService.swift; sourceTree = "<group>"; };
@@ -553,6 +563,8 @@
 				95B6E39D004DC56E44D4C822 /* WeatherPill.swift */,
 				20260527000000001B0BBBBB /* CameraCaptureView.swift */,
 				AABBCC30000000000000CCC2 /* Outfit3DGlow.swift */,
+				202606061100000A000001 /* CurvedUsernamePill.swift */,
+				202606061200000A000001 /* HighlighterUsername.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -674,6 +686,8 @@
 				E782DC00D03C8C56B60CE3B6 /* AvatarCropView.swift */,
 				D337C4C4402316C35342FD86 /* ProfileView.swift */,
 				B1C2D3E4F5A6B7C8D9E0F1A2 /* ProfileHeader.swift */,
+				202606061300000A000001 /* ProfileHeaderStylePreview.swift */,
+				202606061400000A000001 /* ProfileHeaderCustomizeSheet.swift */,
 			);
 			path = Profile;
 			sourceTree = "<group>";
@@ -741,6 +755,7 @@
 				07BA71A9CDD13DA6808964BB /* ProductCategory.swift */,
 				8673AF651837F7F8A1A50BD4 /* ProductLibraryItem.swift */,
 				646E58B0E2ADCFBE6F3987BF /* Profile.swift */,
+				202606061000000A000001 /* ProfileHeaderStyle.swift */,
 				B01D7034E3B52D5B0635EAE8 /* Remix.swift */,
 				45E7F9B93946878842D0BB50 /* SocialModels.swift */,
 				3E528CCFAA1423FAE69CD013 /* UploadMaskingBackend.swift */,
@@ -1031,6 +1046,11 @@
 				20260530000000080B000001 /* Analytics.swift in Sources */,
 				202605301600000B000001 /* VibesService.swift in Sources */,
 				202606011200000B000001 /* AIProxyClient.swift in Sources */,
+				202606061000000B000001 /* ProfileHeaderStyle.swift in Sources */,
+				202606061100000B000001 /* CurvedUsernamePill.swift in Sources */,
+				202606061200000B000001 /* HighlighterUsername.swift in Sources */,
+				202606061300000B000001 /* ProfileHeaderStylePreview.swift in Sources */,
+				202606061400000B000001 /* ProfileHeaderCustomizeSheet.swift in Sources */,
 				8880FC79883BEC299D363DA0 /* SupabaseClient.swift in Sources */,
 				8A121EB863834E9BAF340E7A /* TagPill.swift in Sources */,
 				7100FDD58A11CD8E87D341A6 /* UploadLoaderView.swift in Sources */,

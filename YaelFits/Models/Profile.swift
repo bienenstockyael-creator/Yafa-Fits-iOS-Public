@@ -22,6 +22,27 @@ struct Profile: Codable, Identifiable, Hashable, Sendable {
     /// Drives the "ask the user for their phone" UX without leaking
     /// the hash itself.
     var phoneIsSet: Bool?
+    /// Header layout choice: how the avatar + username display on
+    /// this user's profile page. One of "minimal", "curved",
+    /// "bust". Server-checked enum (see profiles RLS migration).
+    /// Defaults to "minimal" for legacy users — old apps that
+    /// don't know about this field will simply render the legacy
+    /// layout, which is also what `minimal` is.
+    var headerStyle: String?
+    /// Hex string (e.g. "#FF7DBE") for the accent color used by
+    /// `curved` (pill outline) and `bust` (highlighter rect)
+    /// styles. Ignored when `headerStyle == "minimal"`. Picked by
+    /// the user from a small predefined palette.
+    var headerAccentColor: String?
+    /// Public Supabase Storage URL of the background-removed
+    /// version of the avatar. Populated when the user picks the
+    /// `bust` style (avatar gets pushed through FAL background
+    /// removal one-time, result is uploaded + URL stored here).
+    /// Nullable when the user has never used `bust`. Set to nil
+    /// any time the underlying avatar is replaced (the new
+    /// cutout is generated on demand if/when they re-enter
+    /// `bust`).
+    var avatarCutoutUrl: String?
 
     enum CodingKeys: String, CodingKey {
         case id, username, bio
@@ -31,6 +52,9 @@ struct Profile: Codable, Identifiable, Hashable, Sendable {
         case createdAt = "created_at"
         case phoneE164Hash = "phone_e164_hash"
         case phoneIsSet = "phone_is_set"
+        case headerStyle = "header_style"
+        case headerAccentColor = "header_accent_color"
+        case avatarCutoutUrl = "avatar_cutout_url"
     }
 
     /// Used in places where the display name should be primary
