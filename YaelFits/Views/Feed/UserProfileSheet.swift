@@ -267,12 +267,22 @@ struct UserProfileView: View {
 
     private var header: some View {
         VStack(spacing: LayoutMetrics.xSmall) {
-            avatar
+            avatarBlock
+                // Same Dynamic Type clamp as the owner's
+                // `ProfileHeader` so the highlighter scaling
+                // bumps for accessibility text but doesn't blow
+                // past the fixed bust frame at extreme sizes.
+                .dynamicTypeSize(.large ... .accessibility1)
 
-            Text(displayName)
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(AppPalette.textStrong)
-                .padding(.top, LayoutMetrics.xxSmall)
+            // Curved bakes the displayName into the pill;
+            // bust bakes it into the highlighter. Only minimal
+            // needs the standalone label.
+            if headerStyle == .minimal {
+                Text(displayName)
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(AppPalette.textStrong)
+                    .padding(.top, LayoutMetrics.xxSmall)
+            }
 
             if let bio = profile?.bio, !bio.isEmpty {
                 Text(bio)
@@ -292,14 +302,104 @@ struct UserProfileView: View {
         .padding(.bottom, LayoutMetrics.medium)
     }
 
+    /// Read-only mirror of `ProfileHeader.headerStyle` — the
+    /// owner picked it via the customize sheet, all other
+    /// viewers just render it.
+    private var headerStyle: ProfileHeaderStyle {
+        ProfileHeaderStyle.parse(profile?.headerStyle)
+    }
+
+    private var headerAccentColor: Color {
+        ProfileHeaderAccentColor.color(for: profile?.headerAccentColor)
+    }
+
+    /// Branches the avatar treatment per chosen style:
+    ///   * `.minimal` — plain `AvatarView` (circular + shadow).
+    ///   * `.curved`  — same AvatarView with the curved username
+    ///     pill overlaid; pill colored with the user's accent.
+    ///   * `.bust`    — bg-removed PNG drawn at 88pt with no
+    ///     circular crop. Falls back to the regular avatar when
+    ///     the cutout URL is missing (e.g. user picked bust on
+    ///     an old build that didn't persist the cutout, or the
+    ///     URL was cleared on avatar change before re-saving).
+    @ViewBuilder
+    private var avatarBlock: some View {
+        switch headerStyle {
+        case .minimal:
+            avatar
+        case .curved:
+            // Pill keeps the empty-feed avatar-bubble styling
+            // (white fill, cardBorder stroke); accent color only
+            // applies to bust on the customize sheet side.
+            ZStack {
+                avatar
+                CurvedUsernamePill(
+                    text: displayName,
+                    avatarRadius: ProfileHeaderMetrics.liveAvatarSize / 2,
+                    fontSize: ProfileHeaderMetrics.liveCurvedFontSize,
+                    pillThickness: ProfileHeaderMetrics.liveCurvedPillThickness
+                )
+                .drawingGroup()
+                .allowsHitTesting(false)
+            }
+            .frame(
+                width: ProfileHeaderMetrics.liveAvatarSize + ProfileHeaderMetrics.liveCurvedFramePadding,
+                height: ProfileHeaderMetrics.liveAvatarSize + ProfileHeaderMetrics.liveCurvedFramePadding
+            )
+        case .bust:
+            // Highlighter centered on the bust (chest area), not
+            // bottom-anchored. Same composition as the owner's
+            // `ProfileHeader.avatarBlock` — all sizing lives in
+            // `ProfileHeaderMetrics` so the two paths render
+            // identically when a viewer opens a profile they
+            // also happen to own.
+            ZStack {
+                bustImage
+                HighlighterUsername(
+                    text: displayName,
+                    color: headerAccentColor,
+                    fontSize: ProfileHeaderMetrics.liveHighlighterFontSize,
+                    rotation: ProfileHeaderMetrics.highlighterRotation
+                )
+                .offset(y: ProfileHeaderMetrics.liveAvatarSize * ProfileHeaderMetrics.bustHighlighterOffsetRatio)
+                .allowsHitTesting(false)
+            }
+            .frame(
+                width: ProfileHeaderMetrics.liveBustFrameWidth,
+                height: ProfileHeaderMetrics.liveAvatarSize + ProfileHeaderMetrics.liveBustExtraHeight
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var bustImage: some View {
+        if let urlString = profile?.avatarCutoutUrl,
+           let url = URL(string: urlString) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().aspectRatio(contentMode: .fit)
+                default:
+                    avatar
+                }
+            }
+            .frame(
+                width: ProfileHeaderMetrics.liveBustFrameWidth,
+                height: ProfileHeaderMetrics.liveAvatarSize
+            )
+        } else {
+            avatar
+        }
+    }
+
     private var avatar: some View {
-        // Avatar is read-only here — only the user's own ProfileHeader
-        // exposes the PhotosPicker + crop flow. Keep the visual shape
-        // (88pt circle, soft shadow) consistent across both views.
+        // Read-only — only the owner's `ProfileHeader` exposes
+        // the photo picker. Sized via `ProfileHeaderMetrics` so
+        // owner / viewer renderings share one source of truth.
         AvatarView(
             url: profile?.avatarUrl,
             initial: profile?.initial ?? String(displayName.prefix(1)).uppercased(),
-            size: 88,
+            size: ProfileHeaderMetrics.liveAvatarSize,
             shadowRadius: 10,
             shadowY: 4
         )
