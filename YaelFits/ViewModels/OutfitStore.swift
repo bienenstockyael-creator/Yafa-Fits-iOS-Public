@@ -195,6 +195,17 @@ class OutfitStore {
         feedOutfitCache = [:]
     }
 
+    /// Computes the unread-notification badge count by counting
+    /// new likes, comments, vibes, follows, and any 5-vibe
+    /// milestones the user crossed since `lastSeen`.
+    ///
+    /// Queries fire in two parallel tiers via `async let`:
+    ///   Tier 1: user's outfit IDs + new follows (independent)
+    ///   Tier 2: likes/comments/vibes/milestones (all need
+    ///           Tier 1's outfit IDs)
+    /// Each Supabase request is an independent HTTP/2 stream so
+    /// the tiered structure collapses 7 sequential round-trips
+    /// into 2 tiers of parallel queries.
     func refreshUnreadNotificationCount() async {
         guard let userId else { return }
         let lastSeen = NotificationReadState.lastSeenDate(for: userId)
@@ -205,96 +216,102 @@ class OutfitStore {
             let outfitId: String
             enum CodingKeys: String, CodingKey { case outfitId = "outfit_id" }
         }
-        let userOutfitIds: [String] = (try? await supabase
+        struct VibeRow: Decodable {
+            let outfitId: String
+            let createdAt: String
+            enum CodingKeys: String, CodingKey {
+                case outfitId = "outfit_id"
+                case createdAt = "created_at"
+            }
+        }
+        struct FollowIdRow: Decodable { let follower_id: String }
+
+        // Tier 1: user's outfit IDs + new follows.
+        // The follows query doesn't need outfit IDs at all; it
+        // can race the outfits-lookup.
+        async let userOutfitsResult: [IdRow] = supabase
             .from("outfits")
             .select("id")
             .eq("user_id", value: userId.uuidString)
             .execute()
-            .value as [IdRow])?.map(\.id) ?? []
-
-        var count = 0
-
-        if !userOutfitIds.isEmpty {
-            let likes: [OutfitIdRow] = (try? await supabase
-                .from("likes")
-                .select("outfit_id")
-                .in("outfit_id", values: userOutfitIds)
-                .neq("user_id", value: userId.uuidString)
-                .gt("created_at", value: since)
-                .execute()
-                .value) ?? []
-            count += likes.count
-
-            let comments: [OutfitIdRow] = (try? await supabase
-                .from("comments")
-                .select("outfit_id")
-                .in("outfit_id", values: userOutfitIds)
-                .neq("user_id", value: userId.uuidString)
-                .gt("created_at", value: since)
-                .execute()
-                .value) ?? []
-            count += comments.count
-
-            // Vibes count toward the unread badge the same way
-            // likes do. Each vibe = one notification row.
-            struct VibeRow: Decodable {
-                let outfitId: String
-                let createdAt: String
-                enum CodingKeys: String, CodingKey {
-                    case outfitId = "outfit_id"
-                    case createdAt = "created_at"
-                }
-            }
-            let recentVibes: [VibeRow] = (try? await supabase
-                .from("vibes")
-                .select("outfit_id, created_at")
-                .in("outfit_id", values: userOutfitIds)
-                .neq("giver_id", value: userId.uuidString)
-                .gt("created_at", value: since)
-                .execute()
-                .value) ?? []
-            count += recentVibes.count
-
-            // Free-gen-earned milestones: every 5th lifetime vibe
-            // received is its own notification. To know whether
-            // any new milestones were crossed since `lastSeen`,
-            // compare milestones-now vs milestones-before.
-            //
-            // We fetch the lightweight `(outfit_id)` projection
-            // for both queries; per-user lifetime vibe rows top
-            // out in the hundreds (limited by give-vibe quota),
-            // so the bandwidth is negligible and the queries
-            // stay consistent with the rest of this file's style.
-            let allVibes: [OutfitIdRow] = (try? await supabase
-                .from("vibes")
-                .select("outfit_id")
-                .in("outfit_id", values: userOutfitIds)
-                .neq("giver_id", value: userId.uuidString)
-                .execute()
-                .value) ?? []
-            let vibesBeforeSince: [OutfitIdRow] = (try? await supabase
-                .from("vibes")
-                .select("outfit_id")
-                .in("outfit_id", values: userOutfitIds)
-                .neq("giver_id", value: userId.uuidString)
-                .lte("created_at", value: since)
-                .execute()
-                .value) ?? []
-            let milestonesNow = allVibes.count / 5
-            let milestonesBefore = vibesBeforeSince.count / 5
-            count += max(0, milestonesNow - milestonesBefore)
-        }
-
-        struct FollowIdRow: Decodable { let follower_id: String }
-        let follows: [FollowIdRow] = (try? await supabase
+            .value
+        async let followsResult: [FollowIdRow] = supabase
             .from("follows")
             .select("follower_id")
             .eq("following_id", value: userId.uuidString)
             .neq("follower_id", value: userId.uuidString)
             .gt("created_at", value: since)
             .execute()
-            .value) ?? []
-        count += follows.count
+            .value
+
+        let userOutfitIds = ((try? await userOutfitsResult) ?? []).map(\.id)
+        let follows = (try? await followsResult) ?? []
+
+        var count = follows.count
+
+        // Tier 2: all five outfit-scoped queries fire together.
+        if !userOutfitIds.isEmpty {
+            async let likesResult: [OutfitIdRow] = supabase
+                .from("likes")
+                .select("outfit_id")
+                .in("outfit_id", values: userOutfitIds)
+                .neq("user_id", value: userId.uuidString)
+                .gt("created_at", value: since)
+                .execute()
+                .value
+            async let commentsResult: [OutfitIdRow] = supabase
+                .from("comments")
+                .select("outfit_id")
+                .in("outfit_id", values: userOutfitIds)
+                .neq("user_id", value: userId.uuidString)
+                .gt("created_at", value: since)
+                .execute()
+                .value
+            // Vibes count toward the unread badge the same way
+            // likes do. Each vibe = one notification row.
+            async let recentVibesResult: [VibeRow] = supabase
+                .from("vibes")
+                .select("outfit_id, created_at")
+                .in("outfit_id", values: userOutfitIds)
+                .neq("giver_id", value: userId.uuidString)
+                .gt("created_at", value: since)
+                .execute()
+                .value
+            // Free-gen-earned milestones: every 5th lifetime vibe
+            // received is its own notification. Compare
+            // milestones-now vs milestones-before to find unread.
+            // Per-user vibe rows are bounded by the 3/week quota
+            // so these full-history queries stay light.
+            async let allVibesResult: [OutfitIdRow] = supabase
+                .from("vibes")
+                .select("outfit_id")
+                .in("outfit_id", values: userOutfitIds)
+                .neq("giver_id", value: userId.uuidString)
+                .execute()
+                .value
+            async let vibesBeforeSinceResult: [OutfitIdRow] = supabase
+                .from("vibes")
+                .select("outfit_id")
+                .in("outfit_id", values: userOutfitIds)
+                .neq("giver_id", value: userId.uuidString)
+                .lte("created_at", value: since)
+                .execute()
+                .value
+
+            let likes = (try? await likesResult) ?? []
+            let comments = (try? await commentsResult) ?? []
+            let recentVibes = (try? await recentVibesResult) ?? []
+            let allVibes = (try? await allVibesResult) ?? []
+            let vibesBeforeSince = (try? await vibesBeforeSinceResult) ?? []
+
+            count += likes.count
+            count += comments.count
+            count += recentVibes.count
+
+            let milestonesNow = allVibes.count / 5
+            let milestonesBefore = vibesBeforeSince.count / 5
+            count += max(0, milestonesNow - milestonesBefore)
+        }
 
         let finalCount = count
         await MainActor.run {

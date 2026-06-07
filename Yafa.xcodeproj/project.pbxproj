@@ -16,7 +16,6 @@
 		0E86953BE246048B9B408314 /* outfit-2.webp in Resources */ = {isa = PBXBuildFile; fileRef = 4F45F302477F8DD356FE4B1A /* outfit-2.webp */; };
 		10840633716A10C300DFB42C /* RemixArchiveSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FAC6014CC4DA975180EFDC6 /* RemixArchiveSheetView.swift */; };
 		10F0100FB857B9FCBCE40127 /* StateScopingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B807A90E1DD2A35EDCE8EB7A /* StateScopingTests.swift */; };
-		20260530000000090B000001 /* PhoneNumberTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20260530000000090A000001 /* PhoneNumberTests.swift */; };
 		1122334455667788AABBCCDD /* ScrollOffsetObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8899AABBCCDDEEFF11223344 /* ScrollOffsetObserver.swift */; };
 		12D10EF491CEB4225EB2EDAF /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 87088DFCBDEF106E1E3BF96C /* Lottie */; };
 		16C2D83AE59F47AF7304DCCA /* InteractiveTouchSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E4A64387EDDC09043570EF5 /* InteractiveTouchSurface.swift */; };
@@ -50,7 +49,20 @@
 		20260530000000060B000001 /* ContactsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20260530000000060A000001 /* ContactsService.swift */; };
 		20260530000000070B000001 /* PhoneCapturePromptView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20260530000000070A000001 /* PhoneCapturePromptView.swift */; };
 		20260530000000080B000001 /* Analytics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20260530000000080A000001 /* Analytics.swift */; };
+		20260530000000090B000001 /* PhoneNumberTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20260530000000090A000001 /* PhoneNumberTests.swift */; };
 		202605301600000B000001 /* VibesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605301600000A000001 /* VibesService.swift */; };
+		202605301700000B000001 /* VibeButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605301700000A000001 /* VibeButton.swift */; };
+		202605301800000B000001 /* VibesEffectHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605301800000A000001 /* VibesEffectHost.swift */; };
+		202605301900000B000001 /* VibersListSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605301900000A000001 /* VibersListSheet.swift */; };
+		202605302000000B000001 /* VibesIncomingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605302000000A000001 /* VibesIncomingManager.swift */; };
+		202605302100000B000001 /* IncomingVibeToast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605302100000A000001 /* IncomingVibeToast.swift */; };
+		202605302200000B000001 /* VibesWaveShader.metal in Sources */ = {isa = PBXBuildFile; fileRef = 202605302200000A000001 /* VibesWaveShader.metal */; };
+		202605302300000B000001 /* VibesWaveModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605302300000A000001 /* VibesWaveModifier.swift */; };
+		202605302500000B000001 /* WindowSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605302500000A000001 /* WindowSnapshot.swift */; };
+		202605302600000B000001 /* VibeHapticPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605302600000A000001 /* VibeHapticPlayer.swift */; };
+		202605302700000B000001 /* VibesFirstUseModal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605302700000A000001 /* VibesFirstUseModal.swift */; };
+		202605302800000B000001 /* InfoExplainerModal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605302800000A000001 /* InfoExplainerModal.swift */; };
+		202606011200000B000001 /* AIProxyClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202606011200000A000001 /* AIProxyClient.swift */; };
 		22B301AC155311EC382BBED1 /* PasswordResetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9ACE0F1992CD1E1C592E84FE /* PasswordResetView.swift */; };
 		24CE8DD298136439F5078DFA /* PlayfairDisplay-Italic.otf in Resources */ = {isa = PBXBuildFile; fileRef = 60A31063DA222A97AF101191 /* PlayfairDisplay-Italic.otf */; };
 		25CD0A57BA9A4449422B812F /* FrameSequenceViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8D5A078D13851433A0CF2C8 /* FrameSequenceViewModel.swift */; };
@@ -96,17 +108,6 @@
 		6EDB6762B388FDCF0F7227D9 /* Profile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 646E58B0E2ADCFBE6F3987BF /* Profile.swift */; };
 		70437FE05598F5946D0C7653 /* outfit-24.webp in Resources */ = {isa = PBXBuildFile; fileRef = 3088889EDA194337296C9F9C /* outfit-24.webp */; };
 		7100FDD58A11CD8E87D341A6 /* UploadLoaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F9791776DC78094BBB88433 /* UploadLoaderView.swift */; };
-		202605301700000B000001 /* VibeButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605301700000A000001 /* VibeButton.swift */; };
-		202605301800000B000001 /* VibesEffectHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605301800000A000001 /* VibesEffectHost.swift */; };
-		202605301900000B000001 /* VibersListSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605301900000A000001 /* VibersListSheet.swift */; };
-		202605302000000B000001 /* VibesIncomingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605302000000A000001 /* VibesIncomingManager.swift */; };
-		202605302100000B000001 /* IncomingVibeToast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605302100000A000001 /* IncomingVibeToast.swift */; };
-		202605302200000B000001 /* VibesWaveShader.metal in Sources */ = {isa = PBXBuildFile; fileRef = 202605302200000A000001 /* VibesWaveShader.metal */; };
-		202605302300000B000001 /* VibesWaveModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605302300000A000001 /* VibesWaveModifier.swift */; };
-		202605302500000B000001 /* WindowSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605302500000A000001 /* WindowSnapshot.swift */; };
-		202605302600000B000001 /* VibeHapticPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605302600000A000001 /* VibeHapticPlayer.swift */; };
-		202605302700000B000001 /* VibesFirstUseModal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605302700000A000001 /* VibesFirstUseModal.swift */; };
-		202605302800000B000001 /* InfoExplainerModal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605302800000A000001 /* InfoExplainerModal.swift */; };
 		7455F2ED8A8525579A233A3D /* PreparedMaskingVariant.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34A76145E123E70B78BE57D0 /* PreparedMaskingVariant.swift */; };
 		74AA75019C8C28EDD28CB289 /* FalBackgroundRemovalService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A9473A9AC05A63B161719DE /* FalBackgroundRemovalService.swift */; };
 		74C11A63C84CEF82BD4D37F3 /* Inter_28pt-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E4ADA0A6F7861DEAEA0781FD /* Inter_28pt-SemiBold.ttf */; };
@@ -222,17 +223,6 @@
 		1BAE2E8D0D3DBBFF4D20EA22 /* GenerationJobRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationJobRecord.swift; sourceTree = "<group>"; };
 		1DBFD0B0901999A9CE9BDD8A /* outfit-19.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-19.webp"; sourceTree = "<group>"; };
 		1F9791776DC78094BBB88433 /* UploadLoaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadLoaderView.swift; sourceTree = "<group>"; };
-		202605301700000A000001 /* VibeButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeButton.swift; sourceTree = "<group>"; };
-		202605301800000A000001 /* VibesEffectHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibesEffectHost.swift; sourceTree = "<group>"; };
-		202605301900000A000001 /* VibersListSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibersListSheet.swift; sourceTree = "<group>"; };
-		202605302000000A000001 /* VibesIncomingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibesIncomingManager.swift; sourceTree = "<group>"; };
-		202605302100000A000001 /* IncomingVibeToast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IncomingVibeToast.swift; sourceTree = "<group>"; };
-		202605302200000A000001 /* VibesWaveShader.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = VibesWaveShader.metal; sourceTree = "<group>"; };
-		202605302300000A000001 /* VibesWaveModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibesWaveModifier.swift; sourceTree = "<group>"; };
-		202605302500000A000001 /* WindowSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowSnapshot.swift; sourceTree = "<group>"; };
-		202605302600000A000001 /* VibeHapticPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeHapticPlayer.swift; sourceTree = "<group>"; };
-		202605302700000A000001 /* VibesFirstUseModal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibesFirstUseModal.swift; sourceTree = "<group>"; };
-		202605302800000A000001 /* InfoExplainerModal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InfoExplainerModal.swift; sourceTree = "<group>"; };
 		1FAC6014CC4DA975180EFDC6 /* RemixArchiveSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemixArchiveSheetView.swift; sourceTree = "<group>"; };
 		1FD1D6936B993B57FB4A3B73 /* YaelFits.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = YaelFits.entitlements; sourceTree = "<group>"; };
 		2026052500000000002BBBBB /* CarouselDetailCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarouselDetailCard.swift; sourceTree = "<group>"; };
@@ -256,7 +246,20 @@
 		20260530000000060A000001 /* ContactsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsService.swift; sourceTree = "<group>"; };
 		20260530000000070A000001 /* PhoneCapturePromptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneCapturePromptView.swift; sourceTree = "<group>"; };
 		20260530000000080A000001 /* Analytics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Analytics.swift; sourceTree = "<group>"; };
+		20260530000000090A000001 /* PhoneNumberTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneNumberTests.swift; sourceTree = "<group>"; };
 		202605301600000A000001 /* VibesService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibesService.swift; sourceTree = "<group>"; };
+		202605301700000A000001 /* VibeButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeButton.swift; sourceTree = "<group>"; };
+		202605301800000A000001 /* VibesEffectHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibesEffectHost.swift; sourceTree = "<group>"; };
+		202605301900000A000001 /* VibersListSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibersListSheet.swift; sourceTree = "<group>"; };
+		202605302000000A000001 /* VibesIncomingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibesIncomingManager.swift; sourceTree = "<group>"; };
+		202605302100000A000001 /* IncomingVibeToast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IncomingVibeToast.swift; sourceTree = "<group>"; };
+		202605302200000A000001 /* VibesWaveShader.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = VibesWaveShader.metal; sourceTree = "<group>"; };
+		202605302300000A000001 /* VibesWaveModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibesWaveModifier.swift; sourceTree = "<group>"; };
+		202605302500000A000001 /* WindowSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowSnapshot.swift; sourceTree = "<group>"; };
+		202605302600000A000001 /* VibeHapticPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeHapticPlayer.swift; sourceTree = "<group>"; };
+		202605302700000A000001 /* VibesFirstUseModal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibesFirstUseModal.swift; sourceTree = "<group>"; };
+		202605302800000A000001 /* InfoExplainerModal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InfoExplainerModal.swift; sourceTree = "<group>"; };
+		202606011200000A000001 /* AIProxyClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIProxyClient.swift; sourceTree = "<group>"; };
 		251414A04E6CDF8175AC3872 /* ProductLibraryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductLibraryService.swift; sourceTree = "<group>"; };
 		257C2FEEAA3F033C9F7D2A1D /* outfit-27.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-27.webp"; sourceTree = "<group>"; };
 		29E71BBBA1CFBB444044694A /* GenerationJobService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationJobService.swift; sourceTree = "<group>"; };
@@ -352,7 +355,6 @@
 		B1C2D3E4F5A6B7C8D9E0F1A2 /* ProfileHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileHeader.swift; sourceTree = "<group>"; };
 		B69FF6A4ADDD0BAD4FC7F2E4 /* outfit-12.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-12.webp"; sourceTree = "<group>"; };
 		B807A90E1DD2A35EDCE8EB7A /* StateScopingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateScopingTests.swift; sourceTree = "<group>"; };
-		20260530000000090A000001 /* PhoneNumberTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneNumberTests.swift; sourceTree = "<group>"; };
 		B847C0AB98D3425BB5BBAFAB /* star-anim-2.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "star-anim-2.json"; sourceTree = "<group>"; };
 		BB629BBE1A7C4B7CA2437BEC /* placeholder-2.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "placeholder-2.webp"; sourceTree = "<group>"; };
 		BBDABBB7E6689D56A3A999A1 /* AppIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIcon.swift; sourceTree = "<group>"; };
@@ -708,6 +710,7 @@
 				20260530000000060A000001 /* ContactsService.swift */,
 				20260530000000080A000001 /* Analytics.swift */,
 				202605301600000A000001 /* VibesService.swift */,
+				202606011200000A000001 /* AIProxyClient.swift */,
 				202605302000000A000001 /* VibesIncomingManager.swift */,
 				202605302600000A000001 /* VibeHapticPlayer.swift */,
 				D49292C2B1DF2789A26ECDC7 /* SupabaseClient.swift */,
@@ -1027,6 +1030,7 @@
 				20260530000000070B000001 /* PhoneCapturePromptView.swift in Sources */,
 				20260530000000080B000001 /* Analytics.swift in Sources */,
 				202605301600000B000001 /* VibesService.swift in Sources */,
+				202606011200000B000001 /* AIProxyClient.swift in Sources */,
 				8880FC79883BEC299D363DA0 /* SupabaseClient.swift in Sources */,
 				8A121EB863834E9BAF340E7A /* TagPill.swift in Sources */,
 				7100FDD58A11CD8E87D341A6 /* UploadLoaderView.swift in Sources */,
@@ -1080,13 +1084,14 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = YaelFits/YaelFits.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 34;
+				CURRENT_PROJECT_VERSION = 36;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = YaelFits/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				MARKETING_VERSION = 2.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yafa.Yafa;
 				PRODUCT_NAME = Yafa;
 				SDKROOT = iphoneos;
@@ -1202,13 +1207,14 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = YaelFits/YaelFits.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 34;
+				CURRENT_PROJECT_VERSION = 36;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = YaelFits/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				MARKETING_VERSION = 2.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yafa.Yafa;
 				PRODUCT_NAME = Yafa;
 				SDKROOT = iphoneos;

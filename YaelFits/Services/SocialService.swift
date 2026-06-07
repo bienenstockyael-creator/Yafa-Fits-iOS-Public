@@ -99,6 +99,15 @@ struct SocialService {
         return Set(likes.map(\.outfitId))
     }
 
+    /// Records a like. Uses `onConflict: "user_id,outfit_id"` so a
+    /// repeat tap on the same outfit (rapid double-tap, retry after
+    /// network blip, etc.) is a no-op rather than inserting a new
+    /// row. Without this, the default upsert conflicts on the
+    /// primary key `id` (a freshly-generated UUID per call), which
+    /// means every tap inserts a duplicate — inflating
+    /// `outfit_like_counts` while the de-duped likers list shows
+    /// the real count. The DB also has a unique constraint on
+    /// `(user_id, outfit_id)` as a belt-and-suspenders guarantee.
     static func likeOutfit(userId: UUID, outfitId: String) async throws {
         struct LikeInsert: Encodable {
             let user_id: UUID
@@ -106,7 +115,10 @@ struct SocialService {
         }
         try await supabase
             .from("likes")
-            .upsert(LikeInsert(user_id: userId, outfit_id: outfitId))
+            .upsert(
+                LikeInsert(user_id: userId, outfit_id: outfitId),
+                onConflict: "user_id,outfit_id"
+            )
             .execute()
     }
 
@@ -163,7 +175,10 @@ struct SocialService {
         }
         try await supabase
             .from("saves")
-            .upsert(SaveInsert(user_id: userId, outfit_id: outfitId))
+            .upsert(
+                SaveInsert(user_id: userId, outfit_id: outfitId),
+                onConflict: "user_id,outfit_id"
+            )
             .execute()
     }
 
@@ -240,7 +255,10 @@ struct SocialService {
         }
         try await supabase
             .from("follows")
-            .upsert(FollowInsert(follower_id: followerId, following_id: followingId))
+            .upsert(
+                FollowInsert(follower_id: followerId, following_id: followingId),
+                onConflict: "follower_id,following_id"
+            )
             .execute()
     }
 
@@ -283,6 +301,22 @@ struct SocialService {
             .single()
             .execute()
             .value
+    }
+
+    /// Count of this user's PUBLIC outfits, independent of the
+    /// viewer's follow status or the target's privacy. Used to
+    /// render "X outfits" on profile views — see
+    /// `project_yafa_outfit_count_display.md`. The RPC runs as
+    /// SECURITY DEFINER and only returns an integer, so we don't
+    /// leak any content of private users to non-followers; we
+    /// just expose the public-sharing volume as a social signal.
+    static func publicOutfitCount(userId: UUID) async throws -> Int {
+        struct Params: Encodable { let p_user_id: String }
+        let value: Int = try await supabase
+            .rpc("public_outfit_count", params: Params(p_user_id: userId.uuidString))
+            .execute()
+            .value
+        return value
     }
 
     // MARK: - Search

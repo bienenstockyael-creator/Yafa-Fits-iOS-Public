@@ -30,6 +30,14 @@ struct UserProfileView: View {
     @State private var showFollowers = false
     @State private var showFollowing = false
     @State private var vibesReceived: Int = 0
+    /// Public-outfit count for this profile. Computed server-side via
+    /// `public_outfit_count` RPC so it's correct even when the
+    /// viewer is a non-follower of a private user (RLS would hide
+    /// the outfit rows themselves, but the COUNT should still be
+    /// shown as a social signal — see
+    /// `project_yafa_outfit_count_display.md`). Falls back to
+    /// `outfits.count` if the RPC fails.
+    @State private var publicOutfitCount: Int = 0
 
     // Carousel + hero-transition state. Same shape as OutfitGridView.
     @State private var outfitFrames: [String: CGRect] = [:]
@@ -305,7 +313,7 @@ struct UserProfileView: View {
 
     private var statsRow: some View {
         HStack(spacing: LayoutMetrics.small) {
-            statSegment(count: outfits.count, label: outfits.count == 1 ? "outfit" : "outfits")
+            statSegment(count: publicOutfitCount, label: publicOutfitCount == 1 ? "outfit" : "outfits")
 
             Text("·")
                 .font(.system(size: 13))
@@ -674,12 +682,20 @@ struct UserProfileView: View {
             async let followerIdsTask = try SocialService.getFollowerIds(userId: userId)
             async let followingIdsTask = try SocialService.getFollowingIds(userId: userId)
             async let vibesReceivedTask = VibesService.receivedCount(userId: userId)
+            async let publicCountTask = try SocialService.publicOutfitCount(userId: userId)
 
             let p = try await profileTask
             let userOutfits = await outfitsTask
             let frs = (try? await followerIdsTask) ?? []
             let fng = (try? await followingIdsTask) ?? []
             let vibes = await vibesReceivedTask
+            // Fall back to the locally-loaded outfit array if the
+            // RPC fails (network blip, function not deployed yet,
+            // etc.). For a public-profile viewer this falls back
+            // to the right number; for a private-profile non-
+            // follower it'd fall back to 0 — same as today's
+            // behavior, so no regression.
+            let publicCount = (try? await publicCountTask) ?? userOutfits.count
 
             await MainActor.run {
                 profile = p
@@ -687,6 +703,7 @@ struct UserProfileView: View {
                 followerIds = Array(frs)
                 followingIds = Array(fng)
                 vibesReceived = vibes
+                publicOutfitCount = publicCount
                 isLoading = false
             }
         } catch {

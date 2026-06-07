@@ -312,17 +312,10 @@ actor FalDressAvatarService {
 
     // MARK: - FAL plumbing
 
-    private func loadFalAPIKey() throws -> String {
-        let env = ProcessInfo.processInfo.environment
-        if let k = env["FALAPIKey"], !k.isEmpty { return k }
-        if let k = env["FAL_API_KEY"], !k.isEmpty { return k }
-        if let k = env["FAL_KEY"], !k.isEmpty { return k }
-        if let k = Bundle.main.object(forInfoDictionaryKey: "FALAPIKey") as? String,
-           !k.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return k
-        }
-        throw UploadPipelineError.missingFalKey
-    }
+    /// Legacy stub — FAL key lives server-side; `AIProxyClient`
+    /// strips the empty Authorization header and the proxy injects
+    /// the real key before forwarding.
+    private func loadFalAPIKey() throws -> String { "" }
 
     private func dataURI(for data: Data, mimeType: String) -> String {
         "data:\(mimeType);base64,\(data.base64EncodedString())"
@@ -420,7 +413,7 @@ actor FalDressAvatarService {
             request.httpBody = body
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await AIProxyClient.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             let text = String(data: data, encoding: .utf8) ?? "<binary>"
             throw UploadPipelineError.requestFailed(
@@ -436,7 +429,7 @@ actor FalDressAvatarService {
     private func downloadData(from url: URL, apiKey: String) async throws -> Data {
         var request = URLRequest(url: url)
         request.setValue("Key \(apiKey)", forHTTPHeaderField: "Authorization")
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await AIProxyClient.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw UploadPipelineError.requestFailed("Dressed avatar download failed.")
         }

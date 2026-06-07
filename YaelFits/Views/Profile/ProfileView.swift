@@ -32,6 +32,13 @@ struct ProfileView: View {
     @State private var vibesReceived: Int = 0
     @State private var vibesRemainingThisWeek: Int = 0
     @State private var freeCredits3D: Int = 0
+    /// When the next free-credit refresh is due. Non-nil only
+    /// after the user has consumed at least one free credit (the
+    /// 30-day clock starts on first consumption). Combined with
+    /// `freeCredits3D == 0`, we surface "credits refresh in X
+    /// days" on the chip so the user has a concrete expectation
+    /// instead of an opaque empty balance.
+    @State private var creditsResetAt: Date?
     @State private var showVibersOnMe = false
     /// Host that drives the credit-chip explainer modals at root
     /// level (rendered globally in `YaelFitsApp`, so they sit
@@ -243,7 +250,7 @@ struct ProfileView: View {
                 .tracking(1.2)
                 .foregroundStyle(AppPalette.textFaint)
 
-            if store.currentProfile?.phoneE164Hash != nil {
+            if store.currentProfile?.phoneIsSet == true {
                 phoneSavedRow
             } else {
                 phoneEntryRow
@@ -321,6 +328,7 @@ struct ProfileView: View {
             try await SocialService.updatePhoneHash(userId: userId, hash: nil)
             await MainActor.run {
                 store.currentProfile?.phoneE164Hash = nil
+                store.currentProfile?.phoneIsSet = false
                 isSavingPhone = false
             }
         } catch {
@@ -432,9 +440,7 @@ struct ProfileView: View {
                     creditChip(
                         icon: .sparkles,
                         value: "\(freeCredits3D)",
-                        label: freeCredits3D == 1
-                            ? "free 3D gen"
-                            : "free 3D gens"
+                        label: gen3DChipLabel
                     )
                 }
                 .buttonStyle(.plain)
@@ -487,14 +493,59 @@ struct ProfileView: View {
             let remaining = await remainingTask
             let balance = await balanceTask
 
+            // Parse `gen_credits_reset_at` (Supabase returns an
+            // ISO-8601 string). We try the two most common shapes
+            // — with and without fractional seconds — and bail to
+            // nil if neither matches, so a future server format
+            // change degrades to "no countdown shown" rather than
+            // a crash.
+            let resetDate: Date? = balance?.gen_credits_reset_at.flatMap { raw in
+                let withFraction = ISO8601DateFormatter()
+                withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                if let d = withFraction.date(from: raw) { return d }
+                let plain = ISO8601DateFormatter()
+                plain.formatOptions = [.withInternetDateTime]
+                return plain.date(from: raw)
+            }
+
             await MainActor.run {
                 followerIds = frs
                 followingIds = fng
                 vibesReceived = received
                 vibesRemainingThisWeek = remaining
                 freeCredits3D = balance?.gen_credits_free_balance ?? 0
+                creditsResetAt = resetDate
             }
         }
+    }
+
+    /// Label for the 3D-credit chip. When the user still has
+    /// credits, just shows "free 3D gen(s)". When they hit zero
+    /// AND we know the reset date AND it's in the future, swap
+    /// in a concrete countdown so the user has a finite wait
+    /// expectation instead of an opaque "0" with no recovery
+    /// hint. The free-credit window starts on first consumption
+    /// (server sets `gen_credits_reset_at = now() + 30 days` on
+    /// first debit), so this label only renders for users who've
+    /// actually generated something and run out.
+    private var gen3DChipLabel: String {
+        if freeCredits3D > 0 {
+            return freeCredits3D == 1 ? "free 3D gen" : "free 3D gens"
+        }
+        guard let reset = creditsResetAt, reset > Date() else {
+            return "free 3D gens"
+        }
+        let days = Calendar.current.dateComponents([.day], from: Date(), to: reset).day ?? 0
+        if days <= 0 {
+            // Less than a day away — refresh imminent; let them
+            // tap "Generate" and the server-side
+            // `refresh_free_credits_if_due` will fire.
+            return "refresh soon"
+        }
+        if days == 1 {
+            return "refresh in 1 day"
+        }
+        return "refresh in \(days) days"
     }
 
     private func creditChip(
@@ -610,6 +661,7 @@ struct ProfileView: View {
                     try await SocialService.updatePhoneHash(userId: userId, hash: hash)
                     await MainActor.run {
                         store.currentProfile?.phoneE164Hash = hash
+                        store.currentProfile?.phoneIsSet = true
                         phoneInput = ""
                     }
                 } catch {

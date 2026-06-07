@@ -28,10 +28,53 @@ class LocalOutfitStore {
         try? fileManager.createDirectory(at: userDataRootDir, withIntermediateDirectories: true)
     }
 
+    /// Returns the next outfit number to use for a new outfit by
+    /// this user. Monotonically increasing — even after a delete,
+    /// the slot is NOT reused.
+    ///
+    /// Previously this returned `max(currentOutfits.outfitNumber) + 1`,
+    /// which reused freed-up numbers after a delete. That caused a
+    /// subtle data-integrity bug: a freshly-saved outfit could share
+    /// an ID with a recently-deleted outfit whose server-side row
+    /// hadn't been fully cleaned up (the server delete is fire-and-
+    /// forget via `try?`), and the next refresh would merge ghost
+    /// data into the new outfit's slot.
+    ///
+    /// Now we track a per-user "high-water mark" alongside the
+    /// existing metadata — a single integer that only ever grows.
+    /// `next = max(currentMax, highWaterMark) + 1`. Mark gets
+    /// bumped here on every call. The double-source (current outfits
+    /// AND mark) is belt-and-suspenders: if the mark file is ever
+    /// missing or corrupt, we fall back to current outfits and
+    /// still always return at-least-monotonic numbers.
     func nextOutfitNum(userId: UUID) -> Int {
         let outfits = loadOutfits(userId: userId)
-        let nums = outfits.compactMap(\.outfitNumber)
-        return (nums.max() ?? 0) + 1
+        let currentMax = outfits.compactMap(\.outfitNumber).max() ?? 0
+        let highWaterMark = loadOutfitNumberHighWaterMark(userId: userId)
+        let next = max(currentMax, highWaterMark) + 1
+        saveOutfitNumberHighWaterMark(next, userId: userId)
+        return next
+    }
+
+    private func highWaterMarkFile(for userId: UUID) -> URL {
+        userDirectory(for: userId).appendingPathComponent("outfit-number-hwm.json")
+    }
+
+    private struct HighWaterMark: Codable { let value: Int }
+
+    private func loadOutfitNumberHighWaterMark(userId: UUID) -> Int {
+        let url = highWaterMarkFile(for: userId)
+        guard let data = try? Data(contentsOf: url),
+              let mark = try? JSONDecoder().decode(HighWaterMark.self, from: data) else {
+            return 0
+        }
+        return mark.value
+    }
+
+    private func saveOutfitNumberHighWaterMark(_ value: Int, userId: UUID) {
+        let url = highWaterMarkFile(for: userId)
+        guard let encoded = try? JSONEncoder().encode(HighWaterMark(value: value)) else { return }
+        try? encoded.write(to: url, options: .atomic)
     }
 
     private func assetOwnerId(for outfit: Outfit, userId: UUID? = nil) -> String? {

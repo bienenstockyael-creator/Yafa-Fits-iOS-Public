@@ -504,7 +504,7 @@ struct PublicFeedListView: View {
         await MainActor.run {
             isResolvingContacts = false
 
-            let needsPhone = store.currentProfile?.phoneE164Hash == nil
+            let needsPhone = store.currentProfile?.phoneIsSet != true
 
             if !matches.isEmpty {
                 contactMatches = matches
@@ -535,6 +535,7 @@ struct PublicFeedListView: View {
             try await SocialService.updatePhoneHash(userId: userId, hash: hash)
             await MainActor.run {
                 store.currentProfile?.phoneE164Hash = hash
+                store.currentProfile?.phoneIsSet = true
             }
             Analytics.log("phone_capture_saved")
         } catch {

@@ -1,3 +1,4 @@
+import Lottie
 import SwiftUI
 import UIKit
 import UserNotifications
@@ -139,6 +140,9 @@ struct YaelFitsApp: App {
             .task {
                 await authManager.initialize()
             }
+            .task {
+                prewarmLottieAnimations()
+            }
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active, authManager.isAuthenticated {
                     Task { await outfitStore.refreshOutfits() }
@@ -149,5 +153,24 @@ struct YaelFitsApp: App {
 
     private func requestNotificationPermission() async {
         await PushNotificationCoordinator.shared.requestAuthorization()
+    }
+
+    /// Parses the heaviest bundled Lottie JSONs on a background
+    /// queue at app launch and stuffs them into Lottie's internal
+    /// animation cache. Without this, `DiscoBall.json` (1.8 MB) and
+    /// its sparkle overlay would be parsed on the main thread the
+    /// first time `FriendsButtonView` mounts on the empty-friends
+    /// hero — synchronous JSON parse of that size visibly blocks
+    /// the SwiftUI render loop. New users with no follows are the
+    /// only audience that hits the empty hero; pre-warming here
+    /// makes their first-launch friends-feed appearance snappy.
+    /// For users with follows this is wasted work — but it runs on
+    /// a `.utility` Task.detached, so it never competes with
+    /// user-facing rendering.
+    private func prewarmLottieAnimations() {
+        Task.detached(priority: .utility) {
+            _ = LottieAnimation.named("DiscoBall")
+            _ = LottieAnimation.named("disco-ball-sparkles")
+        }
     }
 }

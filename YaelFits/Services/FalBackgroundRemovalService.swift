@@ -108,25 +108,10 @@ actor FalBackgroundRemovalService {
         }
     }
 
-    private func loadFalAPIKey() throws -> String {
-        let env = ProcessInfo.processInfo.environment
-
-        if let envKey = env["FALAPIKey"], !envKey.isEmpty {
-            return envKey
-        }
-        if let envKey = env["FAL_API_KEY"], !envKey.isEmpty {
-            return envKey
-        }
-        if let envKey = env["FAL_KEY"], !envKey.isEmpty {
-            return envKey
-        }
-        if let plistKey = Bundle.main.object(forInfoDictionaryKey: "FALAPIKey") as? String,
-           !plistKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return plistKey
-        }
-
-        throw UploadPipelineError.missingFalKey
-    }
+    /// Legacy stub — FAL key lives server-side; `AIProxyClient`
+    /// strips the empty Authorization header and the proxy injects
+    /// the real key before forwarding.
+    private func loadFalAPIKey() throws -> String { "" }
 
     private func dataURI(for data: Data, mimeType: String) -> String {
         "data:\(mimeType);base64,\(data.base64EncodedString())"
@@ -163,7 +148,7 @@ actor FalBackgroundRemovalService {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
 
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await AIProxyClient.shared.data(for: request)
         try validateFal(response: response, data: data)
 
         guard let decoded = try? JSONDecoder().decode(T.self, from: data) else {

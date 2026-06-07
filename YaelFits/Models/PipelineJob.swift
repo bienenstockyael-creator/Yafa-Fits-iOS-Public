@@ -177,7 +177,7 @@ enum UploadPipelineError: LocalizedError {
         case .decodingFailed:
             return "The generation response could not be decoded."
         case .outOfCredits:
-            return "You're out of 3D credits. Save this fit as 2D for free, or top up to keep generating."
+            return "You're out of 3D credits for this month. Save this fit as 2D for free — your free credits refresh every 30 days."
         }
     }
 }

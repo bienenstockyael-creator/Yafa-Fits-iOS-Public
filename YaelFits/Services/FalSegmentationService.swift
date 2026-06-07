@@ -332,17 +332,13 @@ actor FalSegmentationService {
         }
     }
 
-    private func loadFalAPIKey() throws -> String {
-        let env = ProcessInfo.processInfo.environment
-        if let k = env["FALAPIKey"], !k.isEmpty { return k }
-        if let k = env["FAL_API_KEY"], !k.isEmpty { return k }
-        if let k = env["FAL_KEY"], !k.isEmpty { return k }
-        if let k = Bundle.main.object(forInfoDictionaryKey: "FALAPIKey") as? String,
-           !k.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return k
-        }
-        throw UploadPipelineError.missingFalKey
-    }
+    /// Legacy stub: the FAL API key now lives server-side and is
+    /// injected by the `fal-proxy` Edge Function. Returning an
+    /// empty string preserves the existing internal apiKey
+    /// plumbing — the `Authorization: Key ` header is set with
+    /// an empty value but `AIProxyClient` strips it before
+    /// forwarding to the proxy, which injects the real key.
+    private func loadFalAPIKey() throws -> String { "" }
 
     private func dataURI(for data: Data, mimeType: String) -> String {
         "data:\(mimeType);base64,\(data.base64EncodedString())"
@@ -370,7 +366,7 @@ actor FalSegmentationService {
             request.httpBody = body
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await AIProxyClient.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             let text = String(data: data, encoding: .utf8) ?? "<binary>"
             throw UploadPipelineError.requestFailed("FAL \((response as? HTTPURLResponse)?.statusCode ?? -1): \(text.prefix(300))")
@@ -384,7 +380,7 @@ actor FalSegmentationService {
     nonisolated private func downloadData(from url: URL, apiKey: String) async throws -> Data {
         var request = URLRequest(url: url)
         request.setValue("Key \(apiKey)", forHTTPHeaderField: "Authorization")
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await AIProxyClient.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw UploadPipelineError.requestFailed("Mask download failed.")
         }

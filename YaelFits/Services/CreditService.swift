@@ -56,6 +56,18 @@ actor CreditService {
     struct Balance: Decodable, Sendable {
         let gen_credits_free_balance: Int
         let gen_credits_paid_balance: Int
+        /// When the free-credit balance will reset to 3. Null
+        /// when the user has never consumed a credit (so the
+        /// 30-day clock hasn't started yet) OR after a reset has
+        /// just been applied. When non-null and `now() >` this
+        /// timestamp, the next `refresh_free_credits_if_due`
+        /// call will restore the balance to 3 and clear this
+        /// field — meaning a user looking at this field while
+        /// at zero balance can read it as "credits refresh by
+        /// this date." Decoded as a string to dodge Supabase's
+        /// timezone parsing edge cases; parsed to Date in the UI
+        /// layer where we know the format we want.
+        let gen_credits_reset_at: String?
     }
 
     func balance(userId: UUID) async throws -> Balance {
@@ -68,7 +80,7 @@ actor CreditService {
             .execute()
         let row: Balance = try await supabase
             .from("profiles")
-            .select("gen_credits_free_balance, gen_credits_paid_balance")
+            .select("gen_credits_free_balance, gen_credits_paid_balance, gen_credits_reset_at")
             .eq("id", value: userId.uuidString)
             .single()
             .execute()

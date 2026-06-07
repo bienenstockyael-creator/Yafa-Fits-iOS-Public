@@ -8,12 +8,20 @@ struct Profile: Codable, Identifiable, Hashable, Sendable {
     var bio: String?
     var isPro: Bool?
     var createdAt: Date?
-    /// SHA-256 hash of the user's normalized E.164 phone number,
-    /// used by the contacts matching RPC. RLS hides this column
-    /// from other users — only the row's owner can SELECT it
-    /// directly. Always nil when decoded for someone else's
-    /// profile.
+    /// SHA-256 hash of the user's normalized E.164 phone number.
+    /// Used internally by the `match_contacts_by_phone` RPC; the
+    /// column is REVOKE-d from `SELECT` for authenticated clients
+    /// in production, so this property decodes to nil even on the
+    /// row owner's own profile fetch. Use `phoneIsSet` for the
+    /// "does this user have a phone hash registered?" gate. Kept
+    /// here because the WRITE path (UPDATE) still sets it
+    /// server-side; the local mirror is harmless but stale.
     var phoneE164Hash: String?
+    /// Server-maintained boolean (generated column on the profiles
+    /// table). True iff the user has a phone-number hash on file.
+    /// Drives the "ask the user for their phone" UX without leaking
+    /// the hash itself.
+    var phoneIsSet: Bool?
 
     enum CodingKeys: String, CodingKey {
         case id, username, bio
@@ -22,6 +30,7 @@ struct Profile: Codable, Identifiable, Hashable, Sendable {
         case isPro = "is_pro"
         case createdAt = "created_at"
         case phoneE164Hash = "phone_e164_hash"
+        case phoneIsSet = "phone_is_set"
     }
 
     /// Used in places where the display name should be primary
