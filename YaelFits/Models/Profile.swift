@@ -43,6 +43,15 @@ struct Profile: Codable, Identifiable, Hashable, Sendable {
     /// cutout is generated on demand if/when they re-enter
     /// `bust`).
     var avatarCutoutUrl: String?
+    /// True once the user has completed (or skipped through) the
+    /// first-launch onboarding flow. Drives whether `RootView`
+    /// presents the OnboardingFlow full-screen cover at app open.
+    /// New users start at `false`; the flow flips it to `true`
+    /// on Finish (whether they entered all fields or skipped the
+    /// optional ones). Existing users were backfilled to `true`
+    /// in the migration that added this column so they don't get
+    /// re-prompted.
+    var isOnboarded: Bool?
 
     enum CodingKeys: String, CodingKey {
         case id, username, bio
@@ -55,6 +64,7 @@ struct Profile: Codable, Identifiable, Hashable, Sendable {
         case headerStyle = "header_style"
         case headerAccentColor = "header_accent_color"
         case avatarCutoutUrl = "avatar_cutout_url"
+        case isOnboarded = "is_onboarded"
     }
 
     /// Used in places where the display name should be primary

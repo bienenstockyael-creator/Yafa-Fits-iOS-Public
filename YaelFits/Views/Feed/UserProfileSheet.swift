@@ -379,8 +379,19 @@ struct UserProfileView: View {
                 switch phase {
                 case .success(let image):
                     image.resizable().aspectRatio(contentMode: .fit)
-                default:
+                case .failure:
+                    // Real load error — fall back to the
+                    // circle so the header is never empty.
                     avatar
+                default:
+                    // `.empty` (loading). Don't show the circle
+                    // avatar mid-load — the profile has a cutout
+                    // URL on file, so the right answer IS the
+                    // bust silhouette. Transparent placeholder
+                    // for the ms before URLCache fills it in,
+                    // rather than flashing the wrong shape on
+                    // every tab return.
+                    Color.clear
                 }
             }
             .frame(
@@ -432,10 +443,19 @@ struct UserProfileView: View {
                     .font(.system(size: 13))
                     .foregroundStyle(AppPalette.textFaint)
 
-                statSegment(
-                    count: vibesReceived,
-                    label: vibesReceived == 1 ? "vibe" : "vibes"
-                )
+                // Vibes stat gets the gradient flame icon so the
+                // static count visually matches the in-flight
+                // particle burst (and the owner-side rendering
+                // in `ProfileHeader`).
+                HStack(spacing: 4) {
+                    GradientFlameIcon(size: 24, stroked: true)
+                    Text("\(vibesReceived)")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppPalette.textStrong)
+                    Text(vibesReceived == 1 ? "vibe" : "vibes")
+                        .font(.system(size: 14))
+                        .foregroundStyle(AppPalette.textMuted)
+                }
             }
         }
     }

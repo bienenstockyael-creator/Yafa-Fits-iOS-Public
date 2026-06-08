@@ -31,14 +31,47 @@ struct ProfileView: View {
     /// Refreshed in `.task` alongside follower/following counts.
     @State private var vibesReceived: Int = 0
     @State private var vibesRemainingThisWeek: Int = 0
-    @State private var freeCredits3D: Int = 0
+    /// TOTAL 3D credits available (free monthly + paid non-expiring).
+    /// Computed from `store.currentCreditBalance` rather than a
+    /// local @State so the chip auto-updates whenever ANY surface
+    /// writes a fresh balance to the store (most importantly the
+    /// paywall on successful purchase — without store-backing,
+    /// settings would show a stale count until the user closed +
+    /// reopened the sheet).
+    private var freeCredits3D: Int {
+        let balance = store.currentCreditBalance
+        return (balance?.gen_credits_free_balance ?? 0)
+             + (balance?.gen_credits_paid_balance ?? 0)
+    }
+    /// Just the paid sub-total. Used to switch the chip label:
+    /// "X 3D gens" when paid > 0 (don't claim "free" for bought
+    /// credits) vs "X free 3D gens" otherwise.
+    private var purchasedCredits3D: Int {
+        store.currentCreditBalance?.gen_credits_paid_balance ?? 0
+    }
     /// When the next free-credit refresh is due. Non-nil only
     /// after the user has consumed at least one free credit (the
     /// 30-day clock starts on first consumption). Combined with
     /// `freeCredits3D == 0`, we surface "credits refresh in X
     /// days" on the chip so the user has a concrete expectation
     /// instead of an opaque empty balance.
-    @State private var creditsResetAt: Date?
+    /// Parsed reset timestamp from the cached balance — when the
+    /// free bucket will refill. Computed from store so it updates
+    /// in lockstep with `freeCredits3D` / `purchasedCredits3D`.
+    private var creditsResetAt: Date? {
+        guard let raw = store.currentCreditBalance?.gen_credits_reset_at else {
+            return nil
+        }
+        // Try with fractional seconds first, then plain ISO — same
+        // logic as the original .task code, just moved here so the
+        // chip stays reactive to store changes.
+        let withFraction = ISO8601DateFormatter()
+        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = withFraction.date(from: raw) { return d }
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        return plain.date(from: raw)
+    }
     @State private var showVibersOnMe = false
     /// Host that drives the credit-chip explainer modals at root
     /// level (rendered globally in `YaelFitsApp`, so they sit
@@ -389,15 +422,10 @@ struct ProfileView: View {
 
     private var statsSection: some View {
         VStack(spacing: LayoutMetrics.medium) {
-            HStack(spacing: 0) {
-                statItem(count: store.sortedOutfits.count, label: "Outfits")
-                statItem(count: store.likedIds.count, label: "Liked")
-                Button { showSavedSheet = true } label: {
-                    statItem(count: store.savedIds.count, label: "Saved")
-                }
-                .buttonStyle(.plain)
-            }
-
+            // One row, three taps. Outfits + Liked counts were
+            // dropped per design — the grid already surfaces
+            // those, and reducing the row keeps the settings
+            // sheet's primary analytics signal tight.
             HStack(spacing: 0) {
                 Button { showFollowers = true } label: {
                     statItem(count: followerIds.count, label: "Followers")
@@ -405,14 +433,9 @@ struct ProfileView: View {
                 Button { showFollowing = true } label: {
                     statItem(count: followingIds.count, label: "Following")
                 }.buttonStyle(.plain)
-                if vibesReceived > 0 {
-                    Button {
-                        Analytics.log("profile_vibes_stat_tapped")
-                        showVibersOnMe = true
-                    } label: {
-                        statItem(count: vibesReceived, label: "Vibes")
-                    }.buttonStyle(.plain)
-                }
+                Button { showSavedSheet = true } label: {
+                    statItem(count: store.savedIds.count, label: "Saved")
+                }.buttonStyle(.plain)
             }
 
             // Credits — vibes left to give this week + free 3D
@@ -424,11 +447,16 @@ struct ProfileView: View {
                     vibesHost.showInfoModal(.vibes)
                 } label: {
                     creditChip(
-                        icon: .flame,
+                        icon: GradientFlameIcon(size: 24, stroked: true),
                         value: "\(vibesRemainingThisWeek)",
+                        // Word "vibe(s)" omitted from the label
+                        // since the gradient flame icon already
+                        // signals what's being counted. Keeps
+                        // the chip on one line at any reasonable
+                        // count value.
                         label: vibesRemainingThisWeek == 1
-                            ? "vibe left"
-                            : "vibes left this week"
+                            ? "left"
+                            : "left this week"
                     )
                 }
                 .buttonStyle(.plain)
@@ -438,7 +466,10 @@ struct ProfileView: View {
                     vibesHost.showInfoModal(.gen3D)
                 } label: {
                     creditChip(
-                        icon: .sparkles,
+                        // Sized to 24 so this chip's row height
+                        // matches the vibes chip next to it
+                        // (which uses a 24pt `GradientFlameIcon`).
+                        icon: AppIcon(glyph: .sparkles, size: 24, color: AppPalette.textMuted),
                         value: "\(freeCredits3D)",
                         label: gen3DChipLabel
                     )
@@ -493,49 +524,51 @@ struct ProfileView: View {
             let remaining = await remainingTask
             let balance = await balanceTask
 
-            // Parse `gen_credits_reset_at` (Supabase returns an
-            // ISO-8601 string). We try the two most common shapes
-            // — with and without fractional seconds — and bail to
-            // nil if neither matches, so a future server format
-            // change degrades to "no countdown shown" rather than
-            // a crash.
-            let resetDate: Date? = balance?.gen_credits_reset_at.flatMap { raw in
-                let withFraction = ISO8601DateFormatter()
-                withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-                if let d = withFraction.date(from: raw) { return d }
-                let plain = ISO8601DateFormatter()
-                plain.formatOptions = [.withInternetDateTime]
-                return plain.date(from: raw)
-            }
-
             await MainActor.run {
                 followerIds = frs
                 followingIds = fng
                 vibesReceived = received
                 vibesRemainingThisWeek = remaining
-                freeCredits3D = balance?.gen_credits_free_balance ?? 0
-                creditsResetAt = resetDate
+                // Write the balance into the shared store so
+                // every surface (this chip + the paywall chip +
+                // any future header pill) reads from one
+                // reactive source. Computed `freeCredits3D`,
+                // `purchasedCredits3D`, `creditsResetAt` pick
+                // it up automatically.
+                store.currentCreditBalance = balance
             }
         }
     }
 
-    /// Label for the 3D-credit chip. When the user still has
-    /// credits, just shows "free 3D gen(s)". When they hit zero
-    /// AND we know the reset date AND it's in the future, swap
-    /// in a concrete countdown so the user has a finite wait
-    /// expectation instead of an opaque "0" with no recovery
-    /// hint. The free-credit window starts on first consumption
+    /// Label for the 3D-credit chip. Three states:
+    ///   * Has paid credits — say "3D gen(s)" (don't claim
+    ///     "free" since these credits were bought).
+    ///   * Has free credits only — say "free 3D gen(s)" so
+    ///     the user knows the bucket refreshes monthly.
+    ///   * Zero of both — show the countdown to the next
+    ///     monthly refresh (or "refresh soon" if it's near).
+    /// The free-credit window starts on first consumption
     /// (server sets `gen_credits_reset_at = now() + 30 days` on
-    /// first debit), so this label only renders for users who've
-    /// actually generated something and run out.
+    /// first debit), so the countdown label only renders for
+    /// users who've actually generated something and run out.
     private var gen3DChipLabel: String {
         if freeCredits3D > 0 {
+            if purchasedCredits3D > 0 {
+                return freeCredits3D == 1 ? "3D gen" : "3D gens"
+            }
             return freeCredits3D == 1 ? "free 3D gen" : "free 3D gens"
         }
         guard let reset = creditsResetAt, reset > Date() else {
             return "free 3D gens"
         }
-        let days = Calendar.current.dateComponents([.day], from: Date(), to: reset).day ?? 0
+        let rawDays = Calendar.current.dateComponents([.day], from: Date(), to: reset).day ?? 0
+        // Clamp to the actual refresh interval (30 days). The
+        // server should never set `gen_credits_reset_at` further
+        // out than now + 30 days, but defensive: a bug, manual
+        // DB edit, or stale row could produce a larger value and
+        // we don't want the chip showing "refresh in 364 days"
+        // which would suggest the user is stuck for a year.
+        let days = min(rawDays, 30)
         if days <= 0 {
             // Less than a day away — refresh imminent; let them
             // tap "Generate" and the server-side
@@ -548,13 +581,17 @@ struct ProfileView: View {
         return "refresh in \(days) days"
     }
 
-    private func creditChip(
-        icon: AppIconGlyph,
+    /// Generic icon parameter so the vibes chip can pass in the
+    /// gradient flame and the 3D chip can pass in the flat
+    /// sparkles glyph without us needing two near-identical
+    /// helpers.
+    private func creditChip<Icon: View>(
+        icon: Icon,
         value: String,
         label: String
     ) -> some View {
         HStack(spacing: 6) {
-            AppIcon(glyph: icon, size: 14, color: AppPalette.textMuted)
+            icon
             Text(value)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(AppPalette.textStrong)

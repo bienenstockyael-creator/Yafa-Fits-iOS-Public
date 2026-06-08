@@ -94,6 +94,47 @@ struct SocialService {
             .execute()
     }
 
+    /// Flips the `is_onboarded` flag to true after the user
+    /// completes (or skips through) the first-launch onboarding
+    /// flow. Separate from `updateProfile` because the timing is
+    /// different — this fires once, at the end of onboarding,
+    /// and never again unless the column is manually reset.
+    static func setOnboardingComplete(userId: UUID) async throws {
+        struct OnboardingUpdate: Encodable { let is_onboarded: Bool }
+        try await supabase
+            .from("profiles")
+            .update(OnboardingUpdate(is_onboarded: true))
+            .eq("id", value: userId.uuidString)
+            .execute()
+    }
+
+    /// Returns true when the given username has no existing
+    /// `profiles` row. Used by the onboarding flow's username
+    /// step to give the user inline feedback ("yael — taken")
+    /// before they tap Continue. Case-insensitive at the DB
+    /// layer (we lowercase here too for the network call so the
+    /// caller doesn't have to remember).
+    ///
+    /// Treats network errors as "available" (returns true) — the
+    /// authoritative uniqueness check is the DB constraint on
+    /// commit. We don't want a flaky network to block the user
+    /// from finishing onboarding when their pick is actually
+    /// free.
+    static func isUsernameAvailable(_ username: String) async -> Bool {
+        struct UsernameRow: Decodable { let id: UUID }
+        let normalized = username.trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        guard !normalized.isEmpty else { return false }
+        let rows: [UsernameRow]? = try? await supabase
+            .from("profiles")
+            .select("id")
+            .eq("username", value: normalized)
+            .limit(1)
+            .execute()
+            .value
+        return (rows?.isEmpty ?? true)
+    }
+
     static func updateProfile(_ profile: Profile) async throws {
         struct ProfileUpsertFull: Encodable {
             let id: String

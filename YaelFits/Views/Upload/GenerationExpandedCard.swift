@@ -19,6 +19,14 @@ struct GenerationExpandedCard: View {
     let onCancel: () -> Void
     let onSave2D: () -> Void
     let onMake3D: () -> Void
+    /// Called when the user taps "Buy 3D credits" — i.e. they
+    /// hit the fork after the orchestrator failed with
+    /// `outOfCredits`. The owner (RootView) presents the
+    /// `CreditPaywallHost` as a sheet. We surface the callback
+    /// rather than presenting the sheet inline because the card
+    /// itself lives inside a morph animation; sheet presentation
+    /// is cleaner at the root level.
+    let onBuyCredits: () -> Void
     let onAccept: () -> Void
     let onAcceptAndPublish: () -> Void
     let onRetake: () -> Void
@@ -417,7 +425,18 @@ struct GenerationExpandedCard: View {
         VStack(spacing: LayoutMetrics.xxSmall) {
             switch activeChinPhase {
             case .awaitingDecision:
-                primaryButton(label: "Generate 3D", action: onMake3D)
+                // Out-of-credits state: the last 3D attempt failed
+                // because the user has no free or paid credits
+                // left. Swap "Generate 3D" → "Buy 3D credits" so
+                // the primary CTA routes to the paywall instead
+                // of looping the user back through the same
+                // failing attempt. Save 2D stays available as the
+                // free escape hatch.
+                if job.isOutOfCredits {
+                    primaryButton(label: "Buy 3D credits", action: onBuyCredits)
+                } else {
+                    primaryButton(label: "Generate 3D", action: onMake3D)
+                }
                 secondaryButton(label: "Save as 2D", action: onSave2D)
                 cancelLink
             case .readyToReview:

@@ -41,6 +41,16 @@ struct RootView: View {
     /// view stays in the tree throughout the animation.
     @State private var expandedJobId: String?
 
+    /// Drives the credit paywall sheet. Flipped to true from the
+    /// expanded card's `onBuyCredits` callback (i.e. when the
+    /// user's last 3D attempt failed with `outOfCredits` and they
+    /// tap the resulting "Buy 3D credits" CTA).
+    @State private var showCreditPaywall = false
+    /// Current 3D credit balance, surfaced in the paywall chip /
+    /// context line. Lazily fetched the first time we open the
+    /// paywall and refreshed after a successful purchase.
+    @State private var paywallCurrentBalance: Int = 0
+
     /// Drives the morph between pill-shape (false) and card-shape
     /// (true). Flipped inside `withAnimation` after the card mounts
     /// — that's what the card's `.frame + .position + .clipShape`
@@ -276,6 +286,16 @@ struct RootView: View {
                         // (rendering3D) automatically.
                         store.generationOrchestrator.make3D(job)
                     },
+                    onBuyCredits: {
+                        // Last 3D attempt threw outOfCredits.
+                        // Open the paywall as a sheet on top of
+                        // the morphed card. We don't dismiss the
+                        // card first — the user wants to retry
+                        // generation after the purchase, so
+                        // leaving the card mounted keeps the
+                        // staged outfit + cutout in memory.
+                        showCreditPaywall = true
+                    },
                     onAccept: {
                         returnCardToStack()
                         store.generationOrchestrator.accept(job)
@@ -450,6 +470,33 @@ struct RootView: View {
             }
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showCreditPaywall) {
+            CreditPaywallHost(
+                currentBalance: paywallCurrentBalance,
+                onPurchaseComplete: {
+                    // Fires after the server-side credit grant
+                    // succeeds (validate-apple-receipt → RPC).
+                    // Refreshes both the paywall's chip + the
+                    // shared `store.currentCreditBalance` so the
+                    // settings chip auto-updates next time it's
+                    // opened.
+                    await refreshPaywallBalance()
+                    // Clear `isOutOfCredits` on the expanded
+                    // job so the fork chin's primary CTA swaps
+                    // back from "Buy 3D credits" → "Generate 3D"
+                    // and the user can immediately retry.
+                    await MainActor.run {
+                        if let expandedJob = expandedJob {
+                            expandedJob.isOutOfCredits = false
+                        }
+                    }
+                },
+                onDismiss: { showCreditPaywall = false }
+            )
+            .presentationDragIndicator(.visible)
+            .presentationBackground(AppPalette.groupedBackground)
+            .task { await refreshPaywallBalance() }
         }
         .fullScreenCover(isPresented: $showsVirtualCloset) {
             if let userId = store.userId {
@@ -700,6 +747,24 @@ struct RootView: View {
     /// `isChipExpanded` flips true only when 2+ jobs remain. For
     /// 1 job there's no stack to return to — the chip *is* the
     /// stack of one — so we stay in chip mode.
+    /// Re-reads the credit balance and writes it to BOTH:
+    ///   * `paywallCurrentBalance` — drives the paywall's own
+    ///     chip (this view's local state).
+    ///   * `store.currentCreditBalance` — the shared cache that
+    ///     `ProfileView` reads from, so the settings chip
+    ///     auto-updates the next time the user opens settings
+    ///     without needing to re-fetch.
+    private func refreshPaywallBalance() async {
+        guard let userId = store.userId else { return }
+        let balance = try? await CreditService.shared.balance(userId: userId)
+        let total = (balance?.gen_credits_free_balance ?? 0)
+                  + (balance?.gen_credits_paid_balance ?? 0)
+        await MainActor.run {
+            paywallCurrentBalance = total
+            store.currentCreditBalance = balance
+        }
+    }
+
     private func returnCardToStack() {
         morphPrepTask?.cancel()
         let jobBeingDismissed = expandedJobId

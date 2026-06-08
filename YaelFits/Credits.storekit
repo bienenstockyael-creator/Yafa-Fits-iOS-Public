@@ -1,0 +1,124 @@
+{
+  "identifier" : "yafa-credits-config",
+  "nonRenewingSubscriptions" : [],
+  "products" : [
+    {
+      "displayPrice" : "1.99",
+      "familyShareable" : false,
+      "internalID" : "C0DE0001-0000-4000-A000-000000000001",
+      "localizations" : [
+        {
+          "description" : "One 3D generation credit. Use it whenever.",
+          "displayName" : "1 credit",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.yafa.credits.single",
+      "referenceName" : "Single Credit",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "4.99",
+      "familyShareable" : false,
+      "internalID" : "C0DE0002-0000-4000-A000-000000000002",
+      "localizations" : [
+        {
+          "description" : "Three 3D generation credits. Casual top-up.",
+          "displayName" : "3 credits",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.yafa.credits.starter",
+      "referenceName" : "Starter Bundle",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "13.99",
+      "familyShareable" : false,
+      "internalID" : "C0DE0003-0000-4000-A000-000000000003",
+      "localizations" : [
+        {
+          "description" : "Ten 3D generation credits. For active users.",
+          "displayName" : "10 credits",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.yafa.credits.standard",
+      "referenceName" : "Standard Bundle",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "34.99",
+      "familyShareable" : false,
+      "internalID" : "C0DE0004-0000-4000-A000-000000000004",
+      "localizations" : [
+        {
+          "description" : "Thirty 3D generation credits. Best per-credit value.",
+          "displayName" : "30 credits",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.yafa.credits.bestvalue",
+      "referenceName" : "Best Value Bundle",
+      "type" : "Consumable"
+    }
+  ],
+  "settings" : {
+    "_disableDialogs" : false,
+    "_failTransactionsEnabled" : false,
+    "_locale" : "en_US",
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Load Products"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Purchase"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Verification"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "App Store Sync"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Subscription Status"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "App Transaction"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Manage Subscriptions Sheet"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Refund Request Sheet"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Offer Code Redeem Sheet"
+      }
+    ]
+  },
+  "subscriptionGroups" : [],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}
