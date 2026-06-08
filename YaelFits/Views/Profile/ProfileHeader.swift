@@ -46,14 +46,6 @@ struct ProfileHeader: View {
     /// `AvatarCropView` and would force the cutout into a
     /// disc-shaped silhouette.
     @State private var originalImage: UIImage?
-    /// In-memory copy of the bust cutout the user just saved.
-    /// Rendered FIRST in `bustAvatarContent` so the saved bust
-    /// shows up instantly on sheet dismiss — without this, the
-    /// `AsyncImage(url:)` for `avatarCutoutUrl` has to round-
-    /// trip to Storage to fetch the PNG we literally just
-    /// uploaded, and the user sees the circle-clipped fallback
-    /// flash during that download.
-    @State private var localCutoutImage: UIImage?
 
     private var displayName: String {
         let profile = store.currentProfile
@@ -132,6 +124,11 @@ struct ProfileHeader: View {
                 followerIds = Array(frs)
                 vibesReceived = vibes
             }
+            // Pre-load the avatar URL into the shared store ONCE
+            // so subsequent tab returns render from the cached
+            // UIImage instantly instead of dropping back through
+            // AsyncImage's `.empty` phase.
+            await preloadAvatarIntoStoreIfNeeded()
         }
         .onChange(of: selectedPhoto) { _, newValue in
             guard let newValue else { return }
@@ -149,6 +146,11 @@ struct ProfileHeader: View {
                 pendingCropImage = nil
                 selectedPhoto = nil
                 avatarImage = croppedImage
+                // Seed the store cache too so a subsequent tab
+                // switch (after the upload completes) renders
+                // the new photo instantly instead of re-fetching
+                // the Storage URL we just wrote.
+                store.currentAvatarImage = croppedImage
                 // Keep the pre-crop original so the customize
                 // sheet can feed it to FAL for the bust cutout.
                 originalImage = wrapper.image
@@ -206,7 +208,7 @@ struct ProfileHeader: View {
                         // so swapping back to bust later still
                         // hits the local copy.
                         if style == .bust, let cutoutImage {
-                            localCutoutImage = cutoutImage
+                            store.currentAvatarCutoutImage = cutoutImage
                         }
                         Task {
                             await saveHeaderCustomization(
@@ -444,7 +446,7 @@ struct ProfileHeader: View {
         // kills the post-save flash where the user would see
         // the circle for a beat while AsyncImage re-downloads
         // the PNG we literally just uploaded.
-        if let localCutoutImage {
+        if let localCutoutImage = store.currentAvatarCutoutImage {
             Image(uiImage: localCutoutImage)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
@@ -454,9 +456,22 @@ struct ProfileHeader: View {
                 switch phase {
                 case .success(let image):
                     image.resizable().aspectRatio(contentMode: .fit)
+                case .failure:
+                    // Genuine load error — fall back to the
+                    // circle-clipped avatar so the header is
+                    // never empty.
+                    avatarContent.clipShape(Circle())
                 default:
-                    avatarContent
-                        .clipShape(Circle())
+                    // `.empty` (loading). DON'T show the circle
+                    // fallback here: we know a cutout exists on
+                    // the profile so the right answer is "the
+                    // bust shape" — flashing the circular avatar
+                    // mid-load makes it look like the bust style
+                    // briefly reverted on every tab return. A
+                    // transparent placeholder for the few ms
+                    // before the URLCache hit completes reads
+                    // as "loading" rather than "wrong silhouette".
+                    Color.clear
                 }
             }
         } else {
@@ -467,8 +482,18 @@ struct ProfileHeader: View {
 
     @ViewBuilder
     private var avatarContent: some View {
+        // Priority: locally-picked image (just from the photo
+        // picker) → store-cached image (loaded once and reused
+        // across tab switches) → AsyncImage fallback for the
+        // very first load → gradient-initial fallback. The
+        // store cache is what kills the "pp takes longer to
+        // appear than the rest of the page" feel on tab return.
         if let avatarImage {
             Image(uiImage: avatarImage)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+        } else if let cached = store.currentAvatarImage {
+            Image(uiImage: cached)
                 .resizable()
                 .aspectRatio(contentMode: .fill)
         } else if let urlString = store.currentProfile?.avatarUrl,
@@ -521,10 +546,18 @@ struct ProfileHeader: View {
                     .font(.system(size: 13))
                     .foregroundStyle(AppPalette.textFaint)
 
-                statSegment(
-                    count: vibesReceived,
-                    label: vibesReceived == 1 ? "vibe" : "vibes"
-                )
+                // Vibes stat gets the gradient flame icon so the
+                // static count visually matches the in-flight
+                // particle burst on the VibeButton.
+                HStack(spacing: 4) {
+                    GradientFlameIcon(size: 24, stroked: true)
+                    Text("\(vibesReceived)")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppPalette.textStrong)
+                    Text(vibesReceived == 1 ? "vibe" : "vibes")
+                        .font(.system(size: 14))
+                        .foregroundStyle(AppPalette.textMuted)
+                }
             }
         }
     }
@@ -585,6 +618,45 @@ struct ProfileHeader: View {
         }
     }
 
+    /// Loads the user's avatar AND bust cutout URLs into the
+    /// shared `OutfitStore` on first appearance. Both fetches
+    /// run in parallel and are individually no-op if the cache
+    /// is already populated, so this is safe to re-call. Network
+    /// failures are silent: the existing `AsyncImage` fallback
+    /// still renders correctly, the user just loses the
+    /// cross-tab-instant optimization for that asset this
+    /// session.
+    private func preloadAvatarIntoStoreIfNeeded() async {
+        async let avatarTask: Void = preload(
+            url: store.currentProfile?.avatarUrl,
+            ifCacheNilAt: \OutfitStore.currentAvatarImage
+        )
+        async let cutoutTask: Void = preload(
+            url: store.currentProfile?.avatarCutoutUrl,
+            ifCacheNilAt: \OutfitStore.currentAvatarCutoutImage
+        )
+        _ = await (avatarTask, cutoutTask)
+    }
+
+    /// Generic single-image preloader. Reads the current cache
+    /// value via the keypath; bails if it's already set OR the
+    /// URL is missing/malformed; otherwise fetches the bytes and
+    /// writes the decoded UIImage back through the keypath on
+    /// the main actor.
+    private func preload(
+        url urlString: String?,
+        ifCacheNilAt keyPath: ReferenceWritableKeyPath<OutfitStore, UIImage?>
+    ) async {
+        guard store[keyPath: keyPath] == nil,
+              let urlString,
+              let url = URL(string: urlString),
+              let (data, _) = try? await URLSession.shared.data(from: url),
+              let image = UIImage(data: data)
+        else { return }
+
+        await MainActor.run { store[keyPath: keyPath] = image }
+    }
+
     private func uploadAvatar(_ image: UIImage) async {
         guard let userId = auth.userId else { return }
         await MainActor.run { isUploadingAvatar = true }
@@ -610,7 +682,7 @@ struct ProfileHeader: View {
                 // we cleared the server URL: it was generated
                 // from the prior photo and would composite the
                 // wrong silhouette over the new pixels.
-                localCutoutImage = nil
+                store.currentAvatarCutoutImage = nil
                 if let profile = store.currentProfile {
                     LocalCache.saveProfile(profile, userId: userId)
                 }

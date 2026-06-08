@@ -99,6 +99,11 @@ final class RealGenerationOrchestrator {
             job.loaderStage = .creatingInteractiveFit
             job.isProcessing = true
             job.error = nil
+            // Optimistic clear — if reserve still returns 'none'
+            // we'll re-flip this below. Clearing here means the
+            // fork chin returns to its normal "Generate 3D" CTA
+            // the moment a retry kicks off.
+            job.isOutOfCredits = false
             job.statusTitle = "GENERATING 3D"
             job.statusDetail = "Spinning your fit..."
 
@@ -129,6 +134,11 @@ final class RealGenerationOrchestrator {
                 if let pipelineError = error as? UploadPipelineError,
                    case .outOfCredits = pipelineError {
                     job.step = .fork  // back to the fork so user can pick 2D
+                    // Flag the job so the fork chin can swap its
+                    // "Generate 3D" CTA for "Buy 3D credits" —
+                    // routes the user to the paywall instead of
+                    // forcing the 2D fallback as their only option.
+                    job.isOutOfCredits = true
                 }
                 job.error = self.readableError(error)
                 self.endBackgroundActivity()

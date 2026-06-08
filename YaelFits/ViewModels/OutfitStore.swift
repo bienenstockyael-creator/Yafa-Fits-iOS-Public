@@ -168,6 +168,9 @@ class OutfitStore {
         isCarouselOpen = false
         unreadNotificationCount = 0
         currentProfile = nil
+        currentAvatarImage = nil
+        currentAvatarCutoutImage = nil
+        currentCreditBalance = nil
         feedOutfitCache = [:]
     }
 
@@ -192,6 +195,9 @@ class OutfitStore {
         isCarouselOpen = false
         unreadNotificationCount = 0
         currentProfile = nil
+        currentAvatarImage = nil
+        currentAvatarCutoutImage = nil
+        currentCreditBalance = nil
         feedOutfitCache = [:]
     }
 
@@ -321,6 +327,31 @@ class OutfitStore {
     }
     var hasPlayedInitialListEntrance = false
     var currentProfile: Profile?
+    /// In-memory cache of the current user's avatar UIImage,
+    /// loaded once and reused across tab switches so the profile
+    /// page renders the photo instantly on return instead of
+    /// flashing the gradient-initial fallback while AsyncImage
+    /// re-resolves the URL. Cleared on sign-out + when the user
+    /// picks a new photo (the picker assigns the freshly-cropped
+    /// image here so the header shows the new pixels immediately).
+    var currentAvatarImage: UIImage?
+    /// In-memory cache of the current user's bust cutout PNG.
+    /// Same rationale as `currentAvatarImage` — survives view
+    /// recreation so the bust header renders from RAM on tab
+    /// return. The cutout file is bigger than the regular
+    /// avatar (PNG with alpha) so the network round-trip it
+    /// avoids is the longest of the three avatar loads.
+    var currentAvatarCutoutImage: UIImage?
+    /// Latest credit balance (free monthly + paid non-expiring +
+    /// optional reset timestamp). Cached on the store so every
+    /// surface that shows credits — the settings chip, the
+    /// paywall's balance display, the (future) header pill — reads
+    /// from one reactive source. Updated by:
+    ///   * Settings page on appear (initial hydration).
+    ///   * Paywall on successful purchase (so settings auto-
+    ///     refreshes the next time you open it without needing
+    ///     to re-fetch from the server).
+    var currentCreditBalance: CreditService.Balance?
     var feedOutfitCache: [String: Outfit] = [:]
 
     var outfitById: [String: Outfit] {

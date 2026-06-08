@@ -68,6 +68,11 @@
 		202606061200000B000001 /* HighlighterUsername.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202606061200000A000001 /* HighlighterUsername.swift */; };
 		202606061300000B000001 /* ProfileHeaderStylePreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202606061300000A000001 /* ProfileHeaderStylePreview.swift */; };
 		202606061400000B000001 /* ProfileHeaderCustomizeSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202606061400000A000001 /* ProfileHeaderCustomizeSheet.swift */; };
+		202606071000000B000001 /* CreditBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202606071000000A000001 /* CreditBundle.swift */; };
+		202606071100000B000001 /* CreditPaywall.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202606071100000A000001 /* CreditPaywall.swift */; };
+		202606071300000B000001 /* CreditPurchaseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202606071300000A000001 /* CreditPurchaseService.swift */; };
+		202606071500000B000001 /* CreditPaywallHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202606071500000A000001 /* CreditPaywallHost.swift */; };
+		202606071600000B000001 /* GradientFlameIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202606071600000A000001 /* GradientFlameIcon.swift */; };
 		22B301AC155311EC382BBED1 /* PasswordResetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9ACE0F1992CD1E1C592E84FE /* PasswordResetView.swift */; };
 		24CE8DD298136439F5078DFA /* PlayfairDisplay-Italic.otf in Resources */ = {isa = PBXBuildFile; fileRef = 60A31063DA222A97AF101191 /* PlayfairDisplay-Italic.otf */; };
 		25CD0A57BA9A4449422B812F /* FrameSequenceViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8D5A078D13851433A0CF2C8 /* FrameSequenceViewModel.swift */; };
@@ -101,7 +106,7 @@
 		5CAE51C5E3A11417EAACAA69 /* AppIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBDABBB7E6689D56A3A999A1 /* AppIcon.swift */; };
 		5DAF5717A963FFECA6DB7582 /* FeedPost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CAEA94C97888E4FB2411D67 /* FeedPost.swift */; };
 		6031AD6DFE4D9F896703023A /* outfit-8.webp in Resources */ = {isa = PBXBuildFile; fileRef = 8237E6809B27F49EF0A31185 /* outfit-8.webp */; };
-		6067F6AFE4C3ACB21A74F7CE /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B37F66465AB1E168DACB8ED /* OnboardingView.swift */; };
+		202606080000000B000001 /* OnboardingFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202606080000000A000001 /* OnboardingFlow.swift */; };
 		62B6DF767B86BB73CE229655 /* LocalCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE8E7C6F4FF612B588212336 /* LocalCache.swift */; };
 		62BA6605D8F0C48198220A1E /* outfit-10.webp in Resources */ = {isa = PBXBuildFile; fileRef = 8821036C1F9ED66859189654 /* outfit-10.webp */; };
 		635365B6F7F76518D34DE98C /* outfit-26.webp in Resources */ = {isa = PBXBuildFile; fileRef = 82D53C00C365C5679D3D22CD /* outfit-26.webp */; };
@@ -217,7 +222,7 @@
 		07BA71A9CDD13DA6808964BB /* ProductCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductCategory.swift; sourceTree = "<group>"; };
 		08C870C07795EDBD2EFF2DD8 /* DiscoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverView.swift; sourceTree = "<group>"; };
 		0A93739B0CD45D361C7790C2 /* outfit-11.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-11.webp"; sourceTree = "<group>"; };
-		0B37F66465AB1E168DACB8ED /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		202606080000000A000001 /* OnboardingFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingFlow.swift; sourceTree = "<group>"; };
 		0B54F1D89D0F53C54533E7A1 /* CommentsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommentsSheet.swift; sourceTree = "<group>"; };
 		0EB8B4728A72D35257989791 /* FalVideoGenerationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FalVideoGenerationService.swift; sourceTree = "<group>"; };
 		0F6E685A5C50CFF6759597AE /* outfit-7.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-7.webp"; sourceTree = "<group>"; };
@@ -270,6 +275,12 @@
 		202606061200000A000001 /* HighlighterUsername.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HighlighterUsername.swift; sourceTree = "<group>"; };
 		202606061300000A000001 /* ProfileHeaderStylePreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileHeaderStylePreview.swift; sourceTree = "<group>"; };
 		202606061400000A000001 /* ProfileHeaderCustomizeSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileHeaderCustomizeSheet.swift; sourceTree = "<group>"; };
+		202606071000000A000001 /* CreditBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreditBundle.swift; sourceTree = "<group>"; };
+		202606071100000A000001 /* CreditPaywall.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreditPaywall.swift; sourceTree = "<group>"; };
+		202606071300000A000001 /* CreditPurchaseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreditPurchaseService.swift; sourceTree = "<group>"; };
+		202606071400000A000001 /* Credits.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = Credits.storekit; sourceTree = "<group>"; };
+		202606071500000A000001 /* CreditPaywallHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreditPaywallHost.swift; sourceTree = "<group>"; };
+		202606071600000A000001 /* GradientFlameIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GradientFlameIcon.swift; sourceTree = "<group>"; };
 		251414A04E6CDF8175AC3872 /* ProductLibraryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductLibraryService.swift; sourceTree = "<group>"; };
 		257C2FEEAA3F033C9F7D2A1D /* outfit-27.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-27.webp"; sourceTree = "<group>"; };
 		29E71BBBA1CFBB444044694A /* GenerationJobService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationJobService.swift; sourceTree = "<group>"; };
@@ -501,6 +512,7 @@
 				905C6AFB58485F178201A276 /* Info 2.plist */,
 				85FE161686E36DA80D27F90E /* Info.plist */,
 				1FD1D6936B993B57FB4A3B73 /* YaelFits.entitlements */,
+				202606071400000A000001 /* Credits.storekit */,
 				EDB599797B976DC16F27404F /* YaelFitsApp.swift */,
 				9BD0E599EE3D943C3A19A83E /* Models */,
 				0416C9A434373A2DD80E7005 /* Resources */,
@@ -523,6 +535,15 @@
 				2026052500000000004DDDDD /* ProductShopLink.swift */,
 			);
 			path = Utilities;
+			sourceTree = "<group>";
+		};
+		202606071200000A000001 /* Paywall */ = {
+			isa = PBXGroup;
+			children = (
+				202606071100000A000001 /* CreditPaywall.swift */,
+				202606071500000A000001 /* CreditPaywallHost.swift */,
+			);
+			path = Paywall;
 			sourceTree = "<group>";
 		};
 		31BB6EAC34A3CE2FA5700B85 /* Shaders */ = {
@@ -564,6 +585,7 @@
 				20260527000000001B0BBBBB /* CameraCaptureView.swift */,
 				AABBCC30000000000000CCC2 /* Outfit3DGlow.swift */,
 				202606061100000A000001 /* CurvedUsernamePill.swift */,
+				202606071600000A000001 /* GradientFlameIcon.swift */,
 				202606061200000A000001 /* HighlighterUsername.swift */,
 			);
 			path = Shared;
@@ -572,7 +594,7 @@
 		3D1859E099E56A3FF42F6509 /* Onboarding */ = {
 			isa = PBXGroup;
 			children = (
-				0B37F66465AB1E168DACB8ED /* OnboardingView.swift */,
+				202606080000000A000001 /* OnboardingFlow.swift */,
 			);
 			path = Onboarding;
 			sourceTree = "<group>";
@@ -638,6 +660,7 @@
 				3D1859E099E56A3FF42F6509 /* Onboarding */,
 				83F325BDCF9BA8FE3869E371 /* OutfitGrid */,
 				84B2486E69E9323876220F6C /* Profile */,
+				202606071200000A000001 /* Paywall */,
 				3C444B39D57BCF8F6402DF69 /* Shared */,
 				DEB62E5EBF315C41C23E2C56 /* Upload */,
 				3F6B37DC633462CF67CAEFE1 /* VirtualCloset */,
@@ -730,6 +753,7 @@
 				D49292C2B1DF2789A26ECDC7 /* SupabaseClient.swift */,
 				AA9CDA154F7FD6F2F0D57A92 /* VideoFrameSequenceExporter.swift */,
 				AABBCC10000000000000CCC2 /* CreditService.swift */,
+				202606071300000A000001 /* CreditPurchaseService.swift */,
 				AABBCC20000000000000CCC2 /* TwoDOutfitService.swift */,
 			);
 			path = Services;
@@ -756,6 +780,7 @@
 				8673AF651837F7F8A1A50BD4 /* ProductLibraryItem.swift */,
 				646E58B0E2ADCFBE6F3987BF /* Profile.swift */,
 				202606061000000A000001 /* ProfileHeaderStyle.swift */,
+				202606071000000A000001 /* CreditBundle.swift */,
 				B01D7034E3B52D5B0635EAE8 /* Remix.swift */,
 				45E7F9B93946878842D0BB50 /* SocialModels.swift */,
 				3E528CCFAA1423FAE69CD013 /* UploadMaskingBackend.swift */,
@@ -1004,7 +1029,7 @@
 				B18E3607CB764CEC45F54677 /* LocalOutfitStore.swift in Sources */,
 				3943BB1501C305483389E245 /* LottieView.swift in Sources */,
 				808BE6CA0DC558E5DD9F32AA /* NotificationsPlaceholderSheet.swift in Sources */,
-				6067F6AFE4C3ACB21A74F7CE /* OnboardingView.swift in Sources */,
+				202606080000000B000001 /* OnboardingFlow.swift in Sources */,
 				A770B90612F32D6B5D2C3D36 /* Outfit.swift in Sources */,
 				1D84D5A2F8CA0FC9845A8BC4 /* OutfitCardView.swift in Sources */,
 				FE102BDC0F83DC35A370EAA6 /* OutfitGridView.swift in Sources */,
@@ -1049,8 +1074,13 @@
 				202606061000000B000001 /* ProfileHeaderStyle.swift in Sources */,
 				202606061100000B000001 /* CurvedUsernamePill.swift in Sources */,
 				202606061200000B000001 /* HighlighterUsername.swift in Sources */,
+				202606071600000B000001 /* GradientFlameIcon.swift in Sources */,
 				202606061300000B000001 /* ProfileHeaderStylePreview.swift in Sources */,
 				202606061400000B000001 /* ProfileHeaderCustomizeSheet.swift in Sources */,
+				202606071000000B000001 /* CreditBundle.swift in Sources */,
+				202606071100000B000001 /* CreditPaywall.swift in Sources */,
+				202606071300000B000001 /* CreditPurchaseService.swift in Sources */,
+				202606071500000B000001 /* CreditPaywallHost.swift in Sources */,
 				8880FC79883BEC299D363DA0 /* SupabaseClient.swift in Sources */,
 				8A121EB863834E9BAF340E7A /* TagPill.swift in Sources */,
 				7100FDD58A11CD8E87D341A6 /* UploadLoaderView.swift in Sources */,
@@ -1104,7 +1134,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = YaelFits/YaelFits.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 36;
+				CURRENT_PROJECT_VERSION = 37;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = YaelFits/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1227,7 +1257,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = YaelFits/YaelFits.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 36;
+				CURRENT_PROJECT_VERSION = 37;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = YaelFits/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (

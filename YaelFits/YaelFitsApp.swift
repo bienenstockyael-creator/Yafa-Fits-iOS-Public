@@ -42,7 +42,21 @@ struct YaelFitsApp: App {
                                     _ = await (social, data)
                                     await outfitStore.checkForServerCompletedJob(userId: userId)
                                     await outfitStore.refreshUnreadNotificationCount()
-                                    let needsSetup = outfitStore.currentProfile?.username == nil || (outfitStore.currentProfile?.username ?? "").isEmpty
+                                    // Two triggers for showing onboarding:
+                                    //   1. `is_onboarded == false` — the
+                                    //      canonical signal post-2026-06-08
+                                    //      migration. New users default to
+                                    //      false, finishing the flow flips
+                                    //      to true.
+                                    //   2. Missing username — defensive
+                                    //      fallback for any user whose row
+                                    //      somehow got created without the
+                                    //      handle (legacy bug, manual DB
+                                    //      edit, etc).
+                                    let profile = outfitStore.currentProfile
+                                    let needsSetup =
+                                        profile?.isOnboarded == false
+                                        || (profile?.username ?? "").isEmpty
                                     if needsSetup {
                                         await MainActor.run {
                                             withAnimation(.easeInOut(duration: 0.3)) {
@@ -57,15 +71,13 @@ struct YaelFitsApp: App {
                             }
 
                         if showOnboarding, let userId = authManager.userId {
-                            OnboardingView(
-                                userId: userId,
-                                existingDisplayName: outfitStore.currentProfile?.displayName
-                            ) {
+                            OnboardingFlow {
                                 withAnimation(.easeInOut(duration: 0.3)) {
                                     showOnboarding = false
                                 }
                                 Task { await outfitStore.loadSocialData(userId: userId) }
                             }
+                            .environment(outfitStore)
                             .transition(.opacity)
                         }
                     }
@@ -142,6 +154,32 @@ struct YaelFitsApp: App {
             }
             .task {
                 prewarmLottieAnimations()
+            }
+            .task {
+                // Watch the StoreKit transaction queue for
+                // purchases that landed mid-session-kill (e.g.
+                // Ask-to-Buy approvals that arrived after the
+                // app was backgrounded, or App Store retries of
+                // a transaction we never marked finished
+                // because the validate-apple-receipt Edge
+                // Function was unreachable last time). Each
+                // verified update gets routed through the same
+                // server-validate-then-finish path the live
+                // purchase flow uses.
+                await CreditPurchaseService.shared.startTransactionListener { verified in
+                    do {
+                        _ = try await CreditPurchaseService.shared
+                            .validateAndCredit(verified)
+                        await CreditPurchaseService.shared
+                            .finishTransaction(verified.transaction)
+                    } catch {
+                        // Silent — the transaction stays in the
+                        // queue, listener will retry on next
+                        // launch. Surfacing UI here would be
+                        // intrusive since the user isn't
+                        // actively in a purchase flow.
+                    }
+                }
             }
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active, authManager.isAuthenticated {

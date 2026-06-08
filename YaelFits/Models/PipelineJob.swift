@@ -50,6 +50,12 @@ final class PipelineJob: Identifiable, @unchecked Sendable {
     var resultOutfitId: String?
     var resultFrameCount: Int?
     var error: String?
+    /// True specifically when the last 3D attempt failed because
+    /// the user has no credits left. Set by the orchestrator when
+    /// it catches `UploadPipelineError.outOfCredits`. Drives the
+    /// fork chin's "Generate 3D" CTA → "Buy 3D credits" swap so
+    /// the user can top up without leaving the card.
+    var isOutOfCredits: Bool = false
     var isProcessing: Bool = false
     var statusTitle: String = "Select a full-body mirror selfie."
     var statusDetail: String = "Use Camera Roll or Camera to start the pipeline."
@@ -177,7 +183,7 @@ enum UploadPipelineError: LocalizedError {
         case .decodingFailed:
             return "The generation response could not be decoded."
         case .outOfCredits:
-            return "You're out of 3D credits for this month. Save this fit as 2D for free — your free credits refresh every 30 days."
+            return "You're out of 3D credits this month."
         }
     }
 }
