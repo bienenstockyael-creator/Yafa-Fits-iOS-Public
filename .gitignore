@@ -15,3 +15,6 @@ xcuserdata/
 Yafa 2.xcodeproj/
 Yafa 3.xcodeproj/
 YaelFits/Info 2.plist
+
+# Supabase CLI local state
+supabase/.temp/
