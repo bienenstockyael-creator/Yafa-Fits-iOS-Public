@@ -22,10 +22,6 @@ struct CarouselDetailCard: View {
     @Environment(OutfitStore.self) private var store
     @State private var selectedLinkedProduct: Product?
     @State private var selectedLinkedTag: LinkedTagSelection?
-    @State private var isPublished: Bool?
-    @State private var isLoadingPublishState = false
-    @State private var isTogglingPublish = false
-    @State private var showPublishSheet = false
     @State private var showAddProduct = false
     @State private var autoDetectSource: QuickAddSource?
     @State private var isLoadingAutoDetect = false
@@ -146,19 +142,14 @@ struct CarouselDetailCard: View {
                 emptyTagRow
             }
 
-            // Bottom row only renders in edit mode (Publish + Make
-            // 3D). The card is closed by tapping outside or swiping
-            // down — no in-card close affordance is needed.
-            if !viewOnly && isEditing {
+            // Bottom row: Make 3D only (2D outfits only — 3D outfits
+            // already have a rotation, so promoting them is a no-op;
+            // mirrors `is3DOutfit` in PublicFeedListView where 2D ==
+            // frameCount 1). Publish moved up to CarouselView's bottom
+            // action bar, next to Save.
+            if !viewOnly && isEditing && outfit.frameCount == 1 {
                 HStack(spacing: 8) {
-                    publishButton
-                    // `Make 3D` is only meaningful for 2D outfits — 3D
-                    // outfits already have a rotation, so promoting
-                    // them is a no-op. Mirrors `is3DOutfit` in
-                    // PublicFeedListView: 2D = frameCount == 1.
-                    if outfit.frameCount == 1 {
-                        make3DButton
-                    }
+                    make3DButton
                     Spacer(minLength: 0)
                 }
             }
@@ -203,12 +194,6 @@ struct CarouselDetailCard: View {
         .sheet(item: $selectedLinkedTag) { selection in
             LinkedTagOutfitsSheet(tag: selection.tag, sourceOutfit: outfit)
         }
-        .sheet(isPresented: $showPublishSheet) {
-            PublishSheet(outfit: outfit) { caption, products in
-                isPublished = true
-                store.updateOutfit(outfit.id, caption: caption, products: products)
-            }
-        }
         .sheet(isPresented: $showAddProduct) {
             if let userId = store.userId {
                 AddProductSheet(userId: userId, outfitId: outfit.id) { product in
@@ -249,18 +234,6 @@ struct CarouselDetailCard: View {
                 }
             }
         }
-        .task(id: outfit.id) {
-            await loadPublishState()
-        }
-    }
-
-    private func loadPublishState() async {
-        isLoadingPublishState = true
-        let published = await OutfitService.isPublished(outfitId: outfit.id)
-        await MainActor.run {
-            isPublished = published
-            isLoadingPublishState = false
-        }
     }
 
     private func productRow(_ products: [Product]) -> some View {
@@ -292,14 +265,12 @@ struct CarouselDetailCard: View {
     }
 
     private var emptyProductRow: some View {
-        // Pre-Phase-4 visual: centered EmptyProductCard placeholder.
-        // Tapping it enters edit mode (which then surfaces the +
-        // button + Quick Add).
+        // Tapping the empty placeholder jumps straight into Quick Add
+        // (the AutoDetect product flow) instead of first entering edit
+        // mode — one tap to tag a product.
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            withAnimation(.easeInOut(duration: 0.2)) {
-                editCoordinator.startEditing(outfit)
-            }
+            Task { await openAutoDetect() }
         } label: {
             HStack {
                 EmptyProductCard(size: 88, cornerRadius: 16, iconSize: 22)
@@ -623,50 +594,7 @@ struct CarouselDetailCard: View {
         .buttonStyle(.plain)
     }
 
-    private var publishButton: some View {
-        Button {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            if isPublished == true {
-                // Unpublish directly
-                unpublish()
-            } else {
-                // Open publish sheet for caption + products
-                showPublishSheet = true
-            }
-        } label: {
-            Group {
-                if isLoadingPublishState || isTogglingPublish {
-                    ProgressView()
-                        .controlSize(.small)
-                        .tint(AppPalette.textMuted)
-                } else {
-                    Text(isPublished == true ? "Unpublish" : "Publish")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(isPublished == true ? AppPalette.textMuted : AppPalette.textPrimary)
-                }
-            }
-            .padding(.horizontal, 16)
-            .frame(height: 48)
-            .appCapsule(shadowRadius: 0, shadowY: 0)
-        }
-        .buttonStyle(.plain)
-        .disabled(isLoadingPublishState || isTogglingPublish)
-    }
-
-    private func unpublish() {
-        isTogglingPublish = true
-        isPublished = false
-        Task {
-            do {
-                try await OutfitService.setPublished(false, outfitId: outfit.id)
-            } catch {
-                await MainActor.run { isPublished = true }
-            }
-            await MainActor.run { isTogglingPublish = false }
-        }
-    }
-
-    /// Sibling of `publishButton` — same capsule style, placeholder
+    /// Same capsule style as the other card buttons — placeholder
     /// action. Not yet wired to promote a 2D outfit to 3D via the
     /// generation queue.
     private var make3DButton: some View {

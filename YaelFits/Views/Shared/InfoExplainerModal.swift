@@ -79,16 +79,16 @@ struct InfoExplainerModal: View {
     private func title(for kind: VibesEffectHost.InfoModalKind) -> String {
         switch kind {
         case .vibes: return "Vibes"
-        case .gen3D: return "3D Generations"
+        case .gen3D: return "3D fits"
         }
     }
 
     private func message(for kind: VibesEffectHost.InfoModalKind) -> String {
         switch kind {
         case .vibes:
-            return "A rare reaction for outfits you love. 3 per week. Receive 5 to earn a free 3D generation."
+            return "A rare reaction for outfits you love. 3 per week. Receive 5 to earn a free 3D fit."
         case .gen3D:
-            return "3 free generations per month. Earn a bonus every 5 vibes you receive."
+            return "6 free 3D fits per month. Earn a bonus every 5 vibes you receive."
         }
     }
 

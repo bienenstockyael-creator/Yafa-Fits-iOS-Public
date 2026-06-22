@@ -49,7 +49,7 @@ struct IncomingVibeToast: View {
                 )
                 VStack(alignment: .leading, spacing: 2) {
                     if vibe.crossedMilestone {
-                        Text("You earned a free 3D gen!")
+                        Text("You earned a free 3D fit!")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(AppPalette.textStrong)
                         Text("Thanks to a vibe from \(vibe.giver.handle)")

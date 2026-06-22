@@ -339,6 +339,84 @@ struct SocialService {
             .execute()
     }
 
+    // MARK: - Blocks & Reports
+
+    /// User IDs this user has blocked. Used to filter blocked accounts
+    /// out of the feed, comments, and follow lists client-side.
+    static func getBlockedUserIds(userId: UUID) async throws -> Set<UUID> {
+        struct BlockRow: Decodable { let blocked_id: UUID }
+        let rows: [BlockRow] = try await supabase
+            .from("blocks")
+            .select("blocked_id")
+            .eq("blocker_id", value: userId.uuidString)
+            .execute()
+            .value
+        return Set(rows.map(\.blocked_id))
+    }
+
+    /// Block a user. Idempotent (upsert on the composite key). Also drops
+    /// the blocker's follow of the target; the reverse direction and all
+    /// other surfaces are hidden by client-side filtering on the
+    /// blocked-id set.
+    static func block(blockerId: UUID, blockedId: UUID) async throws {
+        struct BlockInsert: Encodable {
+            let blocker_id: UUID
+            let blocked_id: UUID
+        }
+        try await supabase
+            .from("blocks")
+            .upsert(
+                BlockInsert(blocker_id: blockerId, blocked_id: blockedId),
+                onConflict: "blocker_id,blocked_id"
+            )
+            .execute()
+        try? await unfollow(followerId: blockerId, followingId: blockedId)
+    }
+
+    static func unblock(blockerId: UUID, blockedId: UUID) async throws {
+        try await supabase
+            .from("blocks")
+            .delete()
+            .eq("blocker_id", value: blockerId.uuidString)
+            .eq("blocked_id", value: blockedId.uuidString)
+            .execute()
+    }
+
+    /// File a moderation report. `contentType` is "outfit" / "comment" /
+    /// "user"; pass the matching id and leave the others nil. Reports are
+    /// append-only from the client (RLS allows insert + read-own only).
+    static func reportContent(
+        reporterId: UUID,
+        contentType: String,
+        reportedUserId: UUID? = nil,
+        reportedOutfitId: String? = nil,
+        reportedCommentId: Int64? = nil,
+        reason: String? = nil,
+        details: String? = nil
+    ) async throws {
+        struct ReportInsert: Encodable {
+            let reporter_id: UUID
+            let content_type: String
+            let reported_user_id: UUID?
+            let reported_outfit_id: String?
+            let reported_comment_id: Int64?
+            let reason: String?
+            let details: String?
+        }
+        try await supabase
+            .from("reports")
+            .insert(ReportInsert(
+                reporter_id: reporterId,
+                content_type: contentType,
+                reported_user_id: reportedUserId,
+                reported_outfit_id: reportedOutfitId,
+                reported_comment_id: reportedCommentId,
+                reason: reason,
+                details: details
+            ))
+            .execute()
+    }
+
     // MARK: - Counts
 
     static func getLikeCounts(outfitIds: [String]) async throws -> [String: Int] {

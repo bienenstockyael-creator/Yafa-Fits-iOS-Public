@@ -223,6 +223,14 @@ struct PublicFeedListView: View {
         }
     }
 
+    /// Feed posts excluding authors this user has blocked.
+    private var visibleFeedPosts: [FeedPost] {
+        store.feedPosts.filter { post in
+            guard let authorId = post.authorId else { return true }
+            return !store.blockedUserIds.contains(authorId)
+        }
+    }
+
     private var feedList: some View {
         ScrollViewReader { proxy in
         ScrollView {
@@ -231,7 +239,7 @@ struct PublicFeedListView: View {
                 searchBar
                     .padding(.top, LayoutMetrics.feedTopInset)
 
-                ForEach(store.feedPosts) { post in
+                ForEach(visibleFeedPosts) { post in
                     FeedPostCard(
                         post: post,
                         likeCount: likeCounts[post.outfitId] ?? 0,
@@ -629,6 +637,8 @@ struct FeedPostCard: View {
     @State private var localVibeCount: Int? = nil
     @State private var localIsVibedByMe: Bool? = nil
     @State private var showVibers = false
+    @State private var reportTarget: ReportTarget?
+    @State private var blockCandidate: BlockCandidate?
 
     // Use local store first, then prefetch cache, then per-card fetch
     private var outfit: Outfit? {
@@ -818,6 +828,45 @@ struct FeedPostCard: View {
                 }
                 .buttonStyle(.plain)
             }
+
+            if let authorId = post.authorId, authorId != store.userId {
+                Menu {
+                    Button {
+                        reportTarget = ReportTarget(
+                            contentType: "outfit",
+                            reportedUserId: authorId,
+                            reportedOutfitId: post.outfitId,
+                            displayName: post.authorName
+                        )
+                    } label: { Label("Report post", systemImage: "flag") }
+                    Button(role: .destructive) {
+                        blockCandidate = BlockCandidate(userId: authorId, name: post.authorName)
+                    } label: { Label("Block \(post.authorName)", systemImage: "hand.raised") }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppPalette.textMuted)
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
+                }
+            }
+        }
+        .sheet(item: $reportTarget) { target in
+            ReportSheet(target: target)
+                .environment(store)
+        }
+        .confirmationDialog(
+            blockCandidate.map { "Block \($0.name)?" } ?? "Block user?",
+            isPresented: Binding(
+                get: { blockCandidate != nil },
+                set: { if !$0 { blockCandidate = nil } }
+            ),
+            presenting: blockCandidate
+        ) { candidate in
+            Button("Block", role: .destructive) { store.blockUser(candidate.userId) }
+            Button("Cancel", role: .cancel) {}
+        } message: { candidate in
+            Text("You won't see \(candidate.name)'s posts or comments anymore.")
         }
     }
 

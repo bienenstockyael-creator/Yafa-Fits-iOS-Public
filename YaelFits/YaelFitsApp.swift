@@ -11,10 +11,6 @@ struct YaelFitsApp: App {
     @State private var vibesEffectHost = VibesEffectHost()
     @State private var vibesIncomingManager = VibesIncomingManager()
     @State private var showOnboarding = false
-    // Pre-auth WelcomeTourView is parked while it gets redesigned. The
-    // file lives at Views/Auth/WelcomeTourView.swift; to re-enable, restore
-    // the `@AppStorage("hasSeenWelcomeTour")` declaration and the branch
-    // below that gated on it. The stored UserDefaults value is preserved.
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {

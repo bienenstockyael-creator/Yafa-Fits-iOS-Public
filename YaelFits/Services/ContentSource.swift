@@ -107,7 +107,8 @@ private struct SupabaseOutfitRow: Decodable {
             weather: weather,
             products: products,
             caption: caption,
-            location: location
+            location: location,
+            isPublic: isPublic
         )
     }
 }
@@ -143,7 +144,9 @@ struct ContentSource {
     // MARK: - Supabase data (network)
 
     static func getUserOutfits(userId: UUID) async -> [Outfit] {
+        #if DEBUG
         print("[DIAG] getUserOutfits start uid=\(userId.uuidString.prefix(8))")
+        #endif
         // Primary path: single query with the outfit_products join.
         // If PostgREST's relationship inference is happy, this returns outfits + products.
         let joined: [SupabaseOutfitRow]?
@@ -157,17 +160,25 @@ struct ContentSource {
                 .value
             let total = joined?.count ?? 0
             let withProducts = joined?.filter { !($0.outfitProducts ?? []).isEmpty }.count ?? 0
+            #if DEBUG
             print("[DIAG] joined query: \(total) outfits, \(withProducts) with products")
+            #endif
         } catch {
             joined = nil
+            #if DEBUG
             print("[DIAG] joined query FAILED: \(error.localizedDescription)")
+            #endif
         }
         if let joined, joined.contains(where: { !($0.outfitProducts ?? []).isEmpty }) {
+            #if DEBUG
             print("[DIAG] using join path, returning \(joined.count) outfits")
+            #endif
             return joined.map { $0.toOutfit() }
         }
 
+        #if DEBUG
         print("[DIAG] taking fallback two-query path")
+        #endif
         // Fallback: fetch outfits and outfit_products separately, then stitch.
         // This is robust against PostgREST schema-cache staleness, where the join
         // can silently return rows without their nested products.
@@ -180,15 +191,21 @@ struct ContentSource {
                 .order("created_at", ascending: false)
                 .execute()
                 .value
+            #if DEBUG
             print("[DIAG] fallback outfits query: \(outfitRows.count) rows")
+            #endif
         } catch {
+            #if DEBUG
             print("[DIAG] fallback outfits query FAILED: \(error.localizedDescription)")
+            #endif
             return (joined ?? []).map { $0.toOutfit() }
         }
 
         let outfitIds = outfitRows.map(\.id)
         guard !outfitIds.isEmpty else {
+            #if DEBUG
             print("[DIAG] no outfit IDs, returning empty-products outfits")
+            #endif
             return outfitRows.map { $0.toOutfit() }
         }
 
@@ -214,9 +231,13 @@ struct ContentSource {
                 .in("outfit_id", values: outfitIds)
                 .execute()
                 .value
+            #if DEBUG
             print("[DIAG] outfit_products query: \(productRows.count) rows for \(outfitIds.count) outfits")
+            #endif
         } catch {
+            #if DEBUG
             print("[DIAG] outfit_products query FAILED: \(error.localizedDescription)")
+            #endif
             productRows = []
         }
 
@@ -235,7 +256,9 @@ struct ContentSource {
                 }
             }
         let outfitsWithProducts = productsByOutfit.values.filter { !$0.isEmpty }.count
+        #if DEBUG
         print("[DIAG] stitched: \(outfitsWithProducts)/\(outfitRows.count) outfits got products")
+        #endif
 
         return outfitRows.map { row in
             var outfit = row.toOutfit()

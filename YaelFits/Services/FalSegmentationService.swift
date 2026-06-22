@@ -50,7 +50,9 @@ actor FalSegmentationService {
         }
         let apiKey = try loadFalAPIKey()
 
+        #if DEBUG
         print("[SAM] uploading \(jpegData.count) bytes, tap=(\(Int(point.x)), \(Int(point.y))), imageSize=\(Int(image.size.width))x\(Int(image.size.height))")
+        #endif
 
         await onUpdate(FalSegmentationProgress(title: "Segmenting", detail: "Asking SAM2 to outline the tapped garment."))
 
@@ -88,7 +90,9 @@ actor FalSegmentationService {
         guard !maskURLs.isEmpty else {
             throw UploadPipelineError.maskGenerationFailed
         }
+        #if DEBUG
         print("[SAM] returned \(maskURLs.count) mask(s)")
+        #endif
 
         await onUpdate(FalSegmentationProgress(title: "Segmenting", detail: "Picking the best mask."))
         let smallestMask = try await downloadSmallestMask(urls: maskURLs, apiKey: apiKey)
@@ -124,7 +128,9 @@ actor FalSegmentationService {
                     bestImage = img
                 }
             }
+            #if DEBUG
             print("[SAM] mask areas (idx, whitePixels): \(areas.sorted { $0.0 < $1.0 }) — picked area=\(bestArea)")
+            #endif
             guard let pick = bestImage else {
                 throw UploadPipelineError.maskGenerationFailed
             }

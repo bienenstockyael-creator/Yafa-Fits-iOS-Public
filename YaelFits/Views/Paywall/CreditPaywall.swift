@@ -118,8 +118,8 @@ struct CreditPaywall: View {
     private var contextLine: some View {
         VStack(spacing: 6) {
             Text(currentBalance == 0
-                 ? "You've used all your free 3D generations this month. Top up to keep playing."
-                 : "Get more 3D generations. Credits never expire.")
+                 ? "You've used all your free 3D fits this month. Top up to keep playing."
+                 : "Get more 3D fits. Credits never expire.")
             .font(.system(size: 14))
             .foregroundStyle(AppPalette.textMuted)
             .multilineTextAlignment(.center)

@@ -72,6 +72,15 @@ enum LocalCache {
         return Set(arr.compactMap { UUID(uuidString: $0) })
     }
 
+    static func saveBlockedUserIds(_ ids: Set<UUID>, userId: UUID) {
+        save(Array(ids.map(\.uuidString)), key: "blocked-\(userId.uuidString)")
+    }
+
+    static func loadBlockedUserIds(userId: UUID) -> Set<UUID>? {
+        guard let arr = load([String].self, key: "blocked-\(userId.uuidString)") else { return nil }
+        return Set(arr.compactMap { UUID(uuidString: $0) })
+    }
+
     static func saveProfile(_ profile: Profile, userId: UUID) {
         save(profile, key: "profile-\(userId.uuidString)")
     }

@@ -113,6 +113,15 @@ struct CarouselView: View {
     /// card so the user always gets a prompt before destructive
     /// action, regardless of which surface they tap from.
     @State private var showDeleteConfirmation = false
+    /// Outfit pending the publish (caption/products) sheet. nil at rest.
+    @State private var outfitToPublish: Outfit?
+    /// Per-outfit optimistic published state, keyed by outfit id, so the
+    /// globe toggle feels instant before `outfit.isPublic` catches up.
+    @State private var publishedOverride: [String: Bool] = [:]
+    /// Outfit pending the unpublish confirmation dialog. nil at rest.
+    /// Unpublishing is destructive (pulls the fit from the feed) so it
+    /// gets a confirm step, unlike publishing which has its own sheet.
+    @State private var outfitToUnpublish: Outfit?
     /// Mirrors the chevron press inside the card and the new Info
     /// button outside it. Tracking it as a single source of truth
     /// keeps the spring animation consistent regardless of which
@@ -406,6 +415,13 @@ struct CarouselView: View {
                     .environment(store)
             }
         }
+        .sheet(item: $outfitToPublish) { outfit in
+            PublishSheet(outfit: outfit) { _, _ in
+                publishedOverride[outfit.id] = true
+            }
+            .environment(store)
+        }
+        .overlay { unpublishConfirmOverlay }
         .sheet(isPresented: $showComments) {
             if let outfit = currentOutfit {
                 CommentsSheet(outfitId: outfit.id)
@@ -622,6 +638,7 @@ struct CarouselView: View {
                     }
                 } else {
                     saveCircleButton(outfit: outfit)
+                    publishCircleButton(outfit: outfit)
                     shareCircleButton(outfit: outfit)
                     infoCircleButton
                 }
@@ -681,6 +698,111 @@ struct CarouselView: View {
                 .appCircle()
         }
         .buttonStyle(.plain)
+    }
+
+    /// Publish-to-feed toggle (owner only). A globe — the Friends/feed
+    /// tab glyph — reads as "post this to the feed," and fills in when
+    /// the outfit is live (same pattern as the save bookmark). Published
+    /// state comes from `outfit.isPublic`, with a per-outfit optimistic
+    /// override so the toggle feels instant. Tapping to publish opens
+    /// the caption/products `PublishSheet`; tapping again unpublishes.
+    private func publishCircleButton(outfit: Outfit) -> some View {
+        let live = publishedOverride[outfit.id] ?? (outfit.isPublic == true)
+        return Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            if live {
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                    outfitToUnpublish = outfit
+                }
+            } else {
+                outfitToPublish = outfit
+            }
+        } label: {
+            AppIcon(glyph: .globe, size: 16, color: live ? .white : AppPalette.iconPrimary)
+                .frame(width: 48, height: 48)
+                .if(live) {
+                    // Live: solid-black circle + white globe, mirroring
+                    // the Save pill's active styling so a published fit
+                    // is unmistakable in the row.
+                    $0.background(Circle().fill(Color.black))
+                        .shadow(color: AppPalette.cardShadow, radius: 12, y: 6)
+                }
+                .if(!live) { $0.appCircle() }
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// App-styled unpublish confirmation, replacing the system action
+    /// sheet (which renders dark and clashes with the frosted-glass
+    /// chrome). A soft scrim + frosted `appCard` matching the rest of
+    /// the app, with a red-tinted destructive action.
+    @ViewBuilder
+    private var unpublishConfirmOverlay: some View {
+        if let outfit = outfitToUnpublish {
+            ZStack {
+                // Dismissable scrim
+                Color.black.opacity(0.18)
+                    .ignoresSafeArea()
+                    .onTapGesture { dismissUnpublish() }
+                    .transition(.opacity)
+
+                VStack(spacing: 18) {
+                    VStack(spacing: 8) {
+                        Text("Unpublish this fit?")
+                            .font(.system(size: 19, weight: .semibold))
+                            .foregroundStyle(AppPalette.textStrong)
+                        Text("It'll be removed from the feed.\nYou can publish it again anytime.")
+                            .font(.system(size: 14, weight: .regular))
+                            .multilineTextAlignment(.center)
+                            .foregroundStyle(AppPalette.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    VStack(spacing: 10) {
+                        Button {
+                            UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+                            publishedOverride[outfit.id] = false
+                            Task { try? await OutfitService.setPublished(false, outfitId: outfit.id) }
+                            dismissUnpublish()
+                        } label: {
+                            Text("Unpublish")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 50)
+                                .background(
+                                    Capsule().fill(Color(red: 0.90, green: 0.27, blue: 0.27))
+                                )
+                        }
+                        .buttonStyle(SolidPressButtonStyle())
+
+                        Button {
+                            dismissUnpublish()
+                        } label: {
+                            Text("Cancel")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(AppPalette.textPrimary)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 50)
+                                .appCapsule()
+                        }
+                        .buttonStyle(SolidPressButtonStyle())
+                    }
+                }
+                .padding(22)
+                .frame(maxWidth: 320)
+                .appCard(cornerRadius: 28)
+                .padding(.horizontal, 32)
+                .transition(.scale(scale: 0.92).combined(with: .opacity))
+            }
+            .animation(.spring(response: 0.32, dampingFraction: 0.86), value: outfitToUnpublish?.id)
+        }
+    }
+
+    private func dismissUnpublish() {
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+            outfitToUnpublish = nil
+        }
     }
 
     private var infoCircleButton: some View {

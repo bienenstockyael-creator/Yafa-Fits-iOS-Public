@@ -41,7 +41,7 @@ final class VibesEffectHost {
     /// then drives button-hide via position match).
     var pendingVibeAt: CGPoint?
     /// First-use popup visibility — true while the explanatory
-    /// modal "you gave a vibe! get 5 to earn a free 3D gen" is on
+    /// modal "you gave a vibe! get 5 to earn a free 3D fit" is on
     /// screen. Shown once per device (UserDefaults-gated).
     var firstUsePopupVisible = false
 

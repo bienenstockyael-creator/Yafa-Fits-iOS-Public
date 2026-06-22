@@ -4,6 +4,7 @@ import SwiftUI
 struct ProfileView: View {
     @Environment(OutfitStore.self) private var store
     @Environment(AuthManager.self) private var auth
+    @Environment(\.openURL) private var openURL
 
     @State private var username = ""
     @State private var displayName = ""
@@ -17,6 +18,10 @@ struct ProfileView: View {
     @State private var isSavingPhone = false
     @State private var phoneError: String?
     @State private var showSignOutConfirmation = false
+    @State private var showDeleteConfirmation = false
+    @State private var isDeletingAccount = false
+    @State private var deleteAccountError: String?
+    @State private var showBlockedAccounts = false
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var avatarImage: UIImage?
     @State private var isUploadingAvatar = false
@@ -44,8 +49,8 @@ struct ProfileView: View {
              + (balance?.gen_credits_paid_balance ?? 0)
     }
     /// Just the paid sub-total. Used to switch the chip label:
-    /// "X 3D gens" when paid > 0 (don't claim "free" for bought
-    /// credits) vs "X free 3D gens" otherwise.
+    /// "X 3D fits" when paid > 0 (don't claim "free" for bought
+    /// credits) vs "X free 3D fits" otherwise.
     private var purchasedCredits3D: Int {
         store.currentCreditBalance?.gen_credits_paid_balance ?? 0
     }
@@ -89,6 +94,7 @@ struct ProfileView: View {
                     phoneSection
                     saveButton
                     statsSection
+                    accountExtrasSection
                     signOutSection
                 }
                 .padding(.horizontal, LayoutMetrics.screenPadding)
@@ -110,6 +116,26 @@ struct ProfileView: View {
         .alert("Sign out?", isPresented: $showSignOutConfirmation) {
             Button("Sign Out", role: .destructive) { signOut() }
             Button("Cancel", role: .cancel) {}
+        }
+        .alert("Delete account?", isPresented: $showDeleteConfirmation) {
+            Button("Delete", role: .destructive) { deleteAccount() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This permanently deletes your account, outfits, and all your data. This can't be undone.")
+        }
+        .alert(
+            "Couldn't delete account",
+            isPresented: Binding(
+                get: { deleteAccountError != nil },
+                set: { if !$0 { deleteAccountError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(deleteAccountError ?? "")
+        }
+        .sheet(isPresented: $showBlockedAccounts) {
+            BlockedAccountsSheet().environment(store)
         }
         .onChange(of: selectedPhoto) { _, newValue in
             guard let newValue else { return }
@@ -541,9 +567,9 @@ struct ProfileView: View {
     }
 
     /// Label for the 3D-credit chip. Three states:
-    ///   * Has paid credits — say "3D gen(s)" (don't claim
+    ///   * Has paid credits — say "3D fit(s)" (don't claim
     ///     "free" since these credits were bought).
-    ///   * Has free credits only — say "free 3D gen(s)" so
+    ///   * Has free credits only — say "free 3D fit(s)" so
     ///     the user knows the bucket refreshes monthly.
     ///   * Zero of both — show the countdown to the next
     ///     monthly refresh (or "refresh soon" if it's near).
@@ -554,12 +580,12 @@ struct ProfileView: View {
     private var gen3DChipLabel: String {
         if freeCredits3D > 0 {
             if purchasedCredits3D > 0 {
-                return freeCredits3D == 1 ? "3D gen" : "3D gens"
+                return freeCredits3D == 1 ? "3D fit" : "3D fits"
             }
-            return freeCredits3D == 1 ? "free 3D gen" : "free 3D gens"
+            return freeCredits3D == 1 ? "free 3D fit" : "free 3D fits"
         }
         guard let reset = creditsResetAt, reset > Date() else {
-            return "free 3D gens"
+            return "free 3D fits"
         }
         let rawDays = Calendar.current.dateComponents([.day], from: Date(), to: reset).day ?? 0
         // Clamp to the actual refresh interval (30 days). The
@@ -618,19 +644,68 @@ struct ProfileView: View {
         .frame(maxWidth: .infinity)
     }
 
-    private var signOutSection: some View {
-        Button {
-            showSignOutConfirmation = true
-        } label: {
-            Text("SIGN OUT")
+    /// Blocked-accounts management + legal links. Terms/Privacy live
+    /// here so they're reachable after sign-up (the agreement footer is
+    /// only on the auth screen) — also where App Store review expects them.
+    private var accountExtrasSection: some View {
+        VStack(spacing: LayoutMetrics.small) {
+            settingsRow("BLOCKED ACCOUNTS") { showBlockedAccounts = true }
+            settingsRow("TERMS OF SERVICE") {
+                if let url = URL(string: AppConfig.termsOfServiceURL) { openURL(url) }
+            }
+            settingsRow("PRIVACY POLICY") {
+                if let url = URL(string: AppConfig.privacyPolicyURL) { openURL(url) }
+            }
+        }
+    }
+
+    private func settingsRow(_ text: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(text)
                 .font(.system(size: 11, weight: .medium))
                 .tracking(1.5)
                 .foregroundStyle(AppPalette.textFaint)
                 .frame(maxWidth: .infinity)
-                .frame(height: 44)
-                .appCapsule(shadowRadius: 0, shadowY: 0)
+                .frame(height: 34)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    private var signOutSection: some View {
+        VStack(spacing: LayoutMetrics.small) {
+            Button {
+                showSignOutConfirmation = true
+            } label: {
+                Text("SIGN OUT")
+                    .font(.system(size: 11, weight: .medium))
+                    .tracking(1.5)
+                    .foregroundStyle(AppPalette.textFaint)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 44)
+                    .appCapsule(shadowRadius: 0, shadowY: 0)
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                showDeleteConfirmation = true
+            } label: {
+                Group {
+                    if isDeletingAccount {
+                        ProgressView().tint(AppPalette.textFaint)
+                    } else {
+                        Text("DELETE ACCOUNT")
+                            .font(.system(size: 11, weight: .medium))
+                            .tracking(1.5)
+                            .foregroundStyle(Color.red.opacity(0.85))
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 44)
+            }
+            .buttonStyle(.plain)
+            .disabled(isDeletingAccount)
+        }
     }
 
     private var avatarInitial: String {
@@ -746,9 +821,122 @@ struct ProfileView: View {
             try? await auth.signOut()
         }
     }
+
+    private func deleteAccount() {
+        let userId = auth.userId
+        isDeletingAccount = true
+        Task {
+            do {
+                try await auth.deleteAccount()
+                if let userId { LocalCache.clearAll(userId: userId) }
+                // Session is now nil → RootView routes back to auth.
+            } catch {
+                await MainActor.run {
+                    isDeletingAccount = false
+                    deleteAccountError = error.localizedDescription
+                }
+            }
+        }
+    }
 }
 
 struct IdentifiableImage: Identifiable {
     let id = UUID()
     let image: UIImage
+}
+
+/// Lists the accounts the user has blocked, with an Unblock action for
+/// each. Reachable from Settings → "Blocked Accounts".
+struct BlockedAccountsSheet: View {
+    @Environment(OutfitStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    @State private var profiles: [Profile] = []
+    @State private var isLoading = true
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if isLoading {
+                    ProgressView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if profiles.isEmpty {
+                    emptyState
+                } else {
+                    list
+                }
+            }
+            .background(AppPalette.groupedBackground)
+            .navigationTitle("Blocked Accounts")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.light, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+            .task { await load() }
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: LayoutMetrics.xxSmall) {
+            Image(systemName: "hand.raised")
+                .font(.system(size: 22))
+                .foregroundStyle(AppPalette.textFaint)
+            Text("No blocked accounts")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(AppPalette.textMuted)
+            Text("People you block won't appear in your feed or comments.")
+                .font(.system(size: 12))
+                .foregroundStyle(AppPalette.textFaint)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, LayoutMetrics.large)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var list: some View {
+        ScrollView {
+            LazyVStack(spacing: LayoutMetrics.xSmall) {
+                ForEach(profiles) { profile in
+                    HStack(spacing: LayoutMetrics.xSmall) {
+                        AvatarView(url: profile.avatarUrl, initial: profile.initial, size: 36)
+                        Text("@\(profile.handle)")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(AppPalette.textStrong)
+                        Spacer()
+                        Button {
+                            store.unblockUser(profile.id)
+                            withAnimation { profiles.removeAll { $0.id == profile.id } }
+                        } label: {
+                            Text("Unblock")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(AppPalette.textPrimary)
+                                .padding(.horizontal, 14)
+                                .frame(height: 32)
+                                .appCapsule(shadowRadius: 0, shadowY: 0)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(LayoutMetrics.xSmall)
+                    .appCard(cornerRadius: 16, shadowRadius: 2, shadowY: 1)
+                }
+            }
+            .padding(.horizontal, LayoutMetrics.screenPadding)
+            .padding(.vertical, LayoutMetrics.small)
+        }
+    }
+
+    private func load() async {
+        let ids = store.blockedUserIds
+        guard !ids.isEmpty else {
+            await MainActor.run { isLoading = false }
+            return
+        }
+        let fetched = (try? await SocialService.getProfiles(userIds: ids)) ?? []
+        await MainActor.run {
+            profiles = fetched
+            isLoading = false
+        }
+    }
 }

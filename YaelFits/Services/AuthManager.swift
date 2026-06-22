@@ -197,6 +197,38 @@ class AuthManager {
         }
     }
 
+    // MARK: - Account Deletion
+
+    /// Permanently deletes the signed-in user's account. Calls the
+    /// `delete-user` Edge Function, which removes the auth user under
+    /// the service role; ON DELETE CASCADE wipes all their content.
+    /// On success the local session is cleared so the app returns to
+    /// the sign-in screen.
+    func deleteAccount() async throws {
+        let url = SupabaseConfig.url
+            .appendingPathComponent("functions/v1/delete-user")
+        let jwt = try await supabase.auth.session.accessToken
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse,
+              (200..<300).contains(http.statusCode) else {
+            let body = String(data: data, encoding: .utf8) ?? "(no body)"
+            throw AuthError.accountDeletionFailed(body)
+        }
+
+        // Account is gone server-side — clear the local session. The
+        // server already revoked it, so signOut may no-op/throw; ignore.
+        try? await supabase.auth.signOut()
+        await MainActor.run {
+            self.session = nil
+        }
+    }
+
     // MARK: - Helpers
 
     private func randomNonce(length: Int = 32) -> String {
@@ -232,6 +264,7 @@ enum AuthError: LocalizedError {
     case appleSignInFailed
     case emailAlreadyRegistered
     case noExistingAppleAccount
+    case accountDeletionFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -241,6 +274,8 @@ enum AuthError: LocalizedError {
             return "This email is already registered. Sign in below."
         case .noExistingAppleAccount:
             return "No existing account found with this Apple ID. Tap Sign Up to create one, or sign in with your email and password."
+        case .accountDeletionFailed:
+            return "We couldn't delete your account. Please try again, or contact support if the problem continues."
         }
     }
 }

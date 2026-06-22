@@ -20,9 +20,9 @@ struct RootView: View {
     /// edit fields, sign out, Virtual Closet entry, etc.) in a sheet
     /// instead of taking a tab slot of its own.
     @State private var showsSettingsSheet = false
-    /// Stub flag for the "add me on Yafa" share button. UI surface
-    /// only for now — share-content rendering is a separate task.
-    @State private var showsShareProfileSheet = false
+    /// "Add me on Yafa" share flow — card preview + outfit
+    /// carousel + system share handoff (ProfileShareSheet).
+    @State private var showsProfileShareSheet = false
     /// Standardized closet avatar. Hydrated from disk on appear so a returning
     /// user doesn't have to redo onboarding. Cross-device sync via Supabase
     /// Storage is a follow-up.
@@ -444,32 +444,9 @@ struct RootView: View {
             }
             .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $showsShareProfileSheet) {
-            // Placeholder for the "add me on Yafa" flow. Surface only
-            // — actual share content (card render, deep link, copy) is
-            // a separate task.
-            NavigationStack {
-                VStack(spacing: LayoutMetrics.medium) {
-                    Text("Share your profile")
-                        .font(.system(size: 18, weight: .semibold))
-                    Text("Coming soon — a shareable card so people can find you on Yafa.")
-                        .font(.system(size: 13))
-                        .foregroundStyle(AppPalette.textMuted)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, LayoutMetrics.large)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(AppPalette.groupedBackground)
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button("Done") { showsShareProfileSheet = false }
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(AppPalette.textPrimary)
-                    }
-                }
-            }
-            .presentationDetents([.medium])
-            .presentationDragIndicator(.visible)
+        .sheet(isPresented: $showsProfileShareSheet) {
+            ProfileShareSheet()
+                .environment(store)
         }
         .sheet(isPresented: $showCreditPaywall) {
             CreditPaywallHost(
@@ -887,21 +864,31 @@ struct RootView: View {
         .buttonStyle(.plain)
     }
 
-    /// "Add me on Yafa" share entry point. The actual share content
-    /// (card render, copy, deep link) is out of scope for this pass —
-    /// the button just opens a placeholder share sheet so the surface
-    /// area is wired up for follow-on work.
+    /// "Add me on Yafa" share entry point. Opens the
+    /// ProfileShareSheet — a card-preview flow where the user
+    /// swipes through their latest + favorite outfits to pick
+    /// which one rides on the shareable card, then hands off to
+    /// the system share sheet with the web profile URL.
+    ///
+    /// Hidden defensively if the user has no username. Onboarding
+    /// makes one required, so all post-onboarding users have one —
+    /// this is a belt-and-suspenders guard for the in-progress
+    /// onboarding state, not an expected path.
+    @ViewBuilder
     private var shareProfileButton: some View {
-        Button {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            showsShareProfileSheet = true
-        } label: {
-            AppIcon(glyph: .share, size: 14, color: AppPalette.iconPrimary)
-                .frame(width: 30, height: 30)
-                .background(Circle().fill(Color(red: 0.95, green: 0.95, blue: 0.96).opacity(0.98)))
-                .overlay(Circle().stroke(Color(red: 0.88, green: 0.89, blue: 0.91).opacity(0.9), lineWidth: 0.8))
+        if let username = store.currentProfile?.username, !username.isEmpty {
+            Button {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                Analytics.log("profile_share_opened")
+                showsProfileShareSheet = true
+            } label: {
+                AppIcon(glyph: .share, size: 14, color: AppPalette.iconPrimary)
+                    .frame(width: 30, height: 30)
+                    .background(Circle().fill(Color(red: 0.95, green: 0.95, blue: 0.96).opacity(0.98)))
+                    .overlay(Circle().stroke(Color(red: 0.88, green: 0.89, blue: 0.91).opacity(0.9), lineWidth: 0.8))
+            }
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
     }
 
     /// Loads the persisted avatar for the current user if we haven't already

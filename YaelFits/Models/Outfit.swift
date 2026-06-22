@@ -114,6 +114,11 @@ struct Outfit: Codable, Identifiable, Hashable, Sendable {
     /// Device-local owner used to scope on-disk assets and metadata to the
     /// signed-in account that created the outfit.
     var localOwnerUserId: String? = nil
+    /// Whether this outfit is published publicly (mirrors Supabase
+    /// `outfits.is_public`). Nil for bundled/demo outfits and anything
+    /// not synced from the server. Drives shareability — only public
+    /// outfits can be featured on the web profile card.
+    var isPublic: Bool? = nil
 
     var normalizedFrameExt: String {
         let ext = (frameExt ?? "webp").trimmingCharacters(in: .whitespaces).lowercased()

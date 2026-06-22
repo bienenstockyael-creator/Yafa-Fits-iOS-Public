@@ -70,6 +70,9 @@ class OutfitStore {
     var likedIds: Set<String> = []
     var savedIds: Set<String> = []
     var followingIds: Set<UUID> = []
+    /// Accounts this user has blocked. Their posts, comments, and
+    /// follow-list entries are filtered out client-side.
+    var blockedUserIds: Set<UUID> = []
     var isLoading: Bool = true
     var selectedOutfitId: String?
     var centeredListOutfitId: String?
@@ -154,6 +157,7 @@ class OutfitStore {
         likedIds = []
         savedIds = []
         followingIds = []
+        blockedUserIds = []
         isLoading = true
         selectedOutfitId = nil
         centeredListOutfitId = nil
@@ -181,6 +185,7 @@ class OutfitStore {
         likedIds = []
         savedIds = []
         followingIds = []
+        blockedUserIds = []
         isLoading = false
         selectedOutfitId = nil
         centeredListOutfitId = nil
@@ -531,12 +536,14 @@ class OutfitStore {
         let cachedSaves = LocalCache.loadSavedIds(userId: userId) ?? []
         let cachedProfile = LocalCache.loadProfile(userId: userId)
         let cachedFollowing = LocalCache.loadFollowingIds(userId: userId) ?? []
+        let cachedBlocked = LocalCache.loadBlockedUserIds(userId: userId) ?? []
 
         await MainActor.run {
             guard self.userId == userId else { return }
             self.likedIds = cachedLikes
             self.savedIds = cachedSaves
             self.followingIds = cachedFollowing
+            self.blockedUserIds = cachedBlocked
             self.currentProfile = cachedProfile
         }
 
@@ -546,16 +553,19 @@ class OutfitStore {
             async let savedTask = try? SocialService.getSavedOutfitIds(userId: userId)
             async let profileTask = try? SocialService.getProfile(userId: userId)
             async let followingTask = try? SocialService.getFollowingIds(userId: userId)
+            async let blockedTask = try? SocialService.getBlockedUserIds(userId: userId)
 
             let liked = await likedTask
             let saved = await savedTask
             let profile = await profileTask
             let following = await followingTask
+            let blocked = await blockedTask
 
             if let liked { LocalCache.saveLikedIds(liked, userId: userId) }
             if let saved { LocalCache.saveSavedIds(saved, userId: userId) }
             if let profile { LocalCache.saveProfile(profile, userId: userId) }
             if let following { LocalCache.saveFollowingIds(following, userId: userId) }
+            if let blocked { LocalCache.saveBlockedUserIds(blocked, userId: userId) }
 
             await MainActor.run {
                 self.applyFreshSocialData(
@@ -563,6 +573,7 @@ class OutfitStore {
                     saved: saved,
                     profile: profile,
                     following: following,
+                    blocked: blocked,
                     for: userId
                 )
             }
@@ -574,6 +585,7 @@ class OutfitStore {
         saved: Set<String>?,
         profile: Profile?,
         following: Set<UUID>?,
+        blocked: Set<UUID>?,
         for userId: UUID
     ) {
         guard self.userId == userId else { return }
@@ -581,6 +593,27 @@ class OutfitStore {
         if let saved { self.savedIds = saved }
         if let profile { self.currentProfile = profile }
         if let following { self.followingIds = following }
+        if let blocked { self.blockedUserIds = blocked }
+    }
+
+    // MARK: - Blocking
+
+    /// Optimistically block a user: hide them locally + persist, then
+    /// sync to the server. Every surface filters on `blockedUserIds`, so
+    /// their posts, comments, and follow-list entries disappear at once.
+    func blockUser(_ userId: UUID) {
+        guard let me = self.userId, userId != me else { return }
+        blockedUserIds.insert(userId)
+        followingIds.remove(userId)
+        LocalCache.saveBlockedUserIds(blockedUserIds, userId: me)
+        Task { try? await SocialService.block(blockerId: me, blockedId: userId) }
+    }
+
+    func unblockUser(_ userId: UUID) {
+        guard let me = self.userId else { return }
+        blockedUserIds.remove(userId)
+        LocalCache.saveBlockedUserIds(blockedUserIds, userId: me)
+        Task { try? await SocialService.unblock(blockerId: me, blockedId: userId) }
     }
 
     /// Updates an outfit's caption and products locally after publishing.

@@ -32,7 +32,7 @@ final class VibesIncomingManager {
         let giver: Profile
         let receivedAt: Date
         /// True if THIS vibe's arrival pushed the user across
-        /// a 5-vibe milestone (i.e., earned them a free 3D gen).
+        /// a 5-vibe milestone (i.e., earned them a free 3D fit).
         let crossedMilestone: Bool
     }
 

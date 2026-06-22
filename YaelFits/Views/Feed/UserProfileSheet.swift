@@ -30,6 +30,8 @@ struct UserProfileView: View {
     @State private var showFollowers = false
     @State private var showFollowing = false
     @State private var vibesReceived: Int = 0
+    @State private var reportTarget: ReportTarget?
+    @State private var blockCandidate: BlockCandidate?
     /// Public-outfit count for this profile. Computed server-side via
     /// `public_outfit_count` RPC so it's correct even when the
     /// viewer is a non-follower of a private user (RLS would hide
@@ -223,13 +225,13 @@ struct UserProfileView: View {
         }
         .onDisappear { carouselTransitionTask?.cancel() }
         .sheet(isPresented: $showFollowers) {
-            FollowListSheet(title: "Followers", userIds: followerIds)
+            FollowListSheet(title: "Followers", userIds: followerIds.filter { !store.blockedUserIds.contains($0) })
                 .environment(store)
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppPalette.groupedBackground)
         }
         .sheet(isPresented: $showFollowing) {
-            FollowListSheet(title: "Following", userIds: followingIds)
+            FollowListSheet(title: "Following", userIds: followingIds.filter { !store.blockedUserIds.contains($0) })
                 .environment(store)
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppPalette.groupedBackground)
@@ -255,12 +257,53 @@ struct UserProfileView: View {
             .buttonStyle(.plain)
 
             Spacer()
+
+            if userId != store.userId {
+                Menu {
+                    Button {
+                        reportTarget = ReportTarget(
+                            contentType: "user",
+                            reportedUserId: userId,
+                            displayName: displayName
+                        )
+                    } label: { Label("Report user", systemImage: "flag") }
+                    Button(role: .destructive) {
+                        blockCandidate = BlockCandidate(userId: userId, name: displayName)
+                    } label: { Label("Block user", systemImage: "hand.raised") }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppPalette.iconPrimary)
+                        .frame(width: 36, height: 36)
+                        .appCircle()
+                }
+                .buttonStyle(.plain)
+            }
         }
         .padding(.horizontal, LayoutMetrics.screenPadding)
         .padding(.top, 8)
         .padding(.bottom, LayoutMetrics.xSmall)
         .frame(maxHeight: .infinity, alignment: .top)
         .zIndex(3)
+        .sheet(item: $reportTarget) { target in
+            ReportSheet(target: target).environment(store)
+        }
+        .confirmationDialog(
+            blockCandidate.map { "Block \($0.name)?" } ?? "Block user?",
+            isPresented: Binding(
+                get: { blockCandidate != nil },
+                set: { if !$0 { blockCandidate = nil } }
+            ),
+            presenting: blockCandidate
+        ) { candidate in
+            Button("Block", role: .destructive) {
+                store.blockUser(candidate.userId)
+                onDismiss()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { candidate in
+            Text("You won't see \(candidate.name)'s posts or comments anymore.")
+        }
     }
 
     // MARK: - Header (avatar / name / bio / stats / follow)

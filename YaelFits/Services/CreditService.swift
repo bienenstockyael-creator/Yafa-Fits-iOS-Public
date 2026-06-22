@@ -9,7 +9,7 @@ enum CreditSource: String, Sendable {
     case none
 }
 
-/// Wraps the Supabase RPCs that manage 3D generation credits.
+/// Wraps the Supabase RPCs that manage 3D fit credits.
 ///
 /// Lifecycle: `reserve` debits a credit at job-submit time (before FAL
 /// runs) so concurrent uploads can't double-spend the last credit.

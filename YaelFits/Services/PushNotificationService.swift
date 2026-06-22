@@ -9,7 +9,9 @@ final class PushNotificationAppDelegate: NSObject, UIApplicationDelegate {
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
         let tokenString = deviceToken.map { String(format: "%02x", $0) }.joined()
+        #if DEBUG
         print("[APNs] Registered device token: \(tokenString.prefix(20))...")
+        #endif
         Task {
             await PushNotificationCoordinator.shared.didReceiveToken(tokenString)
         }
@@ -19,7 +21,9 @@ final class PushNotificationAppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFailToRegisterForRemoteNotificationsWithError error: Error
     ) {
+        #if DEBUG
         print("[APNs] Failed to register: \(error.localizedDescription)")
+        #endif
     }
 }
 
@@ -44,17 +48,23 @@ actor PushNotificationCoordinator {
 
         // Check current status — if previously denied, skip (user must enable in Settings)
         let settings = await center.notificationSettings()
+        #if DEBUG
         print("[APNs] Current notification status: \(settings.authorizationStatus.rawValue)")
+        #endif
 
         switch settings.authorizationStatus {
         case .notDetermined:
             let granted = (try? await center.requestAuthorization(options: [.alert, .sound, .badge])) ?? false
+            #if DEBUG
             print("[APNs] Permission granted: \(granted)")
+            #endif
             guard granted else { return }
         case .authorized, .provisional, .ephemeral:
             break // already granted
         default:
+            #if DEBUG
             print("[APNs] Permission denied — user must enable in Settings")
+            #endif
             return
         }
 
@@ -99,9 +109,13 @@ actor PushNotificationCoordinator {
                 .from("device_push_tokens")
                 .upsert(row)
                 .execute()
+            #if DEBUG
             print("[APNs] Token upserted for env: \(environment)")
+            #endif
         } catch {
+            #if DEBUG
             print("[APNs] Token upsert failed: \(error)")
+            #endif
         }
     }
 }

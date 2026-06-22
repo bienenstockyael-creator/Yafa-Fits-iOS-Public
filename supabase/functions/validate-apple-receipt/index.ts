@@ -1,72 +1,72 @@
 // Server-side handler for paid-credit IAP purchases.
 //
-// iOS calls this after a successful `Product.purchase()` returns a
-// `VerifiedTransaction` with a JWS string. The function:
-//   1. Authenticates the caller via their Supabase JWT.
-//   2. Decodes the StoreKit 2 JWS payload to extract the
-//      transaction ID + product ID claimed by Apple.
-//   3. Cross-checks the `product_id` from the request against the
-//      `productId` Apple signed into the JWS (defends against a
-//      client passing a CHEAP product ID alongside an EXPENSIVE
-//      JWS, or vice-versa).
-//   4. Maps the product ID to a credit count using a
-//      server-controlled allowlist (clients can't smuggle in a
-//      bogus credit count).
-//   5. Calls the `grant_paid_credits` RPC under `service_role` to
-//      append an audit row + bump `gen_credits_paid_balance` in
-//      one transaction. The UNIQUE constraint on
-//      `apple_transaction_id` is the idempotency guarantee —
-//      duplicate calls return `was_already_credited: true`
-//      without re-crediting.
+// Production-grade verification: doesn't trust the iOS-submitted
+// JWS payload at all. Instead, extracts the transactionId from
+// the submitted JWS, then re-fetches that transaction directly
+// from Apple's App Store Server API. Apple's response is
+// authoritative — TLS to api.storekit(.sandbox).itunes.apple.com
+// is our trust anchor.
 //
-// Request body (JSON):
-//   { "jws": string, "product_id": string }
+// Flow:
+//   1. Authenticate the caller via their Supabase JWT.
+//   2. Decode the StoreKit 2 JWS body to extract transactionId
+//      (we don't trust anything else in the payload; the cross-
+//      check below catches forged claims).
+//   3. Sign a JWT with the team's App Store Server API key
+//      (ES256, .p8 private key from APPLE_IAP_PRIVATE_KEY).
+//   4. Call Apple's GET /inApps/v1/transactions/{transactionId}
+//      endpoint. Try production first; on 404, fall back to
+//      sandbox. Apple's signed response is the source of
+//      truth for productId / quantity / purchaseDate.
+//   5. Cross-check the verified productId from Apple's response
+//      against the product_id in the request — defends against
+//      a client passing a CHEAP product_id alongside an
+//      EXPENSIVE transactionId.
+//   6. Map productId → credits via a server-controlled
+//      allowlist.
+//   7. Call grant_paid_credits RPC under service_role. The
+//      UNIQUE constraint on apple_transaction_id is the
+//      idempotency guarantee.
 //
-// Response (JSON):
-//   { new_paid_balance: number, was_already_credited: boolean }
-//
-// SECURITY DEBT — MUST HARDEN BEFORE APP STORE RELEASE:
-//   We currently DECODE the JWS payload without verifying its
-//   signature against Apple's signing certificates. In sandbox
-//   (TestFlight, .storekit testing) this is acceptable — no real
-//   money. In production an attacker could craft a fake JWS with
-//   any productId / transactionId and get arbitrary credits.
-//
-//   First attempt at chain verification used `@peculiar/x509` via
-//   esm.sh; deployed cleanly but failed at runtime (function
-//   returned 404, likely an ESM compatibility issue with Deno's
-//   edge runtime). For production, the cleanest path is the App
-//   Store Server API: iOS sends transactionId, this function
-//   authenticates with an App Store Connect API key, calls
-//   Apple's GET /inApps/v1/transactions/{transactionId}, and
-//   trusts Apple's signed response. Setup requires an API key
-//   from App Store Connect; runtime is just HTTPS + JWT signing.
+// Required env (set via supabase secrets / dashboard):
+//   APPLE_IAP_KEY_ID         — 10-char Key ID
+//   APPLE_IAP_ISSUER_ID      — UUID Issuer ID (team-level)
+//   APPLE_IAP_PRIVATE_KEY    — PEM .p8 file contents
+//   APPLE_IAP_BUNDLE_ID      — e.g. com.yafa.Yafa
+//   SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
+//     (auto-provided by Supabase Edge Runtime)
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 
-// Server-controlled bundle → credit mapping. NEVER trust the
-// client's claim of how many credits a purchase is worth — it
-// must originate here.
+// Server-controlled bundle → credit mapping. Source of truth
+// for how many credits each App Store product grants. NEVER
+// trust client claims — the client can lie about anything.
 const BUNDLES: Record<string, { credits: number; price_cents: number }> = {
   "com.yafa.credits.single": { credits: 1, price_cents: 199 },
   "com.yafa.credits.starter": { credits: 3, price_cents: 499 },
-  "com.yafa.credits.standard": { credits: 10, price_cents: 1399 },
+  // Standard lands at $12.99 (App Store price tiers don't
+  // include $13.99 — Apple jumps from $12.99 to $14.99).
+  "com.yafa.credits.standard": { credits: 10, price_cents: 1299 },
   "com.yafa.credits.bestvalue": { credits: 30, price_cents: 3499 },
 };
+
+const PROD_API = "https://api.storekit.itunes.apple.com/inApps/v1/transactions";
+const SANDBOX_API = "https://api.storekit-sandbox.itunes.apple.com/inApps/v1/transactions";
 
 interface RequestPayload {
   jws?: string;
   product_id?: string;
 }
 
-interface JWSTransactionPayload {
+interface AppleTransactionInfo {
   transactionId?: string;
   originalTransactionId?: string;
   productId?: string;
-  bundleId?: string;
-  environment?: "Sandbox" | "Production" | string;
   purchaseDate?: number;
+  quantity?: number;
+  environment?: string;
+  bundleId?: string;
   [key: string]: unknown;
 }
 
@@ -84,7 +84,15 @@ serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!supabaseUrl || !supabaseAnonKey || !serviceRoleKey) {
+  const appleKeyId = Deno.env.get("APPLE_IAP_KEY_ID");
+  const appleIssuerId = Deno.env.get("APPLE_IAP_ISSUER_ID");
+  const applePrivateKey = Deno.env.get("APPLE_IAP_PRIVATE_KEY");
+  const appleBundleId = Deno.env.get("APPLE_IAP_BUNDLE_ID");
+
+  if (
+    !supabaseUrl || !supabaseAnonKey || !serviceRoleKey ||
+    !appleKeyId || !appleIssuerId || !applePrivateKey || !appleBundleId
+  ) {
     return jsonError(500, "misconfigured", "Server env vars missing");
   }
 
@@ -117,35 +125,82 @@ serve(async (req) => {
     return jsonError(400, "unknown_product", `No bundle config for ${product_id}`);
   }
 
-  // ── 3. Decode JWS (TODO: verify signature) ─────────────────
-  let payload: JWSTransactionPayload;
+  // ── 3. Extract transactionId from the iOS-submitted JWS ───
+  //    We don't TRUST the JWS contents — we just need the txn
+  //    ID so we know which transaction to look up via Apple's
+  //    API. The Apple-side fetch returns the authoritative
+  //    record.
+  let clientTransactionId: string;
   try {
-    payload = decodeJWSPayload(jws);
+    const payload = decodeJWSPayload(jws);
+    if (!payload.transactionId) {
+      return jsonError(400, "missing_txn_id", "JWS payload has no transactionId");
+    }
+    clientTransactionId = payload.transactionId;
   } catch (err) {
     return jsonError(400, "bad_jws", `Couldn't decode JWS: ${err}`);
   }
 
-  if (!payload.transactionId) {
-    return jsonError(400, "missing_txn_id", "JWS payload has no transactionId");
+  // ── 4. Sign a JWT for Apple App Store Server API auth ─────
+  let apiToken: string;
+  try {
+    apiToken = await signAppleAPIToken({
+      keyId: appleKeyId,
+      issuerId: appleIssuerId,
+      bundleId: appleBundleId,
+      privateKeyPEM: applePrivateKey,
+    });
+  } catch (err) {
+    return jsonError(500, "jwt_sign_failed", `Couldn't sign Apple JWT: ${err}`);
   }
-  if (payload.productId !== product_id) {
+
+  // ── 5. Fetch authoritative transaction info from Apple ────
+  //    Try production first; on 404 fall back to sandbox. Per
+  //    Apple's guidance, the same transactionId can resolve in
+  //    only one environment, and you should always try prod
+  //    first so live transactions don't get routed to sandbox.
+  let verifiedTxn: AppleTransactionInfo;
+  let verifiedEnv: "Production" | "Sandbox";
+  try {
+    const result = await fetchTransactionFromApple({
+      transactionId: clientTransactionId,
+      apiToken,
+    });
+    verifiedTxn = result.transaction;
+    verifiedEnv = result.environment;
+  } catch (err) {
+    return jsonError(502, "apple_api_failed", String(err));
+  }
+
+  // ── 6. Cross-check Apple's verified data ──────────────────
+  if (verifiedTxn.productId !== product_id) {
     return jsonError(
       400,
       "product_id_mismatch",
-      `Request says ${product_id}, JWS says ${payload.productId}`,
+      `Request says ${product_id}, Apple says ${verifiedTxn.productId}`,
     );
   }
+  if (verifiedTxn.bundleId !== appleBundleId) {
+    return jsonError(
+      400,
+      "bundle_id_mismatch",
+      `Apple txn is for bundle ${verifiedTxn.bundleId}, not ${appleBundleId}`,
+    );
+  }
+  if (!verifiedTxn.transactionId) {
+    return jsonError(500, "apple_no_txn_id", "Apple response missing transactionId");
+  }
 
-  // ── 4. Grant via service-role RPC ─────────────────────────
+  // ── 7. Grant via service-role RPC ─────────────────────────
   const serviceClient = createClient(supabaseUrl, serviceRoleKey);
   const { data, error: rpcError } = await serviceClient.rpc("grant_paid_credits", {
     p_user_id: user.id,
-    p_apple_transaction_id: payload.transactionId,
+    p_apple_transaction_id: verifiedTxn.transactionId,
     p_product_id: product_id,
     p_credits: bundle.credits,
     p_price_cents: bundle.price_cents,
     p_currency: "USD",
-    p_receipt_payload: payload,
+    p_receipt_payload: { ...verifiedTxn, environment: verifiedEnv },
   });
 
   if (rpcError) {
@@ -158,22 +213,164 @@ serve(async (req) => {
   });
 });
 
-/// Decodes a JWS string's middle segment (the payload). Does NOT
-/// verify the signature — that's the open security item flagged
-/// at the top of the file.
-function decodeJWSPayload(jws: string): JWSTransactionPayload {
+// ============================================================
+// JWT signing for App Store Server API
+// ============================================================
+
+interface SignTokenArgs {
+  keyId: string;
+  issuerId: string;
+  bundleId: string;
+  privateKeyPEM: string;
+}
+
+/// Cached imported CryptoKey. Importing the PEM is the
+/// expensive part — every cold start does it once, then warm
+/// invocations re-use the imported key.
+let cachedSigningKey: CryptoKey | null = null;
+let cachedSigningKeyPEM: string | null = null;
+
+async function signAppleAPIToken(args: SignTokenArgs): Promise<string> {
+  // Reuse the imported key when the PEM hasn't changed (it
+  // shouldn't within a function instance — secrets are read at
+  // cold start).
+  if (cachedSigningKey === null || cachedSigningKeyPEM !== args.privateKeyPEM) {
+    cachedSigningKey = await importP8PrivateKey(args.privateKeyPEM);
+    cachedSigningKeyPEM = args.privateKeyPEM;
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const header = {
+    alg: "ES256",
+    kid: args.keyId,
+    typ: "JWT",
+  };
+  const payload = {
+    iss: args.issuerId,
+    iat: now,
+    // 20-minute max per Apple's docs. We use 10 to be safe.
+    exp: now + 600,
+    aud: "appstoreconnect-v1",
+    bid: args.bundleId,
+  };
+
+  const headerB64 = base64urlEncode(new TextEncoder().encode(JSON.stringify(header)));
+  const payloadB64 = base64urlEncode(new TextEncoder().encode(JSON.stringify(payload)));
+  const signingInput = `${headerB64}.${payloadB64}`;
+
+  const signature = await crypto.subtle.sign(
+    { name: "ECDSA", hash: "SHA-256" },
+    cachedSigningKey,
+    new TextEncoder().encode(signingInput),
+  );
+  // WebCrypto returns raw r||s for ECDSA (64 bytes for P-256),
+  // which is exactly what JWT needs. No DER unwrapping required.
+  const signatureB64 = base64urlEncode(new Uint8Array(signature));
+
+  return `${signingInput}.${signatureB64}`;
+}
+
+/// Parses a PKCS#8 PEM-encoded ES256 (P-256) private key and
+/// imports it as a non-extractable CryptoKey usable for signing.
+async function importP8PrivateKey(pem: string): Promise<CryptoKey> {
+  const base64 = pem
+    .replace(/-----BEGIN PRIVATE KEY-----/, "")
+    .replace(/-----END PRIVATE KEY-----/, "")
+    .replace(/\s+/g, "");
+  const der = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+  return await crypto.subtle.importKey(
+    "pkcs8",
+    der,
+    { name: "ECDSA", namedCurve: "P-256" },
+    false,
+    ["sign"],
+  );
+}
+
+// ============================================================
+// Apple App Store Server API
+// ============================================================
+
+interface FetchTransactionArgs {
+  transactionId: string;
+  apiToken: string;
+}
+
+interface FetchTransactionResult {
+  transaction: AppleTransactionInfo;
+  environment: "Production" | "Sandbox";
+}
+
+/// Tries the production endpoint first, falls back to sandbox
+/// on 404. Matches Apple's recommended pattern for handling
+/// transactions from either environment with a single code path.
+async function fetchTransactionFromApple(
+  args: FetchTransactionArgs,
+): Promise<FetchTransactionResult> {
+  // Production
+  const prodResult = await tryFetch(PROD_API, args);
+  if (prodResult) return { transaction: prodResult, environment: "Production" };
+
+  // Sandbox fallback
+  const sandboxResult = await tryFetch(SANDBOX_API, args);
+  if (sandboxResult) return { transaction: sandboxResult, environment: "Sandbox" };
+
+  throw new Error(`Transaction ${args.transactionId} not found in production or sandbox`);
+}
+
+async function tryFetch(
+  baseURL: string,
+  args: FetchTransactionArgs,
+): Promise<AppleTransactionInfo | null> {
+  const url = `${baseURL}/${encodeURIComponent(args.transactionId)}`;
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${args.apiToken}`,
+      Accept: "application/json",
+    },
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Apple API ${res.status}: ${body}`);
+  }
+  const json = await res.json() as { signedTransactionInfo?: string };
+  if (!json.signedTransactionInfo) {
+    throw new Error("Apple response missing signedTransactionInfo");
+  }
+  // Apple's response is itself a JWS. We trust the TLS
+  // connection (api.storekit.itunes.apple.com is Apple's
+  // verified hostname) and just decode the payload. Adding
+  // chain verification here would be defense-in-depth but
+  // doesn't increase the trust ceiling beyond TLS.
+  return decodeJWSPayload(json.signedTransactionInfo);
+}
+
+// ============================================================
+// JWS payload decode (used for both iOS-submitted JWS and
+// Apple's API response JWS)
+// ============================================================
+
+function decodeJWSPayload(jws: string): AppleTransactionInfo {
   const parts = jws.split(".");
   if (parts.length !== 3) {
     throw new Error(`JWS has ${parts.length} segments, expected 3`);
   }
-  // JWS uses base64url (RFC 4648 §5): - and _ in place of + and /,
-  // and trailing padding stripped. atob() is base64-standard so we
-  // restore the substitutions + pad before decoding.
   const padded = parts[1].replace(/-/g, "+").replace(/_/g, "/").padEnd(
     parts[1].length + ((4 - (parts[1].length % 4)) % 4),
     "=",
   );
   return JSON.parse(atob(padded));
+}
+
+// ============================================================
+// Utilities
+// ============================================================
+
+function base64urlEncode(bytes: Uint8Array): string {
+  let str = "";
+  for (let i = 0; i < bytes.length; i++) str += String.fromCharCode(bytes[i]);
+  return btoa(str).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
 function jsonError(status: number, code: string, message: string): Response {

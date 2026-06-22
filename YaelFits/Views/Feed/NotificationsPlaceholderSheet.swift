@@ -411,7 +411,7 @@ private struct NotificationItem: Identifiable {
         case .follow:  return "\(actorName) started following you"
         case .vibe:    return "\(actorName) vibed your outfit"
         case .freeGenEarned:
-            return "You earned a free 3D generation"
+            return "You earned a free 3D fit"
         }
     }
 

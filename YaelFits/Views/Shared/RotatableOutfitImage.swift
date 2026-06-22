@@ -189,6 +189,18 @@ struct RotatableOutfitImage: View {
             guard shouldPreload else { return }
             synchronizeSequenceState(preloadIfNeeded: true)
         }
+        .onChange(of: autoRotate) { _, rotate in
+            // Auto-rotation can be promoted/demoted at runtime —
+            // e.g. a carousel where only the centered outfit spins.
+            // Appear-time wiring alone would leave a newly-centered
+            // outfit static (the param changes but no one re-kicks
+            // the sequence), so react to the flag directly.
+            if rotate {
+                synchronizeSequenceState(preloadIfNeeded: true)
+            } else {
+                viewModel.stopAutoRotate()
+            }
+        }
         .onChange(of: syncFrameIndex) { _, _ in
             syncDisplayedFrameIfNeeded()
         }

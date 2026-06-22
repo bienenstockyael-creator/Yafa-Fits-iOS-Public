@@ -27,6 +27,20 @@ import StoreKit
 /// the server still has to do the verification + grant). Marked
 /// TODO so it's easy to find.
 struct CreditPaywallHost: View {
+    /// Feature flag for paid credits. **False during beta**: the
+    /// paywall still surfaces (to show the tier design + capture
+    /// demand signal) but Buy taps fire an analytics event and
+    /// surface a "Coming soon" alert instead of opening StoreKit.
+    /// Flip to true once the App Store v2 submission (with IAPs)
+    /// is approved and the real purchase flow is desired.
+    ///
+    /// Demand signal lives in `analytics_events`:
+    ///   * `paywall_viewed`     — paywall surfaced for a user
+    ///   * `paywall_tapped_buy` — user tapped Buy on a bundle
+    ///                            (properties: bundle_id, credits)
+    ///   * `paywall_dismissed`  — closed without tapping Buy
+    static let paidCreditsEnabled = false
+
     /// Current 3D credit balance to display in the chip. Owner
     /// supplies it because this view doesn't own the user's
     /// session / profile.
@@ -41,15 +55,12 @@ struct CreditPaywallHost: View {
     @State private var isPurchasing = false
     @State private var loadedPrices: [CreditBundle: String] = [:]
     @State private var errorMessage: String?
+    @State private var showComingSoonAlert = false
 
-    /// True when this build is running against Apple's sandbox
-    /// environment — either from Xcode (dev), via TestFlight, or
-    /// a sandbox tester sign-in on a production build. The
-    /// receipt URL's last path component is the canonical signal
-    /// (production = "receipt", sandbox = "sandboxReceipt").
-    /// Used to surface a small "no real charge" banner on the
-    /// paywall so testers aren't confused by a paid flow that
-    /// won't actually charge them.
+    /// True when the build is running against StoreKit's sandbox
+    /// environment (TestFlight, local development). The paywall
+    /// uses this to surface a "TESTFLIGHT — no real charge"
+    /// banner so testers don't think a real purchase went through.
     static var isSandboxBuild: Bool {
         Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
     }
@@ -60,10 +71,40 @@ struct CreditPaywallHost: View {
             priceLookup: { loadedPrices[$0] },
             isPurchasing: isPurchasing,
             isSandboxBuild: Self.isSandboxBuild,
-            onBuy: { bundle in Task { await handleBuy(bundle) } },
-            onDismiss: onDismiss
+            onBuy: { bundle in
+                if Self.paidCreditsEnabled {
+                    Task { await handleBuy(bundle) }
+                } else {
+                    handleComingSoonTap(bundle)
+                }
+            },
+            onDismiss: {
+                Analytics.log("paywall_dismissed", properties: [
+                    "balance": .int(currentBalance)
+                ])
+                onDismiss()
+            }
         )
-        .task { await loadPrices() }
+        .task {
+            Analytics.log("paywall_viewed", properties: [
+                "balance": .int(currentBalance)
+            ])
+            // Skip StoreKit product fetch when paid credits are off
+            // — fallback USD prices already render correctly, and
+            // there's no need to hit Apple's servers for a flow we
+            // won't run.
+            if Self.paidCreditsEnabled {
+                await loadPrices()
+            }
+        }
+        .alert(
+            "Coming soon",
+            isPresented: $showComingSoonAlert,
+            actions: { Button("Got it") {} },
+            message: {
+                Text("Paid 3D fits are coming soon. We'll let you know the moment they launch.")
+            }
+        )
         .alert(
             "Purchase issue",
             isPresented: Binding(
@@ -73,6 +114,20 @@ struct CreditPaywallHost: View {
             actions: { Button("OK") { errorMessage = nil } },
             message: { Text(errorMessage ?? "") }
         )
+    }
+
+    // MARK: - Coming-soon path
+
+    /// Fires when paid credits are disabled (beta mode). Logs the
+    /// demand signal — which bundle and at what implied price —
+    /// then surfaces a non-blocking "Coming soon" alert.
+    private func handleComingSoonTap(_ bundle: CreditBundle) {
+        Analytics.log("paywall_tapped_buy", properties: [
+            "bundle_id": .string(bundle.rawValue),
+            "credits": .int(bundle.credits),
+            "fallback_price_usd": .string(bundle.fallbackPriceUSD)
+        ])
+        showComingSoonAlert = true
     }
 
     // MARK: - StoreKit wiring

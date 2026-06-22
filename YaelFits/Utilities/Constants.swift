@@ -22,6 +22,16 @@ enum AppConfig {
     static let siteBaseURL = URL(string: "https://yael-fits.vercel.app")!
     /// The account that owns the bundled archive outfits.
     static let archiveOwnerUserId = "31c9f3fd-e672-43f2-954a-0b141640e76f"
+
+    /// Legal links surfaced at sign-up + in settings (App Store
+    /// Guideline 1.2 / 5.1.1). Both pages are hosted on the marketing
+    /// site (public/terms, public/privacy in the Yael-Fits repo).
+    /// NOTE: these resolve only once the web repo is deployed to
+    /// production — verify https://yafafits.com/privacy and /terms load
+    /// before submitting. Also set the Privacy Policy URL in App Store
+    /// Connect.
+    static let termsOfServiceURL = "https://yafafits.com/terms"
+    static let privacyPolicyURL = "https://yafafits.com/privacy"
     static let remoteBaseURL = siteBaseURL.appendingPathComponent("outfits", isDirectory: true)
     static let outfitsDataURL = siteBaseURL.appendingPathComponent("data/outfits.json")
     static let publicFeedDataURL = siteBaseURL.appendingPathComponent("data/public-feed.json")

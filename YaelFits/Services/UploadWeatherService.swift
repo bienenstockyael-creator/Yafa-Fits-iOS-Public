@@ -51,7 +51,9 @@ final class UploadWeatherService: @unchecked Sendable {
     func fetchCurrentWeather() async -> Weather? {
 #if canImport(WeatherKit)
         guard let location = await currentLocation() else {
+            #if DEBUG
             print("[Weather] skipped — no location")
+            #endif
             return nil
         }
         do {
@@ -67,7 +69,9 @@ final class UploadWeatherService: @unchecked Sendable {
             // Surface the actual WeatherKit failure so entitlement /
             // propagation issues are visible in the Xcode console
             // (was a silent nil before, which made diagnosis impossible).
+            #if DEBUG
             print("[Weather] fetch failed: \(error)")
+            #endif
             return nil
         }
 #else

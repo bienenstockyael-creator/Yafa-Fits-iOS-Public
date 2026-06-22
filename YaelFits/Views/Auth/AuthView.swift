@@ -63,6 +63,7 @@ struct AuthView: View {
                                 .padding(.horizontal, LayoutMetrics.medium)
                         }
                         forgotPasswordLink
+                        agreementFooter
                     }
 
                     Color.clear.frame(height: LayoutMetrics.xLarge)
@@ -215,6 +216,31 @@ struct AuthView: View {
     }
 
     // MARK: - Apple Sign In
+
+    /// Terms/Privacy agreement shown under the auth controls. Required
+    /// for a UGC app (App Store Guideline 1.2) — by continuing, the user
+    /// agrees to the Terms (Apple's standard EULA) and Privacy Policy.
+    private var agreementFooter: some View {
+        VStack(spacing: 3) {
+            Text("By continuing, you agree to our")
+                .foregroundStyle(AppPalette.textFaint)
+            HStack(spacing: 4) {
+                if let terms = URL(string: AppConfig.termsOfServiceURL) {
+                    Link("Terms of Service", destination: terms)
+                        .foregroundStyle(AppPalette.textMuted)
+                }
+                Text("and").foregroundStyle(AppPalette.textFaint)
+                if let privacy = URL(string: AppConfig.privacyPolicyURL) {
+                    Link("Privacy Policy", destination: privacy)
+                        .foregroundStyle(AppPalette.textMuted)
+                }
+            }
+        }
+        .font(.system(size: 11))
+        .multilineTextAlignment(.center)
+        .padding(.top, LayoutMetrics.large)
+        .padding(.horizontal, LayoutMetrics.medium)
+    }
 
     private var appleSignInButton: some View {
         SignInWithAppleButton(isSignUp ? .signUp : .signIn) { request in

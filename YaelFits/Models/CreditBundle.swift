@@ -1,11 +1,11 @@
 import Foundation
 
 /// Defines the four IAP bundles users can purchase to top up their
-/// 3D generation credits. The single source of truth for pricing,
+/// 3D fit credits. The single source of truth for pricing,
 /// credit counts, and product IDs across the app.
 ///
 /// Pricing rationale (from project_yafa_paid_credits memory):
-///   * 3D gen costs $0.72 (Kling 2.5 Turbo Pro 10s + small prep).
+///   * a 3D fit costs $0.72 (Kling 2.5 Turbo Pro 10s + small prep).
 ///   * Apple takes 30%, so break-even per credit is ~$1.03.
 ///   * Single tier exists at $1.99 to anchor "save X%" narratives
 ///     and capture true impulse buys.
@@ -46,11 +46,14 @@ enum CreditBundle: String, CaseIterable, Identifiable, Sendable {
     /// from StoreKit (which respects App Store Connect's localized
     /// pricing matrix). This is fallback text shown while the
     /// StoreKit `Product` is still loading + a sanity reference.
+    ///
+    /// Note: App Store price tiers are a fixed list — $13.99 isn't
+    /// a tier, so Standard lands at $12.99 (next neighbor down).
     var fallbackPriceUSD: String {
         switch self {
         case .single:    return "$1.99"
         case .starter:   return "$4.99"
-        case .standard:  return "$13.99"
+        case .standard:  return "$12.99"
         case .bestValue: return "$34.99"
         }
     }
@@ -71,10 +74,10 @@ enum CreditBundle: String, CaseIterable, Identifiable, Sendable {
     /// concrete, neutral sentence describing what the user gets.
     var subtitle: String {
         switch self {
-        case .single:    return "1 generation"
-        case .starter:   return "3 generations"
-        case .standard:  return "10 generations"
-        case .bestValue: return "30 generations"
+        case .single:    return "1 fit"
+        case .starter:   return "3 fits"
+        case .standard:  return "10 fits"
+        case .bestValue: return "30 fits"
         }
     }
 
@@ -85,7 +88,7 @@ enum CreditBundle: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .single:    return nil
         case .starter:   return "save 16%"
-        case .standard:  return "save 30%"
+        case .standard:  return "save 35%"
         case .bestValue: return "save 41%"
         }
     }
@@ -97,7 +100,7 @@ enum CreditBundle: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .single:    return "$1.99/credit"
         case .starter:   return "$1.66/credit"
-        case .standard:  return "$1.40/credit"
+        case .standard:  return "$1.30/credit"
         case .bestValue: return "$1.17/credit"
         }
     }
