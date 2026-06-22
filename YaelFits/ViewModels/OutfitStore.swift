@@ -596,6 +596,16 @@ class OutfitStore {
         if let blocked { self.blockedUserIds = blocked }
     }
 
+    /// Persists the in-memory `currentProfile` to the on-disk cache.
+    /// Called at the end of onboarding so the immediate follow-up
+    /// `loadSocialData` reads the freshly-built profile rather than
+    /// the stale pre-onboarding snapshot (which would otherwise
+    /// clobber the new name / username / avatar back to empty).
+    func cacheCurrentProfile() {
+        guard let userId, let profile = currentProfile else { return }
+        LocalCache.saveProfile(profile, userId: userId)
+    }
+
     // MARK: - Blocking
 
     /// Optimistically block a user: hide them locally + persist, then

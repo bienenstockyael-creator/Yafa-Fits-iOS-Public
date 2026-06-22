@@ -142,7 +142,7 @@ struct ProfileHeader: View {
         }
         .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhoto, matching: .images)
         .fullScreenCover(item: $pendingCropImage) { wrapper in
-            AvatarCropView(image: wrapper.image) { croppedImage in
+            AvatarCropView(image: wrapper.image) { croppedImage, _ in
                 pendingCropImage = nil
                 selectedPhoto = nil
                 avatarImage = croppedImage

@@ -182,10 +182,7 @@ struct ProfileHeaderStylePreview: View {
                             // "magic happening here." Brightness
                             // lift + soft white outer shadow
                             // makes each star read as a glowing
-                            // neon mark against the dark scrim
-                            // (the field itself uses a tinted
-                            // aqua-grey internally, which
-                            // alone reads dim on a dark bg).
+                            // neon mark against the dark scrim.
                             GenerationStarField(
                                 starSize: 220,
                                 interactive: false
@@ -206,17 +203,9 @@ struct ProfileHeaderStylePreview: View {
                 rotation: ProfileHeaderMetrics.highlighterRotation
             )
             // Push the highlighter ~38% of the frame down so it
-            // lands across the chest/torso area. Combined with
-            // the extra frame height below, the result reads as
-            // "headline pasted across the lower body" — the
-            // magazine reference.
+            // lands across the chest/torso area.
             .offset(y: avatarDiameter * ProfileHeaderMetrics.bustHighlighterOffsetRatio)
         }
-        // Wider-than-tall frame so the cutout has horizontal
-        // breathing room for hair / shoulders (matches the
-        // live header's bust frame ratio). Extra vertical
-        // room below catches the highlighter overhang and
-        // leaves space for the bio underneath.
         .frame(
             width: ProfileHeaderMetrics.previewBustWidth,
             height: avatarDiameter + ProfileHeaderMetrics.previewBustExtraHeight

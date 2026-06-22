@@ -2,7 +2,13 @@ import SwiftUI
 
 struct AvatarCropView: View {
     let image: UIImage
-    let onConfirm: (UIImage) -> Void
+    /// Returns two renders of the SAME framing (scale + offset):
+    ///   - `circleCrop`: oval-clipped, for the round avatar.
+    ///   - `squareCrop`: un-clipped square, used as the source for
+    ///     bust background-removal so the cutout keeps the user's
+    ///     centering and zoom (the circle's corners — exactly the
+    ///     shoulders/hair a bust needs — survive here).
+    let onConfirm: (_ circleCrop: UIImage, _ squareCrop: UIImage) -> Void
     let onCancel: () -> Void
 
     @State private var scale: CGFloat = 1.0
@@ -96,27 +102,43 @@ struct AvatarCropView: View {
     private func cropAndConfirm() {
         let outputSize: CGFloat = 400
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: outputSize, height: outputSize))
-        let cropped = renderer.image { _ in
-            let imageAspect = image.size.width / image.size.height
-            let drawW: CGFloat
-            let drawH: CGFloat
-            if imageAspect > 1 {
-                drawH = outputSize * scale
-                drawW = drawH * imageAspect
-            } else {
-                drawW = outputSize * scale
-                drawH = drawW / imageAspect
-            }
 
-            let normalizedOffsetX = offset.width / cropSize * outputSize
-            let normalizedOffsetY = offset.height / cropSize * outputSize
-
-            let drawX = (outputSize - drawW) / 2 + normalizedOffsetX
-            let drawY = (outputSize - drawH) / 2 + normalizedOffsetY
-
-            UIBezierPath(ovalIn: CGRect(x: 0, y: 0, width: outputSize, height: outputSize)).addClip()
-            image.draw(in: CGRect(x: drawX, y: drawY, width: drawW, height: drawH))
+        // Shared framing math — identical scale + offset for both
+        // renders so the square crop and the circle avatar stay in
+        // perfect register (same pixels, the circle just clips the
+        // corners away).
+        let imageAspect = image.size.width / image.size.height
+        let drawW: CGFloat
+        let drawH: CGFloat
+        if imageAspect > 1 {
+            drawH = outputSize * scale
+            drawW = drawH * imageAspect
+        } else {
+            drawW = outputSize * scale
+            drawH = drawW / imageAspect
         }
-        onConfirm(cropped)
+        let normalizedOffsetX = offset.width / cropSize * outputSize
+        let normalizedOffsetY = offset.height / cropSize * outputSize
+        let drawRect = CGRect(
+            x: (outputSize - drawW) / 2 + normalizedOffsetX,
+            y: (outputSize - drawH) / 2 + normalizedOffsetY,
+            width: drawW,
+            height: drawH
+        )
+
+        // Square crop — same framing, NO oval clip. Bust
+        // background-removal runs on this so the cutout preserves
+        // the user's centering + zoom out to the corners.
+        let squareCrop = renderer.image { _ in
+            image.draw(in: drawRect)
+        }
+
+        // Circle crop — oval-clipped, for the round avatar.
+        let circleCrop = renderer.image { _ in
+            UIBezierPath(ovalIn: CGRect(x: 0, y: 0, width: outputSize, height: outputSize)).addClip()
+            image.draw(in: drawRect)
+        }
+
+        onConfirm(circleCrop, squareCrop)
     }
 }

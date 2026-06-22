@@ -204,7 +204,7 @@ struct ProfileHeaderCustomizeSheet: View {
             }
         }
         .fullScreenCover(item: $pendingCropImage) { wrapper in
-            AvatarCropView(image: wrapper.image) { cropped in
+            AvatarCropView(image: wrapper.image) { cropped, square in
                 pendingCropImage = nil
                 selectedPhoto = nil
                 // A NEW photo invalidates any cutout we'd
@@ -218,12 +218,12 @@ struct ProfileHeaderCustomizeSheet: View {
                 // If the user is already on bust, kick off
                 // FAL bg-removal immediately so the new photo
                 // gets cut out without requiring a swipe-away-
-                // and-back. Passing `wrapper.image` directly
-                // because the parent's state update for
-                // `originalImage` hasn't propagated to this
-                // view yet at this exact moment.
+                // and-back. We feed the SQUARE crop (the user's
+                // framing, un-clipped) rather than the full
+                // original, so the bust keeps the centering +
+                // zoom the user just chose in the crop sheet.
                 if selectedStyle == .bust {
-                    Task { await ensureCutoutAvailable(freshSource: wrapper.image) }
+                    Task { await ensureCutoutAvailable(freshSource: square) }
                 }
             } onCancel: {
                 pendingCropImage = nil
