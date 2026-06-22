@@ -30,6 +30,12 @@ struct OnboardingFlow: View {
 
     @State private var currentStep: Step = .name
 
+    /// Direction of the most recent step change, so the page
+    /// transition can slide the right way (forward vs back).
+    @State private var navDirection: NavDirection = .forward
+
+    enum NavDirection { case forward, back }
+
     // Per-step field state, declared at flow scope so values
     // survive back/forward navigation between steps.
     @State private var displayName: String = ""
@@ -40,7 +46,10 @@ struct OnboardingFlow: View {
     // AvatarService at crop-confirm time; style is committed on
     // step-3 Continue.
     @State private var pendingAvatarImage: UIImage?
-    @State private var pendingOriginalImage: UIImage?
+    /// Square crop (same framing as the circle avatar, but
+    /// un-clipped) from AvatarCropView. Source for the bust cutout
+    /// so the silhouette keeps the user's centering + zoom.
+    @State private var pendingSquareImage: UIImage?
     @State private var pendingHeaderStyle: ProfileHeaderStyle = .minimal
     @State private var pendingAccentHex: String = ProfileHeaderAccentColor.defaultHex
     /// Background-removed cutout PNG for the bust preview.
@@ -65,11 +74,13 @@ struct OnboardingFlow: View {
     // Continue mid-network and end up with two parallel writes.
     @State private var isAdvancing = false
 
-    /// Drives the text field's keyboard + cursor blink. Set
-    /// true when a text-input step appears so the cursor shows
-    /// from the start (rather than the user needing to tap the
-    /// prompt to bring up the keyboard).
-    @FocusState private var isInputFocused: Bool
+    /// Which step's text field owns the keyboard. Identified by
+    /// `Step` (not a plain `Bool`) so that during the cross-slide
+    /// transition — when the outgoing and incoming fields briefly
+    /// coexist — first responder moves cleanly from one to the
+    /// other instead of the keyboard dismissing and re-presenting
+    /// (which chopped the animation). `nil` on the photo step.
+    @FocusState private var focusedField: Step?
 
     enum Step: Int, CaseIterable {
         case name, username, photo, phone
@@ -95,28 +106,16 @@ struct OnboardingFlow: View {
 
                 Spacer(minLength: 0)
 
-                // Photo step gets its own layout (mirrors the
-                // existing ProfileHeaderCustomizeSheet body —
-                // style title + carousel + page dots + color
-                // picker). The text-input steps stay with the
-                // viewport-centered prompt pattern.
-                if currentStep == .photo {
-                    stepContent
-                } else {
-                    // Layered so the PROMPT centers exactly on
-                    // the viewport (not the welcome+prompt
-                    // combined center). Welcome floats 50pt
-                    // above center.
-                    ZStack {
-                        stepContent
-                            .padding(.horizontal, LayoutMetrics.screenPadding)
-
-                        Text("WELCOME TO YAFA")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
-                            .tracking(2)
-                            .foregroundStyle(AppPalette.textFaint)
-                            .offset(y: -50)
-                    }
+                // Each step's content cross-slides on navigation:
+                // going forward (Continue) the incoming page enters
+                // from the right while the outgoing fades out to the
+                // left; going back (chevron) mirrors it. Wrapped in a
+                // ZStack so the two pages overlap during the slide
+                // rather than shoving each other within the VStack.
+                ZStack {
+                    stepBody
+                        .id(currentStep)
+                        .transition(stepTransition)
                 }
 
                 Spacer(minLength: 0)
@@ -128,16 +127,20 @@ struct OnboardingFlow: View {
         }
         .onAppear {
             prefillFromExistingProfile()
-            // Focus the input so the keyboard + cursor show
-            // immediately. Step 3 (photo) doesn't need focus,
-            // but the FocusState binding has no effect there.
-            isInputFocused = currentStep != .photo
+            // Resume into an unfinished onboarding on the first step
+            // the user hasn't completed yet, rather than restarting
+            // from the top.
+            resumeAtFirstIncompleteStep()
+            // Focus the current step's input so the keyboard +
+            // cursor show immediately. Photo has no input → nil.
+            focusedField = currentStep == .photo ? nil : currentStep
         }
         .onChange(of: currentStep) { _, newValue in
-            // Re-focus on every text step transition. The
-            // .photo step deliberately blurs to dismiss the
-            // keyboard, since there's no text input there.
-            isInputFocused = newValue != .photo
+            // Move first responder to the incoming step's field.
+            // Because focus is keyed per-step, this hands the
+            // keyboard from the outgoing field to the incoming one
+            // without dismissing it. Photo blurs to nil (no input).
+            focusedField = newValue == .photo ? nil : newValue
         }
         .onChange(of: pendingHeaderStyle) { _, newValue in
             // User landed on bust in the carousel — kick off
@@ -172,11 +175,11 @@ struct OnboardingFlow: View {
             }
         }
         .fullScreenCover(item: $pendingCropImage) { wrapper in
-            AvatarCropView(image: wrapper.image) { cropped in
+            AvatarCropView(image: wrapper.image) { cropped, square in
                 pendingCropImage = nil
                 selectedPhoto = nil
                 pendingAvatarImage = cropped
-                pendingOriginalImage = wrapper.image
+                pendingSquareImage = square
                 // New photo invalidates the prior cutout — the
                 // background-removed silhouette was derived from
                 // the OLD pixels and would composite incorrectly
@@ -200,12 +203,13 @@ struct OnboardingFlow: View {
         }
     }
 
-    // MARK: - Header (back / title / skip)
+    // MARK: - Header (back)
 
-    /// Minimal top bar — just back (left) and skip (right).
-    /// The "WELCOME TO YAFA" label moved into the centered
-    /// content stack so the title lives next to the question
-    /// it's introducing rather than floating at the top.
+    /// Minimal top bar — just a back button (left). The optional
+    /// steps' skip affordance now lives in the primary button
+    /// itself (it reads SKIP until the user provides the optional
+    /// value), so there's no separate corner control to compete
+    /// with it.
     private var header: some View {
         HStack {
             if currentStep != .name {
@@ -222,23 +226,71 @@ struct OnboardingFlow: View {
 
             Spacer()
 
-            if currentStep.isSkippable {
-                Button { Task { await advance(skipping: true) } } label: {
-                    Text("SKIP")
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .tracking(1.5)
-                        .foregroundStyle(AppPalette.textMuted)
-                        .frame(width: 50, height: 36)
-                }
-                .buttonStyle(.plain)
-                .disabled(isAdvancing)
-            } else {
-                Color.clear.frame(width: 50, height: 36)
-            }
+            // Mirror the back button's footprint so the bar stays
+            // balanced now that the corner skip is gone.
+            Color.clear.frame(width: 36, height: 36)
         }
     }
 
     // MARK: - Step content
+
+    /// The full per-step page (the unit that cross-slides between
+    /// steps). Photo gets its own layout; the text steps layer the
+    /// prompt under the floating "WELCOME TO YAFA" label.
+    @ViewBuilder
+    private var stepBody: some View {
+        if currentStep == .photo {
+            stepContent
+        } else {
+            // Layered so the PROMPT centers exactly on the viewport
+            // (not the welcome+prompt combined center). Welcome
+            // floats 50pt above center.
+            ZStack {
+                stepContent
+                    .padding(.horizontal, LayoutMetrics.screenPadding)
+
+                Text("WELCOME TO YAFA")
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .tracking(2)
+                    .foregroundStyle(AppPalette.textFaint)
+                    .offset(y: -50)
+            }
+        }
+    }
+
+    /// Page-transition animation. A spring (not a fixed-duration
+    /// ease) so the page carries real momentum — quick to launch,
+    /// fast through the middle, then a smooth glide to a soft stop.
+    /// `dampingFraction` is just under 1: enough to give the
+    /// velocity curve a touch of life / the faintest settle,
+    /// without a visible wobble on the sliding text. `response`
+    /// sets the pace — lower is snappier.
+    private var stepAnimation: Animation {
+        .spring(response: 0.42, dampingFraction: 0.78)
+    }
+
+    /// Asymmetric slide+fade keyed to `navDirection`. Forward: new
+    /// page in from the right, old out to the left. Back: mirrored.
+    /// Small offset (not a full-width `.move`) keeps it subtle.
+    private var stepTransition: AnyTransition {
+        let dx: CGFloat = 36
+        switch navDirection {
+        case .forward:
+            return .asymmetric(insertion: slideFade(dx), removal: slideFade(-dx))
+        case .back:
+            return .asymmetric(insertion: slideFade(-dx), removal: slideFade(dx))
+        }
+    }
+
+    /// A subtle horizontal-offset + fade transition. `dx` is the
+    /// starting (insertion) / ending (removal) x-offset; it eases
+    /// to/from 0 at the identity state.
+    private func slideFade(_ dx: CGFloat) -> AnyTransition {
+        .modifier(
+            active: SlideFadeModifier(dx: dx, opacity: 0),
+            identity: SlideFadeModifier(dx: 0, opacity: 1)
+        )
+    }
 
     @ViewBuilder
     private var stepContent: some View {
@@ -252,6 +304,7 @@ struct OnboardingFlow: View {
 
     private var nameStep: some View {
         inlinePrompt(
+            step: .name,
             question: "What's your full name?",
             text: $displayName,
             contentType: .name,
@@ -262,6 +315,7 @@ struct OnboardingFlow: View {
     private var usernameStep: some View {
         VStack(spacing: LayoutMetrics.small) {
             inlinePrompt(
+                step: .username,
                 question: "Pick a @handle",
                 text: $username,
                 contentType: .username,
@@ -297,6 +351,7 @@ struct OnboardingFlow: View {
     /// username / phone-number autofill.
     @ViewBuilder
     private func inlinePrompt(
+        step: Step,
         question: String,
         text: Binding<String>,
         contentType: UITextContentType? = nil,
@@ -316,7 +371,7 @@ struct OnboardingFlow: View {
         .textContentType(contentType)
         .textInputAutocapitalization(autocaps)
         .keyboardType(keyboard)
-        .focused($isInputFocused)
+        .focused($focusedField, equals: step)
         .padding(.horizontal, LayoutMetrics.large)
     }
 
@@ -516,6 +571,7 @@ struct OnboardingFlow: View {
 
     private var phoneStep: some View {
         inlinePrompt(
+            step: .phone,
             question: "Your phone number",
             text: $phone,
             contentType: .telephoneNumber,
@@ -526,12 +582,17 @@ struct OnboardingFlow: View {
     // MARK: - Primary action
 
     private var primaryButton: some View {
-        Button { Task { await advance(skipping: false) } } label: {
+        Button {
+            // On an optional step the user hasn't filled in, the
+            // button acts as Skip; otherwise it commits the step.
+            let skipping = currentStep.isSkippable && !optionalStepHasInput
+            Task { await advance(skipping: skipping) }
+        } label: {
             Group {
                 if isAdvancing {
                     ProgressView().tint(AppPalette.textMuted)
                 } else {
-                    Text(currentStep == .phone ? "FINISH" : "CONTINUE")
+                    Text(primaryButtonTitle)
                         .font(.system(size: 12, weight: .semibold))
                         .tracking(1.5)
                         .foregroundStyle(canAdvance ? AppPalette.textPrimary : AppPalette.textFaint)
@@ -540,20 +601,43 @@ struct OnboardingFlow: View {
             .frame(maxWidth: .infinity)
             .frame(height: 44)
             .appCapsule(
+                // Styling tracks enabled-ness, not skip-vs-commit:
+                // an active SKIP and an active CONTINUE look
+                // identical (both get the shadow); only a disabled
+                // required step stays flat.
                 shadowRadius: canAdvance ? 6 : 0,
                 shadowY: canAdvance ? 3 : 0
             )
         }
         .buttonStyle(.plain)
         .disabled(!canAdvance || isAdvancing)
-        .accessibilityLabel(currentStep == .phone ? "Finish" : "Continue")
+        .accessibilityLabel(primaryButtonTitle.capitalized)
     }
 
-    /// Whether the user can tap Continue/Finish. Required steps
-    /// gate on field validity; optional steps gate on either
-    /// having a value OR using the (separate) Skip button. We
-    /// keep the primary button active on optional steps too so
-    /// the user can advance with content via the same big CTA.
+    /// True when the current OPTIONAL step holds the value it would
+    /// save (a picked photo / a typed phone number). Drives the
+    /// primary button's SKIP ↔ CONTINUE morph. Always false on the
+    /// required steps, which don't morph.
+    private var optionalStepHasInput: Bool {
+        switch currentStep {
+        case .photo: return pendingAvatarImage != nil
+        case .phone: return !phone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .name, .username: return false
+        }
+    }
+
+    /// Primary button label. Optional steps read SKIP until the
+    /// user provides the value, then flip to CONTINUE / FINISH.
+    /// Required steps always read CONTINUE / FINISH.
+    private var primaryButtonTitle: String {
+        if currentStep.isSkippable && !optionalStepHasInput { return "SKIP" }
+        return currentStep == .phone ? "FINISH" : "CONTINUE"
+    }
+
+    /// Whether the primary button is enabled. Required steps gate
+    /// on field validity (disabled until valid). Optional steps
+    /// stay always-enabled — the button morphs between SKIP (no
+    /// input) and CONTINUE/FINISH (with input), and both advance.
     private var canAdvance: Bool {
         switch currentStep {
         case .name:
@@ -585,7 +669,8 @@ struct OnboardingFlow: View {
 
         if let next = Step(rawValue: currentStep.rawValue + 1) {
             await MainActor.run {
-                withAnimation(.easeInOut(duration: 0.18)) {
+                navDirection = .forward
+                withAnimation(stepAnimation) {
                     currentStep = next
                 }
             }
@@ -596,7 +681,8 @@ struct OnboardingFlow: View {
 
     private func goBack() {
         guard let previous = Step(rawValue: currentStep.rawValue - 1) else { return }
-        withAnimation(.easeInOut(duration: 0.18)) {
+        navDirection = .back
+        withAnimation(stepAnimation) {
             currentStep = previous
         }
     }
@@ -606,15 +692,17 @@ struct OnboardingFlow: View {
     /// fields the user already filled. The final `setOnboardingComplete`
     /// fires once from `finish()`.
     private func persistCurrentStep() async throws {
-        guard let userId = auth.userId,
-              var profile = store.currentProfile
-        else { return }
+        // Only the user id is required — NOT a loaded profile. For a
+        // brand-new signup the profile row may not have been fetched
+        // into `store.currentProfile` yet, and gating the writes on
+        // it would silently drop the name/handle the user just typed.
+        // The writes below are targeted column updates keyed by id.
+        guard let userId = auth.userId else { return }
         switch currentStep {
         case .name:
             let trimmed = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { return }
-            profile.displayName = trimmed
-            try await SocialService.updateProfile(profile)
+            try await SocialService.updateDisplayName(userId: userId, displayName: trimmed)
             await MainActor.run {
                 store.currentProfile?.displayName = trimmed
             }
@@ -622,8 +710,7 @@ struct OnboardingFlow: View {
         case .username:
             let cleaned = sanitizeUsername(username)
             guard cleaned.count >= 3 else { return }
-            profile.username = cleaned
-            try await SocialService.updateProfile(profile)
+            try await SocialService.updateUsername(userId: userId, username: cleaned)
             await MainActor.run {
                 store.currentProfile?.username = cleaned
             }
@@ -688,8 +775,31 @@ struct OnboardingFlow: View {
     /// `isOnboarded == false`.
     private func finish() async {
         guard let userId = auth.userId else { return }
+
+        // Re-assert the required fields straight from the typed
+        // values — NOT store.currentProfile, which may never have
+        // loaded for a brand-new signup (its fetch can land after
+        // the user has already advanced past these steps). These
+        // targeted, idempotent writes guarantee the name + handle
+        // carry over even if a per-step write blipped (errors are
+        // swallowed to keep the user moving) or the profile object
+        // was still nil. Avatar/header were written in the photo
+        // step (keyed by id, so unaffected) and aren't re-sent here.
+        let trimmedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedName.isEmpty {
+            try? await SocialService.updateDisplayName(userId: userId, displayName: trimmedName)
+        }
+        let cleanedUsername = sanitizeUsername(username)
+        if cleanedUsername.count >= 3 {
+            try? await SocialService.updateUsername(userId: userId, username: cleanedUsername)
+        }
+
         await MainActor.run {
             store.currentProfile?.isOnboarded = true
+            // Freshen the cache so the post-onboarding social reload
+            // (in onFinish) doesn't overwrite the new profile with
+            // the stale pre-onboarding snapshot.
+            store.cacheCurrentProfile()
         }
         try? await SocialService.setOnboardingComplete(userId: userId)
         await MainActor.run { onFinish() }
@@ -704,15 +814,16 @@ struct OnboardingFlow: View {
         String(Profile.sanitizeUsername(raw).prefix(30))
     }
 
-    /// Runs FAL background removal on the user's pre-crop
-    /// original (or cropped fallback) so the bust preview shows
-    /// the real cutout instead of the circle-clipped avatar.
+    /// Runs FAL background removal on the user's SQUARE crop — the
+    /// framing they chose in the crop sheet, un-clipped — so the
+    /// bust preview shows the real cutout centered + zoomed the way
+    /// the user set it, instead of the circle-clipped avatar.
     /// Idempotent — bails early if already processed or in
     /// flight or there's no source image yet.
     private func ensureCutoutAvailable() async {
         guard pendingCutoutImage == nil,
               !isProcessingCutout,
-              let source = pendingOriginalImage ?? pendingAvatarImage,
+              let source = pendingSquareImage,
               let jpegData = source.jpegData(compressionQuality: 0.92)
         else { return }
 
@@ -739,12 +850,51 @@ struct OnboardingFlow: View {
     /// too even though the trigger usually generates one; user
     /// is free to overwrite.
     private func prefillFromExistingProfile() {
-        if displayName.isEmpty, let existing = store.currentProfile?.displayName, !existing.isEmpty {
+        if displayName.isEmpty,
+           let existing = store.currentProfile?.displayName,
+           !existing.isEmpty,
+           !isSeededFromEmail(existing) {
             displayName = existing
         }
         if username.isEmpty, let existing = store.currentProfile?.username, !existing.isEmpty {
             username = existing
             scheduleUsernameCheck()
+        }
+    }
+
+    /// Whether `name` is the auto-seed the signup trigger writes for
+    /// email signups — the email's local-part (e.g.
+    /// "bienenstock.yael+test"). We treat that as "no name set" so
+    /// onboarding shows the name step (and its prompt) instead of
+    /// pre-filling junk and skipping the step on resume. A real,
+    /// user-entered or Sign-in-with-Apple name won't match the
+    /// local-part. Belt-and-suspenders alongside the migration that
+    /// stops seeding this server-side in the first place.
+    private func isSeededFromEmail(_ name: String) -> Bool {
+        guard let email = auth.userEmail,
+              let localPart = email.split(separator: "@").first
+        else { return false }
+        return name.caseInsensitiveCompare(String(localPart)) == .orderedSame
+    }
+
+    /// When a user relaunches into an onboarding they quit partway
+    /// through, skip past the required steps they already finished
+    /// (their values were persisted per-step and re-hydrated by
+    /// `prefillFromExistingProfile`). Lands on the first required
+    /// step still missing its value, else the first optional step.
+    ///
+    /// Required steps only — photo and phone are skippable, so we
+    /// can't tell "deliberately skipped" from "never reached"; a
+    /// fully-named user therefore resumes at `.photo` and clicks
+    /// through the optional steps again (their prior photo upload,
+    /// if any, is untouched — Skip doesn't clear it).
+    private func resumeAtFirstIncompleteStep() {
+        if displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            currentStep = .name
+        } else if username.isEmpty {
+            currentStep = .username
+        } else {
+            currentStep = .photo
         }
     }
 
@@ -756,6 +906,17 @@ struct OnboardingFlow: View {
         usernameAvailable = nil
         let candidate = sanitizeUsername(username)
         guard candidate.count >= 3 else { return }
+        // The user's own already-saved handle is "available" to
+        // them. isUsernameAvailable doesn't exclude the caller's
+        // own row, so without this a resumed onboarding (or a Back
+        // to this step) would report their own username as taken
+        // and strand them on a Continue button that never enables.
+        if let mine = store.currentProfile?.username,
+           !mine.isEmpty,
+           candidate == sanitizeUsername(mine) {
+            usernameAvailable = true
+            return
+        }
         usernameCheckTask = Task {
             try? await Task.sleep(nanoseconds: 400_000_000)
             if Task.isCancelled { return }
@@ -772,4 +933,20 @@ struct OnboardingFlow: View {
         }
     }
 
+}
+
+/// Drives the onboarding page slide+fade. At the active (entering/
+/// leaving) end the page is offset horizontally by `dx` and fully
+/// transparent; at identity it's centered and opaque. Pairing the
+/// offset with opacity gives the subtle "slides in from the side as
+/// it fades up" feel.
+private struct SlideFadeModifier: ViewModifier {
+    let dx: CGFloat
+    let opacity: Double
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(opacity)
+            .offset(x: dx)
+    }
 }

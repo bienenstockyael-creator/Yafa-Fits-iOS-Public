@@ -148,7 +148,7 @@ struct ProfileView: View {
             }
         }
         .fullScreenCover(item: $pendingCropImage) { wrapper in
-            AvatarCropView(image: wrapper.image) { croppedImage in
+            AvatarCropView(image: wrapper.image) { croppedImage, _ in
                 pendingCropImage = nil
                 selectedPhoto = nil
                 avatarImage = croppedImage

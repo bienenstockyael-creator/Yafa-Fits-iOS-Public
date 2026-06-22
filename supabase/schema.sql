@@ -32,13 +32,18 @@ create policy "Users can insert own profile"
 
 -- Auto-create profile on signup
 create or replace function public.handle_new_user()
-returns trigger as $$
+returns trigger as $func$
 begin
+  -- Sign in with Apple passes a real name via
+  -- raw_user_meta_data->>'display_name'; email signups have none, so
+  -- display_name starts NULL and the onboarding name step shows its
+  -- "What's your full name?" prompt instead of a junk email-derived
+  -- value. Deliberately NO split_part(email) fallback.
   insert into public.profiles (id, display_name)
-  values (new.id, coalesce(new.raw_user_meta_data ->> 'display_name', split_part(new.email, '@', 1)));
+  values (new.id, nullif(new.raw_user_meta_data ->> 'display_name', ''));
   return new;
 end;
-$$ language plpgsql security definer;
+$func$ language plpgsql security definer;
 
 create trigger on_auth_user_created
   after insert on auth.users

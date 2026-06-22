@@ -11,6 +11,12 @@ struct YaelFitsApp: App {
     @State private var vibesEffectHost = VibesEffectHost()
     @State private var vibesIncomingManager = VibesIncomingManager()
     @State private var showOnboarding = false
+    // The user id we've finished resolving onboarding status for.
+    // The gating cover below stays up until this matches the current
+    // session, so RootView never flashes before we know whether to
+    // present onboarding (and it can't go stale across sign-out → a
+    // new sign-in re-gates because the ids no longer match).
+    @State private var resolvedForUserId: UUID?
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
@@ -31,39 +37,52 @@ struct YaelFitsApp: App {
                         RootView()
                             .environment(outfitStore)
                             .task(id: authManager.userId) {
-                                if let userId = authManager.userId {
-                                    outfitStore.beginSession(for: userId)
-                                    async let social: Void = outfitStore.loadSocialData(userId: userId)
-                                    async let data: Void = outfitStore.loadData()
-                                    _ = await (social, data)
-                                    await outfitStore.checkForServerCompletedJob(userId: userId)
-                                    await outfitStore.refreshUnreadNotificationCount()
-                                    // Two triggers for showing onboarding:
-                                    //   1. `is_onboarded == false` — the
-                                    //      canonical signal post-2026-06-08
-                                    //      migration. New users default to
-                                    //      false, finishing the flow flips
-                                    //      to true.
-                                    //   2. Missing username — defensive
-                                    //      fallback for any user whose row
-                                    //      somehow got created without the
-                                    //      handle (legacy bug, manual DB
-                                    //      edit, etc).
-                                    let profile = outfitStore.currentProfile
-                                    let needsSetup =
-                                        profile?.isOnboarded == false
-                                        || (profile?.username ?? "").isEmpty
-                                    if needsSetup {
-                                        await MainActor.run {
-                                            withAnimation(.easeInOut(duration: 0.3)) {
-                                                showOnboarding = true
-                                            }
-                                        }
-                                    }
-                                } else {
+                                guard let userId = authManager.userId else {
                                     outfitStore.resetForSignedOutState()
-                                    await MainActor.run { showOnboarding = false }
+                                    await MainActor.run {
+                                        showOnboarding = false
+                                        resolvedForUserId = nil
+                                    }
+                                    return
                                 }
+
+                                outfitStore.beginSession(for: userId)
+
+                                // Resolve onboarding BEFORE the heavy
+                                // outfit/feed loads. loadSocialData applies
+                                // this device's cached profile on the main
+                                // actor before it returns, so currentProfile
+                                // is populated the moment we read it here.
+                                // Deciding now — instead of after the full
+                                // data load — is what removes the flicker:
+                                // the gating cover below stays up until
+                                // `resolvedForUserId` matches, so a new user
+                                // lands straight on the onboarding sheet with
+                                // no flash of the empty profile behind it.
+                                await outfitStore.loadSocialData(userId: userId)
+
+                                // Two triggers for showing onboarding:
+                                //   1. `is_onboarded == false` — the
+                                //      canonical signal post-2026-06-08
+                                //      migration. New users default to false,
+                                //      finishing the flow flips it to true.
+                                //   2. Missing username — defensive fallback
+                                //      for any user whose row somehow got
+                                //      created without the handle.
+                                let profile = outfitStore.currentProfile
+                                let needsSetup =
+                                    profile?.isOnboarded == false
+                                    || (profile?.username ?? "").isEmpty
+                                await MainActor.run {
+                                    showOnboarding = needsSetup
+                                    resolvedForUserId = userId
+                                }
+
+                                // Remaining loads run after the onboarding
+                                // decision so they never hold the cover up.
+                                await outfitStore.loadData()
+                                await outfitStore.checkForServerCompletedJob(userId: userId)
+                                await outfitStore.refreshUnreadNotificationCount()
                             }
 
                         if showOnboarding, let userId = authManager.userId {
@@ -75,6 +94,20 @@ struct YaelFitsApp: App {
                             }
                             .environment(outfitStore)
                             .transition(.opacity)
+                        }
+
+                        // Gating cover — hides RootView until we've resolved
+                        // onboarding status for the current session. Without
+                        // it, RootView renders the instant the session
+                        // authenticates and the profile flashes for the
+                        // duration of the resolve. Reuses the app-launch
+                        // loading look so it hands off seamlessly from the
+                        // `isLoading` spinner above.
+                        if resolvedForUserId != authManager.userId {
+                            ZStack {
+                                Color.white.ignoresSafeArea()
+                                ProgressView()
+                            }
                         }
                     }
                 } else {

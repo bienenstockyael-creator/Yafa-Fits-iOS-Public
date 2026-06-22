@@ -155,6 +155,29 @@ struct SocialService {
             .execute()
     }
 
+    /// Targeted display-name write keyed by user id. Unlike
+    /// `updateProfile(_:)`, it needs no loaded `Profile` object — so
+    /// it works during onboarding for a brand-new user whose profile
+    /// row hasn't been fetched into the client yet (the row already
+    /// exists server-side via the signup trigger).
+    static func updateDisplayName(userId: UUID, displayName: String) async throws {
+        try await supabase
+            .from("profiles")
+            .update(["display_name": displayName])
+            .eq("id", value: userId.uuidString)
+            .execute()
+    }
+
+    /// Targeted username write keyed by user id. See
+    /// `updateDisplayName` for why this doesn't take a `Profile`.
+    static func updateUsername(userId: UUID, username: String) async throws {
+        try await supabase
+            .from("profiles")
+            .update(["username": username])
+            .eq("id", value: userId.uuidString)
+            .execute()
+    }
+
     // MARK: - Likes
 
     static func getLikedOutfitIds(userId: UUID) async throws -> Set<String> {
