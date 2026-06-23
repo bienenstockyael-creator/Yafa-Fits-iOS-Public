@@ -456,8 +456,13 @@ struct ProfileView: View {
             // those, and reducing the row keeps the settings
             // sheet's primary analytics signal tight.
             HStack(spacing: 0) {
-                Button { showFollowers = true } label: {
-                    statItem(count: followerIds.count, label: "Followers")
+                // Favorites replaces Followers here — the follower count
+                // already shows (and opens the followers list) on the
+                // profile-home header, so repeating it in settings was
+                // redundant. Favorites had no home after the FAB became
+                // the closet, so it lands in this slot.
+                Button { showFavoritesSheet = true } label: {
+                    statItem(count: favoritedOwnCount, label: "Favorites")
                 }.buttonStyle(.plain)
                 Button { showFollowing = true } label: {
                     statItem(count: followingIds.count, label: "Following")
@@ -521,6 +526,12 @@ struct ProfileView: View {
         }
         .sheet(isPresented: $showSavedSheet) {
             SavedOutfitsSheet()
+                .environment(store)
+                .presentationDragIndicator(.visible)
+                .presentationBackground(AppPalette.groupedBackground)
+        }
+        .sheet(isPresented: $showFavoritesSheet) {
+            FavoritesSheetView()
                 .environment(store)
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppPalette.groupedBackground)
@@ -652,7 +663,6 @@ struct ProfileView: View {
     /// only on the auth screen) — also where App Store review expects them.
     private var accountExtrasSection: some View {
         VStack(spacing: LayoutMetrics.small) {
-            settingsRow(favoritesRowTitle) { showFavoritesSheet = true }
             settingsRow("BLOCKED ACCOUNTS") { showBlockedAccounts = true }
             settingsRow("TERMS OF SERVICE") {
                 if let url = URL(string: AppConfig.termsOfServiceURL) { openURL(url) }
@@ -661,20 +671,11 @@ struct ProfileView: View {
                 if let url = URL(string: AppConfig.privacyPolicyURL) { openURL(url) }
             }
         }
-        .sheet(isPresented: $showFavoritesSheet) {
-            FavoritesSheetView()
-                .environment(store)
-                .presentationDragIndicator(.visible)
-                .presentationBackground(AppPalette.groupedBackground)
-        }
     }
 
-    /// "FAVORITES" with a trailing count of the user's favorited own
-    /// outfits, so the entry keeps the at-a-glance signal the FAB
-    /// badge used to give now that it lives in settings.
-    private var favoritesRowTitle: String {
-        let count = store.likedIds.filter { id in store.outfits.contains { $0.id == id } }.count
-        return count > 0 ? "FAVORITES · \(count)" : "FAVORITES"
+    /// The user's favorited *own* outfits — drives the Favorites stat.
+    private var favoritedOwnCount: Int {
+        store.likedIds.filter { id in store.outfits.contains { $0.id == id } }.count
     }
 
     private func settingsRow(_ text: String, action: @escaping () -> Void) -> some View {
