@@ -38,10 +38,11 @@ struct WardrobeView: View {
     /// Live, damped scale applied to the grid during a pinch for continuous
     /// feedback; springs back to 1 (and commits a new column count) on
     /// release — so the zoom feels fluid instead of snapping mid-gesture.
+    /// Live zoom scale applied to the whole grid during a pinch. On release
+    /// we swap the column count and "continue" this scale into the new
+    /// layout (scale-compensation), so the tiles morph size seamlessly the
+    /// way Photos does — never sliding item-by-item to new slots.
     @State private var pinchScale: CGFloat = 1
-    /// Grid opacity, dipped to 0 while the column count changes so items
-    /// crossfade (Photos-style) instead of visibly sliding to new slots.
-    @State private var gridOpacity: Double = 1
 
     private static let minColumns = 2
     private static let maxColumns = 4
@@ -153,11 +154,11 @@ struct WardrobeView: View {
                 .padding(.horizontal, LayoutMetrics.screenPadding)
                 .padding(.top, LayoutMetrics.medium)
                 .padding(.bottom, LayoutMetrics.large)
-                .scaleEffect(pinchScale, anchor: .top)
-                .opacity(gridOpacity)
-                // Column reflow itself is NOT animated — it happens while
-                // the grid is faded out (see zoomGesture), so items never
-                // visibly travel across the grid.
+                .scaleEffect(pinchScale, anchor: .center)
+                // Column reflow itself is NOT animated (no position slide /
+                // clustering) — only the uniform `pinchScale` animates, and
+                // it's pre-set so the new layout starts at the old visual
+                // size, then settles to 1. See zoomGesture.
                 .animation(.spring(response: 0.42, dampingFraction: 0.9), value: filteredItems)
             }
         }
@@ -172,28 +173,31 @@ struct WardrobeView: View {
     private var zoomGesture: some Gesture {
         MagnificationGesture()
             .onChanged { value in
-                // Damped so the grid gives feedback without ballooning.
-                pinchScale = 1 + (value - 1) * 0.32
+                // Live, lightly-clamped zoom of the current layout — the
+                // continuous feedback under your fingers.
+                pinchScale = min(1.35, max(0.74, value))
             }
             .onEnded { value in
-                let steps = Int(((value - 1) * 2.2).rounded())
-                let target = min(Self.maxColumns, max(Self.minColumns, columnCount - steps))
+                // Desired columns scale inversely with how big you zoomed
+                // the tiles: zoom out (value > 1) → bigger tiles → fewer
+                // columns.
+                let target = min(
+                    Self.maxColumns,
+                    max(Self.minColumns, Int((Double(columnCount) / value).rounded()))
+                )
                 guard target != columnCount else {
-                    // No column change — just relax the live scale.
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { pinchScale = 1 }
+                    withAnimation(.spring(response: 0.34, dampingFraction: 0.85)) { pinchScale = 1 }
                     return
                 }
                 UISelectionFeedbackGenerator().selectionChanged()
-                // Photos-style crossfade: fade out (and release the scale),
-                // reflow to the new column count while invisible, fade in.
-                withAnimation(.easeOut(duration: 0.14)) {
-                    gridOpacity = 0
-                    pinchScale = 1
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.14) {
-                    columnCount = target   // instant reflow, hidden under the fade
-                    withAnimation(.easeIn(duration: 0.2)) { gridOpacity = 1 }
-                }
+                // Scale-compensation: switch the layout instantly, but start
+                // it at the size your fingers left off (so nothing jumps),
+                // then spring the scale to 1 — the tiles morph into the new
+                // grid. Uniform scale → no item ever slides across the grid.
+                let continued = pinchScale * CGFloat(target) / CGFloat(columnCount)
+                columnCount = target
+                pinchScale = continued
+                withAnimation(.spring(response: 0.42, dampingFraction: 0.86)) { pinchScale = 1 }
             }
     }
 
