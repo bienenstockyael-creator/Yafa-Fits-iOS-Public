@@ -508,7 +508,7 @@ private struct WardrobeItemCell: View {
     var showCategory: Bool = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .center, spacing: 7) {
             // Product floats with no card behind it (minimal). A fixed
             // aspect box scales the tile with the column width so the grid
             // reflows cleanly when you pinch-zoom.
@@ -529,16 +529,17 @@ private struct WardrobeItemCell: View {
                     }
                 }
 
-            // Quiet caption — the garment is the hero.
+            // Quiet, centered caption — the garment is the hero.
             Text(item.name)
                 .font(.system(size: 11.5))
                 .foregroundStyle(AppPalette.textMuted)
                 .lineLimit(1)
-                .padding(.horizontal, 1)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
 
             if showCategory, item.category != .other {
                 TagPill(tag: item.category.label)
-                    .scaleEffect(0.85, anchor: .leading)
+                    .scaleEffect(0.85)
             }
         }
     }
