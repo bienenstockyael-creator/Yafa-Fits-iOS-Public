@@ -46,6 +46,9 @@ struct WardrobeView: View {
     /// Column count when the current pinch began, so the gesture maps
     /// absolute (not incrementally drifting).
     @State private var pinchStartColumns: Int?
+    /// True while a pinch is in progress — used to lock scrolling so the
+    /// content doesn't drift as you zoom.
+    @State private var isPinching = false
 
     private static let minColumns = 2
     private static let maxColumns = 4
@@ -158,16 +161,18 @@ struct WardrobeView: View {
                 .padding(.top, LayoutMetrics.medium)
                 .padding(.bottom, LayoutMetrics.large)
                 .scaleEffect(pinchScale, anchor: .center)
-                // Smooth the threshold step: animate the column reflow AND
-                // the compensating scale with the SAME fast interactive
-                // spring, so positions slide gently while tile size stays
-                // ~continuous (they move in lock-step). Buttery, not snappy.
-                .animation(.interactiveSpring(response: 0.26, dampingFraction: 0.84), value: columnCount)
-                .animation(.interactiveSpring(response: 0.26, dampingFraction: 0.84), value: pinchScale)
+                // Size compensation is instant (the value is already
+                // continuous), so there's no spring/bounce and no desync —
+                // tiles scale smoothly with your fingers. Only the filter
+                // change animates.
                 .animation(.spring(response: 0.42, dampingFraction: 0.9), value: filteredItems)
             }
         }
         .scrollIndicators(.hidden)
+        // Lock the scroll while pinching so the content doesn't drift under
+        // your fingers as you zoom (two-finger pinch was also reading as a
+        // scroll).
+        .scrollDisabled(isPinching)
         .simultaneousGesture(zoomGesture)
     }
 
@@ -178,6 +183,7 @@ struct WardrobeView: View {
     private var zoomGesture: some Gesture {
         MagnificationGesture()
             .onChanged { value in
+                isPinching = true
                 let start = pinchStartColumns ?? columnCount
                 if pinchStartColumns == nil { pinchStartColumns = columnCount }
                 // Continuous desired column count (zoom out → bigger tiles →
@@ -197,8 +203,9 @@ struct WardrobeView: View {
             }
             .onEnded { _ in
                 pinchStartColumns = nil
-                // Gentle settle to the clean column width.
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.86)) { pinchScale = 1 }
+                isPinching = false
+                // Gentle, non-bouncy settle to the clean column width.
+                withAnimation(.easeOut(duration: 0.24)) { pinchScale = 1 }
             }
     }
 
