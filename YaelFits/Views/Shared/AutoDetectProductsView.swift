@@ -581,17 +581,23 @@ struct AutoDetectProductsView: View {
             slots[i].state = .generating
         }
         Task {
-            let image = await loadImage(item.resolvedImageURL)
+            let raw = await loadImage(item.resolvedImageURL)
+            // Trim the transparent margins so the garment fills the card
+            // box consistently — otherwise each PNG's random padding made
+            // the reused item look huge or tiny in the "added" card.
+            let trimmed = await Task.detached(priority: .userInitiated) {
+                raw?.trimmingTransparentMargins()
+            }.value
             await MainActor.run {
-                if let image, let j = slots.firstIndex(where: { $0.id == slotID }) {
+                if let trimmed, let j = slots.firstIndex(where: { $0.id == slotID }) {
                     withAnimation(.smooth(duration: 0.25)) {
-                        slots[j].state = .accepted(image)
+                        slots[j].state = .accepted(trimmed)
                     }
                 }
             }
             // Let the "added" card linger a beat so the swap is felt, then
             // commit + remove with the standard removal animation.
-            try? await Task.sleep(nanoseconds: image == nil ? 0 : 650_000_000)
+            try? await Task.sleep(nanoseconds: trimmed == nil ? 0 : 650_000_000)
             await MainActor.run { finalizeReuse(item: item, slotID: slotID) }
         }
     }
@@ -1251,6 +1257,9 @@ private struct TrimmedProductThumbnail: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFit()
+                    // Small inset so the alpha-trimmed garment doesn't
+                    // sit edge-to-edge — gives the pill breathing room.
+                    .padding(5)
                     .transition(.opacity)
             } else {
                 Color.clear
