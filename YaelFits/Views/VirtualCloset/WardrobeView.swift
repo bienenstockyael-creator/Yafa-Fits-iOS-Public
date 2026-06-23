@@ -176,8 +176,10 @@ struct WardrobeView: View {
                 // Zoom from the pinch focal point, not the content center.
                 .scaleEffect(pinchScale, anchor: pinchAnchor)
                 // Gesture lives on the grid so `startAnchor` is in the grid's
-                // own coordinate space (the finger midpoint).
-                .simultaneousGesture(zoomGesture)
+                // own coordinate space (the finger midpoint). High priority so
+                // a two-finger pinch wins over the ScrollView's scroll instead
+                // of the scroll hijacking it.
+                .highPriorityGesture(zoomGesture)
                 // Category/status change swaps the grid's identity, so it's a
                 // clean scale + fade (no items sliding to new positions). The
                 // thumbnail cache keeps the new grid from flickering.
@@ -220,8 +222,9 @@ struct WardrobeView: View {
             }
             .onEnded { _ in
                 pinchStartColumns = nil
-                // Softer settle to the clean column width.
-                withAnimation(.easeInOut(duration: 0.45)) { pinchScale = 1 }
+                // Settle with a very subtle, lightly-underdamped spring so the
+                // end of the zoom feels organic/fluid (just a hint of bounce).
+                withAnimation(.spring(response: 0.42, dampingFraction: 0.72)) { pinchScale = 1 }
                 // Keep `isPinching` true a beat longer so the finger-lift
                 // doesn't register as a tap (opening an item) and scrolling
                 // doesn't snap back mid-settle.
