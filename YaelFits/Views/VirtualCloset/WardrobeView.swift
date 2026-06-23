@@ -27,6 +27,7 @@ struct WardrobeView: View {
     @State private var categoryFilter: WardrobeCategory? = nil  // nil == All
     @State private var statusFilter: WardrobeStatus? = nil      // nil == All
     @State private var searchText: String = ""
+    @State private var selectedItem: WardrobeDisplayItem?
 
     private let columns: [GridItem] = [
         GridItem(.flexible(), spacing: 16),
@@ -53,6 +54,14 @@ struct WardrobeView: View {
                     placement: .navigationBarDrawer(displayMode: .always),
                     prompt: "Search your closet"
                 )
+                .sheet(item: $selectedItem) { item in
+                    WardrobeItemDetailSheet(item: item, userId: userId) {
+                        await load()
+                    }
+                    .environment(store)
+                    .presentationDragIndicator(.visible)
+                    .presentationBackground(AppPalette.groupedBackground)
+                }
                 .task { await load() }
         }
     }
@@ -82,7 +91,13 @@ struct WardrobeView: View {
             } else {
                 LazyVGrid(columns: columns, spacing: 16) {
                     ForEach(filteredItems) { item in
-                        WardrobeItemCell(item: item)
+                        Button {
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            selectedItem = item
+                        } label: {
+                            WardrobeItemCell(item: item)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
                 .padding(.horizontal, LayoutMetrics.screenPadding)
@@ -359,6 +374,229 @@ private struct WardrobeItemCell: View {
                     .foregroundStyle(AppPalette.textMuted)
                     .lineLimit(1)
             }
+        }
+    }
+}
+
+// MARK: - Item detail / edit
+
+/// Tap-to-edit sheet for a wardrobe item.
+///
+/// Two modes, keyed on whether the item is backed by a `products`
+/// row (`item.productId != nil`):
+///   • Backed → edits update that row in place.
+///   • Inline (an `Outfit.products` entry not yet in the closet) →
+///     saving *promotes* it by creating a real `products` row. The
+///     union dedup then collapses the inline copy into the new row,
+///     so it becomes editable from then on.
+private struct WardrobeItemDetailSheet: View {
+    let item: WardrobeDisplayItem
+    let userId: UUID
+    /// Called after a successful save so the closet can reload.
+    var onChanged: () async -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
+
+    @State private var name: String
+    @State private var category: WardrobeCategory
+    @State private var brand: String
+    @State private var price: String
+    @State private var sourceURL: String
+    @State private var status: WardrobeStatus
+    @State private var isSaving = false
+    @State private var saveError: String?
+
+    private var isBacked: Bool { item.productId != nil }
+
+    init(item: WardrobeDisplayItem, userId: UUID, onChanged: @escaping () async -> Void) {
+        self.item = item
+        self.userId = userId
+        self.onChanged = onChanged
+        _name = State(initialValue: item.name)
+        _category = State(initialValue: item.category)
+        _brand = State(initialValue: item.brand ?? "")
+        _price = State(initialValue: item.price ?? "")
+        _sourceURL = State(initialValue: item.sourceURL ?? "")
+        _status = State(initialValue: item.status)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: LayoutMetrics.medium) {
+                    image
+                    if !isBacked {
+                        Text("This item is tagged on an outfit. Saving adds it to your closet so you can edit it.")
+                            .font(.system(size: 12))
+                            .foregroundStyle(AppPalette.textMuted)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    fields
+                    if !sourceURL.isEmpty, let linkURL = URL(string: sourceURL) {
+                        Button { openURL(linkURL) } label: {
+                            Text("Open product link")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(AppPalette.textPrimary)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 44)
+                                .background(Capsule().fill(AppPalette.cardFill))
+                                .overlay(Capsule().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    if let saveError {
+                        Text(saveError)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.red)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .padding(LayoutMetrics.screenPadding)
+            }
+            .background(AppPalette.groupedBackground)
+            .navigationTitle(isBacked ? "Edit item" : "Add to closet")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.light, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                        .font(.system(size: 13))
+                        .foregroundStyle(AppPalette.textMuted)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(isBacked ? "Save" : "Add") { Task { await save() } }
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(canSave ? AppPalette.textPrimary : AppPalette.textFaint)
+                        .disabled(!canSave)
+                }
+            }
+        }
+    }
+
+    private var canSave: Bool {
+        !isSaving && !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var image: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: LayoutMetrics.cardCornerRadius, style: .continuous)
+                .fill(AppPalette.cardFill)
+            AsyncImage(url: URL(string: item.imageURL)) { phase in
+                if let img = phase.image {
+                    img.resizable().scaledToFit().padding(LayoutMetrics.small)
+                } else if phase.error != nil {
+                    AppIcon(glyph: .tshirt, size: 32, color: AppPalette.textFaint)
+                } else {
+                    ProgressView()
+                }
+            }
+        }
+        .frame(height: 220)
+    }
+
+    private var fields: some View {
+        VStack(spacing: LayoutMetrics.small) {
+            labeledField("NAME") {
+                TextField("Item name", text: $name)
+                    .textInputAutocapitalization(.words)
+            }
+            labeledField("CATEGORY") {
+                Menu {
+                    ForEach(WardrobeCategory.displayOrder, id: \.self) { c in
+                        Button(c.label) { category = c }
+                    }
+                } label: {
+                    HStack {
+                        Text(category.label)
+                            .foregroundStyle(AppPalette.textPrimary)
+                        Spacer()
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.system(size: 11))
+                            .foregroundStyle(AppPalette.textMuted)
+                    }
+                }
+            }
+            labeledField("BRAND") {
+                TextField("Optional", text: $brand)
+                    .textInputAutocapitalization(.words)
+            }
+            labeledField("PRICE") {
+                TextField("Optional", text: $price)
+            }
+            labeledField("LINK") {
+                TextField("Optional product URL", text: $sourceURL)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .keyboardType(.URL)
+            }
+            labeledField("STATUS") {
+                Picker("", selection: $status) {
+                    Text("Owned").tag(WardrobeStatus.owned)
+                    Text("Wishlist").tag(WardrobeStatus.wishlist)
+                }
+                .pickerStyle(.segmented)
+            }
+        }
+    }
+
+    private func labeledField<Content: View>(
+        _ label: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label)
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(1.2)
+                .foregroundStyle(AppPalette.textFaint)
+            content()
+                .font(.system(size: 15))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 11)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(AppPalette.cardFill)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(AppPalette.cardBorder, lineWidth: 0.75)
+                )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func save() async {
+        isSaving = true
+        saveError = nil
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        do {
+            if let pid = item.productId {
+                try await WardrobeService.updateItem(
+                    id: pid,
+                    name: trimmed,
+                    category: category.rawValue,
+                    brand: brand,
+                    price: price,
+                    sourceURL: sourceURL,
+                    status: status
+                )
+            } else {
+                _ = try await WardrobeService.createItem(
+                    userId: userId,
+                    name: trimmed,
+                    imageURL: item.imageURL,
+                    category: category.rawValue,
+                    brand: brand.isEmpty ? nil : brand,
+                    price: price.isEmpty ? nil : price,
+                    sourceURL: sourceURL.isEmpty ? nil : sourceURL,
+                    status: status
+                )
+            }
+            await onChanged()
+            dismiss()
+        } catch {
+            saveError = error.localizedDescription
+            isSaving = false
         }
     }
 }
