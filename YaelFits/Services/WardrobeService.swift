@@ -31,7 +31,7 @@ enum WardrobeService {
     /// caller decides how to treat failure; a thrown error simply
     /// means "couldn't check", and the dedup strip should degrade to
     /// the normal new-item flow.
-    static func findSimilar(query: String, limit: Int = 5) async throws -> [WardrobeItem] {
+    static func findSimilar(query: String, limit: Int = 6) async throws -> [ClosetMatch] {
         struct Params: Encodable {
             let p_query: String
             let p_limit: Int

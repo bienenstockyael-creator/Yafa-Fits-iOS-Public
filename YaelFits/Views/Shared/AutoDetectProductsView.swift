@@ -56,7 +56,7 @@ struct AutoDetectProductsView: View {
     /// `WardrobeService.findSimilar` so the user can reuse an existing
     /// item instead of re-logging it — which also skips the FAL
     /// thumbnail generation entirely.
-    @State private var suggestions: [WardrobeItem] = []
+    @State private var suggestions: [ClosetMatch] = []
     @State private var suggestionSlotID: UUID?
     @FocusState private var focusedSlotID: UUID?
     /// Slot most recently tapped or dragged. Rendered above its peers so
@@ -571,7 +571,7 @@ struct AutoDetectProductsView: View {
     /// the product thumbnail) so it visually reads as "added", then
     /// saves and removes the slot. No FAL call — the thumbnail is the
     /// existing item's image.
-    private func reuseExistingItem(_ item: WardrobeItem, for slotID: UUID) {
+    private func reuseExistingItem(_ item: ClosetMatch, for slotID: UUID) {
         guard let i = slots.firstIndex(where: { $0.id == slotID }) else { return }
         UIImpactFeedbackGenerator(style: .soft).impactOccurred()
         focusedSlotID = nil
@@ -596,14 +596,14 @@ struct AutoDetectProductsView: View {
         }
     }
 
-    private func finalizeReuse(item: WardrobeItem, slotID: UUID) {
+    private func finalizeReuse(item: ClosetMatch, slotID: UUID) {
         onProductSaved(Product(
             name: item.name,
             price: item.price,
             image: item.imageURL,
             shopLink: item.sourceURL,
-            productId: item.id,
-            tags: item.tags
+            productId: item.productId,
+            tags: nil
         ))
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         withAnimation(.easeOut(duration: 0.18)) {
@@ -662,7 +662,7 @@ struct AutoDetectProductsView: View {
     /// A big product thumbnail + semibold label on a thin-material
     /// capsule. `scaledToFit` so the product is never cropped, and no
     /// circle behind it — the product image itself is the focus.
-    private func suggestionChip(_ item: WardrobeItem) -> some View {
+    private func suggestionChip(_ item: ClosetMatch) -> some View {
         HStack(spacing: 6) {
             suggestionThumbnail(item)
             Text(item.displayName)
@@ -685,17 +685,10 @@ struct AutoDetectProductsView: View {
         .shadow(color: Color.black.opacity(0.08), radius: 6, y: 2)
     }
 
-    private func suggestionThumbnail(_ item: WardrobeItem) -> some View {
-        AsyncImage(url: URL(string: item.imageURL)) { phase in
-            if let img = phase.image {
-                img.resizable().scaledToFit()
-            } else {
-                Color.clear
-            }
-        }
-        // Fixed frame: the pill's size is settled BEFORE the image loads,
-        // so it doesn't resize/jitter when the image arrives.
-        .frame(width: 44, height: 44)
+    private func suggestionThumbnail(_ item: ClosetMatch) -> some View {
+        // Trims the product PNG's transparent margins so the garment
+        // fills the frame; fixed size so the pill never resizes on load.
+        TrimmedProductThumbnail(urlString: item.imageURL, size: 46)
     }
 
     private func commitName(_ slotID: UUID) async {
@@ -1236,5 +1229,80 @@ private struct SlotWidgetView: View {
             }
             .buttonStyle(.plain)
         }
+    }
+}
+
+// MARK: - Trimmed product thumbnail
+
+/// Loads a product image and trims its transparent margins so the
+/// garment fills the frame — product thumbnails are flat-lays with
+/// baked-in transparent padding that otherwise makes them look small
+/// and float in their box. The frame is fixed, so the pill doesn't
+/// resize when the image lands; the trim runs off the main thread.
+private struct TrimmedProductThumbnail: View {
+    let urlString: String
+    let size: CGFloat
+
+    @State private var image: UIImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .transition(.opacity)
+            } else {
+                Color.clear
+            }
+        }
+        .frame(width: size, height: size)
+        .task(id: urlString) { await load() }
+    }
+
+    private func load() async {
+        guard let url = URL(string: urlString),
+              let (data, _) = try? await URLSession.shared.data(from: url),
+              let raw = UIImage(data: data) else { return }
+        let trimmed = await Task.detached(priority: .userInitiated) {
+            raw.trimmingTransparentMargins()
+        }.value
+        await MainActor.run {
+            withAnimation(.easeOut(duration: 0.15)) { image = trimmed }
+        }
+    }
+}
+
+private extension UIImage {
+    /// Crop away the near-transparent border so the opaque content
+    /// fills the image. Returns self if it has no croppable margin.
+    func trimmingTransparentMargins(alphaThreshold: UInt8 = 8) -> UIImage {
+        guard let cg = cgImage else { return self }
+        let w = cg.width, h = cg.height
+        guard w > 0, h > 0 else { return self }
+        let bpp = 4
+        let bpr = w * bpp
+        var data = [UInt8](repeating: 0, count: h * bpr)
+        guard let ctx = CGContext(
+            data: &data, width: w, height: h, bitsPerComponent: 8,
+            bytesPerRow: bpr, space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return self }
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+
+        var minX = w, minY = h, maxX = -1, maxY = -1
+        for y in 0..<h {
+            let row = y * bpr
+            for x in 0..<w where data[row + x * bpp + 3] > alphaThreshold {
+                if x < minX { minX = x }
+                if x > maxX { maxX = x }
+                if y < minY { minY = y }
+                if y > maxY { maxY = y }
+            }
+        }
+        guard maxX >= minX, maxY >= minY else { return self }
+        let rect = CGRect(x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1)
+        guard let cropped = cg.cropping(to: rect) else { return self }
+        return UIImage(cgImage: cropped, scale: scale, orientation: imageOrientation)
     }
 }

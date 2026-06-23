@@ -69,6 +69,35 @@ struct WardrobeItem: Codable, Identifiable, Hashable, Sendable {
     var isWishlist: Bool { status == WardrobeStatus.wishlist.rawValue }
 }
 
+/// A fuzzy "already in your closet?" match returned by the
+/// `find_similar_products` RPC. Unlike `WardrobeItem`, this spans both
+/// real `products` rows AND inline `outfit_products` tags, so
+/// `productId` is nil for inline matches (which have no products row).
+struct ClosetMatch: Codable, Identifiable, Hashable, Sendable {
+    let name: String
+    let imageURL: String
+    let sourceURL: String?
+    let price: String?
+    let productId: UUID?
+
+    enum CodingKeys: String, CodingKey {
+        case name, price
+        case imageURL = "image_url"
+        case sourceURL = "source_url"
+        case productId = "product_id"
+    }
+
+    /// Stable identity for ForEach — the products id when present, else
+    /// the (deduped) name.
+    var id: String { productId?.uuidString ?? name.lowercased() }
+
+    var displayName: String {
+        name.split(separator: " ")
+            .map { $0.prefix(1).uppercased() + $0.dropFirst().lowercased() }
+            .joined(separator: " ")
+    }
+}
+
 /// The wardrobe's own, richer clothing taxonomy — independent of the
 /// try-on `ProductCategory` (which only needs top/bottom/shoes for its
 /// carousels). Drives the closet's filter chips. String-backed so it
