@@ -621,34 +621,45 @@ struct AutoDetectProductsView: View {
         )
     }
 
+    /// Mirrors the collapsed generation pill (`GenerationChipPill`):
+    /// a circular thumbnail + semibold label on a thin-material capsule.
+    /// Uses `scaledToFit` (not fill) inside the circle so the product
+    /// thumbnail is never cropped.
     private func suggestionChip(_ item: WardrobeItem) -> some View {
-        HStack(spacing: 6) {
-            AsyncImage(url: URL(string: item.imageURL)) { phase in
-                if let img = phase.image {
-                    img.resizable().scaledToFit()
-                } else {
-                    Color.clear
-                }
-            }
-            // Height-bounded so the box hugs the garment's aspect instead
-            // of padding a tall item out to a wide square — keeps the pill
-            // tight around its contents.
-            .frame(width: 44, height: 44)
+        HStack(spacing: 10) {
+            suggestionThumbnail(item)
             Text(item.displayName)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(AppPalette.textPrimary)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
         }
-        .padding(.leading, 6)
-        .padding(.trailing, 14)
-        .padding(.vertical, 5)
-        .background(
-            Capsule()
-                .fill(Color.white)
-                .shadow(color: Color.black.opacity(0.06), radius: 6, y: 2)
-        )
-        .overlay(Capsule().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
+        .padding(.leading, 7)
+        .padding(.trailing, 16)
+        .padding(.vertical, 7)
+        .background {
+            ZStack {
+                LightBlurView(style: .systemThinMaterialLight)
+                    .clipShape(Capsule(style: .continuous))
+                Capsule(style: .continuous).fill(AppPalette.cardFill)
+            }
+        }
+        .overlay(Capsule(style: .continuous).strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
+        .shadow(color: Color.black.opacity(0.10), radius: 10, y: 4)
+    }
+
+    private func suggestionThumbnail(_ item: WardrobeItem) -> some View {
+        AsyncImage(url: URL(string: item.imageURL)) { phase in
+            if let img = phase.image {
+                img.resizable().scaledToFit()
+            } else {
+                Color.clear
+            }
+        }
+        .padding(5)
+        .frame(width: 38, height: 38)
+        .background(Circle().fill(Color.white))
+        .overlay(Circle().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
     }
 
     private func commitName(_ slotID: UUID) async {
