@@ -1078,8 +1078,9 @@ private struct SlotWidgetView: View {
                 .fill(Color.white.opacity(0.55))
                 .opacity(isGenerating ? 1 : 0)
             if isGenerating {
-                ProgressView()
-                    .tint(AppPalette.textMuted)
+                // Same sparkle field as the outfit / bust generation, for a
+                // consistent "AI is working" look (replaces the spinner).
+                GenerationStarField(starSize: 78, interactive: false)
                     .transition(.opacity)
             }
 
@@ -1184,8 +1185,8 @@ private struct SlotWidgetView: View {
                 .animation(.easeInOut(duration: 0.18), value: isEmpty)
             }
         case .generating:
-            HStack(spacing: 8) {
-                ProgressView().controlSize(.small).tint(AppPalette.textMuted)
+            HStack(spacing: 6) {
+                AppIcon(glyph: .sparkles, size: 14, color: AppPalette.uploadGlow)
                 Text("Generating…")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(AppPalette.textMuted)
