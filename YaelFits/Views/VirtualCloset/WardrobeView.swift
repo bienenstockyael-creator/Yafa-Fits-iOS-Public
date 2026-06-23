@@ -171,7 +171,11 @@ struct WardrobeView: View {
                             UIImpactFeedbackGenerator(style: .light).impactOccurred()
                             selectedItem = item
                         } label: {
-                            WardrobeItemCell(item: item, showCategory: columnCount <= 2 && categoryFilter == nil)
+                            WardrobeItemCell(
+                                item: item,
+                                showCategory: columnCount <= 2 && categoryFilter == nil,
+                                showWishlistTag: columnCount <= 2
+                            )
                         }
                         .buttonStyle(.plain)
                         // Re-identify EACH tile when the category/status filter
@@ -184,7 +188,7 @@ struct WardrobeView: View {
                 }
                 .padding(.horizontal, LayoutMetrics.screenPadding)
                 .padding(.top, LayoutMetrics.medium)
-                .padding(.bottom, LayoutMetrics.large)
+                .padding(.bottom, 56)
                 // Zoom from the pinch focal point, not the content center.
                 .scaleEffect(pinchScale, anchor: pinchAnchor)
                 // Gesture lives on the grid so `startAnchor` is in the grid's
@@ -503,9 +507,12 @@ struct WardrobeDisplayItem: Identifiable, Hashable {
 
 private struct WardrobeItemCell: View {
     let item: WardrobeDisplayItem
-    /// Show the category pill only when the grid is sparse (2 columns) —
-    /// hidden when dense so tiles stay clean.
+    /// Show the category pill (only on the All filter, 2 columns).
     var showCategory: Bool = false
+    /// Show the wishlist tag for wishlist items (2 columns).
+    var showWishlistTag: Bool = false
+
+    private var isWishlist: Bool { item.status == .wishlist }
 
     var body: some View {
         VStack(alignment: .center, spacing: 7) {
@@ -517,17 +524,6 @@ private struct WardrobeItemCell: View {
                 .overlay {
                     TrimmedRemoteImage(url: item.resolvedImageURL, contentPadding: 6)
                 }
-                .overlay(alignment: .topLeading) {
-                    if item.status == .wishlist {
-                        Text("WISHLIST")
-                            .font(.system(size: 8, weight: .bold))
-                            .tracking(0.6)
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 4)
-                            .background(Capsule().fill(AppPalette.uploadGlow))
-                    }
-                }
 
             // Quiet, centered caption — the garment is the hero.
             Text(item.name)
@@ -537,11 +533,25 @@ private struct WardrobeItemCell: View {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
 
-            if showCategory, item.category != .other {
+            // Wishlist items get a distinct tag; owned items show category.
+            if isWishlist, showWishlistTag {
+                wishlistPill
+            } else if showCategory, item.category != .other {
                 TagPill(tag: item.category.label)
                     .scaleEffect(0.85)
             }
         }
+    }
+
+    private var wishlistPill: some View {
+        Text("WISHLIST")
+            .font(.system(size: 10, weight: .semibold))
+            .tracking(1.2)
+            .foregroundStyle(AppPalette.uploadGlow)
+            .padding(.horizontal, 12)
+            .frame(height: 30)
+            .background(Capsule().fill(AppPalette.uploadGlow.opacity(0.12)))
+            .overlay(Capsule().strokeBorder(AppPalette.uploadGlow.opacity(0.35), lineWidth: 0.75))
     }
 }
 
@@ -656,8 +666,8 @@ private struct WardrobeItemDetailSheet: View {
             UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
             showDeleteConfirm = true
         } label: {
-            Text("Remove from closet")
-                .font(.system(size: 14, weight: .semibold))
+            Text("Delete")
+                .font(.system(size: 14))
                 .foregroundStyle(.red)
                 .frame(maxWidth: .infinity)
                 .frame(height: 46)
@@ -722,11 +732,6 @@ private struct WardrobeItemDetailSheet: View {
                 TextField("Add brand", text: $brand)
                     .multilineTextAlignment(.trailing)
                     .textInputAutocapitalization(.words)
-            }
-            rowDivider
-            formRow("Price") {
-                TextField("Add price", text: $price)
-                    .multilineTextAlignment(.trailing)
             }
             rowDivider
             formRow("Link") {
