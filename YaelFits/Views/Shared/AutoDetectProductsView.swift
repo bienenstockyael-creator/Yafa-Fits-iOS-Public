@@ -605,17 +605,15 @@ struct AutoDetectProductsView: View {
                     Color.clear
                 }
             }
-            .frame(width: 38, height: 38)
-            .background(AppPalette.groupedBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .frame(width: 48, height: 48)
             Text(item.displayName)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(AppPalette.textPrimary)
                 .lineLimit(1)
         }
-        .padding(.leading, 7)
+        .padding(.leading, 8)
         .padding(.trailing, 16)
-        .padding(.vertical, 6)
+        .padding(.vertical, 5)
         .background(
             Capsule()
                 .fill(Color.white)
