@@ -62,6 +62,14 @@ struct ProfileShareSheet: View {
     /// can't resolve. Offering private/unsynced (e.g. bundled) outfits
     /// here would let the user "pick" a look that the recipient never
     /// sees — every such pick collapses to the same fallback outfit.
+    /// True when the user has synced-but-unpublished fits
+    /// (`isPublic == false`) — i.e. fits that *could* be featured if
+    /// published. Drives the empty-state hint. (`nil` = bundled/local,
+    /// which can't be featured at all, so it doesn't count.)
+    private var hasUnpublishedFits: Bool {
+        store.sortedOutfits.contains { $0.isPublic == false }
+    }
+
     private var shareableOutfits: [Outfit] {
         let sorted = store.sortedOutfits.filter { $0.isPublic == true }
         let favorites = sorted.filter { store.likedIds.contains($0.id) }.prefix(3)
@@ -199,6 +207,20 @@ struct ProfileShareSheet: View {
                 pageDots
                     .padding(.top, 14)
                     .opacity(cardVisible ? 1 : 0)
+
+                // The card features PUBLISHED fits. If the user has
+                // fits but hasn't published any, the card falls back
+                // to their bust/avatar — this explains why and how to
+                // change it, so the empty card doesn't read as broken.
+                if shareableOutfits.isEmpty && hasUnpublishedFits {
+                    Text("Publish a fit to feature it on your card")
+                        .font(.system(size: 12))
+                        .foregroundStyle(AppPalette.textMuted)
+                        .multilineTextAlignment(.center)
+                        .padding(.top, 14)
+                        .padding(.horizontal, LayoutMetrics.large)
+                        .opacity(cardVisible ? 1 : 0)
+                }
 
                 Spacer(minLength: LayoutMetrics.large)
 
