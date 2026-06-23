@@ -40,11 +40,11 @@ struct ProfileShareSheet: View {
     /// web/OG card and the next launch reuse it.
     @State private var bustCutout: UIImage? = nil
     @State private var isGeneratingBust = false
-    /// Once-ever flag: surface the "publish to feature" hint the first
-    /// time the user swipes to the end of their outfit carousel, so
-    /// they learn that publishing adds fits to the card.
-    @AppStorage("yafa.shareCardEndHintSeen") private var endHintSeen = false
-    @State private var showEndHint = false
+    /// Once-ever flag for the publish explainer pop-up — shown the
+    /// first time the card has nothing published to feature, or the
+    /// user reaches the end of their carousel.
+    @AppStorage("yafa.shareCardPublishHintSeen") private var publishHintSeen = false
+    @State private var showPublishModal = false
 
     private let cardGray = Color(white: 0.918)
 
@@ -81,12 +81,27 @@ struct ProfileShareSheet: View {
         store.sortedOutfits.contains { $0.isPublic == false }
     }
 
-    /// Whether to show the "publish a fit" hint under the card —
-    /// either the empty-state case (has fits but none published) or
-    /// the one-time nudge when the user reaches the end of their
-    /// carousel of published fits.
-    private var showsPublishHint: Bool {
-        (shareableOutfits.isEmpty && hasUnpublishedFits) || showEndHint
+    /// Presents the publish explainer pop-up once (ever). Marks it
+    /// seen on present so it never re-pops.
+    private func presentPublishHint(afterDelay delay: Double = 0) {
+        guard !publishHintSeen else { return }
+        publishHintSeen = true
+        let show = {
+            withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
+                showPublishModal = true
+            }
+        }
+        if delay > 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: show)
+        } else {
+            show()
+        }
+    }
+
+    private func dismissPublishHint() {
+        withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
+            showPublishModal = false
+        }
     }
 
     private var shareableOutfits: [Outfit] {
@@ -279,21 +294,6 @@ struct ProfileShareSheet: View {
                     .padding(.top, 14)
                     .opacity(cardVisible ? 1 : 0)
 
-                // The card features PUBLISHED fits. Shown when the
-                // user has fits but hasn't published any (the empty
-                // card would otherwise read as broken), and once when
-                // they first reach the end of their carousel — so they
-                // learn that publishing adds fits to the card.
-                if showsPublishHint {
-                    Text("Publish a fit to feature it on your card")
-                        .font(.system(size: 12))
-                        .foregroundStyle(AppPalette.textMuted)
-                        .multilineTextAlignment(.center)
-                        .padding(.top, 14)
-                        .padding(.horizontal, LayoutMetrics.large)
-                        .opacity(cardVisible ? 1 : 0)
-                }
-
                 Spacer(minLength: LayoutMetrics.large)
 
                 shareButton
@@ -302,10 +302,18 @@ struct ProfileShareSheet: View {
                     .opacity(cardVisible ? 1 : 0)
                     .offset(y: cardVisible ? 0 : 16)
             }
+
+            // Publish explainer pop-up — app-standard modal style.
+            publishHintModal
         }
         .onAppear {
             withAnimation(.spring(response: 0.55, dampingFraction: 0.82).delay(0.05)) {
                 cardVisible = true
+            }
+            // Empty-state explainer: if there's nothing published to
+            // feature (but the user has fits), pop the hint once.
+            if shareableOutfits.isEmpty && hasUnpublishedFits {
+                presentPublishHint(afterDelay: 0.45)
             }
         }
         .task {
@@ -315,14 +323,68 @@ struct ProfileShareSheet: View {
         }
         .onChange(of: selectedIndex) { _, newIndex in
             // First time the user swipes to the end of their carousel,
-            // surface the publish hint once (ever) so they learn how
-            // more fits get onto the card. Only meaningful with >1 fit.
-            guard !endHintSeen,
-                  shareableOutfits.count > 1,
+            // pop the publish hint once (ever). Only meaningful with
+            // more than one fit.
+            guard shareableOutfits.count > 1,
                   newIndex >= shareableOutfits.count - 1
             else { return }
-            endHintSeen = true
-            withAnimation(.easeInOut(duration: 0.25)) { showEndHint = true }
+            presentPublishHint()
+        }
+    }
+
+    // MARK: - Publish explainer pop-up
+
+    /// App-standard centered modal (mirrors `InfoExplainerModal`):
+    /// dim backdrop + `appCard` with icon, title, message, GOT IT.
+    @ViewBuilder
+    private var publishHintModal: some View {
+        if showPublishModal {
+            ZStack {
+                Color.black.opacity(0.45)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture { dismissPublishHint() }
+                    .transition(.opacity)
+
+                VStack(spacing: LayoutMetrics.medium) {
+                    AppIcon(glyph: .globe, size: 36, color: AppPalette.textStrong)
+                        .padding(.top, LayoutMetrics.small)
+
+                    VStack(spacing: LayoutMetrics.small) {
+                        Text("Feature your fits")
+                            .font(.system(size: 22, weight: .semibold))
+                            .foregroundStyle(AppPalette.textStrong)
+
+                        Text("Your card features the fits you've published. Tap the globe on any fit to publish it — it'll show up here for people to swipe through.")
+                            .font(.system(size: 15))
+                            .foregroundStyle(AppPalette.textMuted)
+                            .multilineTextAlignment(.center)
+                            .lineSpacing(3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Button(action: { dismissPublishHint() }) {
+                        Text("GOT IT")
+                            .font(.system(size: 12, weight: .semibold))
+                            .tracking(1.5)
+                            .foregroundStyle(AppPalette.textPrimary)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 44)
+                            .appCapsule(shadowRadius: 0, shadowY: 0)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, LayoutMetrics.xSmall)
+                }
+                .padding(.horizontal, LayoutMetrics.large)
+                .padding(.vertical, LayoutMetrics.large)
+                .appCard(cornerRadius: 24, shadowRadius: 28, shadowY: 12)
+                .padding(.horizontal, LayoutMetrics.medium)
+                .transition(
+                    .scale(scale: 0.92, anchor: .center).combined(with: .opacity)
+                )
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .ignoresSafeArea()
         }
     }
 
