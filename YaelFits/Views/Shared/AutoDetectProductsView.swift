@@ -1080,7 +1080,7 @@ private struct SlotWidgetView: View {
             if isGenerating {
                 // Same sparkle field as the outfit / bust generation, for a
                 // consistent "AI is working" look (replaces the spinner).
-                GenerationStarField(starSize: 78, interactive: false)
+                GenerationStarField(starSize: 150, interactive: false)
                     .transition(.opacity)
             }
 
