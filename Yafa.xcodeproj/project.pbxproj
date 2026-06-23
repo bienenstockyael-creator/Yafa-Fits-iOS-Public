@@ -13,6 +13,7 @@
 		077DB02F9473F88E769F9A4C /* placeholder-3.webp in Resources */ = {isa = PBXBuildFile; fileRef = 422DD784B7345E185A3C2C41 /* placeholder-3.webp */; };
 		0AE3A5C0D8CDF4B7EED61A53 /* ProductCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07BA71A9CDD13DA6808964BB /* ProductCategory.swift */; };
 		0E7F75E0908D4E70379B08A5 /* ProductLibraryItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8673AF651837F7F8A1A50BD4 /* ProductLibraryItem.swift */; };
+		FACE0000000000000000B001 /* WardrobeItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0000000000000000F001 /* WardrobeItem.swift */; };
 		0E86953BE246048B9B408314 /* outfit-2.webp in Resources */ = {isa = PBXBuildFile; fileRef = 4F45F302477F8DD356FE4B1A /* outfit-2.webp */; };
 		10840633716A10C300DFB42C /* RemixArchiveSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FAC6014CC4DA975180EFDC6 /* RemixArchiveSheetView.swift */; };
 		10F0100FB857B9FCBCE40127 /* StateScopingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B807A90E1DD2A35EDCE8EB7A /* StateScopingTests.swift */; };
@@ -96,6 +97,7 @@
 		3F5E7AF631869748B3F18F74 /* FrameLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A3F4701E39853E7B869448A /* FrameLoader.swift */; };
 		4434E9CC224A947D5BC8FD63 /* FalAvatarStandardizationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6F605079F2D6968468CCE00 /* FalAvatarStandardizationService.swift */; };
 		44360C1EC58813498FC14626 /* ProductLibraryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 251414A04E6CDF8175AC3872 /* ProductLibraryService.swift */; };
+		FACE0000000000000000B002 /* WardrobeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0000000000000000F002 /* WardrobeService.swift */; };
 		4A4F1BB87ED3BD7DF0C413F7 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = B6B48116FEE66A166D635ADA /* Supabase */; };
 		4B718F5E1C8680BCBDD7C08F /* GenerationJobService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29E71BBBA1CFBB444044694A /* GenerationJobService.swift */; };
 		4C1D7D2C2780705E46A2698D /* windy.json in Resources */ = {isa = PBXBuildFile; fileRef = F6B8C9D105280144E32EBE34 /* windy.json */; };
@@ -124,6 +126,7 @@
 		74AA75019C8C28EDD28CB289 /* FalBackgroundRemovalService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A9473A9AC05A63B161719DE /* FalBackgroundRemovalService.swift */; };
 		74C11A63C84CEF82BD4D37F3 /* Inter_28pt-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E4ADA0A6F7861DEAEA0781FD /* Inter_28pt-SemiBold.ttf */; };
 		780F959E205BE16642ED4986 /* VirtualClosetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D8BC1280D2AC0BEF07C6956 /* VirtualClosetView.swift */; };
+		FACE0000000000000000B003 /* WardrobeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0000000000000000F003 /* WardrobeView.swift */; };
 		808BE6CA0DC558E5DD9F32AA /* NotificationsPlaceholderSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 474903917CC828F9A9431A6E /* NotificationsPlaceholderSheet.swift */; };
 		8102360B51D1E0956A25F698 /* AvatarCropView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E782DC00D03C8C56B60CE3B6 /* AvatarCropView.swift */; };
 		815AE7C9B6BFEC7E1E745DCF /* AppModifiers.swift in Sources */ = {isa = PBXBuildFile; fileRef = C70BC4A54DE808065C369147 /* AppModifiers.swift */; };
@@ -285,6 +288,7 @@
 		202606111200000A000001 /* ProfileShareSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileShareSheet.swift; sourceTree = "<group>"; };
 		20260620000000990A000001 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		251414A04E6CDF8175AC3872 /* ProductLibraryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductLibraryService.swift; sourceTree = "<group>"; };
+		FACE0000000000000000F002 /* WardrobeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WardrobeService.swift; sourceTree = "<group>"; };
 		257C2FEEAA3F033C9F7D2A1D /* outfit-27.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-27.webp"; sourceTree = "<group>"; };
 		29E71BBBA1CFBB444044694A /* GenerationJobService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationJobService.swift; sourceTree = "<group>"; };
 		2BD94E7C6117190A4E63A8F5 /* ProductThumbnailUploadService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductThumbnailUploadService.swift; sourceTree = "<group>"; };
@@ -328,6 +332,7 @@
 		6A852FB7BE96B45E54412928 /* UserProfileSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfileSheet.swift; sourceTree = "<group>"; };
 		6AF76DDBEC17ACF0DEB5C2B2 /* outfits.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = outfits.json; sourceTree = "<group>"; };
 		6D8BC1280D2AC0BEF07C6956 /* VirtualClosetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VirtualClosetView.swift; sourceTree = "<group>"; };
+		FACE0000000000000000F003 /* WardrobeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WardrobeView.swift; sourceTree = "<group>"; };
 		701463B9FED6F52BA2804658 /* star-anim-4.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "star-anim-4.json"; sourceTree = "<group>"; };
 		7430C4B99E445B625AABF792 /* star-anim-5.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "star-anim-5.json"; sourceTree = "<group>"; };
 		765A7EC84BEB99AC0CCD8914 /* FollowListSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FollowListSheet.swift; sourceTree = "<group>"; };
@@ -344,6 +349,7 @@
 		8456128B0E6C520224F3D108 /* melike-profile.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "melike-profile.png"; sourceTree = "<group>"; };
 		85FE161686E36DA80D27F90E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		8673AF651837F7F8A1A50BD4 /* ProductLibraryItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductLibraryItem.swift; sourceTree = "<group>"; };
+		FACE0000000000000000F001 /* WardrobeItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WardrobeItem.swift; sourceTree = "<group>"; };
 		870B827D251E84029B685BB1 /* RemixStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemixStorage.swift; sourceTree = "<group>"; };
 		8821036C1F9ED66859189654 /* outfit-10.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-10.webp"; sourceTree = "<group>"; };
 		8899AABBCCDDEEFF11223344 /* ScrollOffsetObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrollOffsetObserver.swift; sourceTree = "<group>"; };
@@ -610,6 +616,7 @@
 				5896B8C8BF7E8A341C74D09E /* DressAvatarSheetView.swift */,
 				1FAC6014CC4DA975180EFDC6 /* RemixArchiveSheetView.swift */,
 				6D8BC1280D2AC0BEF07C6956 /* VirtualClosetView.swift */,
+				FACE0000000000000000F003 /* WardrobeView.swift */,
 			);
 			path = VirtualCloset;
 			sourceTree = "<group>";
@@ -744,6 +751,7 @@
 				3A2CE7F573582B8F2F582033 /* OutfitService.swift */,
 				9536A3D80F4BDF8F985E374D /* ProductImageService.swift */,
 				251414A04E6CDF8175AC3872 /* ProductLibraryService.swift */,
+				FACE0000000000000000F002 /* WardrobeService.swift */,
 				2BD94E7C6117190A4E63A8F5 /* ProductThumbnailUploadService.swift */,
 				35C267E0A7B040C73D2CA472 /* PushNotificationService.swift */,
 				870B827D251E84029B685BB1 /* RemixStorage.swift */,
@@ -782,6 +790,7 @@
 				34A76145E123E70B78BE57D0 /* PreparedMaskingVariant.swift */,
 				07BA71A9CDD13DA6808964BB /* ProductCategory.swift */,
 				8673AF651837F7F8A1A50BD4 /* ProductLibraryItem.swift */,
+				FACE0000000000000000F001 /* WardrobeItem.swift */,
 				646E58B0E2ADCFBE6F3987BF /* Profile.swift */,
 				202606061000000A000001 /* ProfileHeaderStyle.swift */,
 				202606071000000A000001 /* CreditBundle.swift */,
@@ -1049,7 +1058,9 @@
 				68575EA5AE5ADEDC9B66A0A8 /* ProductImageService.swift in Sources */,
 				3A4491708C31E6C0FE1817E2 /* ProductImageView.swift in Sources */,
 				0E7F75E0908D4E70379B08A5 /* ProductLibraryItem.swift in Sources */,
+				FACE0000000000000000B001 /* WardrobeItem.swift in Sources */,
 				44360C1EC58813498FC14626 /* ProductLibraryService.swift in Sources */,
+				FACE0000000000000000B002 /* WardrobeService.swift in Sources */,
 				FF542F98F1BFD9E0DA427831 /* ProductThumbnailUploadService.swift in Sources */,
 				6EDB6762B388FDCF0F7227D9 /* Profile.swift in Sources */,
 				E344DB1A263DCD98D7F53A83 /* ProfileView.swift in Sources */,
@@ -1109,6 +1120,7 @@
 				8C561C0B75E7BF70D820955C /* VideoFrameSequenceExporter.swift in Sources */,
 				84290C7D80CCB0AC505AF5EA /* ViewMotion.swift in Sources */,
 				780F959E205BE16642ED4986 /* VirtualClosetView.swift in Sources */,
+				FACE0000000000000000B003 /* WardrobeView.swift in Sources */,
 				5BADF890C56B2FFCD1113112 /* WeatherPill.swift in Sources */,
 				20260527000000001B0AAAAA /* CameraCaptureView.swift in Sources */,
 				BC22750567EDDC797832CD21 /* YaelFitsApp.swift in Sources */,
@@ -1138,7 +1150,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = YaelFits/YaelFits.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 43;
+				CURRENT_PROJECT_VERSION = 45;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = YaelFits/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1261,7 +1273,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = YaelFits/YaelFits.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 43;
+				CURRENT_PROJECT_VERSION = 45;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = YaelFits/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
