@@ -49,11 +49,6 @@ struct WardrobeView: View {
                             .foregroundStyle(AppPalette.textMuted)
                     }
                 }
-                .searchable(
-                    text: $searchText,
-                    placement: .navigationBarDrawer(displayMode: .always),
-                    prompt: "Search your closet"
-                )
                 .sheet(item: $selectedItem) { item in
                     WardrobeItemDetailSheet(item: item, userId: userId) {
                         await load()
@@ -64,6 +59,36 @@ struct WardrobeView: View {
                 }
                 .task { await load() }
         }
+        // Fixed light palette across the app — keep the sheet light so the
+        // search field text stays readable in dark mode.
+        .preferredColorScheme(.light)
+    }
+
+    /// Same look as the public-feed search bar (appCard 14 / search icon /
+    /// 13pt), but a live text field that filters the grid.
+    private var searchBar: some View {
+        HStack(spacing: LayoutMetrics.xxSmall) {
+            AppIcon(glyph: .search, size: 14, color: AppPalette.textFaint)
+            TextField("Search your closet", text: $searchText)
+                .font(.system(size: 13))
+                .foregroundStyle(AppPalette.textStrong)
+                .tint(AppPalette.textStrong)
+                .autocorrectionDisabled()
+                .submitLabel(.search)
+            if !searchText.isEmpty {
+                Button { searchText = "" } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(AppPalette.textFaint)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 14)
+        .frame(height: 40)
+        .appCard(cornerRadius: 14, shadowRadius: 4, shadowY: 2)
+        .padding(.horizontal, LayoutMetrics.screenPadding)
+        .padding(.top, LayoutMetrics.small)
     }
 
     // MARK: - Content states
@@ -77,6 +102,7 @@ struct WardrobeView: View {
             emptyState
         } else {
             VStack(spacing: 0) {
+                searchBar
                 filterBar
                 grid
             }
@@ -154,15 +180,16 @@ struct WardrobeView: View {
                 .font(.system(size: 13, weight: isOn ? .semibold : .medium))
                 .foregroundStyle(isOn ? Color.white : AppPalette.textMuted)
                 .padding(.horizontal, 14)
-                .padding(.vertical, 7)
-                .background(
-                    Capsule(style: .continuous)
-                        .fill(isOn ? AppPalette.textPrimary : AppPalette.cardFill)
-                )
-                .overlay(
-                    Capsule(style: .continuous)
-                        .strokeBorder(AppPalette.cardBorder, lineWidth: isOn ? 0 : 0.75)
-                )
+                .frame(height: 34)
+                // Selected: solid dark fill on top of the frosted capsule.
+                .background {
+                    if isOn {
+                        Capsule(style: .continuous).fill(AppPalette.textStrong)
+                    }
+                }
+                // Unselected: the app's standard frosted-glass capsule (same
+                // treatment as TagPill / appCapsule everywhere else).
+                .appCapsule(shadowRadius: 0, shadowY: 0)
         }
         .buttonStyle(.plain)
     }
@@ -530,13 +557,9 @@ private struct WardrobeItemDetailSheet: View {
                     .keyboardType(.URL)
             }
         }
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(AppPalette.cardBorder, lineWidth: 0.75)
-        )
+        .padding(.vertical, 2)
+        // Same frosted-glass card as the carousel's product detail card.
+        .appCard(cornerRadius: LayoutMetrics.cardCornerRadius)
     }
 
     private func formRow<Content: View>(
