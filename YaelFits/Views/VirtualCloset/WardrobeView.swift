@@ -168,6 +168,12 @@ struct WardrobeView: View {
                             WardrobeItemCell(item: item, showCategory: columnCount <= 2)
                         }
                         .buttonStyle(.plain)
+                        // Re-identify EACH tile when the category/status filter
+                        // changes, so every tile transitions individually —
+                        // scale + fade from its own center — instead of sliding
+                        // to a new slot. (The thumbnail cache avoids flicker.)
+                        .id("\(gridIdentity)|\(item.id)")
+                        .transition(.scale(scale: 0.9).combined(with: .opacity))
                     }
                 }
                 .padding(.horizontal, LayoutMetrics.screenPadding)
@@ -180,11 +186,6 @@ struct WardrobeView: View {
                 // a two-finger pinch wins over the ScrollView's scroll instead
                 // of the scroll hijacking it.
                 .highPriorityGesture(zoomGesture)
-                // Category/status change swaps the grid's identity, so it's a
-                // clean scale + fade (no items sliding to new positions). The
-                // thumbnail cache keeps the new grid from flickering.
-                .id(gridIdentity)
-                .transition(.scale(scale: 0.97).combined(with: .opacity))
             }
         }
         .scrollIndicators(.hidden)
@@ -222,9 +223,9 @@ struct WardrobeView: View {
             }
             .onEnded { _ in
                 pinchStartColumns = nil
-                // Settle with a very subtle, lightly-underdamped spring so the
-                // end of the zoom feels organic/fluid (just a hint of bounce).
-                withAnimation(.spring(response: 0.42, dampingFraction: 0.72)) { pinchScale = 1 }
+                // Settle with an underdamped spring so the end of the zoom has
+                // a light, organic bounce.
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.62)) { pinchScale = 1 }
                 // Keep `isPinching` true a beat longer so the finger-lift
                 // doesn't register as a tap (opening an item) and scrolling
                 // doesn't snap back mid-settle.
