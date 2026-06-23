@@ -96,6 +96,21 @@ struct ClosetMatch: Codable, Identifiable, Hashable, Sendable {
             .map { $0.prefix(1).uppercased() + $0.dropFirst().lowercased() }
             .joined(separator: " ")
     }
+
+    /// Resolves a possibly-relative image path (e.g. `/products/x.webp`,
+    /// common on inline outfit-product tags) to an absolute URL, the
+    /// same way `Product.resolvedImageURL` does. Absolute URLs pass
+    /// through unchanged.
+    var resolvedImageURL: URL? {
+        let trimmed = imageURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if let abs = URL(string: trimmed), abs.scheme != nil { return abs }
+        let normalized = trimmed.hasPrefix("/")
+            ? String(trimmed.dropFirst())
+            : trimmed.replacingOccurrences(of: "^\\./?", with: "", options: .regularExpression)
+        guard !normalized.isEmpty else { return nil }
+        return AppConfig.siteBaseURL.appendingPathComponent(normalized)
+    }
 }
 
 /// The wardrobe's own, richer clothing taxonomy — independent of the

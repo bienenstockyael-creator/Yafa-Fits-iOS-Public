@@ -581,7 +581,7 @@ struct AutoDetectProductsView: View {
             slots[i].state = .generating
         }
         Task {
-            let image = await loadImage(from: item.imageURL)
+            let image = await loadImage(item.resolvedImageURL)
             await MainActor.run {
                 if let image, let j = slots.firstIndex(where: { $0.id == slotID }) {
                     withAnimation(.smooth(duration: 0.25)) {
@@ -611,8 +611,8 @@ struct AutoDetectProductsView: View {
         }
     }
 
-    private func loadImage(from urlString: String) async -> UIImage? {
-        guard let url = URL(string: urlString) else { return nil }
+    private func loadImage(_ url: URL?) async -> UIImage? {
+        guard let url else { return nil }
         guard let (data, _) = try? await URLSession.shared.data(from: url) else { return nil }
         return UIImage(data: data)
     }
@@ -688,7 +688,7 @@ struct AutoDetectProductsView: View {
     private func suggestionThumbnail(_ item: ClosetMatch) -> some View {
         // Trims the product PNG's transparent margins so the garment
         // fills the frame; fixed size so the pill never resizes on load.
-        TrimmedProductThumbnail(urlString: item.imageURL, size: 46)
+        TrimmedProductThumbnail(url: item.resolvedImageURL, size: 46)
     }
 
     private func commitName(_ slotID: UUID) async {
@@ -1240,7 +1240,7 @@ private struct SlotWidgetView: View {
 /// and float in their box. The frame is fixed, so the pill doesn't
 /// resize when the image lands; the trim runs off the main thread.
 private struct TrimmedProductThumbnail: View {
-    let urlString: String
+    let url: URL?
     let size: CGFloat
 
     @State private var image: UIImage?
@@ -1257,11 +1257,11 @@ private struct TrimmedProductThumbnail: View {
             }
         }
         .frame(width: size, height: size)
-        .task(id: urlString) { await load() }
+        .task(id: url) { await load() }
     }
 
     private func load() async {
-        guard let url = URL(string: urlString),
+        guard let url,
               let (data, _) = try? await URLSession.shared.data(from: url),
               let raw = UIImage(data: data) else { return }
         let trimmed = await Task.detached(priority: .userInitiated) {
