@@ -49,6 +49,10 @@ struct WardrobeView: View {
     /// True while a pinch is in progress — used to lock scrolling so the
     /// content doesn't drift as you zoom.
     @State private var isPinching = false
+    /// The focal point of the current pinch (midpoint of the two fingers),
+    /// in the grid's unit space — so the zoom originates from your fingers
+    /// rather than the content's center.
+    @State private var pinchAnchor: UnitPoint = .center
 
     private static let minColumns = 2
     private static let maxColumns = 4
@@ -160,12 +164,16 @@ struct WardrobeView: View {
                 .padding(.horizontal, LayoutMetrics.screenPadding)
                 .padding(.top, LayoutMetrics.medium)
                 .padding(.bottom, LayoutMetrics.large)
-                .scaleEffect(pinchScale, anchor: .center)
+                // Zoom from the pinch focal point, not the content center.
+                .scaleEffect(pinchScale, anchor: pinchAnchor)
                 // Size compensation is instant (the value is already
                 // continuous), so there's no spring/bounce and no desync —
                 // tiles scale smoothly with your fingers. Only the filter
                 // change animates.
                 .animation(.spring(response: 0.42, dampingFraction: 0.9), value: filteredItems)
+                // Gesture lives on the grid so `startAnchor` is in the grid's
+                // own coordinate space (the finger midpoint).
+                .simultaneousGesture(zoomGesture)
             }
         }
         .scrollIndicators(.hidden)
@@ -173,7 +181,6 @@ struct WardrobeView: View {
         // your fingers as you zoom (two-finger pinch was also reading as a
         // scroll).
         .scrollDisabled(isPinching)
-        .simultaneousGesture(zoomGesture)
     }
 
     /// Pinch out → fewer/bigger tiles; pinch in → more/smaller. Mirrors the
@@ -181,16 +188,17 @@ struct WardrobeView: View {
     /// the new column count when you let go. Two-finger pinch coexists with
     /// one-finger scroll.
     private var zoomGesture: some Gesture {
-        MagnificationGesture()
+        MagnifyGesture()
             .onChanged { value in
                 isPinching = true
-                let start = pinchStartColumns ?? columnCount
+                pinchAnchor = value.startAnchor   // finger midpoint
                 if pinchStartColumns == nil { pinchStartColumns = columnCount }
+                let start = pinchStartColumns ?? columnCount
                 // Continuous desired column count (zoom out → bigger tiles →
                 // fewer columns), then the nearest whole layout to render.
                 let desired = min(
                     Double(Self.maxColumns),
-                    max(Double(Self.minColumns), Double(start) / value)
+                    max(Double(Self.minColumns), Double(start) / value.magnification)
                 )
                 let whole = Int(desired.rounded())
                 if whole != columnCount {
@@ -204,8 +212,8 @@ struct WardrobeView: View {
             .onEnded { _ in
                 pinchStartColumns = nil
                 isPinching = false
-                // Gentle, non-bouncy settle to the clean column width.
-                withAnimation(.easeOut(duration: 0.24)) { pinchScale = 1 }
+                // Soft, non-bouncy settle to the clean column width.
+                withAnimation(.easeInOut(duration: 0.34)) { pinchScale = 1 }
             }
     }
 
