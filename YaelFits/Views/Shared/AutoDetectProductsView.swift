@@ -418,6 +418,15 @@ struct AutoDetectProductsView: View {
     // MARK: - Tap handling
 
     private func handleTap(at location: CGPoint, imageRect: CGRect) {
+        // If a slot is currently being named, a tap on the background just
+        // dismisses the keyboard + "already in your closet?" bar (back to
+        // the plain tagging UI) instead of starting a new tag.
+        if focusedSlotID != nil {
+            focusedSlotID = nil
+            suggestions = []
+            return
+        }
+
         let xRatio = location.x / imageRect.width
         let yRatio = location.y / imageRect.height
         guard (0...1).contains(xRatio), (0...1).contains(yRatio) else { return }
@@ -613,7 +622,7 @@ struct AutoDetectProductsView: View {
     }
 
     private func suggestionChip(_ item: WardrobeItem) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             AsyncImage(url: URL(string: item.imageURL)) { phase in
                 if let img = phase.image {
                     img.resizable().scaledToFit()
@@ -621,14 +630,18 @@ struct AutoDetectProductsView: View {
                     Color.clear
                 }
             }
-            .frame(width: 48, height: 48)
+            // Height-bounded so the box hugs the garment's aspect instead
+            // of padding a tall item out to a wide square — keeps the pill
+            // tight around its contents.
+            .frame(width: 44, height: 44)
             Text(item.displayName)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(AppPalette.textPrimary)
                 .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
         }
-        .padding(.leading, 8)
-        .padding(.trailing, 16)
+        .padding(.leading, 6)
+        .padding(.trailing, 14)
         .padding(.vertical, 5)
         .background(
             Capsule()
