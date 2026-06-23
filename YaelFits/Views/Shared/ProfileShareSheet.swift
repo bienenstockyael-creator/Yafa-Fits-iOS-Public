@@ -40,6 +40,11 @@ struct ProfileShareSheet: View {
     /// web/OG card and the next launch reuse it.
     @State private var bustCutout: UIImage? = nil
     @State private var isGeneratingBust = false
+    /// Once-ever flag: surface the "publish to feature" hint the first
+    /// time the user swipes to the end of their outfit carousel, so
+    /// they learn that publishing adds fits to the card.
+    @AppStorage("yafa.shareCardEndHintSeen") private var endHintSeen = false
+    @State private var showEndHint = false
 
     private let cardGray = Color(white: 0.918)
 
@@ -74,6 +79,14 @@ struct ProfileShareSheet: View {
     /// which can't be featured at all, so it doesn't count.)
     private var hasUnpublishedFits: Bool {
         store.sortedOutfits.contains { $0.isPublic == false }
+    }
+
+    /// Whether to show the "publish a fit" hint under the card —
+    /// either the empty-state case (has fits but none published) or
+    /// the one-time nudge when the user reaches the end of their
+    /// carousel of published fits.
+    private var showsPublishHint: Bool {
+        (shareableOutfits.isEmpty && hasUnpublishedFits) || showEndHint
     }
 
     private var shareableOutfits: [Outfit] {
@@ -266,11 +279,12 @@ struct ProfileShareSheet: View {
                     .padding(.top, 14)
                     .opacity(cardVisible ? 1 : 0)
 
-                // The card features PUBLISHED fits. If the user has
-                // fits but hasn't published any, the card falls back
-                // to their bust/avatar — this explains why and how to
-                // change it, so the empty card doesn't read as broken.
-                if shareableOutfits.isEmpty && hasUnpublishedFits {
+                // The card features PUBLISHED fits. Shown when the
+                // user has fits but hasn't published any (the empty
+                // card would otherwise read as broken), and once when
+                // they first reach the end of their carousel — so they
+                // learn that publishing adds fits to the card.
+                if showsPublishHint {
                     Text("Publish a fit to feature it on your card")
                         .font(.system(size: 12))
                         .foregroundStyle(AppPalette.textMuted)
@@ -298,6 +312,17 @@ struct ProfileShareSheet: View {
             // Auto-generate the bust for the empty-state card if the
             // user has a photo but no cutout yet (runs at most once).
             await ensureBustCutout()
+        }
+        .onChange(of: selectedIndex) { _, newIndex in
+            // First time the user swipes to the end of their carousel,
+            // surface the publish hint once (ever) so they learn how
+            // more fits get onto the card. Only meaningful with >1 fit.
+            guard !endHintSeen,
+                  shareableOutfits.count > 1,
+                  newIndex >= shareableOutfits.count - 1
+            else { return }
+            endHintSeen = true
+            withAnimation(.easeInOut(duration: 0.25)) { showEndHint = true }
         }
     }
 
