@@ -105,6 +105,23 @@ extension View {
         modifier(HoloCardModifier(active: active, cornerRadius: cornerRadius))
     }
 
+    /// Same holo shader + motion as `holoCard`, but composited ON TOP
+    /// of the content instead of behind it. Use when the surface
+    /// underneath is opaque (e.g. the profile share card's solid
+    /// fill), where the background variant would be hidden. The
+    /// shader's `.multiply` blend keeps the content readable while the
+    /// chromatic shimmer rides over it.
+    func holoOverlay(active: Bool, cornerRadius: CGFloat = LayoutMetrics.cardCornerRadius) -> some View {
+        overlay {
+            if active {
+                HoloOverlay(cornerRadius: cornerRadius)
+                    .allowsHitTesting(false)
+            }
+        }
+        .onAppear { if active { HoloMotionTracker.shared.start() } }
+        .onDisappear { if active { HoloMotionTracker.shared.stop() } }
+    }
+
     func proCardTilt(active: Bool) -> some View {
         modifier(ProCardTiltModifier(active: active))
     }

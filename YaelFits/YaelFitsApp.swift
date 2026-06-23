@@ -61,18 +61,37 @@ struct YaelFitsApp: App {
                                 // no flash of the empty profile behind it.
                                 await outfitStore.loadSocialData(userId: userId)
 
+                                // Onboarding decision. Prefer the cached
+                                // profile (instant), but on a CACHE MISS
+                                // (nil) fetch the authoritative profile from
+                                // the server before deciding. A nil profile
+                                // would otherwise make the "missing username"
+                                // check true and FALSE-trigger onboarding for
+                                // an already-onboarded user signing in on a
+                                // fresh device / after a reinstall / after an
+                                // account switch. The gating cover stays up
+                                // for the brief fetch.
+                                var profile = outfitStore.currentProfile
+                                if profile == nil {
+                                    profile = try? await SocialService.getProfile(userId: userId)
+                                    if let fetched = profile {
+                                        await MainActor.run {
+                                            outfitStore.currentProfile = fetched
+                                        }
+                                    }
+                                }
+
                                 // Two triggers for showing onboarding:
-                                //   1. `is_onboarded == false` — the
-                                //      canonical signal post-2026-06-08
-                                //      migration. New users default to false,
-                                //      finishing the flow flips it to true.
-                                //   2. Missing username — defensive fallback
-                                //      for any user whose row somehow got
-                                //      created without the handle.
-                                let profile = outfitStore.currentProfile
-                                let needsSetup =
-                                    profile?.isOnboarded == false
-                                    || (profile?.username ?? "").isEmpty
+                                //   1. `is_onboarded == false` — canonical
+                                //      signal (new users default to false;
+                                //      finishing the flow flips it true).
+                                //   2. Missing username — defensive fallback.
+                                // Only ever shown for a profile we actually
+                                // have: a still-nil profile (cache miss +
+                                // failed fetch) must NOT trigger onboarding.
+                                let needsSetup = profile.map {
+                                    $0.isOnboarded == false || ($0.username ?? "").isEmpty
+                                } ?? false
                                 await MainActor.run {
                                     showOnboarding = needsSetup
                                     resolvedForUserId = userId

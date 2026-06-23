@@ -82,6 +82,89 @@ struct ProfileShareSheet: View {
         return outfits[selectedIndex]
     }
 
+    // MARK: - Empty-state hero (no shareable outfit)
+
+    /// Whether the user has a profile photo, so the empty-state card
+    /// heroes their bust (and styles the handle as a highlighter)
+    /// rather than showing the silhouette + plain label.
+    private var hasProfilePhoto: Bool {
+        store.currentAvatarCutoutImage != nil
+        || store.currentAvatarImage != nil
+        || !((store.currentProfile?.avatarUrl ?? "").isEmpty)
+    }
+
+    /// Accent color for the bust handle highlighter — the user's
+    /// chosen header accent, or the default if they haven't set one.
+    private var bustAccentColor: Color {
+        ProfileHeaderAccentColor.color(
+            for: store.currentProfile?.headerAccentColor ?? ProfileHeaderAccentColor.defaultHex
+        )
+    }
+
+    /// Centerpiece when the user has no shareable outfit. Prefers the
+    /// background-removed bust, then the circle avatar (in-memory,
+    /// else fetched from the profile URL), and finally the logo
+    /// silhouette placeholder when there's no profile photo at all.
+    @ViewBuilder
+    private func emptyStateHero(height: CGFloat) -> some View {
+        if let cutout = store.currentAvatarCutoutImage {
+            Image(uiImage: cutout)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(height: height)
+        } else if let avatar = store.currentAvatarImage {
+            Image(uiImage: avatar)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: height, height: height)
+                .clipShape(Circle())
+        } else if let cutoutURL = remoteURL(store.currentProfile?.avatarCutoutUrl) {
+            AsyncImage(url: cutoutURL) { phase in
+                if let image = phase.image {
+                    image.resizable().aspectRatio(contentMode: .fit).frame(height: height)
+                } else {
+                    silhouette(height: height)
+                }
+            }
+        } else if let avatarURL = remoteURL(store.currentProfile?.avatarUrl) {
+            AsyncImage(url: avatarURL) { phase in
+                if let image = phase.image {
+                    image.resizable().aspectRatio(contentMode: .fill)
+                        .frame(width: height, height: height).clipShape(Circle())
+                } else {
+                    silhouette(height: height)
+                }
+            }
+        } else {
+            silhouette(height: height)
+        }
+    }
+
+    @ViewBuilder
+    private func silhouette(height: CGFloat) -> some View {
+        if let image = Self.silhouetteImage {
+            Image(uiImage: image)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(height: height)
+        }
+    }
+
+    private func remoteURL(_ string: String?) -> URL? {
+        guard let string, !string.isEmpty else { return nil }
+        return URL(string: string)
+    }
+
+    /// The single-figure logo silhouette (`placeholder-1.webp`),
+    /// loaded once from the bundle. Same asset family the
+    /// outfit-generation placeholders use.
+    private static let silhouetteImage: UIImage? = {
+        guard let url = Bundle.main.url(forResource: "placeholder-1", withExtension: "webp"),
+              let data = try? Data(contentsOf: url)
+        else { return nil }
+        return UIImage(data: data)
+    }()
+
     private var shareURL: URL? {
         guard let username = store.currentProfile?.username, !username.isEmpty
         else { return nil }
@@ -198,11 +281,15 @@ struct ProfileShareSheet: View {
             }
 
             ZStack {
-                // Fixed card.
+                // Fixed card. With no shareable outfit, the card
+                // itself carries the pro-card holo shimmer — on every
+                // share card (outfit or empty state), so the card
+                // always reads as a designed, holographic piece.
                 RoundedRectangle(cornerRadius: 24 * scale, style: .continuous)
                     .fill(cardGray)
-                    .shadow(color: .black.opacity(0.14), radius: 16, y: 10)
                     .frame(width: cardWidth, height: cardHeight)
+                    .holoOverlay(active: true, cornerRadius: 24 * scale)
+                    .shadow(color: .black.opacity(0.14), radius: 16, y: 10)
 
                 Text("add me on Yafa!")
                     .font(labelFont)
@@ -211,46 +298,84 @@ struct ProfileShareSheet: View {
                     .offset(y: -cardHeight * 0.42)
                     .allowsHitTesting(false)
 
-                Text("@\(store.currentProfile?.username ?? "")")
-                    .font(labelFont)
-                    .tracking(-1.13 * scale)
-                    .foregroundStyle(.black)
-                    .offset(y: cardHeight * 0.42)
-                    .allowsHitTesting(false)
-
-                // Outfit strip — floats over the card, unclipped.
-                // Neighbors shrink + fade by distance from center.
-                ZStack {
-                    ForEach(Array(outfits.enumerated()), id: \.element.id) { i, outfit in
-                        let pos = relativePos(i)
-                        let proximity = max(0, 1 - abs(pos))
-                        RotatableOutfitImage(
-                            outfit: outfit,
-                            height: cardHeight * 0.64,
-                            draggable: false,
-                            eagerLoad: true,
-                            // Only the centered outfit spins — neighbors
-                            // hold still until they're swiped into the
-                            // card. (RotatableOutfitImage reacts to this
-                            // flag changing, so promotion on page-change
-                            // starts the spin.)
-                            autoRotate: i == selectedIndex
-                        )
-                        .scaleEffect(0.72 + 0.28 * proximity)
-                        .offset(x: pos * step)
+                // Bottom @handle label — for the outfit and silhouette
+                // cards. The photo-bust card instead overlaps the
+                // handle on the photo's bottom edge (below), so it's
+                // skipped here in that case.
+                if !(outfits.isEmpty && hasProfilePhoto) {
+                    Text("@\(store.currentProfile?.username ?? "")")
+                        .font(labelFont)
+                        .tracking(-1.13 * scale)
+                        .foregroundStyle(.black)
+                        .offset(y: cardHeight * 0.42)
                         .allowsHitTesting(false)
-                    }
                 }
-                .frame(width: geo.size.width, height: cardHeight)
+
+                if outfits.isEmpty {
+                    if hasProfilePhoto {
+                        // Photo bust — sized down so it reads as a
+                        // portrait, with the @handle in the bust
+                        // style's highlighter blob anchored so its
+                        // first line overlaps the photo's bottom edge
+                        // (matching the profile bust treatment).
+                        emptyStateHero(height: cardHeight * 0.41)
+                            .overlay(alignment: .bottom) {
+                                HighlighterUsername(
+                                    text: "@\(store.currentProfile?.username ?? "")",
+                                    color: bustAccentColor,
+                                    fontSize: 22 * scale,
+                                    rotation: ProfileHeaderMetrics.highlighterRotation
+                                )
+                                .alignmentGuide(VerticalAlignment.bottom) { dims in
+                                    dims[VerticalAlignment.top]
+                                }
+                                .offset(y: -22 * scale * 0.5)
+                            }
+                            .allowsHitTesting(false)
+                    } else {
+                        // No photo — logo silhouette placeholder.
+                        emptyStateHero(height: cardHeight * 0.64)
+                            .allowsHitTesting(false)
+                    }
+                } else {
+                    // Outfit strip — floats over the card, unclipped.
+                    // Neighbors shrink + fade by distance from center.
+                    ZStack {
+                        ForEach(Array(outfits.enumerated()), id: \.element.id) { i, outfit in
+                            let pos = relativePos(i)
+                            let proximity = max(0, 1 - abs(pos))
+                            RotatableOutfitImage(
+                                outfit: outfit,
+                                height: cardHeight * 0.64,
+                                draggable: false,
+                                eagerLoad: true,
+                                // Only the centered outfit spins — neighbors
+                                // hold still until they're swiped into the
+                                // card. (RotatableOutfitImage reacts to this
+                                // flag changing, so promotion on page-change
+                                // starts the spin.)
+                                autoRotate: i == selectedIndex
+                            )
+                            .scaleEffect(0.72 + 0.28 * proximity)
+                            .offset(x: pos * step)
+                            .allowsHitTesting(false)
+                        }
+                    }
+                    .frame(width: geo.size.width, height: cardHeight)
+                }
             }
             .frame(width: geo.size.width, height: geo.size.height)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture()
                     .onChanged { value in
+                        // Nothing to swipe with 0 or 1 outfit (the
+                        // empty-state hero is fixed, not a carousel).
+                        guard outfits.count > 1 else { return }
                         carouselDragOffset = value.translation.width
                     }
                     .onEnded { value in
+                        guard outfits.count > 1 else { return }
                         let translation = value.translation.width
                         let velocity = value.predictedEndTranslation.width
                         var newIndex = selectedIndex

@@ -78,6 +78,15 @@ struct ProfileHeaderCustomizeSheet: View {
     @State private var selectedColorHex: String
     @State private var cutoutImage: UIImage?
     @State private var isProcessingCutout = false
+    /// Square crop from the most recent in-session photo pick (the
+    /// user's framing from the crop sheet, un-clipped). Used as the
+    /// bust cutout source so the cutout keeps that scale + centering
+    /// even when the user picks on the minimal style and only later
+    /// swipes to bust — at which point `freshSource` is gone but the
+    /// stored crop still carries the framing. Its presence also means
+    /// "a fresh photo was picked," so we skip the stale cached cutout
+    /// URL (which points at the previous photo).
+    @State private var pendingSquareCrop: UIImage?
     /// True only when `cutoutImage` came from a fresh FAL run in
     /// THIS sheet session. False when we hydrated it from the
     /// already-stored `existingCutoutURL`. Drives the save path:
@@ -214,6 +223,10 @@ struct ProfileHeaderCustomizeSheet: View {
                 // one.
                 cutoutImage = nil
                 cutoutWasFreshlyGenerated = false
+                // Remember the square crop so the bust cutout keeps
+                // the user's framing even if they picked here on a
+                // non-bust style and swipe to bust later.
+                pendingSquareCrop = square
                 onPhotoPicked(cropped, wrapper.image)
                 // If the user is already on bust, kick off
                 // FAL bg-removal immediately so the new photo
@@ -451,10 +464,16 @@ struct ProfileHeaderCustomizeSheet: View {
     private func ensureCutoutAvailable(freshSource: UIImage? = nil) async {
         if cutoutImage != nil { return }
 
+        // The framing-preserving source for a fresh in-session pick:
+        // the just-passed square (bust-time pick) or the stored crop
+        // (picked on another style, swiped to bust now). Either way it
+        // supersedes the cached URL, which is the OLD photo's cutout.
+        let freshCrop = freshSource ?? pendingSquareCrop
+
         // 1. Try the cached URL on the profile first (cheap).
         //    Skipped when a fresh photo was just picked — the
         //    stored URL points to the prior photo's cutout.
-        if freshSource == nil,
+        if freshCrop == nil,
            let urlString = existingCutoutURL,
            let url = URL(string: urlString) {
             await MainActor.run { isProcessingCutout = true }
@@ -477,7 +496,11 @@ struct ProfileHeaderCustomizeSheet: View {
         // leave `cutoutImage` nil and the preview hides the
         // spinner — acceptable per the V1 spec.
         await MainActor.run { isProcessingCutout = true }
-        let sourceImage = freshSource ?? originalImage ?? avatarImage
+        // Prefer the user's framed square crop (this session's pick),
+        // then the pre-crop original, then the circle avatar. Using
+        // the square crop is what preserves the scale + centering when
+        // the photo was added on a non-bust style and revealed here.
+        let sourceImage = freshCrop ?? originalImage ?? avatarImage
         guard let jpegData = sourceImage.jpegData(compressionQuality: 0.92) else {
             await MainActor.run { isProcessingCutout = false }
             return
