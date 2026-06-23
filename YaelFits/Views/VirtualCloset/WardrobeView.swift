@@ -199,9 +199,8 @@ struct WardrobeView: View {
             }
         }
         .scrollIndicators(.hidden)
-        // Soft fade at BOTH edges so items dissolve into the background as
-        // they scroll past the top (under the pills) or the bottom, instead
-        // of hard clip lines.
+        // Soft fade only at the TOP edge (so items dissolve under the
+        // pills); content extends fully to the bottom of the viewport.
         .mask(
             VStack(spacing: 0) {
                 LinearGradient(
@@ -211,12 +210,6 @@ struct WardrobeView: View {
                 )
                 .frame(height: 24)
                 Color.black
-                LinearGradient(
-                    colors: [.black, .clear],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: 32)
             }
         )
         // Disable scrolling the moment a second finger lands, so a pinch is
