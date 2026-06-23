@@ -51,6 +51,13 @@ struct AutoDetectProductsView: View {
     @State private var saveError: String?
     @State private var isSaving = false
     @State private var subjectExtents: SubjectExtents?
+    /// "Already in your closet?" matches for the slot currently being
+    /// named, plus the slot they belong to. Driven by
+    /// `WardrobeService.findSimilar` so the user can reuse an existing
+    /// item instead of re-logging it — which also skips the FAL
+    /// thumbnail generation entirely.
+    @State private var suggestions: [WardrobeItem] = []
+    @State private var suggestionSlotID: UUID?
     @FocusState private var focusedSlotID: UUID?
     /// Slot most recently tapped or dragged. Rendered above its peers so
     /// partially-covered cards can be brought forward with one tap.
@@ -109,6 +116,30 @@ struct AutoDetectProductsView: View {
         .onDisappear {
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         }
+        // Debounced "already in your closet?" lookup, re-run whenever the
+        // name of the slot being typed into changes.
+        .task(id: activeNamingName) {
+            let name = (activeNamingName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard name.count >= 2 else {
+                await MainActor.run { suggestions = [] }
+                return
+            }
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            if Task.isCancelled { return }
+            let matches = (try? await WardrobeService.findSimilar(query: name, limit: 6)) ?? []
+            if Task.isCancelled { return }
+            await MainActor.run {
+                suggestionSlotID = focusedSlotID
+                suggestions = matches
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if !suggestions.isEmpty, activeNamingName != nil {
+                suggestionBar
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: suggestions.isEmpty)
     }
 
     // MARK: - Header
@@ -492,6 +523,95 @@ struct AutoDetectProductsView: View {
     private func updateName(_ slotID: UUID, _ newName: String) {
         guard let i = slots.firstIndex(where: { $0.id == slotID }) else { return }
         slots[i].name = newName
+    }
+
+    // MARK: - Closet dedup suggestions
+
+    /// Name of the slot currently being typed into (focused + `.naming`).
+    /// Drives the suggestion lookup; `nil` when nothing is being named.
+    private var activeNamingName: String? {
+        guard let id = focusedSlotID,
+              let slot = slots.first(where: { $0.id == id }),
+              case .naming = slot.state else { return nil }
+        return slot.name
+    }
+
+    /// Reuse an existing closet item for a slot instead of generating a
+    /// fresh thumbnail: fire `onProductSaved` with a `Product` that
+    /// points at the existing library row (carrying its `productId` so
+    /// the tag links to it), then drop the slot. No FAL call.
+    private func reuseExistingItem(_ item: WardrobeItem, for slotID: UUID) {
+        onProductSaved(Product(
+            name: item.name,
+            price: item.price,
+            image: item.imageURL,
+            shopLink: item.sourceURL,
+            productId: item.id,
+            tags: item.tags
+        ))
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        focusedSlotID = nil
+        suggestions = []
+        withAnimation(.easeOut(duration: 0.12)) {
+            slots.removeAll { $0.id == slotID }
+        }
+    }
+
+    private var suggestionBar: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("ALREADY IN YOUR CLOSET?")
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(1.2)
+                .foregroundStyle(AppPalette.textMuted)
+                .padding(.horizontal, LayoutMetrics.screenPadding)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(suggestions) { item in
+                        Button {
+                            if let sid = suggestionSlotID {
+                                reuseExistingItem(item, for: sid)
+                            }
+                        } label: {
+                            suggestionChip(item)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, LayoutMetrics.screenPadding)
+            }
+        }
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(AppPalette.cardBorder)
+                .frame(height: 0.75)
+        }
+    }
+
+    private func suggestionChip(_ item: WardrobeItem) -> some View {
+        HStack(spacing: 8) {
+            AsyncImage(url: URL(string: item.imageURL)) { phase in
+                if let img = phase.image {
+                    img.resizable().scaledToFit()
+                } else {
+                    Color.clear
+                }
+            }
+            .frame(width: 34, height: 34)
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            Text(item.displayName)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(AppPalette.textPrimary)
+                .lineLimit(1)
+        }
+        .padding(.leading, 7)
+        .padding(.trailing, 14)
+        .padding(.vertical, 6)
+        .background(Capsule().fill(Color.white))
+        .overlay(Capsule().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
     }
 
     private func commitName(_ slotID: UUID) async {
