@@ -223,15 +223,15 @@ struct VibeButton: View {
     @ViewBuilder
     private var flameView: some View {
         if isVibedByMe {
-            // Filled BLUE flame for the "you vibed this, can't again"
-            // state — replaces the old dark fill so the post-vibe
-            // icon reads as the vibe's blue.
-            AppIcon(
-                glyph: .flame,
-                size: 18,
-                color: AppPalette.uploadGlow,
-                filled: true
-            )
+            // Post-vibe ("you vibed this, can't again") state. Uses
+            // the exact same gradient flame as the profile vibes
+            // stat (`GradientFlameIcon(size: 24, stroked: true)` in
+            // ProfileHeader / UserProfileSheet) so a fit you've
+            // vibed on the feed reads as the same affordance as the
+            // vibe count on a profile — one shared visual identity,
+            // not a flat-blue lookalike. `stroked` keeps the
+            // silhouette legible at this smaller size.
+            GradientFlameIcon(size: 18, stroked: true)
         } else {
             let color = state == .locked
                 ? AppPalette.textFaint
