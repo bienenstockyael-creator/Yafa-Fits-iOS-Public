@@ -24,7 +24,7 @@ struct WardrobeView: View {
     @State private var isLoading = true
     @State private var loadError: String?
 
-    @State private var categoryFilter: ProductCategory? = nil  // nil == All
+    @State private var categoryFilter: WardrobeCategory? = nil  // nil == All
     @State private var statusFilter: WardrobeStatus? = nil      // nil == All
     @State private var searchText: String = ""
 
@@ -101,7 +101,7 @@ struct WardrobeView: View {
                 HStack(spacing: 8) {
                     chip(title: "All", isOn: categoryFilter == nil) { categoryFilter = nil }
                     ForEach(availableCategories, id: \.self) { cat in
-                        chip(title: cat.wardrobeLabel, isOn: categoryFilter == cat) {
+                        chip(title: cat.label, isOn: categoryFilter == cat) {
                             categoryFilter = (categoryFilter == cat) ? nil : cat
                         }
                     }
@@ -203,10 +203,10 @@ struct WardrobeView: View {
         for item in libraryItems {
             guard consider(name: item.name, url: item.imageURL) else { continue }
             // Stored category wins; fall back to keyword inference while
-            // most rows still carry the default 'unknown'.
-            let category = item.categoryEnum == .unknown
-                ? ProductCategory.inferring(from: item.name)
-                : item.categoryEnum
+            // most rows still carry the default 'unknown' (decoded as
+            // `.other`).
+            let category = WardrobeCategory(rawValue: item.category)
+                ?? WardrobeCategory.inferring(from: item.name)
             items.append(WardrobeDisplayItem(
                 id: item.id.uuidString,
                 name: item.name,
@@ -229,7 +229,7 @@ struct WardrobeView: View {
                     id: "outfit-\(product.id)-\(outfit.id)",
                     name: product.name,
                     imageURL: resolved,
-                    category: ProductCategory.inferring(from: product.name),
+                    category: WardrobeCategory.inferring(from: product.name),
                     status: .owned,
                     brand: nil,
                     price: product.price,
@@ -255,10 +255,9 @@ struct WardrobeView: View {
     }
 
     /// Categories actually present, in a stable display order.
-    private var availableCategories: [ProductCategory] {
+    private var availableCategories: [WardrobeCategory] {
         let present = Set(allItems.map(\.category))
-        let order: [ProductCategory] = [.top, .bottom, .fullBody, .shoes, .unknown]
-        return order.filter { present.contains($0) }
+        return WardrobeCategory.displayOrder.filter { present.contains($0) }
     }
 
     private var hasWishlistItems: Bool {
@@ -304,7 +303,7 @@ struct WardrobeDisplayItem: Identifiable, Hashable {
     let id: String
     let name: String
     let imageURL: String
-    let category: ProductCategory
+    let category: WardrobeCategory
     let status: WardrobeStatus
     let brand: String?
     let price: String?
@@ -364,16 +363,3 @@ private struct WardrobeItemCell: View {
     }
 }
 
-// MARK: - Category labels
-
-private extension ProductCategory {
-    var wardrobeLabel: String {
-        switch self {
-        case .top: return "Tops"
-        case .bottom: return "Bottoms"
-        case .fullBody: return "Full body"
-        case .shoes: return "Shoes"
-        case .unknown: return "Other"
-        }
-    }
-}

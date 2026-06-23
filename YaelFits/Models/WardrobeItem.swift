@@ -28,7 +28,7 @@ struct WardrobeItem: Codable, Identifiable, Hashable, Sendable {
     let brand: String?
     let color: String?
     /// Free-form category string. NOT NULL in the DB (default
-    /// `'unknown'`). Mapped to `ProductCategory` via `categoryEnum`
+    /// `'unknown'`). Mapped to `WardrobeCategory` via `categoryValue`
     /// where the value is a known case.
     let category: String
     let price: String?
@@ -57,14 +57,98 @@ struct WardrobeItem: Codable, Identifiable, Hashable, Sendable {
             .joined(separator: " ")
     }
 
-    /// Best-effort map to the existing keyword taxonomy. Falls back
-    /// to `.unknown` for values outside `ProductCategory`'s cases
-    /// (e.g. future `outerwear` / `accessory` labels).
-    var categoryEnum: ProductCategory {
-        ProductCategory(rawValue: category) ?? .unknown
+    /// The stored category as a `WardrobeCategory`, or `.other` when
+    /// the column holds an unrecognized value (e.g. the `'unknown'`
+    /// default before anything has been labeled). Callers that want
+    /// keyword inference for unlabeled items should fall back to
+    /// `WardrobeCategory.inferring(from:)` themselves.
+    var categoryValue: WardrobeCategory {
+        WardrobeCategory(rawValue: category) ?? .other
     }
 
     var isWishlist: Bool { status == WardrobeStatus.wishlist.rawValue }
+}
+
+/// The wardrobe's own, richer clothing taxonomy — independent of the
+/// try-on `ProductCategory` (which only needs top/bottom/shoes for its
+/// carousels). Drives the closet's filter chips. String-backed so it
+/// round-trips the `products.category` column.
+enum WardrobeCategory: String, CaseIterable, Sendable {
+    case top
+    case outerwear
+    case dress
+    case pants
+    case skirt
+    case shoes
+    case accessory
+    case other
+
+    var label: String {
+        switch self {
+        case .top:       return "Tops"
+        case .outerwear: return "Outerwear"
+        case .dress:     return "Dresses"
+        case .pants:     return "Pants"
+        case .skirt:     return "Skirts"
+        case .shoes:     return "Shoes"
+        case .accessory: return "Accessories"
+        case .other:     return "Other"
+        }
+    }
+
+    /// Stable order for the filter chips.
+    static let displayOrder: [WardrobeCategory] =
+        [.top, .outerwear, .dress, .pants, .skirt, .shoes, .accessory, .other]
+
+    /// Infer a category from a product name via keyword matching.
+    ///
+    /// Order is deliberate: shoes and outerwear are checked before
+    /// generic tops/bottoms (a "denim jacket" is outerwear, not
+    /// pants; a "sweater dress" is a dress, not a top), and the
+    /// accessory net is cast LAST so layering words like "belted"
+    /// trench/dress don't get miscaught as a belt. Keyword tokens are
+    /// chosen to avoid common substring collisions (e.g. "shorts" not
+    /// "short" → won't grab "short sleeve"; "boots" not "boot" →
+    /// won't grab "bootcut").
+    static func inferring(from name: String) -> WardrobeCategory {
+        let n = name.lowercased()
+        func has(_ words: [String]) -> Bool { words.contains { n.contains($0) } }
+
+        if has(["shoe", "sneaker", "trainer", "boots", "bootie", "heel",
+                "sandal", "loafer", "mule", "clog", "slipper", "espadrille",
+                "ballet flat", "flats", "pump", "stiletto", "wedge"]) {
+            return .shoes
+        }
+        if has(["coat", "jacket", "blazer", "parka", "trench", "puffer",
+                "anorak", "windbreaker", "raincoat", "overcoat", "cardigan",
+                "poncho", "cape", "gilet", "vest"]) {
+            return .outerwear
+        }
+        if has(["dress", "gown", "jumpsuit", "romper", "playsuit", "bodysuit"]) {
+            return .dress
+        }
+        if has(["skirt", "skort"]) {
+            return .skirt
+        }
+        if has(["pant", "trouser", "jean", "denim", "shorts", "legging",
+                "chino", "cargo", "culotte", "sweatpant", "jogger", "slack",
+                "capri", "palazzo", "flare"]) {
+            return .pants
+        }
+        if has(["top", "shirt", "tee", "t-shirt", "tshirt", "blouse",
+                "sweater", "jumper", "knit", "hoodie", "sweatshirt", "tank",
+                "cami", "camisole", "turtleneck", "polo", "bralette", "crop",
+                "henley", "tunic", "bodice", "corset", "bustier"]) {
+            return .top
+        }
+        if has(["bag", "tote", "clutch", "purse", "backpack", "handbag",
+                "belt", "scarf", "hat", "beanie", "beret", "glove", "sunglass",
+                "necklace", "earring", "bracelet", "watch", "jewel", "wallet",
+                "sock", "tights"]) {
+            return .accessory
+        }
+        return .other
+    }
 }
 
 /// The two ownership states a wardrobe item can be in. String-backed
