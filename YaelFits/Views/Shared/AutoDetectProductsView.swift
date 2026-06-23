@@ -565,7 +565,38 @@ struct AutoDetectProductsView: View {
     /// fresh thumbnail: fire `onProductSaved` with a `Product` that
     /// points at the existing library row (carrying its `productId` so
     /// the tag links to it), then drop the slot. No FAL call.
+    /// Reuse an existing closet item for a slot. Rather than silently
+    /// dropping the slot, it drives the *same* card states as a normal
+    /// tag (name fills in → brief `.generating` → `.accepted` showing
+    /// the product thumbnail) so it visually reads as "added", then
+    /// saves and removes the slot. No FAL call — the thumbnail is the
+    /// existing item's image.
     private func reuseExistingItem(_ item: WardrobeItem, for slotID: UUID) {
+        guard let i = slots.firstIndex(where: { $0.id == slotID }) else { return }
+        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+        focusedSlotID = nil
+        suggestions = []
+        withAnimation(.smooth(duration: 0.22)) {
+            slots[i].name = item.displayName
+            slots[i].state = .generating
+        }
+        Task {
+            let image = await loadImage(from: item.imageURL)
+            await MainActor.run {
+                if let image, let j = slots.firstIndex(where: { $0.id == slotID }) {
+                    withAnimation(.smooth(duration: 0.25)) {
+                        slots[j].state = .accepted(image)
+                    }
+                }
+            }
+            // Let the "added" card linger a beat so the swap is felt, then
+            // commit + remove with the standard removal animation.
+            try? await Task.sleep(nanoseconds: image == nil ? 0 : 650_000_000)
+            await MainActor.run { finalizeReuse(item: item, slotID: slotID) }
+        }
+    }
+
+    private func finalizeReuse(item: WardrobeItem, slotID: UUID) {
         onProductSaved(Product(
             name: item.name,
             price: item.price,
@@ -575,11 +606,15 @@ struct AutoDetectProductsView: View {
             tags: item.tags
         ))
         UINotificationFeedbackGenerator().notificationOccurred(.success)
-        focusedSlotID = nil
-        suggestions = []
-        withAnimation(.easeOut(duration: 0.12)) {
+        withAnimation(.easeOut(duration: 0.18)) {
             slots.removeAll { $0.id == slotID }
         }
+    }
+
+    private func loadImage(from urlString: String) async -> UIImage? {
+        guard let url = URL(string: urlString) else { return nil }
+        guard let (data, _) = try? await URLSession.shared.data(from: url) else { return nil }
+        return UIImage(data: data)
     }
 
     private var suggestionBar: some View {
