@@ -766,6 +766,29 @@ struct AutoDetectProductsView: View {
 
     // MARK: - Save
 
+    /// Persists a tagged thumbnail as a first-class `products` row so it
+    /// shows up in the Wardrobe immediately and survives outfit reloads,
+    /// then returns the `Product` to attach to the outfit (carrying the
+    /// new `productId`). Falls back to an inline-only product if the
+    /// closet insert fails, so tagging never breaks on a closet error.
+    private func persistTaggedProduct(name: String, imageURL: String) async -> Product {
+        let category = WardrobeCategory.inferring(from: name).rawValue
+        let savedId = try? await WardrobeService.createItem(
+            userId: userId,
+            name: name,
+            imageURL: imageURL,
+            category: category
+        ).id
+        return Product(
+            name: name,
+            price: nil,
+            image: imageURL,
+            shopLink: nil,
+            productId: savedId,
+            tags: nil
+        )
+    }
+
     /// Uploads the thumbnail for a single accepted slot, reports it to
     /// the parent, and removes the slot from the canvas. Sheet stays
     /// up. Wired to each card's corner checkmark.
@@ -774,14 +797,7 @@ struct AutoDetectProductsView: View {
         guard case let .accepted(thumb) = snapshot.state else { return }
         do {
             let url = try await ProductThumbnailUploadService.upload(thumb, userId: userId)
-            let product = Product(
-                name: snapshot.name,
-                price: nil,
-                image: url,
-                shopLink: nil,
-                productId: nil,
-                tags: nil
-            )
+            let product = await persistTaggedProduct(name: snapshot.name, imageURL: url)
             await MainActor.run {
                 onProductSaved(product)
                 withAnimation(.easeOut(duration: 0.12)) {
@@ -812,14 +828,7 @@ struct AutoDetectProductsView: View {
             guard case let .accepted(thumb) = snapshot.state else { continue }
             do {
                 let url = try await ProductThumbnailUploadService.upload(thumb, userId: userId)
-                let product = Product(
-                    name: snapshot.name,
-                    price: nil,
-                    image: url,
-                    shopLink: nil,
-                    productId: nil,
-                    tags: nil
-                )
+                let product = await persistTaggedProduct(name: snapshot.name, imageURL: url)
                 await MainActor.run { onProductSaved(product) }
             } catch {
                 await MainActor.run { saveError = error.localizedDescription }
@@ -1080,7 +1089,12 @@ private struct SlotWidgetView: View {
             if isGenerating {
                 // Same sparkle field as the outfit / bust generation, for a
                 // consistent "AI is working" look (replaces the spinner).
+                // Constrain the field to a small, centered frame so the
+                // sparkles cluster in the middle of the slot (the field
+                // spawns on a circle sized to its container) rather than
+                // scattering toward a corner.
                 GenerationStarField(starSize: 150, interactive: false)
+                    .frame(width: 76, height: 76)
                     .transition(.opacity)
             }
 
