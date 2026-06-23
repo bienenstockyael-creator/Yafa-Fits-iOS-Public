@@ -481,12 +481,6 @@ private struct WardrobeItemDetailSheet: View {
             ScrollView {
                 VStack(spacing: LayoutMetrics.large) {
                     productImage
-                    if !isBacked {
-                        Text("This item is tagged on an outfit — saving adds it to your closet so you can edit it.")
-                            .font(.system(size: 12))
-                            .foregroundStyle(AppPalette.textMuted)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
                     formCard
                     statusSection
                     if !sourceURL.isEmpty, let linkURL = URL(string: sourceURL) {
