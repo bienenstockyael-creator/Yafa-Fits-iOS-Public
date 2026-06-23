@@ -533,6 +533,7 @@ private struct WardrobeItemCell: View {
             // Wishlist items get a distinct tag; owned items show category.
             if isWishlist, showWishlistTag {
                 wishlistPill
+                    .scaleEffect(0.85)
             } else if showCategory, item.category != .other {
                 TagPill(tag: item.category.label)
                     .scaleEffect(0.85)
@@ -540,15 +541,18 @@ private struct WardrobeItemCell: View {
         }
     }
 
+    /// Mirrors `TagPill`'s clean white capsule, but with the same soft
+    /// aqua glow used behind the weather pill — a subtle wishlist accent
+    /// rather than a loud filled chip.
     private var wishlistPill: some View {
         Text("WISHLIST")
             .font(.system(size: 10, weight: .semibold))
             .tracking(1.2)
             .foregroundStyle(AppPalette.uploadGlow)
-            .padding(.horizontal, 12)
-            .frame(height: 30)
-            .background(Capsule().fill(AppPalette.uploadGlow.opacity(0.12)))
-            .overlay(Capsule().strokeBorder(AppPalette.uploadGlow.opacity(0.35), lineWidth: 0.75))
+            .padding(.horizontal, LayoutMetrics.xSmall)
+            .frame(height: 36)
+            .appCapsule(shadowRadius: 0, shadowY: 0)
+            .shadow(color: AppPalette.uploadGlow.opacity(0.35), radius: 14, y: 0)
     }
 }
 
