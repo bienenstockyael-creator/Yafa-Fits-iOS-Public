@@ -254,7 +254,7 @@ struct AutoDetectProductsView: View {
                             }
                     )
 
-                let positions = computeAllPositions(canvasSize: geo.size, imageRect: imageRect)
+                let positions = computeAllPositions(canvasSize: geo.size, imageRect: imageRect, bottomReserved: suggestionBarReserved)
                 ForEach(slots) { slot in
                     SlotWidgetView(
                         slot: slot,
@@ -300,6 +300,9 @@ struct AutoDetectProductsView: View {
             // doesn't hard-cut when the user taps Done or X and the
             // keyboard goes away.
             .animation(.smooth(duration: 0.25), value: imageRect)
+            // Slide cards up/down when the suggestion bar appears/clears so
+            // a low card lifts clear of it rather than being covered.
+            .animation(.smooth(duration: 0.22), value: suggestionBarReserved)
             .coordinateSpace(name: "canvas")
         }
     }
@@ -347,7 +350,7 @@ struct AutoDetectProductsView: View {
     /// Compute every slot's position in a single pass so we can keep cards
     /// from overlapping each other on the same side. Each slot gets pushed
     /// down past any earlier card it would collide with.
-    private func computeAllPositions(canvasSize: CGSize, imageRect: CGRect) -> [UUID: CGPoint] {
+    private func computeAllPositions(canvasSize: CGSize, imageRect: CGRect, bottomReserved: CGFloat = 0) -> [UUID: CGPoint] {
         let widgetHalf = SlotWidgetView.widgetOuterWidth / 2
         // Edge inset has to clear the 40pt corner button overhang from the
         // top-right of each card (offset 8, -8), or the X gets clipped.
@@ -370,7 +373,7 @@ struct AutoDetectProductsView: View {
 
             // Resolve Y so we don't overlap any earlier card on the same side.
             let topPad = halfHeight + 4
-            let bottomPad = canvasSize.height - halfHeight - 8
+            let bottomPad = canvasSize.height - halfHeight - 8 - bottomReserved
             var y = max(topPad, min(preferredY, bottomPad))
 
             // Push down past any colliding occupied range, repeating until
@@ -530,6 +533,15 @@ struct AutoDetectProductsView: View {
     }
 
     // MARK: - Closet dedup suggestions
+
+    /// Extra bottom space the canvas must keep clear for the "already in
+    /// your closet?" suggestion bar (which floats above the keyboard), so
+    /// the focused card lifts above it instead of being covered. Zero
+    /// when the bar isn't showing. Approximates the bar's rendered height
+    /// (label + chip row + padding) plus a small gap.
+    private var suggestionBarReserved: CGFloat {
+        (!suggestions.isEmpty && activeNamingName != nil) ? 130 : 0
+    }
 
     /// Name of the slot currently being typed into (focused + `.naming`).
     /// Drives the suggestion lookup; `nil` when nothing is being named.
