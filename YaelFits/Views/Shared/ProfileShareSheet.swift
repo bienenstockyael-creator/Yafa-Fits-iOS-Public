@@ -347,7 +347,7 @@ struct ProfileShareSheet: View {
                     .transition(.opacity)
 
                 VStack(spacing: LayoutMetrics.medium) {
-                    AppIcon(glyph: .globe, size: 36, color: AppPalette.textStrong)
+                    AppIcon(glyph: .globe, size: 22, color: AppPalette.textStrong)
                         .padding(.top, LayoutMetrics.small)
 
                     VStack(spacing: LayoutMetrics.small) {
@@ -355,7 +355,7 @@ struct ProfileShareSheet: View {
                             .font(.system(size: 22, weight: .semibold))
                             .foregroundStyle(AppPalette.textStrong)
 
-                        Text("Your card features the fits you've published. Tap the globe on any fit to publish it — it'll show up here for people to swipe through.")
+                        Text("You can only feature the fits you've already published to the feed.")
                             .font(.system(size: 15))
                             .foregroundStyle(AppPalette.textMuted)
                             .multilineTextAlignment(.center)
