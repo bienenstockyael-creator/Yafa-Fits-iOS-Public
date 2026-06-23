@@ -173,7 +173,7 @@ struct WardrobeView: View {
                         } label: {
                             WardrobeItemCell(
                                 item: item,
-                                showCategory: columnCount <= 2 && categoryFilter == nil,
+                                showCategory: columnCount <= 2 && categoryFilter == nil && statusFilter == nil,
                                 showWishlistTag: columnCount <= 2
                             )
                         }
@@ -188,7 +188,9 @@ struct WardrobeView: View {
                 }
                 .padding(.horizontal, LayoutMetrics.screenPadding)
                 .padding(.top, LayoutMetrics.medium)
-                .padding(.bottom, 56)
+                // Clear the home indicator for the LAST items (the scroll
+                // view itself extends through the bottom safe area below).
+                .padding(.bottom, 40)
                 // Zoom from the pinch focal point, not the content center.
                 .scaleEffect(pinchScale, anchor: pinchAnchor)
                 // Gesture lives on the grid so `startAnchor` is in the grid's
@@ -199,22 +201,26 @@ struct WardrobeView: View {
             }
         }
         .scrollIndicators(.hidden)
-        // Soft fade only at the TOP edge (so items dissolve under the
-        // pills); content extends fully to the bottom of the viewport.
-        .mask(
-            VStack(spacing: 0) {
-                LinearGradient(
-                    colors: [.clear, .black],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: 24)
-                Color.black
-            }
-        )
+        // Top fade as a lightweight OVERLAY (background colour → clear) over
+        // just the top edge — so items dissolve under the pills WITHOUT
+        // masking the whole ScrollView (which was clipping the bottom).
+        // Content now extends fully to the bottom of the viewport.
+        .overlay(alignment: .top) {
+            LinearGradient(
+                colors: [AppPalette.groupedBackground, AppPalette.groupedBackground.opacity(0)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 22)
+            .allowsHitTesting(false)
+        }
         // Disable scrolling the moment a second finger lands, so a pinch is
         // never read as a scroll. One-finger scrolling is unaffected.
         .scrollDisabled(twoFingersDown)
+        // Extend the grid THROUGH the bottom safe area so it fills to the
+        // physical bottom of the screen — no background strip / clip line
+        // above the home indicator.
+        .ignoresSafeArea(.container, edges: .bottom)
         .background(
             TouchCountReporter { count in
                 let down = count >= 2
@@ -269,36 +275,27 @@ struct WardrobeView: View {
     // MARK: - Filter bar
 
     private var filterBar: some View {
-        VStack(spacing: LayoutMetrics.xxSmall) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    chip(title: "All", isOn: categoryFilter == nil) { categoryFilter = nil }
-                    ForEach(availableCategories, id: \.self) { cat in
-                        chip(title: cat.label, isOn: categoryFilter == cat) {
-                            categoryFilter = (categoryFilter == cat) ? nil : cat
-                        }
+        // One row: All · categories · Wishlist (status, not a category).
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                chip(title: "All", isOn: categoryFilter == nil && statusFilter == nil) {
+                    categoryFilter = nil
+                    statusFilter = nil
+                }
+                ForEach(availableCategories, id: \.self) { cat in
+                    chip(title: cat.label, isOn: categoryFilter == cat && statusFilter == nil) {
+                        statusFilter = nil
+                        categoryFilter = (categoryFilter == cat) ? nil : cat
                     }
                 }
-                .padding(.horizontal, LayoutMetrics.screenPadding)
-            }
-
-            // Owned / Wishlist only appears once the user actually has
-            // wishlist items (e.g. from the future Chrome extension) —
-            // otherwise it's noise.
-            if hasWishlistItems {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        chip(title: "All items", isOn: statusFilter == nil) { statusFilter = nil }
-                        chip(title: "Owned", isOn: statusFilter == .owned) {
-                            statusFilter = (statusFilter == .owned) ? nil : .owned
-                        }
-                        chip(title: "Wishlist", isOn: statusFilter == .wishlist) {
-                            statusFilter = (statusFilter == .wishlist) ? nil : .wishlist
-                        }
+                if hasWishlistItems {
+                    chip(title: "Wishlist", isOn: statusFilter == .wishlist) {
+                        categoryFilter = nil
+                        statusFilter = (statusFilter == .wishlist) ? nil : .wishlist
                     }
-                    .padding(.horizontal, LayoutMetrics.screenPadding)
                 }
             }
+            .padding(.horizontal, LayoutMetrics.screenPadding)
         }
         .padding(.top, LayoutMetrics.xSmall)
     }
