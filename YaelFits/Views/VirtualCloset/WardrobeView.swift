@@ -34,8 +34,9 @@ struct WardrobeView: View {
     @State private var deletedItemIDs: Set<String> = []
 
     /// Apple Photos–style zoom: pinch to change how many columns the grid
-    /// shows. Persisted so the closet remembers your preferred density.
-    @AppStorage("yafa.closetColumns") private var columnCount: Int = 2
+    /// shows. Always starts at 2 (the default density) each time the closet
+    /// opens — not persisted.
+    @State private var columnCount: Int = 2
     /// Live, damped scale applied to the grid during a pinch for continuous
     /// feedback; springs back to 1 (and commits a new column count) on
     /// release — so the zoom feels fluid instead of snapping mid-gesture.
@@ -170,7 +171,7 @@ struct WardrobeView: View {
                             UIImpactFeedbackGenerator(style: .light).impactOccurred()
                             selectedItem = item
                         } label: {
-                            WardrobeItemCell(item: item, showCategory: columnCount <= 2)
+                            WardrobeItemCell(item: item, showCategory: columnCount <= 2 && categoryFilter == nil)
                         }
                         .buttonStyle(.plain)
                         // Re-identify EACH tile when the category/status filter
@@ -194,6 +195,19 @@ struct WardrobeView: View {
             }
         }
         .scrollIndicators(.hidden)
+        // Soft fade at the top edge so items dissolve into the background as
+        // they scroll up under the filter pills, instead of a hard clip line.
+        .mask(
+            VStack(spacing: 0) {
+                LinearGradient(
+                    colors: [.clear, .black],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 24)
+                Color.black
+            }
+        )
         // Disable scrolling the moment a second finger lands, so a pinch is
         // never read as a scroll. One-finger scrolling is unaffected.
         .scrollDisabled(twoFingersDown)
