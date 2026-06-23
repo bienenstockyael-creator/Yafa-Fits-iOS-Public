@@ -163,47 +163,51 @@ struct WardrobeView: View {
 
     private var grid: some View {
         ScrollView {
-            if filteredItems.isEmpty {
-                noMatchesState
-                    .padding(.top, LayoutMetrics.xLarge)
-            } else {
-                LazyVGrid(columns: columns, spacing: 20) {
-                    ForEach(filteredItems) { item in
-                        Button {
-                            // Ignore the stray tap that a finger-lift after a
-                            // pinch can register.
-                            guard !isPinching else { return }
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            selectedItem = item
-                        } label: {
-                            WardrobeItemCell(
-                                item: item,
-                                showCategory: columnCount <= 2 && categoryFilter == nil && statusFilter == nil,
-                                showWishlistTag: columnCount <= 2
-                            )
+            // The whole page (grid or empty state) is ONE animated unit, keyed
+            // by the active filter. On a filter change the entire layer
+            // transitions together — a directional slide on swipe, a scale+fade
+            // on tap — so individual tiles never animate on their own (no
+            // bottom-up reflow).
+            Group {
+                if filteredItems.isEmpty {
+                    noMatchesState
+                        .padding(.top, LayoutMetrics.xLarge)
+                        .frame(maxWidth: .infinity)
+                } else {
+                    LazyVGrid(columns: columns, spacing: 20) {
+                        ForEach(filteredItems) { item in
+                            Button {
+                                // Ignore the stray tap that a finger-lift after a
+                                // pinch can register.
+                                guard !isPinching else { return }
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                selectedItem = item
+                            } label: {
+                                WardrobeItemCell(
+                                    item: item,
+                                    showCategory: columnCount <= 2 && categoryFilter == nil && statusFilter == nil,
+                                    showWishlistTag: columnCount <= 2
+                                )
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
-                        // Re-identify EACH tile when the category/status filter
-                        // changes, so every tile transitions individually —
-                        // scale + fade from its own center — instead of sliding
-                        // to a new slot. (The thumbnail cache avoids flicker.)
-                        .id("\(gridIdentity)|\(item.id)")
-                        .transition(cellTransition)
                     }
+                    .padding(.horizontal, LayoutMetrics.screenPadding)
+                    .padding(.top, LayoutMetrics.medium)
+                    // Clear the home indicator for the LAST items (the scroll
+                    // view itself extends through the bottom safe area below).
+                    .padding(.bottom, 40)
+                    // Zoom from the pinch focal point, not the content center.
+                    .scaleEffect(pinchScale, anchor: pinchAnchor)
+                    // Gesture lives on the grid so `startAnchor` is in the grid's
+                    // own coordinate space (the finger midpoint). High priority so
+                    // a two-finger pinch wins over the ScrollView's scroll instead
+                    // of the scroll hijacking it.
+                    .highPriorityGesture(zoomGesture)
                 }
-                .padding(.horizontal, LayoutMetrics.screenPadding)
-                .padding(.top, LayoutMetrics.medium)
-                // Clear the home indicator for the LAST items (the scroll
-                // view itself extends through the bottom safe area below).
-                .padding(.bottom, 40)
-                // Zoom from the pinch focal point, not the content center.
-                .scaleEffect(pinchScale, anchor: pinchAnchor)
-                // Gesture lives on the grid so `startAnchor` is in the grid's
-                // own coordinate space (the finger midpoint). High priority so
-                // a two-finger pinch wins over the ScrollView's scroll instead
-                // of the scroll hijacking it.
-                .highPriorityGesture(zoomGesture)
             }
+            .id(gridIdentity)
+            .transition(gridTransition)
         }
         .scrollIndicators(.hidden)
         // Top fade as a lightweight OVERLAY (background colour → clear) over
@@ -406,13 +410,13 @@ struct WardrobeView: View {
         withAnimation(.easeInOut(duration: 0.32)) { applyTab(tabs[next]) }
     }
 
-    /// Per-cell enter/exit transition on a filter change. A swipe sets
-    /// `insertionEdge`, so items slide in from the swiped side and the old
-    /// ones slide out the opposite way (a page turn). A tap leaves it `nil`,
-    /// keeping the quiet scale+fade.
-    private var cellTransition: AnyTransition {
+    /// Whole-grid enter/exit transition on a filter change. A swipe sets
+    /// `insertionEdge`, so the page slides in from the swiped side and the old
+    /// one slides out the opposite way (a clean page turn — purely horizontal).
+    /// A tap leaves it `nil`, giving a quiet scale+fade instead.
+    private var gridTransition: AnyTransition {
         guard let insertionEdge else {
-            return .scale(scale: 0.9).combined(with: .opacity)
+            return .scale(scale: 0.96).combined(with: .opacity)
         }
         let removalEdge: Edge = insertionEdge == .trailing ? .leading : .trailing
         return .asymmetric(
@@ -422,15 +426,18 @@ struct WardrobeView: View {
     }
 
     /// Horizontal flick on the grid → previous/next category. Runs
-    /// simultaneously with the vertical scroll, and only fires on a clearly
-    /// horizontal swipe so normal scrolling and pinch-zoom are untouched.
+    /// simultaneously with the vertical scroll, but commits ONLY on a
+    /// decisively horizontal swipe (using flick velocity), so it never
+    /// competes with vertical scrolling or the sheet's swipe-to-dismiss.
     private var categorySwipe: some Gesture {
-        DragGesture(minimumDistance: 24)
+        DragGesture(minimumDistance: 18)
             .onEnded { value in
                 guard !isPinching, !twoFingersDown else { return }
-                let dx = value.translation.width
-                let dy = value.translation.height
-                guard abs(dx) > 50, abs(dx) > abs(dy) * 1.4 else { return }
+                // Use the projected end point so a quick flick counts even if
+                // short — but require the motion to be strongly horizontal.
+                let dx = value.predictedEndTranslation.width
+                let dy = value.predictedEndTranslation.height
+                guard abs(dx) > 80, abs(dx) > abs(dy) * 2.5 else { return }
                 advanceTab(by: dx < 0 ? 1 : -1)   // swipe left → next
             }
     }
