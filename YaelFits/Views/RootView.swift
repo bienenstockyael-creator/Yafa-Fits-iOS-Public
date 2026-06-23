@@ -12,7 +12,7 @@ struct RootView: View {
     @State private var loaderMounted = true
     @State private var loaderVisible = true
     @State private var loaderDismissTask: Task<Void, Never>?
-    @State private var showsFavoritesSheet = false
+    @State private var showsCloset = false
     @State private var showsVirtualCloset = false
     @State private var showsAvatarOnboarding = false
     /// Profile-as-home: the gear button on the right of the top bar
@@ -185,7 +185,7 @@ struct RootView: View {
                     Spacer()
                     HStack(alignment: .bottom) {
                         Spacer()
-                        floatingFavoritesButton
+                        floatingClosetButton
                     }
                     .padding(.horizontal, 28)
                     .padding(.bottom, 28)
@@ -421,9 +421,11 @@ struct RootView: View {
             transitionTask?.cancel()
             morphPrepTask?.cancel()
         }
-        .sheet(isPresented: $showsFavoritesSheet) {
-            FavoritesSheetView()
-                .environment(store)
+        .sheet(isPresented: $showsCloset) {
+            if let userId = store.userId {
+                WardrobeView(userId: userId)
+                    .environment(store)
+            }
         }
         .sheet(isPresented: $showsSettingsSheet) {
             // The full settings/profile screen — theme toggles, follow
@@ -1361,37 +1363,24 @@ struct RootView: View {
     }
 
 
-    private var floatingFavoritesButton: some View {
+    /// Floating entry to the Wardrobe (product closet). Replaced the
+    /// old favorites FAB — favorites now lives in the settings sheet.
+    /// "Dress avatar" / try-on becomes an action inside the wardrobe
+    /// rather than its own buried settings entry.
+    private var floatingClosetButton: some View {
         Button {
             let impact = UIImpactFeedbackGenerator(style: .light)
             impact.impactOccurred()
-            showsFavoritesSheet = true
+            showsCloset = true
         } label: {
-            ZStack(alignment: .topTrailing) {
-                AppIcon(
-                    glyph: .bookmark,
-                    size: 16,
-                    color: AppPalette.iconPrimary,
-                    filled: store.likedIds.contains(where: { id in store.outfits.contains { $0.id == id } })
-                )
-                    .frame(width: 48, height: 48)
-                    .appCircle()
-                let ownLikedCount = store.likedIds.filter { id in store.outfits.contains { $0.id == id } }.count
-                if ownLikedCount > 0 {
-                    Text("\(ownLikedCount)")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(AppPalette.textMuted)
-                        .frame(width: 20, height: 20)
-                        .background {
-                            LightBlurView(style: .systemThinMaterialLight)
-                                .clipShape(Circle())
-                                .overlay(Circle().fill(AppPalette.cardFill))
-                        }
-                        .overlay(Circle().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
-                        .shadow(color: AppPalette.cardShadow, radius: 4, y: 2)
-                        .offset(x: 4, y: -4)
-                }
-            }
+            AppIcon(
+                glyph: .tshirt,
+                size: 18,
+                color: AppPalette.iconPrimary,
+                filled: false
+            )
+            .frame(width: 48, height: 48)
+            .appCircle()
         }
         .buttonStyle(.plain)
     }

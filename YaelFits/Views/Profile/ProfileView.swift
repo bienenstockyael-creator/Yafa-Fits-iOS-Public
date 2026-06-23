@@ -32,6 +32,9 @@ struct ProfileView: View {
     @State private var showFollowers = false
     @State private var showFollowing = false
     @State private var showSavedSheet = false
+    /// Favorites (your liked own outfits) — moved here from the old
+    /// floating FAB, which now opens the wardrobe instead.
+    @State private var showFavoritesSheet = false
     /// Vibes + 3D credit balances surfaced under the stats row.
     /// Refreshed in `.task` alongside follower/following counts.
     @State private var vibesReceived: Int = 0
@@ -649,6 +652,7 @@ struct ProfileView: View {
     /// only on the auth screen) — also where App Store review expects them.
     private var accountExtrasSection: some View {
         VStack(spacing: LayoutMetrics.small) {
+            settingsRow(favoritesRowTitle) { showFavoritesSheet = true }
             settingsRow("BLOCKED ACCOUNTS") { showBlockedAccounts = true }
             settingsRow("TERMS OF SERVICE") {
                 if let url = URL(string: AppConfig.termsOfServiceURL) { openURL(url) }
@@ -657,6 +661,20 @@ struct ProfileView: View {
                 if let url = URL(string: AppConfig.privacyPolicyURL) { openURL(url) }
             }
         }
+        .sheet(isPresented: $showFavoritesSheet) {
+            FavoritesSheetView()
+                .environment(store)
+                .presentationDragIndicator(.visible)
+                .presentationBackground(AppPalette.groupedBackground)
+        }
+    }
+
+    /// "FAVORITES" with a trailing count of the user's favorited own
+    /// outfits, so the entry keeps the at-a-glance signal the FAB
+    /// badge used to give now that it lives in settings.
+    private var favoritesRowTitle: String {
+        let count = store.likedIds.filter { id in store.outfits.contains { $0.id == id } }.count
+        return count > 0 ? "FAVORITES · \(count)" : "FAVORITES"
     }
 
     private func settingsRow(_ text: String, action: @escaping () -> Void) -> some View {
