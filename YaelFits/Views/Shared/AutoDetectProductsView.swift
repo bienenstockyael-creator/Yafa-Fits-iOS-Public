@@ -694,7 +694,8 @@ struct AutoDetectProductsView: View {
     private func suggestionThumbnail(_ item: ClosetMatch) -> some View {
         // Trims the product PNG's transparent margins so the garment
         // fills the frame; fixed size so the pill never resizes on load.
-        TrimmedProductThumbnail(url: item.resolvedImageURL, size: 46)
+        TrimmedRemoteImage(url: item.resolvedImageURL, contentPadding: 5)
+            .frame(width: 46, height: 46)
     }
 
     private func commitName(_ slotID: UUID) async {
@@ -1235,83 +1236,5 @@ private struct SlotWidgetView: View {
             }
             .buttonStyle(.plain)
         }
-    }
-}
-
-// MARK: - Trimmed product thumbnail
-
-/// Loads a product image and trims its transparent margins so the
-/// garment fills the frame — product thumbnails are flat-lays with
-/// baked-in transparent padding that otherwise makes them look small
-/// and float in their box. The frame is fixed, so the pill doesn't
-/// resize when the image lands; the trim runs off the main thread.
-private struct TrimmedProductThumbnail: View {
-    let url: URL?
-    let size: CGFloat
-
-    @State private var image: UIImage?
-
-    var body: some View {
-        Group {
-            if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    // Small inset so the alpha-trimmed garment doesn't
-                    // sit edge-to-edge — gives the pill breathing room.
-                    .padding(5)
-                    .transition(.opacity)
-            } else {
-                Color.clear
-            }
-        }
-        .frame(width: size, height: size)
-        .task(id: url) { await load() }
-    }
-
-    private func load() async {
-        guard let url,
-              let (data, _) = try? await URLSession.shared.data(from: url),
-              let raw = UIImage(data: data) else { return }
-        let trimmed = await Task.detached(priority: .userInitiated) {
-            raw.trimmingTransparentMargins()
-        }.value
-        await MainActor.run {
-            withAnimation(.easeOut(duration: 0.15)) { image = trimmed }
-        }
-    }
-}
-
-private extension UIImage {
-    /// Crop away the near-transparent border so the opaque content
-    /// fills the image. Returns self if it has no croppable margin.
-    func trimmingTransparentMargins(alphaThreshold: UInt8 = 8) -> UIImage {
-        guard let cg = cgImage else { return self }
-        let w = cg.width, h = cg.height
-        guard w > 0, h > 0 else { return self }
-        let bpp = 4
-        let bpr = w * bpp
-        var data = [UInt8](repeating: 0, count: h * bpr)
-        guard let ctx = CGContext(
-            data: &data, width: w, height: h, bitsPerComponent: 8,
-            bytesPerRow: bpr, space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else { return self }
-        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
-
-        var minX = w, minY = h, maxX = -1, maxY = -1
-        for y in 0..<h {
-            let row = y * bpr
-            for x in 0..<w where data[row + x * bpp + 3] > alphaThreshold {
-                if x < minX { minX = x }
-                if x > maxX { maxX = x }
-                if y < minY { minY = y }
-                if y > maxY { maxY = y }
-            }
-        }
-        guard maxX >= minX, maxY >= minY else { return self }
-        let rect = CGRect(x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1)
-        guard let cropped = cg.cropping(to: rect) else { return self }
-        return UIImage(cgImage: cropped, scale: scale, orientation: imageOrientation)
     }
 }

@@ -181,3 +181,79 @@ extension View {
         modifier(AppRoundedRectModifier(cornerRadius: cornerRadius, shadowRadius: shadowRadius, shadowY: shadowY))
     }
 }
+
+// MARK: - Trimmed remote product image
+
+/// Loads a remote product image and crops its transparent margins so
+/// the garment fills the frame, then renders it `scaledToFit`. Product
+/// thumbnails are flat-lays with baked-in transparent padding that
+/// otherwise makes them look randomly tiny/huge. The trim runs off the
+/// main thread; the caller supplies the frame, so layout is stable.
+struct TrimmedRemoteImage: View {
+    let url: URL?
+    /// Inset applied to the trimmed image inside its frame (breathing room).
+    var contentPadding: CGFloat = 0
+
+    @State private var image: UIImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .padding(contentPadding)
+                    .transition(.opacity)
+            } else {
+                Color.clear
+            }
+        }
+        .task(id: url) { await load() }
+    }
+
+    private func load() async {
+        guard let url,
+              let (data, _) = try? await URLSession.shared.data(from: url),
+              let raw = UIImage(data: data) else { return }
+        let trimmed = await Task.detached(priority: .userInitiated) {
+            raw.trimmingTransparentMargins()
+        }.value
+        await MainActor.run {
+            withAnimation(.easeOut(duration: 0.15)) { image = trimmed }
+        }
+    }
+}
+
+extension UIImage {
+    /// Crop away the near-transparent border so the opaque content fills
+    /// the image. Returns self if there's no croppable margin.
+    func trimmingTransparentMargins(alphaThreshold: UInt8 = 8) -> UIImage {
+        guard let cg = cgImage else { return self }
+        let w = cg.width, h = cg.height
+        guard w > 0, h > 0 else { return self }
+        let bpp = 4
+        let bpr = w * bpp
+        var data = [UInt8](repeating: 0, count: h * bpr)
+        guard let ctx = CGContext(
+            data: &data, width: w, height: h, bitsPerComponent: 8,
+            bytesPerRow: bpr, space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return self }
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+
+        var minX = w, minY = h, maxX = -1, maxY = -1
+        for y in 0..<h {
+            let row = y * bpr
+            for x in 0..<w where data[row + x * bpp + 3] > alphaThreshold {
+                if x < minX { minX = x }
+                if x > maxX { maxX = x }
+                if y < minY { minY = y }
+                if y > maxY { maxY = y }
+            }
+        }
+        guard maxX >= minX, maxY >= minY else { return self }
+        let rect = CGRect(x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1)
+        guard let cropped = cg.cropping(to: rect) else { return self }
+        return UIImage(cgImage: cropped, scale: scale, orientation: imageOrientation)
+    }
+}

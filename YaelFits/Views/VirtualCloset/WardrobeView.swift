@@ -324,6 +324,19 @@ struct WardrobeDisplayItem: Identifiable, Hashable {
     let price: String?
     let sourceURL: String?
     let productId: UUID?
+
+    /// Resolves possibly-relative image paths against the site base URL
+    /// (same as `Product.resolvedImageURL`).
+    var resolvedImageURL: URL? {
+        let trimmed = imageURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if let abs = URL(string: trimmed), abs.scheme != nil { return abs }
+        let normalized = trimmed.hasPrefix("/")
+            ? String(trimmed.dropFirst())
+            : trimmed.replacingOccurrences(of: "^\\./?", with: "", options: .regularExpression)
+        guard !normalized.isEmpty else { return nil }
+        return AppConfig.siteBaseURL.appendingPathComponent(normalized)
+    }
 }
 
 // MARK: - Cell
@@ -332,48 +345,37 @@ private struct WardrobeItemCell: View {
     let item: WardrobeDisplayItem
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ZStack {
-                RoundedRectangle(cornerRadius: LayoutMetrics.compactCornerRadius, style: .continuous)
-                    .fill(AppPalette.cardFill)
-                AsyncImage(url: URL(string: item.imageURL)) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFit().padding(8)
-                    case .empty:
-                        ProgressView().scaleEffect(0.7)
-                    case .failure:
-                        AppIcon(glyph: .tshirt, size: 22, color: AppPalette.textFaint)
-                    @unknown default:
-                        Color.clear
+        VStack(alignment: .leading, spacing: 9) {
+            // Trimmed product on a clean tile — consistent sizing across
+            // items, matching the app's soft card surfaces.
+            TrimmedRemoteImage(url: item.resolvedImageURL, contentPadding: 16)
+                .frame(maxWidth: .infinity)
+                .frame(height: 150)
+                .background(Color.white)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .strokeBorder(AppPalette.cardBorder, lineWidth: 0.75)
+                )
+                .overlay(alignment: .topLeading) {
+                    if item.status == .wishlist {
+                        Text("WISHLIST")
+                            .font(.system(size: 8, weight: .bold))
+                            .tracking(0.6)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(AppPalette.uploadGlow))
+                            .padding(8)
                     }
                 }
-            }
-            .frame(height: 130)
-            .clipShape(RoundedRectangle(cornerRadius: LayoutMetrics.compactCornerRadius, style: .continuous))
-            .overlay(alignment: .topLeading) {
-                if item.status == .wishlist {
-                    Text("Wishlist")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(Color.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(Capsule().fill(AppPalette.uploadGlow))
-                        .padding(6)
-                }
-            }
+                .shadow(color: AppPalette.cardShadow, radius: 9, y: 4)
 
             Text(item.name)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(AppPalette.textPrimary)
+                .font(.system(size: 12.5, weight: .medium))
+                .foregroundStyle(AppPalette.textStrong)
                 .lineLimit(1)
-
-            if let price = item.price, !price.isEmpty {
-                Text(price)
-                    .font(.system(size: 11))
-                    .foregroundStyle(AppPalette.textMuted)
-                    .lineLimit(1)
-            }
+                .padding(.horizontal, 2)
         }
     }
 }
