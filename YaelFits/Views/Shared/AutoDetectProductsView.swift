@@ -558,11 +558,11 @@ struct AutoDetectProductsView: View {
     }
 
     private var suggestionBar: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             Text("ALREADY IN YOUR CLOSET?")
-                .font(.system(size: 10, weight: .semibold))
-                .tracking(1.2)
-                .foregroundStyle(AppPalette.textMuted)
+                .font(.system(size: 10, weight: .bold))
+                .tracking(1.4)
+                .foregroundStyle(AppPalette.textFaint)
                 .padding(.horizontal, LayoutMetrics.screenPadding)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
@@ -580,14 +580,20 @@ struct AutoDetectProductsView: View {
                 .padding(.horizontal, LayoutMetrics.screenPadding)
             }
         }
-        .padding(.vertical, 12)
+        .padding(.top, 14)
+        .padding(.bottom, 16)
         .frame(maxWidth: .infinity)
-        .background(.ultraThinMaterial)
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(AppPalette.cardBorder)
-                .frame(height: 0.75)
-        }
+        .background(
+            UnevenRoundedRectangle(
+                topLeadingRadius: 24,
+                bottomLeadingRadius: 0,
+                bottomTrailingRadius: 0,
+                topTrailingRadius: 24,
+                style: .continuous
+            )
+            .fill(AppPalette.groupedBackground)
+            .shadow(color: Color.black.opacity(0.10), radius: 16, y: -5)
+        )
     }
 
     private func suggestionChip(_ item: WardrobeItem) -> some View {
@@ -599,18 +605,22 @@ struct AutoDetectProductsView: View {
                     Color.clear
                 }
             }
-            .frame(width: 34, height: 34)
-            .background(Color.white)
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .frame(width: 38, height: 38)
+            .background(AppPalette.groupedBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
             Text(item.displayName)
-                .font(.system(size: 13, weight: .medium))
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(AppPalette.textPrimary)
                 .lineLimit(1)
         }
         .padding(.leading, 7)
-        .padding(.trailing, 14)
+        .padding(.trailing, 16)
         .padding(.vertical, 6)
-        .background(Capsule().fill(Color.white))
+        .background(
+            Capsule()
+                .fill(Color.white)
+                .shadow(color: Color.black.opacity(0.06), radius: 6, y: 2)
+        )
         .overlay(Capsule().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
     }
 
