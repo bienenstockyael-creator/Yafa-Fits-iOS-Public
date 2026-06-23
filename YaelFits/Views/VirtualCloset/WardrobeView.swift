@@ -32,19 +32,28 @@ struct WardrobeView: View {
     /// updates even before the (cached) outfit list re-syncs.
     @State private var deletedItemIDs: Set<String> = []
 
-    /// Persisted preferred density (whole columns).
-    @AppStorage("yafa.closetColumns") private var savedColumns: Int = 2
-    /// Continuous column count driven by the pinch. Fractional values let
-    /// the custom `ZoomGrid` layout interpolate item frames between the two
-    /// bracketing integer grids — the fully-fluid Photos feel.
-    @State private var zoomColumns: Double = 2
-    /// zoomColumns at the moment the current pinch began.
-    @State private var pinchStartColumns: Double?
+    /// Apple Photos–style zoom: pinch to change how many columns the grid
+    /// shows. Persisted so the closet remembers your preferred density.
+    @AppStorage("yafa.closetColumns") private var columnCount: Int = 2
+    /// Live, damped scale applied to the grid during a pinch for continuous
+    /// feedback; springs back to 1 (and commits a new column count) on
+    /// release — so the zoom feels fluid instead of snapping mid-gesture.
+    /// Small compensating scale so tile *size* stays continuous while the
+    /// column count steps during a pinch (the integer layout can only jump,
+    /// the scale fills the gaps). Always ~0.85–1.2, so it never shoves
+    /// content off-screen.
+    @State private var pinchScale: CGFloat = 1
+    /// Column count when the current pinch began, so the gesture maps
+    /// absolute (not incrementally drifting).
+    @State private var pinchStartColumns: Int?
 
     private static let minColumns = 2
     private static let maxColumns = 4
     private let gridSpacing: CGFloat = 14
-    private let gridRowSpacing: CGFloat = 22
+
+    private var columns: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: gridSpacing), count: columnCount)
+    }
 
     var body: some View {
         NavigationStack {
@@ -76,7 +85,6 @@ struct WardrobeView: View {
                     .presentationBackground(AppPalette.groupedBackground)
                 }
                 .task { await load() }
-                .onAppear { zoomColumns = Double(savedColumns) }
         }
         // Fixed light palette across the app — keep the sheet light so the
         // search field text stays readable in dark mode.
@@ -134,19 +142,13 @@ struct WardrobeView: View {
                 noMatchesState
                     .padding(.top, LayoutMetrics.xLarge)
             } else {
-                ZoomGrid(
-                    columns: zoomColumns,
-                    spacing: gridSpacing,
-                    rowSpacing: gridRowSpacing,
-                    minColumns: Self.minColumns,
-                    maxColumns: Self.maxColumns
-                ) {
+                LazyVGrid(columns: columns, spacing: 20) {
                     ForEach(filteredItems) { item in
                         Button {
                             UIImpactFeedbackGenerator(style: .light).impactOccurred()
                             selectedItem = item
                         } label: {
-                            WardrobeItemCell(item: item)
+                            WardrobeItemCell(item: item, showCategory: columnCount <= 2)
                         }
                         .buttonStyle(.plain)
                         .transition(.scale(scale: 0.92).combined(with: .opacity))
@@ -155,6 +157,13 @@ struct WardrobeView: View {
                 .padding(.horizontal, LayoutMetrics.screenPadding)
                 .padding(.top, LayoutMetrics.medium)
                 .padding(.bottom, LayoutMetrics.large)
+                .scaleEffect(pinchScale, anchor: .center)
+                // Smooth the threshold step: animate the column reflow AND
+                // the compensating scale with the SAME fast interactive
+                // spring, so positions slide gently while tile size stays
+                // ~continuous (they move in lock-step). Buttery, not snappy.
+                .animation(.interactiveSpring(response: 0.26, dampingFraction: 0.84), value: columnCount)
+                .animation(.interactiveSpring(response: 0.26, dampingFraction: 0.84), value: pinchScale)
                 .animation(.spring(response: 0.42, dampingFraction: 0.9), value: filteredItems)
             }
         }
@@ -162,32 +171,34 @@ struct WardrobeView: View {
         .simultaneousGesture(zoomGesture)
     }
 
-    /// Pinch drives the continuous `zoomColumns`; the `ZoomGrid` layout
-    /// interpolates every tile's position AND size between the bracketing
-    /// integer grids, so it morphs fluidly (no snapping). On release it
-    /// springs to the nearest whole column count.
+    /// Pinch out → fewer/bigger tiles; pinch in → more/smaller. Mirrors the
+    /// Photos app: the grid scales live under your fingers, then springs to
+    /// the new column count when you let go. Two-finger pinch coexists with
+    /// one-finger scroll.
     private var zoomGesture: some Gesture {
         MagnificationGesture()
             .onChanged { value in
-                if pinchStartColumns == nil { pinchStartColumns = zoomColumns }
-                let start = pinchStartColumns ?? zoomColumns
-                // Zoom out (value > 1) → bigger tiles → fewer columns.
-                zoomColumns = min(
+                let start = pinchStartColumns ?? columnCount
+                if pinchStartColumns == nil { pinchStartColumns = columnCount }
+                // Continuous desired column count (zoom out → bigger tiles →
+                // fewer columns), then the nearest whole layout to render.
+                let desired = min(
                     Double(Self.maxColumns),
-                    max(Double(Self.minColumns), start / Double(value))
+                    max(Double(Self.minColumns), Double(start) / value)
                 )
+                let whole = Int(desired.rounded())
+                if whole != columnCount {
+                    columnCount = whole          // steps 2→3→4 mid-pinch
+                    UISelectionFeedbackGenerator().selectionChanged()
+                }
+                // Fill the gap between the whole layout and the continuous
+                // desired size with scale → tile size never jumps.
+                pinchScale = CGFloat(columnCount) / CGFloat(desired)
             }
             .onEnded { _ in
                 pinchStartColumns = nil
-                let snapped = min(
-                    Self.maxColumns,
-                    max(Self.minColumns, Int(zoomColumns.rounded()))
-                )
-                UISelectionFeedbackGenerator().selectionChanged()
-                withAnimation(.spring(response: 0.36, dampingFraction: 0.84)) {
-                    zoomColumns = Double(snapped)
-                }
-                savedColumns = snapped
+                // Gentle settle to the clean column width.
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.86)) { pinchScale = 1 }
             }
     }
 
@@ -431,13 +442,20 @@ struct WardrobeDisplayItem: Identifiable, Hashable {
 
 private struct WardrobeItemCell: View {
     let item: WardrobeDisplayItem
+    /// Show the category pill only when the grid is sparse (2 columns) —
+    /// hidden when dense so tiles stay clean.
+    var showCategory: Bool = false
 
     var body: some View {
-        // Fills the frame the ZoomGrid layout assigns it: the product fills
-        // the area above a quiet one-line caption. No card — minimal.
-        VStack(alignment: .leading, spacing: 6) {
-            TrimmedRemoteImage(url: item.resolvedImageURL, contentPadding: 6)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        VStack(alignment: .leading, spacing: 7) {
+            // Product floats with no card behind it (minimal). A fixed
+            // aspect box scales the tile with the column width so the grid
+            // reflows cleanly when you pinch-zoom.
+            Color.clear
+                .aspectRatio(0.85, contentMode: .fit)
+                .overlay {
+                    TrimmedRemoteImage(url: item.resolvedImageURL, contentPadding: 6)
+                }
                 .overlay(alignment: .topLeading) {
                     if item.status == .wishlist {
                         Text("WISHLIST")
@@ -449,89 +467,18 @@ private struct WardrobeItemCell: View {
                             .background(Capsule().fill(AppPalette.uploadGlow))
                     }
                 }
+
+            // Quiet caption — the garment is the hero.
             Text(item.name)
                 .font(.system(size: 11.5))
                 .foregroundStyle(AppPalette.textMuted)
                 .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-}
+                .padding(.horizontal, 1)
 
-/// A grid whose column count can be a CONTINUOUS (fractional) value. Each
-/// item's frame — position AND size — is interpolated between the two
-/// bracketing integer grids by the fractional part, so pinch-zoom morphs
-/// fluidly the way the Photos app does, instead of snapping between whole
-/// layouts. Conforms to `Animatable` (via `columns`) so a `withAnimation`
-/// on the column count re-runs the layout each frame for a smooth settle.
-private struct ZoomGrid: Layout {
-    var columns: Double
-    var spacing: CGFloat = 14
-    var rowSpacing: CGFloat = 22
-    /// Image-area aspect (width / height); the caption strip sits below it.
-    var imageAspect: CGFloat = 0.85
-    var captionHeight: CGFloat = 22
-    var minColumns: Int = 2
-    var maxColumns: Int = 4
-
-    var animatableData: Double {
-        get { columns }
-        set { columns = newValue }
-    }
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let width = proposal.width ?? 0
-        let height = frames(count: subviews.count, width: width).map(\.maxY).max() ?? 0
-        return CGSize(width: width, height: height)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let computed = frames(count: subviews.count, width: bounds.width)
-        for (i, sub) in subviews.enumerated() {
-            let f = computed[i]
-            sub.place(
-                at: CGPoint(x: bounds.minX + f.minX, y: bounds.minY + f.minY),
-                anchor: .topLeading,
-                proposal: ProposedViewSize(width: f.width, height: f.height)
-            )
-        }
-    }
-
-    private func wholeGridFrames(count: Int, cols: Int, width: CGFloat) -> [CGRect] {
-        let c = max(1, cols)
-        let itemW = (width - spacing * CGFloat(c - 1)) / CGFloat(c)
-        let cellH = itemW / imageAspect + captionHeight
-        var result: [CGRect] = []
-        result.reserveCapacity(count)
-        for i in 0..<count {
-            let row = i / c, col = i % c
-            result.append(CGRect(
-                x: CGFloat(col) * (itemW + spacing),
-                y: CGFloat(row) * (cellH + rowSpacing),
-                width: itemW,
-                height: cellH
-            ))
-        }
-        return result
-    }
-
-    private func frames(count: Int, width: CGFloat) -> [CGRect] {
-        guard count > 0, width > 0 else { return [] }
-        let clamped = min(Double(maxColumns), max(Double(minColumns), columns))
-        let lower = max(minColumns, min(maxColumns, Int(clamped.rounded(.down))))
-        let upper = min(maxColumns, lower + 1)
-        let a = wholeGridFrames(count: count, cols: lower, width: width)
-        let t = CGFloat(clamped - Double(lower))
-        if upper == lower || t <= 0.0001 { return a }
-        let b = wholeGridFrames(count: count, cols: upper, width: width)
-        return (0..<count).map { i in
-            let ra = a[i], rb = b[i]
-            return CGRect(
-                x: ra.minX + (rb.minX - ra.minX) * t,
-                y: ra.minY + (rb.minY - ra.minY) * t,
-                width: ra.width + (rb.width - ra.width) * t,
-                height: ra.height + (rb.height - ra.height) * t
-            )
+            if showCategory, item.category != .other {
+                TagPill(tag: item.category.label)
+                    .scaleEffect(0.85, anchor: .leading)
+            }
         }
     }
 }
