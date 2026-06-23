@@ -43,7 +43,10 @@ struct ProfileShareSheet: View {
     /// Once-ever flag for the publish explainer pop-up — shown the
     /// first time the card has nothing published to feature, or the
     /// user reaches the end of their carousel.
-    @AppStorage("yafa.shareCardPublishHintSeen") private var publishHintSeen = false
+    // Key bumped to .v2 to re-surface the publish hint after the
+    // copy/icon refresh — resets the one-time "seen" state so the
+    // explainer pops once more for everyone who'd already dismissed it.
+    @AppStorage("yafa.shareCardPublishHintSeen.v2") private var publishHintSeen = false
     @State private var showPublishModal = false
 
     private let cardGray = Color(white: 0.918)
