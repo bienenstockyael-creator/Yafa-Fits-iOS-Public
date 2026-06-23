@@ -33,6 +33,11 @@ struct WardrobeView: View {
     /// updates even before the (cached) outfit list re-syncs.
     @State private var deletedItemIDs: Set<String> = []
 
+    /// Drives the grid's enter/exit animation on a filter change. `nil` →
+    /// the quiet scale+fade used when tapping a pill; an edge → a directional
+    /// slide (set by a swipe, so items page in from the swiped side).
+    @State private var insertionEdge: Edge? = nil
+
     /// Apple Photos–style zoom: pinch to change how many columns the grid
     /// shows. Always starts at 2 (the default density) each time the closet
     /// opens — not persisted.
@@ -183,7 +188,7 @@ struct WardrobeView: View {
                         // scale + fade from its own center — instead of sliding
                         // to a new slot. (The thumbnail cache avoids flicker.)
                         .id("\(gridIdentity)|\(item.id)")
-                        .transition(.scale(scale: 0.9).combined(with: .opacity))
+                        .transition(cellTransition)
                     }
                 }
                 .padding(.horizontal, LayoutMetrics.screenPadding)
@@ -318,7 +323,8 @@ struct WardrobeView: View {
     private func chip(title: String, isOn: Bool, action: @escaping () -> Void) -> some View {
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            // Soft fade for the grid swap — no springiness.
+            // Tapping a pill uses the quiet scale+fade (no direction).
+            insertionEdge = nil
             withAnimation(.easeInOut(duration: 0.3)) { action() }
         } label: {
             Text(title)
@@ -387,15 +393,32 @@ struct WardrobeView: View {
         }
     }
 
-    /// Step one tab left/right (clamped at the ends), with the same soft
-    /// fade the pills use when tapped.
+    /// Step one tab left/right (clamped at the ends). Unlike a pill tap, the
+    /// grid pages in directionally — swipe left (next) → new items enter from
+    /// the right; swipe right (prev) → from the left.
     private func advanceTab(by delta: Int) {
         let tabs = filterTabs
         guard tabs.count > 1 else { return }
         let next = currentTabIndex + delta
         guard next >= 0, next < tabs.count else { return }
+        insertionEdge = delta > 0 ? .trailing : .leading
         UISelectionFeedbackGenerator().selectionChanged()
-        withAnimation(.easeInOut(duration: 0.3)) { applyTab(tabs[next]) }
+        withAnimation(.easeInOut(duration: 0.32)) { applyTab(tabs[next]) }
+    }
+
+    /// Per-cell enter/exit transition on a filter change. A swipe sets
+    /// `insertionEdge`, so items slide in from the swiped side and the old
+    /// ones slide out the opposite way (a page turn). A tap leaves it `nil`,
+    /// keeping the quiet scale+fade.
+    private var cellTransition: AnyTransition {
+        guard let insertionEdge else {
+            return .scale(scale: 0.9).combined(with: .opacity)
+        }
+        let removalEdge: Edge = insertionEdge == .trailing ? .leading : .trailing
+        return .asymmetric(
+            insertion: .move(edge: insertionEdge).combined(with: .opacity),
+            removal: .move(edge: removalEdge).combined(with: .opacity)
+        )
     }
 
     /// Horizontal flick on the grid → previous/next category. Runs
