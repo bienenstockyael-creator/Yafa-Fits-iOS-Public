@@ -94,6 +94,10 @@ struct AutoDetectProductsView: View {
                     .buttonStyle(.plain)
                     .padding(.bottom, LayoutMetrics.medium)
                 }
+                // Stay pinned at the bottom; it's fine for the keyboard to
+                // cover it while naming a slot (a separate flow) rather
+                // than have it ride up over the card.
+                .ignoresSafeArea(.keyboard, edges: .bottom)
             }
         }
         .alert("Couldn't save", isPresented: errorBinding) {
