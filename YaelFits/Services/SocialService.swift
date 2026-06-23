@@ -178,6 +178,19 @@ struct SocialService {
             .execute()
     }
 
+    /// Targeted avatar-cutout-URL write keyed by user id. Used by the
+    /// share card's on-demand bust generation to persist the cutout so
+    /// the web/OG card and the next app launch reuse it. Deliberately
+    /// does NOT touch header_style — the user keeps whatever profile
+    /// style they're on; only the share card features the bust.
+    static func updateAvatarCutoutUrl(userId: UUID, url: String) async throws {
+        try await supabase
+            .from("profiles")
+            .update(["avatar_cutout_url": url])
+            .eq("id", value: userId.uuidString)
+            .execute()
+    }
+
     // MARK: - Likes
 
     static func getLikedOutfitIds(userId: UUID) async throws -> Set<String> {

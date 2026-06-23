@@ -34,6 +34,12 @@ struct ProfileShareSheet: View {
     /// Fractional dot position while the user is scrubbing the
     /// dot picker. nil at rest.
     @State private var dotScrubPosition: CGFloat? = nil
+    /// On-demand bust cutout for the empty-state card when the user
+    /// has a photo but no existing cutout (e.g. minimal/curved header
+    /// style). Generated once via FAL bg-removal, then uploaded so the
+    /// web/OG card and the next launch reuse it.
+    @State private var bustCutout: UIImage? = nil
+    @State private var isGeneratingBust = false
 
     private let cardGray = Color(white: 0.918)
 
@@ -115,11 +121,12 @@ struct ProfileShareSheet: View {
     /// silhouette placeholder when there's no profile photo at all.
     @ViewBuilder
     private func emptyStateHero(height: CGFloat) -> some View {
-        if let cutout = store.currentAvatarCutoutImage {
+        if let cutout = store.currentAvatarCutoutImage ?? bustCutout {
             Image(uiImage: cutout)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(height: height)
+                .transition(.opacity)
         } else if let avatar = store.currentAvatarImage {
             Image(uiImage: avatar)
                 .resizable()
@@ -155,6 +162,57 @@ struct ProfileShareSheet: View {
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(height: height)
+        }
+    }
+
+    /// Generates a bust cutout for the empty-state card on demand when
+    /// the user has a photo but no cutout yet (e.g. minimal/curved
+    /// header style). Background-removes the avatar via FAL, swaps it
+    /// in, and uploads + persists `avatar_cutout_url` so the web/OG
+    /// card and the next launch reuse it (without changing the user's
+    /// header style). No-op if a cutout already exists, there's no
+    /// photo, or there are shareable outfits to feature instead — so
+    /// it runs at most once per avatar.
+    private func ensureBustCutout() async {
+        guard shareableOutfits.isEmpty,
+              store.currentAvatarCutoutImage == nil,
+              bustCutout == nil,
+              !isGeneratingBust,
+              (store.currentProfile?.avatarCutoutUrl ?? "").isEmpty,
+              let userId = store.userId
+        else { return }
+
+        // Source: the in-memory avatar, else download it from the URL.
+        var source = store.currentAvatarImage
+        if source == nil,
+           let urlString = store.currentProfile?.avatarUrl,
+           !urlString.isEmpty,
+           let url = URL(string: urlString),
+           let (data, _) = try? await URLSession.shared.data(from: url) {
+            source = UIImage(data: data)
+        }
+        guard let avatar = source,
+              let jpeg = avatar.jpegData(compressionQuality: 0.92)
+        else { return }
+
+        await MainActor.run { isGeneratingBust = true }
+        defer { Task { await MainActor.run { isGeneratingBust = false } } }
+
+        do {
+            let resultData = try await FalBackgroundRemovalService.shared
+                .removeBackground(from: jpeg) { _ in }
+            guard let cutout = UIImage(data: resultData) else { return }
+            await MainActor.run {
+                withAnimation(.easeInOut(duration: 0.3)) { bustCutout = cutout }
+            }
+            // Persist for the web/OG card + next launch. Targeted
+            // write — leaves the user's header style untouched.
+            if let cutoutURL = try? await AvatarService.uploadAvatarCutout(cutout, userId: userId) {
+                try? await SocialService.updateAvatarCutoutUrl(userId: userId, url: cutoutURL)
+                await MainActor.run { store.currentProfile?.avatarCutoutUrl = cutoutURL }
+            }
+        } catch {
+            // Silent — falls back to the circle avatar.
         }
     }
 
@@ -235,6 +293,11 @@ struct ProfileShareSheet: View {
             withAnimation(.spring(response: 0.55, dampingFraction: 0.82).delay(0.05)) {
                 cardVisible = true
             }
+        }
+        .task {
+            // Auto-generate the bust for the empty-state card if the
+            // user has a photo but no cutout yet (runs at most once).
+            await ensureBustCutout()
         }
     }
 
