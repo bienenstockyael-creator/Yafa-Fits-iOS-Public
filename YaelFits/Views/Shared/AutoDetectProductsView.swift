@@ -663,7 +663,7 @@ struct AutoDetectProductsView: View {
     /// capsule. `scaledToFit` so the product is never cropped, and no
     /// circle behind it — the product image itself is the focus.
     private func suggestionChip(_ item: WardrobeItem) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             suggestionThumbnail(item)
             Text(item.displayName)
                 .font(.system(size: 14, weight: .semibold))
@@ -673,7 +673,7 @@ struct AutoDetectProductsView: View {
         }
         .padding(.leading, 10)
         .padding(.trailing, 16)
-        .padding(.vertical, 4)
+        .padding(.vertical, 5)
         .background {
             ZStack {
                 LightBlurView(style: .systemThinMaterialLight)
@@ -690,15 +690,12 @@ struct AutoDetectProductsView: View {
             if let img = phase.image {
                 img.resizable().scaledToFit()
             } else {
-                // Stable width during load so the pill doesn't collapse
-                // then jump when the image arrives.
-                Color.clear.frame(width: 44)
+                Color.clear
             }
         }
-        // Height-bounded only: the thumbnail's width hugs the garment's
-        // own aspect, so a narrow item doesn't sit in a wide empty box
-        // (which was both inflating the pill height and the gap to text).
-        .frame(height: 52)
+        // Fixed frame: the pill's size is settled BEFORE the image loads,
+        // so it doesn't resize/jitter when the image arrives.
+        .frame(width: 44, height: 44)
     }
 
     private func commitName(_ slotID: UUID) async {
