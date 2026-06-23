@@ -345,18 +345,12 @@ private struct WardrobeItemCell: View {
     let item: WardrobeDisplayItem
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            // Trimmed product on a clean tile — consistent sizing across
-            // items, matching the app's soft card surfaces.
-            TrimmedRemoteImage(url: item.resolvedImageURL, contentPadding: 16)
+        VStack(alignment: .leading, spacing: 8) {
+            // Product floats with no card behind it — minimal, consistent
+            // sizing via the alpha trim.
+            TrimmedRemoteImage(url: item.resolvedImageURL, contentPadding: 6)
                 .frame(maxWidth: .infinity)
-                .frame(height: 150)
-                .background(Color.white)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .strokeBorder(AppPalette.cardBorder, lineWidth: 0.75)
-                )
+                .frame(height: 138)
                 .overlay(alignment: .topLeading) {
                     if item.status == .wishlist {
                         Text("WISHLIST")
@@ -366,10 +360,8 @@ private struct WardrobeItemCell: View {
                             .padding(.horizontal, 7)
                             .padding(.vertical, 4)
                             .background(Capsule().fill(AppPalette.uploadGlow))
-                            .padding(8)
                     }
                 }
-                .shadow(color: AppPalette.cardShadow, radius: 9, y: 4)
 
             Text(item.name)
                 .font(.system(size: 12.5, weight: .medium))
@@ -399,6 +391,7 @@ private struct WardrobeItemDetailSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
+    @Environment(OutfitStore.self) private var store
 
     @State private var name: String
     @State private var category: WardrobeCategory
@@ -426,27 +419,20 @@ private struct WardrobeItemDetailSheet: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: LayoutMetrics.medium) {
-                    image
+                VStack(spacing: LayoutMetrics.large) {
+                    productImage
                     if !isBacked {
-                        Text("This item is tagged on an outfit. Saving adds it to your closet so you can edit it.")
+                        Text("This item is tagged on an outfit — saving adds it to your closet so you can edit it.")
                             .font(.system(size: 12))
                             .foregroundStyle(AppPalette.textMuted)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    fields
+                    formCard
+                    statusSection
                     if !sourceURL.isEmpty, let linkURL = URL(string: sourceURL) {
-                        Button { openURL(linkURL) } label: {
-                            Text("Open product link")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(AppPalette.textPrimary)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 44)
-                                .background(Capsule().fill(AppPalette.cardFill))
-                                .overlay(Capsule().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
-                        }
-                        .buttonStyle(.plain)
+                        openLinkButton(linkURL)
                     }
+                    taggedOnSection
                     if let saveError {
                         Text(saveError)
                             .font(.system(size: 12))
@@ -463,108 +449,190 @@ private struct WardrobeItemDetailSheet: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") { dismiss() }
-                        .font(.system(size: 13))
+                        .font(.system(size: 14))
                         .foregroundStyle(AppPalette.textMuted)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(isBacked ? "Save" : "Add") { Task { await save() } }
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(canSave ? AppPalette.textPrimary : AppPalette.textFaint)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(canSave ? AppPalette.textStrong : AppPalette.textFaint)
                         .disabled(!canSave)
                 }
             }
         }
+        // The app uses a fixed light palette; pin the sheet to light so
+        // system controls (text fields, segmented picker) stay readable
+        // even when the phone is in dark mode.
+        .preferredColorScheme(.light)
     }
 
     private var canSave: Bool {
         !isSaving && !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    private var image: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: LayoutMetrics.cardCornerRadius, style: .continuous)
-                .fill(AppPalette.cardFill)
-            AsyncImage(url: URL(string: item.imageURL)) { phase in
-                if let img = phase.image {
-                    img.resizable().scaledToFit().padding(LayoutMetrics.small)
-                } else if phase.error != nil {
-                    AppIcon(glyph: .tshirt, size: 32, color: AppPalette.textFaint)
-                } else {
-                    ProgressView()
-                }
-            }
-        }
-        .frame(height: 220)
+    /// Product floats directly on the grouped background — no card.
+    private var productImage: some View {
+        TrimmedRemoteImage(url: item.resolvedImageURL)
+            .frame(height: 190)
+            .frame(maxWidth: .infinity)
+            .padding(.top, LayoutMetrics.xSmall)
     }
 
-    private var fields: some View {
-        VStack(spacing: LayoutMetrics.small) {
-            labeledField("NAME") {
+    /// All editable fields in one inset card with hairline row dividers
+    /// (iOS grouped-form feel) instead of a stack of separate cards.
+    private var formCard: some View {
+        VStack(spacing: 0) {
+            formRow("Name") {
                 TextField("Item name", text: $name)
+                    .multilineTextAlignment(.trailing)
                     .textInputAutocapitalization(.words)
             }
-            labeledField("CATEGORY") {
+            rowDivider
+            HStack {
+                Text("Category")
+                    .font(.system(size: 15))
+                    .foregroundStyle(AppPalette.textMuted)
+                Spacer(minLength: 16)
                 Menu {
                     ForEach(WardrobeCategory.displayOrder, id: \.self) { c in
                         Button(c.label) { category = c }
                     }
                 } label: {
-                    HStack {
+                    HStack(spacing: 4) {
                         Text(category.label)
-                            .foregroundStyle(AppPalette.textPrimary)
-                        Spacer()
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(AppPalette.textStrong)
                         Image(systemName: "chevron.up.chevron.down")
                             .font(.system(size: 11))
                             .foregroundStyle(AppPalette.textMuted)
                     }
                 }
             }
-            labeledField("BRAND") {
-                TextField("Optional", text: $brand)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 13)
+            rowDivider
+            formRow("Brand") {
+                TextField("Add brand", text: $brand)
+                    .multilineTextAlignment(.trailing)
                     .textInputAutocapitalization(.words)
             }
-            labeledField("PRICE") {
-                TextField("Optional", text: $price)
+            rowDivider
+            formRow("Price") {
+                TextField("Add price", text: $price)
+                    .multilineTextAlignment(.trailing)
             }
-            labeledField("LINK") {
-                TextField("Optional product URL", text: $sourceURL)
+            rowDivider
+            formRow("Link") {
+                TextField("Add URL", text: $sourceURL)
+                    .multilineTextAlignment(.trailing)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .keyboardType(.URL)
             }
-            labeledField("STATUS") {
-                Picker("", selection: $status) {
-                    Text("Owned").tag(WardrobeStatus.owned)
-                    Text("Wishlist").tag(WardrobeStatus.wishlist)
-                }
-                .pickerStyle(.segmented)
-            }
         }
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(AppPalette.cardBorder, lineWidth: 0.75)
+        )
     }
 
-    private func labeledField<Content: View>(
+    private func formRow<Content: View>(
         _ label: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        HStack {
             Text(label)
+                .font(.system(size: 15))
+                .foregroundStyle(AppPalette.textMuted)
+            Spacer(minLength: 16)
+            content()
+                .font(.system(size: 15))
+                .foregroundStyle(AppPalette.textStrong)
+                .tint(AppPalette.textStrong)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 13)
+    }
+
+    private var rowDivider: some View {
+        Rectangle()
+            .fill(AppPalette.cardBorder)
+            .frame(height: 0.75)
+            .padding(.leading, 16)
+    }
+
+    private var statusSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("STATUS")
                 .font(.system(size: 10, weight: .semibold))
                 .tracking(1.2)
                 .foregroundStyle(AppPalette.textFaint)
-            content()
-                .font(.system(size: 15))
-                .padding(.horizontal, 14)
-                .padding(.vertical, 11)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(AppPalette.cardFill)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(AppPalette.cardBorder, lineWidth: 0.75)
-                )
+            Picker("", selection: $status) {
+                Text("Owned").tag(WardrobeStatus.owned)
+                Text("Wishlist").tag(WardrobeStatus.wishlist)
+            }
+            .pickerStyle(.segmented)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func openLinkButton(_ url: URL) -> some View {
+        Button { openURL(url) } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "bag")
+                    .font(.system(size: 13, weight: .semibold))
+                Text("Open product link")
+                    .font(.system(size: 14, weight: .semibold))
+            }
+            .foregroundStyle(AppPalette.textStrong)
+            .frame(maxWidth: .infinity)
+            .frame(height: 46)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Mini carousel of the outfits this product is currently tagged on.
+    @ViewBuilder
+    private var taggedOnSection: some View {
+        let outfits = taggedOutfits
+        if !outfits.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("TAGGED ON")
+                    .font(.system(size: 10, weight: .semibold))
+                    .tracking(1.2)
+                    .foregroundStyle(AppPalette.textFaint)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(outfits) { outfit in
+                            RotatableOutfitImage(outfit: outfit, height: 150, draggable: false, eagerLoad: true)
+                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var taggedOutfits: [Outfit] {
+        func norm(_ s: String) -> String {
+            s.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        let myName = norm(item.name)
+        let myURL = item.resolvedImageURL?.absoluteString
+        return store.outfits.filter { outfit in
+            (outfit.products ?? []).contains { p in
+                if let pid = item.productId, let ppid = p.productId { return ppid == pid }
+                if !myName.isEmpty && norm(p.name) == myName { return true }
+                if let myURL, p.resolvedImageURL?.absoluteString == myURL { return true }
+                return false
+            }
+        }
     }
 
     private func save() async {
