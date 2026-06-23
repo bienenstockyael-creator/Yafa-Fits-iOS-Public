@@ -549,7 +549,7 @@ struct AutoDetectProductsView: View {
     /// when the bar isn't showing. Approximates the bar's rendered height
     /// (label + chip row + padding) plus a small gap.
     private var suggestionBarReserved: CGFloat {
-        (!suggestions.isEmpty && activeNamingName != nil) ? 155 : 0
+        (!suggestions.isEmpty && activeNamingName != nil) ? 140 : 0
     }
 
     /// Name of the slot currently being typed into (focused + `.naming`).
@@ -663,7 +663,7 @@ struct AutoDetectProductsView: View {
     /// capsule. `scaledToFit` so the product is never cropped, and no
     /// circle behind it — the product image itself is the focus.
     private func suggestionChip(_ item: WardrobeItem) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             suggestionThumbnail(item)
             Text(item.displayName)
                 .font(.system(size: 14, weight: .semibold))
@@ -671,9 +671,9 @@ struct AutoDetectProductsView: View {
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
         }
-        .padding(.leading, 8)
-        .padding(.trailing, 18)
-        .padding(.vertical, 6)
+        .padding(.leading, 10)
+        .padding(.trailing, 16)
+        .padding(.vertical, 4)
         .background {
             ZStack {
                 LightBlurView(style: .systemThinMaterialLight)
@@ -690,10 +690,15 @@ struct AutoDetectProductsView: View {
             if let img = phase.image {
                 img.resizable().scaledToFit()
             } else {
-                Color.clear
+                // Stable width during load so the pill doesn't collapse
+                // then jump when the image arrives.
+                Color.clear.frame(width: 44)
             }
         }
-        .frame(width: 60, height: 60)
+        // Height-bounded only: the thumbnail's width hugs the garment's
+        // own aspect, so a narrow item doesn't sit in a wide empty box
+        // (which was both inflating the pill height and the gap to text).
+        .frame(height: 52)
     }
 
     private func commitName(_ slotID: UUID) async {
