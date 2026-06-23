@@ -146,17 +146,26 @@ struct VibeButton: View {
             // (which fires 32ms into the 0.25s transition),
             // leaving a faint ghost chrome visible for the wave's
             // entire 1.1s lifetime.
-            if !showsVibed {
+            if !isVibedByMe {
                 chromeBackground
             }
 
-            // Layer 2: the flame icon. 40×40 padded when un-vibed
-            // (centered inside the chrome circle); tight 18×40 once
-            // the fit has any vibes (no chrome — the count sits right
-            // next to it inline). The frame change drives the icon's
-            // position shift, which the morph layer follows.
+            // Layer 2: the flame icon. 40×40 padded when unvibed
+            // (so it sits centered inside the chrome circle); tight
+            // 18×40 when vibed (no chrome to fill, count goes
+            // right next to it). The frame change is what causes
+            // the icon's global position to shift on tap, which
+            // the morph layer follows via `updateMorphCenter`.
             flameView
-                .frame(width: showsVibed ? 18 : 40, height: 40)
+                .frame(width: isVibedByMe ? 18 : 40, height: 40)
+
+            // Layer 3: small count badge in the upper-right when
+            // unvibed + count > 0.
+            if showBadge {
+                badgeView
+                    .offset(x: 4, y: -2)
+                    .transition(.opacity)
+            }
         }
         // Hide the entire flame container (chrome + icon + badge)
         // while the morph is active for THIS button — opacity is
@@ -213,10 +222,10 @@ struct VibeButton: View {
     /// at the root level via `VibesMorphLayer`, not here.
     @ViewBuilder
     private var flameView: some View {
-        if showsVibed {
-            // Filled BLUE flame whenever the fit has been vibed — by
-            // the viewer OR anyone else — so an owner (who can't vibe
-            // their own fit) still sees the vibes it received.
+        if isVibedByMe {
+            // Filled BLUE flame for the "you vibed this, can't again"
+            // state — replaces the old dark fill so the post-vibe
+            // icon reads as the vibe's blue.
             AppIcon(
                 glyph: .flame,
                 size: 18,
@@ -237,8 +246,21 @@ struct VibeButton: View {
         }
     }
 
-    /// Inline count to the right of the flame, shown whenever the fit
-    /// has vibes.
+    /// Small "unvibed" count badge in the upper-right corner.
+    private var badgeView: some View {
+        Text("\(vibeCount)")
+            .font(.system(size: 9, weight: .bold))
+            .foregroundStyle(AppPalette.textMuted)
+            .frame(minWidth: 16, minHeight: 16)
+            .background {
+                LightBlurView(style: .systemThinMaterialLight)
+                    .clipShape(Circle())
+                    .overlay(Circle().fill(Color.white.opacity(0.96)))
+            }
+            .overlay(Circle().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
+    }
+
+    /// Inline count to the right of the flame, vibed only.
     private var inlineCount: some View {
         Text("\(vibeCount)")
             .font(.system(size: 13, weight: .semibold))
@@ -246,16 +268,12 @@ struct VibeButton: View {
             .monospacedDigit()
     }
 
-    /// Whether the button wears its "vibed" treatment — filled blue
-    /// flame + inline count, no chrome. True when the viewer vibed it
-    /// OR the fit has any vibes at all, so owners see the vibes they
-    /// received (they can't vibe their own fits).
-    private var showsVibed: Bool {
-        isVibedByMe || vibeCount > 0
+    private var showBadge: Bool {
+        !isVibedByMe && vibeCount > 0
     }
 
     private var showInlineCount: Bool {
-        vibeCount > 0
+        isVibedByMe && vibeCount > 0
     }
 
     /// True when THIS button's morph is in flight. Read from the
