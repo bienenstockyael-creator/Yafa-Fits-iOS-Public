@@ -142,7 +142,7 @@ struct WardrobeView: View {
             }
         }
         .scrollIndicators(.hidden)
-        .gesture(zoomGesture)
+        .simultaneousGesture(zoomGesture)
     }
 
     /// Pinch out → fewer/bigger tiles; pinch in → more/smaller. Mirrors the
