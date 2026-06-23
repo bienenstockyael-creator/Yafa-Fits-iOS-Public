@@ -39,6 +39,9 @@ struct WardrobeView: View {
     /// feedback; springs back to 1 (and commits a new column count) on
     /// release — so the zoom feels fluid instead of snapping mid-gesture.
     @State private var pinchScale: CGFloat = 1
+    /// Grid opacity, dipped to 0 while the column count changes so items
+    /// crossfade (Photos-style) instead of visibly sliding to new slots.
+    @State private var gridOpacity: Double = 1
 
     private static let minColumns = 2
     private static let maxColumns = 4
@@ -151,7 +154,10 @@ struct WardrobeView: View {
                 .padding(.top, LayoutMetrics.medium)
                 .padding(.bottom, LayoutMetrics.large)
                 .scaleEffect(pinchScale, anchor: .top)
-                .animation(.spring(response: 0.46, dampingFraction: 0.85), value: columnCount)
+                .opacity(gridOpacity)
+                // Column reflow itself is NOT animated — it happens while
+                // the grid is faded out (see zoomGesture), so items never
+                // visibly travel across the grid.
                 .animation(.spring(response: 0.42, dampingFraction: 0.9), value: filteredItems)
             }
         }
@@ -172,10 +178,21 @@ struct WardrobeView: View {
             .onEnded { value in
                 let steps = Int(((value - 1) * 2.2).rounded())
                 let target = min(Self.maxColumns, max(Self.minColumns, columnCount - steps))
-                if target != columnCount { UISelectionFeedbackGenerator().selectionChanged() }
-                withAnimation(.spring(response: 0.46, dampingFraction: 0.82)) {
-                    columnCount = target
+                guard target != columnCount else {
+                    // No column change — just relax the live scale.
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { pinchScale = 1 }
+                    return
+                }
+                UISelectionFeedbackGenerator().selectionChanged()
+                // Photos-style crossfade: fade out (and release the scale),
+                // reflow to the new column count while invisible, fade in.
+                withAnimation(.easeOut(duration: 0.14)) {
+                    gridOpacity = 0
                     pinchScale = 1
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.14) {
+                    columnCount = target   // instant reflow, hidden under the fade
+                    withAnimation(.easeIn(duration: 0.2)) { gridOpacity = 1 }
                 }
             }
     }
@@ -494,8 +511,6 @@ private struct WardrobeItemDetailSheet: View {
     @State private var saveError: String?
     @State private var showDeleteConfirm = false
 
-    private var isBacked: Bool { item.productId != nil }
-
     init(
         item: WardrobeDisplayItem,
         userId: UUID,
@@ -536,7 +551,7 @@ private struct WardrobeItemDetailSheet: View {
                 .padding(LayoutMetrics.screenPadding)
             }
             .background(AppPalette.groupedBackground)
-            .navigationTitle(isBacked ? "Edit item" : "Add to closet")
+            .navigationTitle("Edit item")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.light, for: .navigationBar)
             .toolbar {
@@ -546,7 +561,7 @@ private struct WardrobeItemDetailSheet: View {
                         .foregroundStyle(AppPalette.textMuted)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(isBacked ? "Save" : "Add") { Task { await save() } }
+                    Button("Save") { Task { await save() } }
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(canSave ? AppPalette.textStrong : AppPalette.textFaint)
                         .disabled(!canSave)
