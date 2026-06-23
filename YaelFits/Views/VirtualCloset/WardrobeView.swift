@@ -38,11 +38,14 @@ struct WardrobeView: View {
     /// Live, damped scale applied to the grid during a pinch for continuous
     /// feedback; springs back to 1 (and commits a new column count) on
     /// release — so the zoom feels fluid instead of snapping mid-gesture.
-    /// Live zoom scale applied to the whole grid during a pinch. On release
-    /// we swap the column count and "continue" this scale into the new
-    /// layout (scale-compensation), so the tiles morph size seamlessly the
-    /// way Photos does — never sliding item-by-item to new slots.
+    /// Small compensating scale so tile *size* stays continuous while the
+    /// column count steps during a pinch (the integer layout can only jump,
+    /// the scale fills the gaps). Always ~0.85–1.2, so it never shoves
+    /// content off-screen.
     @State private var pinchScale: CGFloat = 1
+    /// Column count when the current pinch began, so the gesture maps
+    /// absolute (not incrementally drifting).
+    @State private var pinchStartColumns: Int?
 
     private static let minColumns = 2
     private static let maxColumns = 4
@@ -173,31 +176,26 @@ struct WardrobeView: View {
     private var zoomGesture: some Gesture {
         MagnificationGesture()
             .onChanged { value in
-                // Live, lightly-clamped zoom of the current layout — the
-                // continuous feedback under your fingers.
-                pinchScale = min(1.35, max(0.74, value))
-            }
-            .onEnded { value in
-                // Desired columns scale inversely with how big you zoomed
-                // the tiles: zoom out (value > 1) → bigger tiles → fewer
-                // columns.
-                let target = min(
-                    Self.maxColumns,
-                    max(Self.minColumns, Int((Double(columnCount) / value).rounded()))
+                let start = pinchStartColumns ?? columnCount
+                if pinchStartColumns == nil { pinchStartColumns = columnCount }
+                // Continuous desired column count (zoom out → bigger tiles →
+                // fewer columns), then the nearest whole layout to render.
+                let desired = min(
+                    Double(Self.maxColumns),
+                    max(Double(Self.minColumns), Double(start) / value)
                 )
-                guard target != columnCount else {
-                    withAnimation(.spring(response: 0.34, dampingFraction: 0.85)) { pinchScale = 1 }
-                    return
+                let whole = Int(desired.rounded())
+                if whole != columnCount {
+                    columnCount = whole          // steps 2→3→4 mid-pinch
+                    UISelectionFeedbackGenerator().selectionChanged()
                 }
-                UISelectionFeedbackGenerator().selectionChanged()
-                // Scale-compensation: switch the layout instantly, but start
-                // it at the size your fingers left off (so nothing jumps),
-                // then spring the scale to 1 — the tiles morph into the new
-                // grid. Uniform scale → no item ever slides across the grid.
-                let continued = pinchScale * CGFloat(target) / CGFloat(columnCount)
-                columnCount = target
-                pinchScale = continued
-                withAnimation(.spring(response: 0.42, dampingFraction: 0.86)) { pinchScale = 1 }
+                // Fill the gap between the whole layout and the continuous
+                // desired size with scale → tile size never jumps.
+                pinchScale = CGFloat(columnCount) / CGFloat(desired)
+            }
+            .onEnded { _ in
+                pinchStartColumns = nil
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) { pinchScale = 1 }
             }
     }
 
