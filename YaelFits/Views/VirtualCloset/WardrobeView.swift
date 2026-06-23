@@ -28,13 +28,17 @@ struct WardrobeView: View {
     @State private var statusFilter: WardrobeStatus? = nil      // nil == All
     @State private var searchText: String = ""
     @State private var selectedItem: WardrobeDisplayItem?
+    /// Items deleted this session — filtered out immediately so the grid
+    /// updates even before the (cached) outfit list re-syncs.
+    @State private var deletedItemIDs: Set<String> = []
 
     /// Apple Photos–style zoom: pinch to change how many columns the grid
     /// shows. Persisted so the closet remembers your preferred density.
     @AppStorage("yafa.closetColumns") private var columnCount: Int = 2
-    /// Column count captured at the start of a pinch, so the gesture maps
-    /// relative to where it began.
-    @State private var pinchBaseColumns: Int?
+    /// Live, damped scale applied to the grid during a pinch for continuous
+    /// feedback; springs back to 1 (and commits a new column count) on
+    /// release — so the zoom feels fluid instead of snapping mid-gesture.
+    @State private var pinchScale: CGFloat = 1
 
     private static let minColumns = 2
     private static let maxColumns = 4
@@ -59,9 +63,16 @@ struct WardrobeView: View {
                     }
                 }
                 .sheet(item: $selectedItem) { item in
-                    WardrobeItemDetailSheet(item: item, userId: userId) {
-                        await load()
-                    }
+                    WardrobeItemDetailSheet(
+                        item: item,
+                        userId: userId,
+                        onChanged: { await load() },
+                        onDeleted: {
+                            withAnimation(.spring(response: 0.42, dampingFraction: 0.9)) {
+                                _ = deletedItemIDs.insert(item.id)
+                            }
+                        }
+                    )
                     .environment(store)
                     .presentationDragIndicator(.visible)
                     .presentationBackground(AppPalette.groupedBackground)
@@ -133,12 +144,15 @@ struct WardrobeView: View {
                             WardrobeItemCell(item: item, showCategory: columnCount <= 2)
                         }
                         .buttonStyle(.plain)
+                        .transition(.scale(scale: 0.92).combined(with: .opacity))
                     }
                 }
                 .padding(.horizontal, LayoutMetrics.screenPadding)
                 .padding(.top, LayoutMetrics.medium)
                 .padding(.bottom, LayoutMetrics.large)
-                .animation(.easeInOut(duration: 0.22), value: columnCount)
+                .scaleEffect(pinchScale, anchor: .top)
+                .animation(.spring(response: 0.46, dampingFraction: 0.85), value: columnCount)
+                .animation(.spring(response: 0.42, dampingFraction: 0.9), value: filteredItems)
             }
         }
         .scrollIndicators(.hidden)
@@ -146,21 +160,24 @@ struct WardrobeView: View {
     }
 
     /// Pinch out → fewer/bigger tiles; pinch in → more/smaller. Mirrors the
-    /// Photos app. Two-finger pinch coexists with one-finger scroll.
+    /// Photos app: the grid scales live under your fingers, then springs to
+    /// the new column count when you let go. Two-finger pinch coexists with
+    /// one-finger scroll.
     private var zoomGesture: some Gesture {
         MagnificationGesture()
             .onChanged { value in
-                let base = pinchBaseColumns ?? columnCount
-                if pinchBaseColumns == nil { pinchBaseColumns = columnCount }
-                // value > 1 (pinch out) lowers the column count.
+                // Damped so the grid gives feedback without ballooning.
+                pinchScale = 1 + (value - 1) * 0.32
+            }
+            .onEnded { value in
                 let steps = Int(((value - 1) * 2.2).rounded())
-                let target = min(Self.maxColumns, max(Self.minColumns, base - steps))
-                if target != columnCount {
-                    UISelectionFeedbackGenerator().selectionChanged()
-                    withAnimation(.easeInOut(duration: 0.22)) { columnCount = target }
+                let target = min(Self.maxColumns, max(Self.minColumns, columnCount - steps))
+                if target != columnCount { UISelectionFeedbackGenerator().selectionChanged() }
+                withAnimation(.spring(response: 0.46, dampingFraction: 0.82)) {
+                    columnCount = target
+                    pinchScale = 1
                 }
             }
-            .onEnded { _ in pinchBaseColumns = nil }
     }
 
     // MARK: - Filter bar
@@ -203,7 +220,7 @@ struct WardrobeView: View {
     private func chip(title: String, isOn: Bool, action: @escaping () -> Void) -> some View {
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            withAnimation(.easeInOut(duration: 0.15)) { action() }
+            withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) { action() }
         } label: {
             Text(title)
                 .font(.system(size: 13, weight: isOn ? .semibold : .medium))
@@ -313,7 +330,7 @@ struct WardrobeView: View {
                 ))
             }
         }
-        return items
+        return items.filter { !deletedItemIDs.contains($0.id) }
     }
 
     private var filteredItems: [WardrobeDisplayItem] {
@@ -460,6 +477,8 @@ private struct WardrobeItemDetailSheet: View {
     let userId: UUID
     /// Called after a successful save so the closet can reload.
     var onChanged: () async -> Void
+    /// Called after a successful delete so the closet can drop it locally.
+    var onDeleted: () -> Void
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
@@ -473,13 +492,20 @@ private struct WardrobeItemDetailSheet: View {
     @State private var status: WardrobeStatus
     @State private var isSaving = false
     @State private var saveError: String?
+    @State private var showDeleteConfirm = false
 
     private var isBacked: Bool { item.productId != nil }
 
-    init(item: WardrobeDisplayItem, userId: UUID, onChanged: @escaping () async -> Void) {
+    init(
+        item: WardrobeDisplayItem,
+        userId: UUID,
+        onChanged: @escaping () async -> Void,
+        onDeleted: @escaping () -> Void = {}
+    ) {
         self.item = item
         self.userId = userId
         self.onChanged = onChanged
+        self.onDeleted = onDeleted
         _name = State(initialValue: item.name)
         _category = State(initialValue: item.category)
         _brand = State(initialValue: item.brand ?? "")
@@ -505,6 +531,7 @@ private struct WardrobeItemDetailSheet: View {
                             .foregroundStyle(.red)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
+                    deleteButton
                 }
                 .padding(LayoutMetrics.screenPadding)
             }
@@ -530,10 +557,42 @@ private struct WardrobeItemDetailSheet: View {
         // system controls (text fields, segmented picker) stay readable
         // even when the phone is in dark mode.
         .preferredColorScheme(.light)
+        .alert("Remove from closet?", isPresented: $showDeleteConfirm) {
+            Button("Remove", role: .destructive) { Task { await deleteItem() } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes “\(item.name)” from your closet and untags it from any outfits it's on.")
+        }
     }
 
     private var canSave: Bool {
         !isSaving && !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var deleteButton: some View {
+        Button(role: .destructive) {
+            UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+            showDeleteConfirm = true
+        } label: {
+            Text("Remove from closet")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.red)
+                .frame(maxWidth: .infinity)
+                .frame(height: 46)
+        }
+        .buttonStyle(.plain)
+        .padding(.top, LayoutMetrics.xSmall)
+    }
+
+    private func deleteItem() async {
+        do {
+            try await WardrobeService.deleteItem(productId: item.productId, name: item.name)
+            onDeleted()
+            await onChanged()
+            dismiss()
+        } catch {
+            saveError = error.localizedDescription
+        }
     }
 
     /// Product floats directly on the grouped background — no card.

@@ -91,6 +91,26 @@ enum WardrobeService {
         return item
     }
 
+    /// Remove an item from the closet entirely: deletes its tags from the
+    /// caller's outfits (RLS scopes the delete to outfits they own) and the
+    /// canonical `products` row, if any. Because the closet is the union of
+    /// products + inline outfit tags, both must go for the item to actually
+    /// disappear.
+    static func deleteItem(productId: UUID?, name: String) async throws {
+        try await supabase
+            .from("outfit_products")
+            .delete()
+            .eq("name", value: name)
+            .execute()
+        if let productId {
+            try await supabase
+                .from("products")
+                .delete()
+                .eq("id", value: productId.uuidString)
+                .execute()
+        }
+    }
+
     /// Update mutable labels / status on an item. Only non-nil
     /// arguments are sent — the synthesized `Encodable` uses
     /// `encodeIfPresent` for optionals, so a nil field is omitted
