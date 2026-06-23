@@ -549,7 +549,7 @@ struct AutoDetectProductsView: View {
     /// when the bar isn't showing. Approximates the bar's rendered height
     /// (label + chip row + padding) plus a small gap.
     private var suggestionBarReserved: CGFloat {
-        (!suggestions.isEmpty && activeNamingName != nil) ? 130 : 0
+        (!suggestions.isEmpty && activeNamingName != nil) ? 155 : 0
     }
 
     /// Name of the slot currently being typed into (focused + `.naming`).
@@ -625,7 +625,7 @@ struct AutoDetectProductsView: View {
                 .foregroundStyle(AppPalette.textFaint)
                 .padding(.horizontal, LayoutMetrics.screenPadding)
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
+                HStack(spacing: 12) {
                     ForEach(suggestions) { item in
                         Button {
                             if let sid = suggestionSlotID {
@@ -638,10 +638,13 @@ struct AutoDetectProductsView: View {
                     }
                 }
                 .padding(.horizontal, LayoutMetrics.screenPadding)
+                // Vertical room so the chip shadows aren't clipped by the
+                // horizontal ScrollView's bounds.
+                .padding(.vertical, 8)
             }
         }
-        .padding(.top, 14)
-        .padding(.bottom, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
         .frame(maxWidth: .infinity)
         .background(
             UnevenRoundedRectangle(
@@ -656,22 +659,21 @@ struct AutoDetectProductsView: View {
         )
     }
 
-    /// Mirrors the collapsed generation pill (`GenerationChipPill`):
-    /// a circular thumbnail + semibold label on a thin-material capsule.
-    /// Uses `scaledToFit` (not fill) inside the circle so the product
-    /// thumbnail is never cropped.
+    /// A big product thumbnail + semibold label on a thin-material
+    /// capsule. `scaledToFit` so the product is never cropped, and no
+    /// circle behind it — the product image itself is the focus.
     private func suggestionChip(_ item: WardrobeItem) -> some View {
         HStack(spacing: 10) {
             suggestionThumbnail(item)
             Text(item.displayName)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(AppPalette.textPrimary)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
         }
-        .padding(.leading, 7)
-        .padding(.trailing, 16)
-        .padding(.vertical, 7)
+        .padding(.leading, 8)
+        .padding(.trailing, 18)
+        .padding(.vertical, 6)
         .background {
             ZStack {
                 LightBlurView(style: .systemThinMaterialLight)
@@ -680,7 +682,7 @@ struct AutoDetectProductsView: View {
             }
         }
         .overlay(Capsule(style: .continuous).strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
-        .shadow(color: Color.black.opacity(0.10), radius: 10, y: 4)
+        .shadow(color: Color.black.opacity(0.08), radius: 6, y: 2)
     }
 
     private func suggestionThumbnail(_ item: WardrobeItem) -> some View {
@@ -691,10 +693,7 @@ struct AutoDetectProductsView: View {
                 Color.clear
             }
         }
-        .padding(5)
-        .frame(width: 38, height: 38)
-        .background(Circle().fill(Color.white))
-        .overlay(Circle().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
+        .frame(width: 60, height: 60)
     }
 
     private func commitName(_ slotID: UUID) async {
