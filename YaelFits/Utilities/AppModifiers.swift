@@ -189,12 +189,28 @@ extension View {
 /// thumbnails are flat-lays with baked-in transparent padding that
 /// otherwise makes them look randomly tiny/huge. The trim runs off the
 /// main thread; the caller supplies the frame, so layout is stable.
+/// In-memory cache of trimmed product images so re-created views (e.g.
+/// when the closet grid swaps identity on a filter change) show instantly
+/// instead of reloading/flickering.
+enum TrimmedImageCache {
+    static let shared = NSCache<NSURL, UIImage>()
+}
+
 struct TrimmedRemoteImage: View {
     let url: URL?
     /// Inset applied to the trimmed image inside its frame (breathing room).
     var contentPadding: CGFloat = 0
 
     @State private var image: UIImage?
+
+    init(url: URL?, contentPadding: CGFloat = 0) {
+        self.url = url
+        self.contentPadding = contentPadding
+        // Seed synchronously from cache so there's no blank frame.
+        if let url, let cached = TrimmedImageCache.shared.object(forKey: url as NSURL) {
+            _image = State(initialValue: cached)
+        }
+    }
 
     var body: some View {
         Group {
@@ -212,12 +228,17 @@ struct TrimmedRemoteImage: View {
     }
 
     private func load() async {
-        guard let url,
-              let (data, _) = try? await URLSession.shared.data(from: url),
+        guard image == nil, let url else { return }
+        if let cached = TrimmedImageCache.shared.object(forKey: url as NSURL) {
+            image = cached
+            return
+        }
+        guard let (data, _) = try? await URLSession.shared.data(from: url),
               let raw = UIImage(data: data) else { return }
         let trimmed = await Task.detached(priority: .userInitiated) {
             raw.trimmingTransparentMargins()
         }.value
+        TrimmedImageCache.shared.setObject(trimmed, forKey: url as NSURL)
         await MainActor.run {
             withAnimation(.easeOut(duration: 0.15)) { image = trimmed }
         }

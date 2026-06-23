@@ -62,6 +62,13 @@ struct WardrobeView: View {
         Array(repeating: GridItem(.flexible(), spacing: gridSpacing), count: columnCount)
     }
 
+    /// Changes when the category/status filter changes (NOT on search or
+    /// zoom), so the grid re-identifies and the swap animates as a clean
+    /// scale + fade instead of items sliding.
+    private var gridIdentity: String {
+        "\(categoryFilter?.rawValue ?? "all")|\(statusFilter?.rawValue ?? "all")"
+    }
+
     var body: some View {
         NavigationStack {
             content
@@ -152,13 +159,15 @@ struct WardrobeView: View {
                 LazyVGrid(columns: columns, spacing: 20) {
                     ForEach(filteredItems) { item in
                         Button {
+                            // Ignore the stray tap that a finger-lift after a
+                            // pinch can register.
+                            guard !isPinching else { return }
                             UIImpactFeedbackGenerator(style: .light).impactOccurred()
                             selectedItem = item
                         } label: {
                             WardrobeItemCell(item: item, showCategory: columnCount <= 2)
                         }
                         .buttonStyle(.plain)
-                        .transition(.scale(scale: 0.92).combined(with: .opacity))
                     }
                 }
                 .padding(.horizontal, LayoutMetrics.screenPadding)
@@ -166,14 +175,14 @@ struct WardrobeView: View {
                 .padding(.bottom, LayoutMetrics.large)
                 // Zoom from the pinch focal point, not the content center.
                 .scaleEffect(pinchScale, anchor: pinchAnchor)
-                // Size compensation is instant (the value is already
-                // continuous), so there's no spring/bounce and no desync —
-                // tiles scale smoothly with your fingers. Only the filter
-                // change animates.
-                .animation(.spring(response: 0.42, dampingFraction: 0.9), value: filteredItems)
                 // Gesture lives on the grid so `startAnchor` is in the grid's
                 // own coordinate space (the finger midpoint).
                 .simultaneousGesture(zoomGesture)
+                // Category/status change swaps the grid's identity, so it's a
+                // clean scale + fade (no items sliding to new positions). The
+                // thumbnail cache keeps the new grid from flickering.
+                .id(gridIdentity)
+                .transition(.scale(scale: 0.97).combined(with: .opacity))
             }
         }
         .scrollIndicators(.hidden)
@@ -211,9 +220,14 @@ struct WardrobeView: View {
             }
             .onEnded { _ in
                 pinchStartColumns = nil
-                isPinching = false
-                // Soft, non-bouncy settle to the clean column width.
-                withAnimation(.easeInOut(duration: 0.34)) { pinchScale = 1 }
+                // Softer settle to the clean column width.
+                withAnimation(.easeInOut(duration: 0.45)) { pinchScale = 1 }
+                // Keep `isPinching` true a beat longer so the finger-lift
+                // doesn't register as a tap (opening an item) and scrolling
+                // doesn't snap back mid-settle.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+                    isPinching = false
+                }
             }
     }
 
@@ -257,7 +271,8 @@ struct WardrobeView: View {
     private func chip(title: String, isOn: Bool, action: @escaping () -> Void) -> some View {
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) { action() }
+            // Soft fade for the grid swap — no springiness.
+            withAnimation(.easeInOut(duration: 0.3)) { action() }
         } label: {
             Text(title)
                 .font(.system(size: 13, weight: isOn ? .semibold : .medium))
