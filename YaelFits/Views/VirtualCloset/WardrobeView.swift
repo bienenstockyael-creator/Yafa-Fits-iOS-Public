@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// The wardrobe (product closet): every product the user has tagged,
 /// shown as a filterable grid.
@@ -53,6 +54,10 @@ struct WardrobeView: View {
     /// in the grid's unit space — so the zoom originates from your fingers
     /// rather than the content's center.
     @State private var pinchAnchor: UnitPoint = .center
+    /// True whenever ≥2 fingers are on screen — scrolling is disabled then,
+    /// so a two-finger pinch can never be hijacked into a scroll (one finger
+    /// still scrolls normally).
+    @State private var twoFingersDown = false
 
     private static let minColumns = 2
     private static let maxColumns = 4
@@ -189,10 +194,15 @@ struct WardrobeView: View {
             }
         }
         .scrollIndicators(.hidden)
-        // Lock the scroll while pinching so the content doesn't drift under
-        // your fingers as you zoom (two-finger pinch was also reading as a
-        // scroll).
-        .scrollDisabled(isPinching)
+        // Disable scrolling the moment a second finger lands, so a pinch is
+        // never read as a scroll. One-finger scrolling is unaffected.
+        .scrollDisabled(twoFingersDown)
+        .background(
+            TouchCountReporter { count in
+                let down = count >= 2
+                if down != twoFingersDown { twoFingersDown = down }
+            }
+        )
     }
 
     /// Pinch out → fewer/bigger tiles; pinch in → more/smaller. Mirrors the
@@ -205,21 +215,24 @@ struct WardrobeView: View {
                 isPinching = true
                 pinchAnchor = value.startAnchor   // finger midpoint
                 if pinchStartColumns == nil { pinchStartColumns = columnCount }
-                let start = pinchStartColumns ?? columnCount
+                let start = Double(pinchStartColumns ?? columnCount)
                 // Continuous desired column count (zoom out → bigger tiles →
-                // fewer columns), then the nearest whole layout to render.
-                let desired = min(
-                    Double(Self.maxColumns),
-                    max(Double(Self.minColumns), Double(start) / value.magnification)
-                )
-                let whole = Int(desired.rounded())
+                // fewer columns).
+                let raw = start / Double(value.magnification)
+                let lo = Double(Self.minColumns), hi = Double(Self.maxColumns)
+                // Rubber-band past the limits so the extremes (2 / 4 cols)
+                // still have an overshoot to spring back from on release.
+                let effective: Double
+                if raw < lo { effective = lo - (lo - raw) * 0.28 }
+                else if raw > hi { effective = hi + (raw - hi) * 0.28 }
+                else { effective = raw }
+                let whole = min(Self.maxColumns, max(Self.minColumns, Int(raw.rounded())))
                 if whole != columnCount {
                     columnCount = whole          // steps 2→3→4 mid-pinch
                     UISelectionFeedbackGenerator().selectionChanged()
                 }
-                // Fill the gap between the whole layout and the continuous
-                // desired size with scale → tile size never jumps.
-                pinchScale = CGFloat(columnCount) / CGFloat(desired)
+                // Compensating scale (overshoots past the limits → bounce).
+                pinchScale = CGFloat(Double(columnCount) / effective)
             }
             .onEnded { _ in
                 pinchStartColumns = nil
@@ -846,3 +859,84 @@ private struct WardrobeItemDetailSheet: View {
     }
 }
 
+
+// MARK: - Two-finger detection
+
+/// Reports the number of active touches on screen, without interfering with
+/// scrolling, taps, or the pinch gesture. Used to disable the ScrollView's
+/// scroll the instant a second finger lands, so a pinch can never be read as
+/// a scroll. One finger still scrolls normally.
+private struct TouchCountReporter: UIViewRepresentable {
+    let onChange: (Int) -> Void
+
+    func makeUIView(context: Context) -> TouchCountView {
+        let view = TouchCountView()
+        view.onChange = onChange
+        return view
+    }
+
+    func updateUIView(_ uiView: TouchCountView, context: Context) {
+        uiView.onChange = onChange
+    }
+}
+
+private final class TouchCountView: UIView {
+    var onChange: (Int) -> Void = { _ in }
+    private weak var recognizer: TouchCountGestureRecognizer?
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if let window, recognizer == nil {
+            let r = TouchCountGestureRecognizer()
+            r.cancelsTouchesInView = false
+            r.delaysTouchesBegan = false
+            r.delaysTouchesEnded = false
+            r.delegate = SimultaneousGestureDelegate.shared
+            r.onCountChange = { [weak self] count in self?.onChange(count) }
+            window.addGestureRecognizer(r)
+            recognizer = r
+        } else if window == nil, let r = recognizer {
+            r.view?.removeGestureRecognizer(r)
+            recognizer = nil
+            onChange(0)
+        }
+    }
+}
+
+/// Passive recognizer: it never transitions out of `.possible`, so it
+/// observes touches without ever cancelling the scroll / tap / pinch.
+private final class TouchCountGestureRecognizer: UIGestureRecognizer {
+    var onCountChange: (Int) -> Void = { _ in }
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+        super.touchesBegan(touches, with: event)
+        report(event)
+    }
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
+        super.touchesEnded(touches, with: event)
+        report(event)
+    }
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
+        super.touchesCancelled(touches, with: event)
+        report(event)
+    }
+    override func reset() {
+        super.reset()
+        onCountChange(0)
+    }
+
+    private func report(_ event: UIEvent) {
+        let active = (event.allTouches ?? []).filter {
+            $0.phase != .ended && $0.phase != .cancelled
+        }.count
+        onCountChange(active)
+    }
+}
+
+private final class SimultaneousGestureDelegate: NSObject, UIGestureRecognizerDelegate {
+    static let shared = SimultaneousGestureDelegate()
+    func gestureRecognizer(
+        _ gestureRecognizer: UIGestureRecognizer,
+        shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+    ) -> Bool { true }
+}
