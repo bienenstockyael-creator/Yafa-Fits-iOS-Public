@@ -29,11 +29,20 @@ struct WardrobeView: View {
     @State private var searchText: String = ""
     @State private var selectedItem: WardrobeDisplayItem?
 
-    private let columns: [GridItem] = [
-        GridItem(.flexible(), spacing: 16),
-        GridItem(.flexible(), spacing: 16),
-        GridItem(.flexible(), spacing: 16),
-    ]
+    /// Apple Photos–style zoom: pinch to change how many columns the grid
+    /// shows. Persisted so the closet remembers your preferred density.
+    @AppStorage("yafa.closetColumns") private var columnCount: Int = 2
+    /// Column count captured at the start of a pinch, so the gesture maps
+    /// relative to where it began.
+    @State private var pinchBaseColumns: Int?
+
+    private static let minColumns = 2
+    private static let maxColumns = 4
+    private let gridSpacing: CGFloat = 14
+
+    private var columns: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: gridSpacing), count: columnCount)
+    }
 
     var body: some View {
         NavigationStack {
@@ -115,7 +124,7 @@ struct WardrobeView: View {
                 noMatchesState
                     .padding(.top, LayoutMetrics.xLarge)
             } else {
-                LazyVGrid(columns: columns, spacing: 16) {
+                LazyVGrid(columns: columns, spacing: 20) {
                     ForEach(filteredItems) { item in
                         Button {
                             UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -129,9 +138,29 @@ struct WardrobeView: View {
                 .padding(.horizontal, LayoutMetrics.screenPadding)
                 .padding(.top, LayoutMetrics.medium)
                 .padding(.bottom, LayoutMetrics.large)
+                .animation(.easeInOut(duration: 0.22), value: columnCount)
             }
         }
         .scrollIndicators(.hidden)
+        .gesture(zoomGesture)
+    }
+
+    /// Pinch out → fewer/bigger tiles; pinch in → more/smaller. Mirrors the
+    /// Photos app. Two-finger pinch coexists with one-finger scroll.
+    private var zoomGesture: some Gesture {
+        MagnificationGesture()
+            .onChanged { value in
+                let base = pinchBaseColumns ?? columnCount
+                if pinchBaseColumns == nil { pinchBaseColumns = columnCount }
+                // value > 1 (pinch out) lowers the column count.
+                let steps = Int(((value - 1) * 2.2).rounded())
+                let target = min(Self.maxColumns, max(Self.minColumns, base - steps))
+                if target != columnCount {
+                    UISelectionFeedbackGenerator().selectionChanged()
+                    withAnimation(.easeInOut(duration: 0.22)) { columnCount = target }
+                }
+            }
+            .onEnded { _ in pinchBaseColumns = nil }
     }
 
     // MARK: - Filter bar
@@ -372,12 +401,15 @@ private struct WardrobeItemCell: View {
     let item: WardrobeDisplayItem
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Product floats with no card behind it — minimal, consistent
-            // sizing via the alpha trim.
-            TrimmedRemoteImage(url: item.resolvedImageURL, contentPadding: 6)
-                .frame(maxWidth: .infinity)
-                .frame(height: 138)
+        VStack(alignment: .leading, spacing: 7) {
+            // Product floats with no card behind it (minimal). A fixed
+            // aspect box scales the tile with the column width so the grid
+            // reflows cleanly when you pinch-zoom.
+            Color.clear
+                .aspectRatio(0.85, contentMode: .fit)
+                .overlay {
+                    TrimmedRemoteImage(url: item.resolvedImageURL, contentPadding: 6)
+                }
                 .overlay(alignment: .topLeading) {
                     if item.status == .wishlist {
                         Text("WISHLIST")
@@ -390,11 +422,12 @@ private struct WardrobeItemCell: View {
                     }
                 }
 
+            // Quiet caption — the garment is the hero.
             Text(item.name)
-                .font(.system(size: 12.5, weight: .medium))
-                .foregroundStyle(AppPalette.textStrong)
+                .font(.system(size: 11.5))
+                .foregroundStyle(AppPalette.textMuted)
                 .lineLimit(1)
-                .padding(.horizontal, 2)
+                .padding(.horizontal, 1)
         }
     }
 }
