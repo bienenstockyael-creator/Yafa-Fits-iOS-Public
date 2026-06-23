@@ -1477,7 +1477,10 @@ private struct UploadTabIconView: View {
     }
 }
 
-private struct FavoritesSheetView: View {
+// Module-visible (not file-private) so the Favorites entry in
+// ProfileView's settings can present it now that it no longer lives
+// on a floating button in RootView.
+struct FavoritesSheetView: View {
     @Environment(OutfitStore.self) private var store
     @Environment(\.dismiss) private var dismiss
 
