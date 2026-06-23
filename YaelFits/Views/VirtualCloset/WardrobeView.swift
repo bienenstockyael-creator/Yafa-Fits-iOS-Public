@@ -130,7 +130,7 @@ struct WardrobeView: View {
                             UIImpactFeedbackGenerator(style: .light).impactOccurred()
                             selectedItem = item
                         } label: {
-                            WardrobeItemCell(item: item)
+                            WardrobeItemCell(item: item, showCategory: columnCount <= 2)
                         }
                         .buttonStyle(.plain)
                     }
@@ -226,16 +226,20 @@ struct WardrobeView: View {
     // MARK: - Empty states
 
     private var emptyState: some View {
-        VStack(spacing: LayoutMetrics.xxSmall) {
-            AppIcon(glyph: .tshirt, size: 28, color: AppPalette.textFaint)
-            Text("Your closet is empty")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(AppPalette.textMuted)
-            Text("Tag products on your outfits and they'll collect here.")
-                .font(.system(size: 12))
-                .foregroundStyle(AppPalette.textFaint)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, LayoutMetrics.large)
+        VStack(spacing: LayoutMetrics.medium) {
+            AppIcon(glyph: .tshirt, size: 30, color: AppPalette.textMuted)
+                .frame(width: 76, height: 76)
+                .appCircle(shadowRadius: 0, shadowY: 0)
+            VStack(spacing: 7) {
+                Text("Your closet is empty")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(AppPalette.textStrong)
+                Text("Tag products on your outfits and they’ll collect here automatically.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(AppPalette.textMuted)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.horizontal, LayoutMetrics.xLarge)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -399,6 +403,9 @@ struct WardrobeDisplayItem: Identifiable, Hashable {
 
 private struct WardrobeItemCell: View {
     let item: WardrobeDisplayItem
+    /// Show the category pill only when the grid is sparse (2 columns) —
+    /// hidden when dense so tiles stay clean.
+    var showCategory: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
@@ -428,6 +435,11 @@ private struct WardrobeItemCell: View {
                 .foregroundStyle(AppPalette.textMuted)
                 .lineLimit(1)
                 .padding(.horizontal, 1)
+
+            if showCategory, item.category != .other {
+                TagPill(tag: item.category.label)
+                    .scaleEffect(0.85, anchor: .leading)
+            }
         }
     }
 }
