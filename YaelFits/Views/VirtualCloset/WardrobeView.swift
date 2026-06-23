@@ -217,6 +217,9 @@ struct WardrobeView: View {
         // Disable scrolling the moment a second finger lands, so a pinch is
         // never read as a scroll. One-finger scrolling is unaffected.
         .scrollDisabled(twoFingersDown)
+        // Horizontal flick walks the category pills, simultaneously with the
+        // vertical scroll (only horizontal-dominant swipes act).
+        .simultaneousGesture(categorySwipe)
         // Extend the grid THROUGH the bottom safe area so it fills to the
         // physical bottom of the screen — no background strip / clip line
         // above the home indicator.
@@ -276,26 +279,38 @@ struct WardrobeView: View {
 
     private var filterBar: some View {
         // One row: All · categories · Wishlist (status, not a category).
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                chip(title: "All", isOn: categoryFilter == nil && statusFilter == nil) {
-                    categoryFilter = nil
-                    statusFilter = nil
-                }
-                ForEach(availableCategories, id: \.self) { cat in
-                    chip(title: cat.label, isOn: categoryFilter == cat && statusFilter == nil) {
-                        statusFilter = nil
-                        categoryFilter = (categoryFilter == cat) ? nil : cat
-                    }
-                }
-                if hasWishlistItems {
-                    chip(title: "Wishlist", isOn: statusFilter == .wishlist) {
+        // Tappable, and also driven by horizontal swipes on the grid — the
+        // active pill auto-scrolls into view whenever the selection changes.
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    chip(title: "All", isOn: categoryFilter == nil && statusFilter == nil) {
                         categoryFilter = nil
-                        statusFilter = (statusFilter == .wishlist) ? nil : .wishlist
+                        statusFilter = nil
                     }
+                    .id("all")
+                    ForEach(availableCategories, id: \.self) { cat in
+                        chip(title: cat.label, isOn: categoryFilter == cat && statusFilter == nil) {
+                            statusFilter = nil
+                            categoryFilter = (categoryFilter == cat) ? nil : cat
+                        }
+                        .id(cat.rawValue)
+                    }
+                    if hasWishlistItems {
+                        chip(title: "Wishlist", isOn: statusFilter == .wishlist) {
+                            categoryFilter = nil
+                            statusFilter = (statusFilter == .wishlist) ? nil : .wishlist
+                        }
+                        .id("wishlist")
+                    }
+                }
+                .padding(.horizontal, LayoutMetrics.screenPadding)
+            }
+            .onChange(of: gridIdentity) { _, _ in
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    proxy.scrollTo(currentTabID, anchor: .center)
                 }
             }
-            .padding(.horizontal, LayoutMetrics.screenPadding)
         }
         .padding(.top, LayoutMetrics.xSmall)
     }
@@ -322,6 +337,79 @@ struct WardrobeView: View {
                 .appCapsule(shadowRadius: 0, shadowY: 0)
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: - Category swipe
+
+    /// The ordered filter "tabs" the swipe walks through — matches the pill
+    /// row exactly: All · each present category · Wishlist (when present).
+    private enum FilterTab: Equatable {
+        case all
+        case category(WardrobeCategory)
+        case wishlist
+    }
+
+    private var filterTabs: [FilterTab] {
+        var tabs: [FilterTab] = [.all]
+        tabs += availableCategories.map(FilterTab.category)
+        if hasWishlistItems { tabs.append(.wishlist) }
+        return tabs
+    }
+
+    private var currentTabIndex: Int {
+        if statusFilter == .wishlist {
+            return filterTabs.firstIndex(of: .wishlist) ?? 0
+        }
+        if let categoryFilter {
+            return filterTabs.firstIndex(of: .category(categoryFilter)) ?? 0
+        }
+        return 0
+    }
+
+    /// `id` of the currently-selected pill, for auto-scrolling it into view.
+    private var currentTabID: String {
+        if statusFilter == .wishlist { return "wishlist" }
+        if let categoryFilter { return categoryFilter.rawValue }
+        return "all"
+    }
+
+    private func applyTab(_ tab: FilterTab) {
+        switch tab {
+        case .all:
+            categoryFilter = nil
+            statusFilter = nil
+        case .category(let c):
+            statusFilter = nil
+            categoryFilter = c
+        case .wishlist:
+            categoryFilter = nil
+            statusFilter = .wishlist
+        }
+    }
+
+    /// Step one tab left/right (clamped at the ends), with the same soft
+    /// fade the pills use when tapped.
+    private func advanceTab(by delta: Int) {
+        let tabs = filterTabs
+        guard tabs.count > 1 else { return }
+        let next = currentTabIndex + delta
+        guard next >= 0, next < tabs.count else { return }
+        UISelectionFeedbackGenerator().selectionChanged()
+        withAnimation(.easeInOut(duration: 0.3)) { applyTab(tabs[next]) }
+    }
+
+    /// Horizontal flick on the grid → previous/next category. Runs
+    /// simultaneously with the vertical scroll, and only fires on a clearly
+    /// horizontal swipe so normal scrolling and pinch-zoom are untouched.
+    private var categorySwipe: some Gesture {
+        DragGesture(minimumDistance: 24)
+            .onEnded { value in
+                guard !isPinching, !twoFingersDown else { return }
+                let dx = value.translation.width
+                let dy = value.translation.height
+                guard abs(dx) > 50, abs(dx) > abs(dy) * 1.4 else { return }
+                advanceTab(by: dx < 0 ? 1 : -1)   // swipe left → next
+            }
     }
 
     // MARK: - Empty states
