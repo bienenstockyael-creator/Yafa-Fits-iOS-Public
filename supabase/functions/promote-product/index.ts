@@ -141,7 +141,7 @@ serve(async (req) => {
       .from("products")
       .upload(path, pngBytes, { contentType: "image/png", upsert: false });
     if (upErr) return json(500, { error: "upload_failed", detail: upErr.message });
-    const imageUrl = userClient.storage.from("products").getPublicURL(path).data.publicUrl;
+    const imageUrl = userClient.storage.from("products").getPublicUrl(path).data.publicUrl;
 
     // 5. Insert the polished closet product (wishlist — a shopping find).
     const { data: inserted, error: insErr } = await userClient
