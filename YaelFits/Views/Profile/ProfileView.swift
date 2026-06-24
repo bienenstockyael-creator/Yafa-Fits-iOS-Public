@@ -35,6 +35,7 @@ struct ProfileView: View {
     /// Favorites (your liked own outfits) — moved here from the old
     /// floating FAB, which now opens the wardrobe instead.
     @State private var showFavoritesSheet = false
+    @State private var showLinkExtension = false
     /// Vibes + 3D credit balances surfaced under the stats row.
     /// Refreshed in `.task` alongside follower/following counts.
     @State private var vibesReceived: Int = 0
@@ -536,6 +537,11 @@ struct ProfileView: View {
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppPalette.groupedBackground)
         }
+        .sheet(isPresented: $showLinkExtension) {
+            LinkExtensionView()
+                .environment(store)
+                .presentationDragIndicator(.visible)
+        }
         .sheet(isPresented: $showVibersOnMe) {
             if let userId = store.userId {
                 VibersListSheet(source: .user(userId))
@@ -663,6 +669,7 @@ struct ProfileView: View {
     /// only on the auth screen) — also where App Store review expects them.
     private var accountExtrasSection: some View {
         VStack(spacing: LayoutMetrics.small) {
+            settingsRow("LINK BROWSER EXTENSION") { showLinkExtension = true }
             settingsRow("BLOCKED ACCOUNTS") { showBlockedAccounts = true }
             settingsRow("TERMS OF SERVICE") {
                 if let url = URL(string: AppConfig.termsOfServiceURL) { openURL(url) }
@@ -957,5 +964,96 @@ struct BlockedAccountsSheet: View {
             profiles = fetched
             isLoading = false
         }
+    }
+}
+
+// MARK: - Link browser extension
+
+/// Shows a short-lived pairing code so the Chrome extension can link to this
+/// account. The code is generated on the server (DB default) when this sheet
+/// opens; "New code" mints a fresh one.
+struct LinkExtensionView: View {
+    @Environment(OutfitStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var code: String?
+    @State private var isLoading = false
+    @State private var errorText: String?
+
+    var body: some View {
+        VStack(spacing: LayoutMetrics.large) {
+            VStack(spacing: 8) {
+                Text("Link browser extension")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(AppPalette.textStrong)
+                Text("In Chrome, open the Yafa extension and tap **Add to Yafa** on a saved item, then enter this code.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(AppPalette.textMuted)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.horizontal, LayoutMetrics.large)
+
+            Group {
+                if let code {
+                    Text(grouped(code))
+                        .font(.system(size: 30, weight: .bold, design: .monospaced))
+                        .tracking(6)
+                        .foregroundStyle(AppPalette.textStrong)
+                } else if isLoading {
+                    ProgressView()
+                } else {
+                    Text("——").foregroundStyle(AppPalette.textFaint)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 86)
+            .appCard(cornerRadius: LayoutMetrics.cardCornerRadius)
+            .padding(.horizontal, LayoutMetrics.large)
+
+            Text(errorText ?? "Expires in 10 minutes · single use")
+                .font(.system(size: 12))
+                .foregroundStyle(errorText == nil ? AppPalette.textFaint : Color.red)
+
+            Button {
+                Task { await generate() }
+            } label: {
+                Text(code == nil ? "Generate code" : "New code")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 50)
+                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(AppPalette.textStrong))
+            }
+            .buttonStyle(.plain)
+            .disabled(isLoading)
+            .padding(.horizontal, LayoutMetrics.large)
+
+            Spacer()
+        }
+        .padding(.top, LayoutMetrics.xLarge)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AppPalette.groupedBackground.ignoresSafeArea())
+        .preferredColorScheme(.light)
+        .task { if code == nil { await generate() } }
+    }
+
+    /// Splits the code into two halves for readability ("ABCD2345" → "ABCD 2345").
+    private func grouped(_ s: String) -> String {
+        let chars = Array(s)
+        guard chars.count > 4 else { return s }
+        let mid = chars.count / 2
+        return String(chars[..<mid]) + " " + String(chars[mid...])
+    }
+
+    private func generate() async {
+        guard let uid = store.userId else { errorText = "You're not signed in."; return }
+        isLoading = true
+        errorText = nil
+        do {
+            code = try await PairingService.createCode(userId: uid).code
+        } catch {
+            errorText = "Couldn't create a code — try again."
+        }
+        isLoading = false
     }
 }

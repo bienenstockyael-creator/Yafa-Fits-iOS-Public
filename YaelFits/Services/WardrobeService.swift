@@ -159,3 +159,27 @@ enum WardrobeError: LocalizedError {
         }
     }
 }
+
+// MARK: - Browser-extension pairing
+
+struct PairingCode: Decodable, Sendable {
+    let code: String
+    let expires_at: String
+}
+
+enum PairingService {
+    /// Creates a short-lived, single-use pairing code for this user (the DB
+    /// generates the code + expiry). The browser extension redeems it via the
+    /// `redeem-pairing-code` edge function to obtain a session.
+    static func createCode(userId: UUID) async throws -> PairingCode {
+        struct Insert: Encodable { let user_id: String }
+        let rows: [PairingCode] = try await supabase
+            .from("pairing_codes")
+            .insert(Insert(user_id: userId.uuidString))
+            .select("code, expires_at")
+            .execute()
+            .value
+        guard let first = rows.first else { throw WardrobeError.insertFailed }
+        return first
+    }
+}
