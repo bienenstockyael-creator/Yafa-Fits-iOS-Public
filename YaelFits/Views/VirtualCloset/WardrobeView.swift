@@ -29,6 +29,7 @@ struct WardrobeView: View {
     @State private var statusFilter: WardrobeStatus? = nil      // nil == All
     @State private var searchText: String = ""
     @State private var selectedItem: WardrobeDisplayItem?
+    @State private var showGetExtension = false
     /// Items deleted this session — filtered out immediately so the grid
     /// updates even before the (cached) outfit list re-syncs.
     @State private var deletedItemIDs: Set<String> = []
@@ -108,6 +109,10 @@ struct WardrobeView: View {
                     .environment(store)
                     .presentationDragIndicator(.visible)
                     .presentationBackground(AppPalette.groupedBackground)
+                }
+                .sheet(isPresented: $showGetExtension) {
+                    GetExtensionSheet()
+                        .presentationDragIndicator(.visible)
                 }
                 .task { await load() }
         }
@@ -453,12 +458,26 @@ struct WardrobeView: View {
                 Text("Your closet is empty")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(AppPalette.textStrong)
-                Text("Tag products on your outfits and they’ll collect here automatically.")
+                Text("Tag products on your outfits and they’ll collect here automatically — or save them from your laptop with the Yafa browser extension.")
                     .font(.system(size: 13))
                     .foregroundStyle(AppPalette.textMuted)
                     .multilineTextAlignment(.center)
             }
             .padding(.horizontal, LayoutMetrics.xLarge)
+
+            Button { showGetExtension = true } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "puzzlepiece.fill").font(.system(size: 13))
+                    Text("Save from your desktop")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .foregroundStyle(AppPalette.textStrong)
+                .padding(.horizontal, 18)
+                .frame(height: 44)
+                .appCapsule(shadowRadius: 0, shadowY: 0)
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 4)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -1078,4 +1097,94 @@ private final class SimultaneousGestureDelegate: NSObject, UIGestureRecognizerDe
         _ gestureRecognizer: UIGestureRecognizer,
         shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
     ) -> Bool { true }
+}
+
+// MARK: - Get the Chrome extension
+
+/// Explains the Yafa browser extension and how to get it. Until the extension
+/// is approved on the Chrome Web Store, it shows a "Coming soon" state instead
+/// of a live button. Flip `isLive` to true (and the URL is already correct)
+/// once the listing is published.
+struct GetExtensionSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
+
+    /// Set to true once the extension is live on the Web Store.
+    private let isLive = false
+    private let storeURL = URL(string: "https://chromewebstore.google.com/detail/cjeoackfbfomhbcneibfpfddapklgopg")!
+
+    var body: some View {
+        VStack(spacing: LayoutMetrics.large) {
+            VStack(spacing: 12) {
+                Image(systemName: "puzzlepiece.fill")
+                    .font(.system(size: 26))
+                    .foregroundStyle(AppPalette.textStrong)
+                    .frame(width: 64, height: 64)
+                    .appCircle(shadowRadius: 0, shadowY: 0)
+                Text("Save from your desktop")
+                    .font(.system(size: 21, weight: .bold))
+                    .foregroundStyle(AppPalette.textStrong)
+                Text("Shopping on your laptop? Add the Yafa extension to Chrome to save products as you browse — they sync straight to your closet here.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(AppPalette.textMuted)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.horizontal, LayoutMetrics.large)
+
+            VStack(alignment: .leading, spacing: 14) {
+                stepRow("1", "Add the Yafa extension to Chrome")
+                stepRow("2", "Click the Yafa icon on any product page to save it")
+                stepRow("3", "Tap “Add to Yafa” to send it to your closet")
+            }
+            .padding(LayoutMetrics.large)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .appCard(cornerRadius: LayoutMetrics.cardCornerRadius)
+
+            Spacer()
+
+            if isLive {
+                Button { openURL(storeURL) } label: {
+                    Text("Get it on Chrome")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 52)
+                        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(AppPalette.textStrong))
+                }
+                .buttonStyle(.plain)
+            } else {
+                HStack(spacing: 7) {
+                    Image(systemName: "clock")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text("Coming soon to the Chrome Web Store")
+                        .font(.system(size: 15, weight: .semibold))
+                }
+                .foregroundStyle(AppPalette.textMuted)
+                .frame(maxWidth: .infinity)
+                .frame(height: 52)
+                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(AppPalette.cardFill))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
+            }
+        }
+        .padding(.top, LayoutMetrics.xLarge)
+        .padding(.bottom, LayoutMetrics.large)
+        .padding(.horizontal, LayoutMetrics.large)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AppPalette.groupedBackground.ignoresSafeArea())
+        .preferredColorScheme(.light)
+    }
+
+    private func stepRow(_ n: String, _ text: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text(n)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 24, height: 24)
+                .background(Circle().fill(AppPalette.textStrong))
+            Text(text)
+                .font(.system(size: 14))
+                .foregroundStyle(AppPalette.textPrimary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
 }

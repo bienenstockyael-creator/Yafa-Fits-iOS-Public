@@ -36,6 +36,7 @@ struct ProfileView: View {
     /// floating FAB, which now opens the wardrobe instead.
     @State private var showFavoritesSheet = false
     @State private var showLinkExtension = false
+    @State private var showGetExtension = false
     /// Vibes + 3D credit balances surfaced under the stats row.
     /// Refreshed in `.task` alongside follower/following counts.
     @State private var vibesReceived: Int = 0
@@ -542,6 +543,10 @@ struct ProfileView: View {
                 .environment(store)
                 .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $showGetExtension) {
+            GetExtensionSheet()
+                .presentationDragIndicator(.visible)
+        }
         .sheet(isPresented: $showVibersOnMe) {
             if let userId = store.userId {
                 VibersListSheet(source: .user(userId))
@@ -669,6 +674,7 @@ struct ProfileView: View {
     /// only on the auth screen) — also where App Store review expects them.
     private var accountExtrasSection: some View {
         VStack(spacing: LayoutMetrics.small) {
+            settingsRow("GET THE CHROME EXTENSION") { showGetExtension = true }
             settingsRow("LINK BROWSER EXTENSION") { showLinkExtension = true }
             settingsRow("BLOCKED ACCOUNTS") { showBlockedAccounts = true }
             settingsRow("TERMS OF SERVICE") {
