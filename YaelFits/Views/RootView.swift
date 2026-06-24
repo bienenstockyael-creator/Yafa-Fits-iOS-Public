@@ -421,10 +421,22 @@ struct RootView: View {
             transitionTask?.cancel()
             morphPrepTask?.cancel()
         }
-        .sheet(isPresented: $showsCloset) {
-            if let userId = store.userId {
-                WardrobeView(userId: userId)
-                    .environment(store)
+        // The closet is a full-screen PAGE that grows out of the closet button
+        // (bottom-right) rather than a sheet — so its inner gestures (category
+        // swipe, lightbox) never fight a sheet's drag-to-dismiss.
+        .overlay {
+            if showsCloset, let userId = store.userId {
+                WardrobeView(userId: userId, onClose: {
+                    withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
+                        showsCloset = false
+                    }
+                })
+                .environment(store)
+                .background(AppPalette.groupedBackground)
+                .transition(
+                    .scale(scale: 0.04, anchor: UnitPoint(x: 0.86, y: 0.9))
+                        .combined(with: .opacity)
+                )
             }
         }
         .sheet(isPresented: $showsSettingsSheet) {
@@ -1371,7 +1383,10 @@ struct RootView: View {
         Button {
             let impact = UIImpactFeedbackGenerator(style: .light)
             impact.impactOccurred()
-            showsCloset = true
+            // Grow the closet page out of this button (see the .overlay below).
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) {
+                showsCloset = true
+            }
         } label: {
             AppIcon(
                 glyph: .tshirt,

@@ -20,6 +20,9 @@ struct WardrobeView: View {
     @Environment(\.dismiss) private var dismiss
 
     let userId: UUID
+    /// Dismiss the closet. Set when the closet is shown as a grow-from-button
+    /// page (RootView overlay); falls back to the sheet dismiss otherwise.
+    var onClose: (() -> Void)? = nil
 
     @State private var libraryItems: [WardrobeItem] = []
     @State private var isLoading = true
@@ -95,7 +98,7 @@ struct WardrobeView: View {
                 .toolbarColorScheme(.light, for: .navigationBar)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
-                        Button("Close") { dismiss() }
+                        Button("Close") { if let onClose { onClose() } else { dismiss() } }
                             .font(.system(size: 13))
                             .foregroundStyle(AppPalette.textMuted)
                     }
@@ -848,22 +851,31 @@ private struct ProductLightbox: View {
 
             VStack(spacing: 0) {
                 topBar
+                    // Chrome unfurls with the form (below), not a flat fade.
+                    .transition(.scale(scale: 0.96, anchor: .top).combined(with: .opacity))
                 ScrollView {
                     VStack(spacing: LayoutMetrics.large) {
                         heroImage
-                        formCard
-                        statusSection
-                        if !sourceURL.isEmpty, let linkURL = URL(string: sourceURL) {
-                            openLinkButton(linkURL)
+                            // Image flies in solid (matched-geometry only) — no
+                            // fade — so it never reads as a separate element.
+                            .transition(.identity)
+                        VStack(spacing: LayoutMetrics.large) {
+                            formCard
+                            statusSection
+                            if !sourceURL.isEmpty, let linkURL = URL(string: sourceURL) {
+                                openLinkButton(linkURL)
+                            }
+                            taggedOnSection
+                            if let saveError {
+                                Text(saveError)
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.red)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            deleteButton
                         }
-                        taggedOnSection
-                        if let saveError {
-                            Text(saveError)
-                                .font(.system(size: 12))
-                                .foregroundStyle(.red)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        deleteButton
+                        // The form grows out from just under the morphing image.
+                        .transition(.scale(scale: 0.96, anchor: .top).combined(with: .opacity))
                     }
                     .padding(LayoutMetrics.screenPadding)
                 }
