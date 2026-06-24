@@ -108,29 +108,24 @@ struct WardrobeView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            content
-                .background(AppPalette.groupedBackground)
-                .navigationTitle("Closet")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbarColorScheme(.light, for: .navigationBar)
-                // Match the nav bar to the page so the top doesn't read as a
-                // white strip above the lavender content.
-                .toolbarBackground(AppPalette.groupedBackground, for: .navigationBar)
-                .toolbarBackground(.visible, for: .navigationBar)
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button("Close") { if let onClose { onClose() } else { dismiss() } }
-                            .font(.system(size: 13))
-                            .foregroundStyle(AppPalette.textMuted)
-                    }
-                }
-                .sheet(isPresented: $showGetExtension) {
-                    GetExtensionSheet()
-                        .presentationDragIndicator(.visible)
-                }
-                .task { await load() }
-                .onDisappear { pollTask?.cancel() }
+        // The page fills the whole screen, behind the bars. NOT a NavigationStack:
+        // its nav bar reserved the top and its safe-area management clamped both
+        // the page AND the lightbox overlay below the bars — the real reason full
+        // screen never reached the edges. A custom header replaces the (purely
+        // cosmetic) nav bar.
+        ZStack {
+            AppPalette.groupedBackground.ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                closetHeader
+                content
+            }
+        }
+        .task { await load() }
+        .onDisappear { pollTask?.cancel() }
+        .sheet(isPresented: $showGetExtension) {
+            GetExtensionSheet()
+                .presentationDragIndicator(.visible)
         }
         // Backdrop dims in place — it must NOT travel with the card. Its OWN
         // overlay so its existence toggles independently and its .opacity
@@ -191,6 +186,30 @@ struct WardrobeView: View {
         // Fixed light palette across the app — keep it light so the search
         // field text stays readable in dark mode.
         .preferredColorScheme(.light)
+    }
+
+    /// Custom page header replacing the nav bar. It lives inside a VStack that
+    /// respects the safe area, so it naturally sits below the status bar while
+    /// the page background fills behind it.
+    private var closetHeader: some View {
+        ZStack {
+            Text("Closet")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(AppPalette.textStrong)
+            HStack {
+                Button { if let onClose { onClose() } else { dismiss() } } label: {
+                    Text("Close")
+                        .font(.system(size: 13))
+                        .foregroundStyle(AppPalette.textMuted)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                Spacer()
+            }
+        }
+        .frame(height: 44)
+        .padding(.horizontal, LayoutMetrics.screenPadding)
+        .padding(.top, 6)
     }
 
     /// Same look as the public-feed search bar (appCard 14 / search icon /
