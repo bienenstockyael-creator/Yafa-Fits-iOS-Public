@@ -24,6 +24,9 @@ struct WardrobeView: View {
     @State private var libraryItems: [WardrobeItem] = []
     @State private var isLoading = true
     @State private var loadError: String?
+    /// Re-fetches the closet while any thumbnail is still generating, so
+    /// the sparkle overlay clears itself once FAL swaps in the cut-out.
+    @State private var pollTask: Task<Void, Never>?
 
     @State private var categoryFilter: WardrobeCategory? = nil  // nil == All
     @State private var statusFilter: WardrobeStatus? = nil      // nil == All
@@ -115,6 +118,7 @@ struct WardrobeView: View {
                         .presentationDragIndicator(.visible)
                 }
                 .task { await load() }
+                .onDisappear { pollTask?.cancel() }
         }
         // Fixed light palette across the app — keep the sheet light so the
         // search field text stays readable in dark mode.
@@ -458,26 +462,15 @@ struct WardrobeView: View {
                 Text("Your closet is empty")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(AppPalette.textStrong)
-                Text("Tag products on your outfits and they’ll collect here automatically — or save them from your laptop with the Yafa browser extension.")
+                Text("Tag products on your outfits and they’ll collect here automatically.")
                     .font(.system(size: 13))
                     .foregroundStyle(AppPalette.textMuted)
                     .multilineTextAlignment(.center)
             }
             .padding(.horizontal, LayoutMetrics.xLarge)
-
-            Button { showGetExtension = true } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "puzzlepiece.fill").font(.system(size: 13))
-                    Text("Save from your desktop")
-                        .font(.system(size: 14, weight: .semibold))
-                }
-                .foregroundStyle(AppPalette.textStrong)
-                .padding(.horizontal, 18)
-                .frame(height: 44)
-                .appCapsule(shadowRadius: 0, shadowY: 0)
-            }
-            .buttonStyle(.plain)
-            .padding(.top, 4)
+            // "Save from your desktop" / Chrome-extension entry hidden until
+            // the Chrome extension is live on the Web Store (avoids a 2.1
+            // "coming soon" flag). Re-add this button when it ships.
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -529,7 +522,8 @@ struct WardrobeView: View {
                 brand: item.brand,
                 price: item.price,
                 sourceURL: item.sourceURL,
-                productId: item.id
+                productId: item.id,
+                isPolishing: item.isPolishing
             ))
         }
 
@@ -597,12 +591,27 @@ struct WardrobeView: View {
             await MainActor.run {
                 libraryItems = items
                 isLoading = false
+                schedulePollIfPolishing()
             }
         } catch {
             await MainActor.run {
                 loadError = error.localizedDescription
                 isLoading = false
             }
+        }
+    }
+
+    /// While any item is still generating its thumbnail, re-fetch shortly
+    /// after so the cut-out (and the sparkle dismissal) appear on their
+    /// own. Self-cancelling: stops as soon as nothing is polishing.
+    @MainActor
+    private func schedulePollIfPolishing() {
+        pollTask?.cancel()
+        guard libraryItems.contains(where: { $0.isPolishing }) else { return }
+        pollTask = Task {
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            guard !Task.isCancelled else { return }
+            await load()
         }
     }
 }
@@ -622,6 +631,9 @@ struct WardrobeDisplayItem: Identifiable, Hashable {
     let price: String?
     let sourceURL: String?
     let productId: UUID?
+    /// True while a Share-Extension save is still having its FAL cut-out
+    /// generated — drives the sparkle overlay in the cell.
+    var isPolishing: Bool = false
 
     /// Resolves possibly-relative image paths against the site base URL
     /// (same as `Product.resolvedImageURL`).
@@ -648,6 +660,13 @@ private struct WardrobeItemCell: View {
 
     private var isWishlist: Bool { item.status == .wishlist }
 
+    /// Drives the generating sparkles. Tracks `isPolishing`, but *lingers*
+    /// after polishing ends until the cut-out image has actually loaded — so
+    /// the sparkles hand off to the finished thumbnail instead of vanishing
+    /// onto the raw photo a beat early.
+    @State private var showSparkles = false
+    @State private var lingerTask: Task<Void, Never>?
+
     var body: some View {
         VStack(alignment: .center, spacing: 7) {
             // Product floats with no card behind it (minimal). A fixed
@@ -656,7 +675,42 @@ private struct WardrobeItemCell: View {
             Color.clear
                 .aspectRatio(0.85, contentMode: .fit)
                 .overlay {
-                    TrimmedRemoteImage(url: item.resolvedImageURL, contentPadding: 6)
+                    TrimmedRemoteImage(url: item.resolvedImageURL, contentPadding: 6, onLoad: {
+                        // Cut-out finished loading — retire the sparkles now
+                        // (only once polishing has actually ended).
+                        if !item.isPolishing {
+                            lingerTask?.cancel()
+                            showSparkles = false
+                        }
+                    })
+                        // Keep the raw photo dimmed under the sparkles until the
+                        // cut-out is ready, so they resolve together.
+                        .opacity(showSparkles ? 0.25 : 1)
+                }
+                .overlay {
+                    // The app's generation Lottie sparkles — shown while
+                    // polishing, then held until the cut-out loads (see above).
+                    if showSparkles {
+                        GenerationStarField(starSize: 250, interactive: false)
+                            .allowsHitTesting(false)
+                            .transition(.opacity)
+                    }
+                }
+                .animation(.easeInOut(duration: 0.3), value: showSparkles)
+                .onAppear { showSparkles = item.isPolishing }
+                .onChange(of: item.isPolishing) { _, nowPolishing in
+                    if nowPolishing {
+                        lingerTask?.cancel()
+                        showSparkles = true
+                    } else {
+                        // Linger until the cut-out loads (onLoad above); cap it
+                        // so a failed polish never sparkles forever.
+                        lingerTask?.cancel()
+                        lingerTask = Task {
+                            try? await Task.sleep(nanoseconds: 4_000_000_000)
+                            await MainActor.run { showSparkles = false }
+                        }
+                    }
                 }
 
             // Quiet, centered caption — the garment is the hero.

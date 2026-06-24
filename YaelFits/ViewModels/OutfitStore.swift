@@ -427,10 +427,12 @@ class OutfitStore {
         let instantFeed = cachedFeed ?? ContentSource.getBundledFeed()
         let sorted = instant.sorted { ($0.outfitNumber ?? 0) < ($1.outfitNumber ?? 0) }
 
-        if !sorted.isEmpty {
-            await FrameLoader.shared.preloadFullSequences(for: Array(sorted.prefix(9)))
-        }
-
+        // Reveal the UI as soon as the instant (cached/local) data is ready.
+        // Do NOT gate the loader on network frame downloads: on a clean
+        // install (no cached frames) preloading 9 full sequences over the
+        // network blocked the loader for a very long time / indefinitely —
+        // which App Review hit on a fresh device ("loads indefinitely after
+        // login"). Frames now stream in behind the already-visible archive.
         await MainActor.run {
             guard self.userId == userId else { return }
             self.outfits = instant
@@ -440,7 +442,10 @@ class OutfitStore {
 
         if !sorted.isEmpty {
             Task.detached(priority: .utility) {
+                guard self.userId == userId else { return }
+                // First frames first so cells aren't blank, then full sequences.
                 await FrameLoader.shared.preloadFirstFrames(outfits: Array(sorted.prefix(12)))
+                await FrameLoader.shared.preloadFullSequences(for: Array(sorted.prefix(9)))
             }
         }
 

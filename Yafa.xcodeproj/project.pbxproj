@@ -13,12 +13,12 @@
 		077DB02F9473F88E769F9A4C /* placeholder-3.webp in Resources */ = {isa = PBXBuildFile; fileRef = 422DD784B7345E185A3C2C41 /* placeholder-3.webp */; };
 		0AE3A5C0D8CDF4B7EED61A53 /* ProductCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07BA71A9CDD13DA6808964BB /* ProductCategory.swift */; };
 		0E7F75E0908D4E70379B08A5 /* ProductLibraryItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8673AF651837F7F8A1A50BD4 /* ProductLibraryItem.swift */; };
-		FACE0000000000000000B001 /* WardrobeItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0000000000000000F001 /* WardrobeItem.swift */; };
 		0E86953BE246048B9B408314 /* outfit-2.webp in Resources */ = {isa = PBXBuildFile; fileRef = 4F45F302477F8DD356FE4B1A /* outfit-2.webp */; };
 		10840633716A10C300DFB42C /* RemixArchiveSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FAC6014CC4DA975180EFDC6 /* RemixArchiveSheetView.swift */; };
 		10F0100FB857B9FCBCE40127 /* StateScopingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B807A90E1DD2A35EDCE8EB7A /* StateScopingTests.swift */; };
 		1122334455667788AABBCCDD /* ScrollOffsetObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8899AABBCCDDEEFF11223344 /* ScrollOffsetObserver.swift */; };
 		12D10EF491CEB4225EB2EDAF /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 87088DFCBDEF106E1E3BF96C /* Lottie */; };
+		FACE0000000000000000C001 /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = FACE0000000000000000D001 /* Lottie */; };
 		16C2D83AE59F47AF7304DCCA /* InteractiveTouchSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E4A64387EDDC09043570EF5 /* InteractiveTouchSurface.swift */; };
 		17E7BA37588835D6831F3AD3 /* GenerationJobRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BAE2E8D0D3DBBFF4D20EA22 /* GenerationJobRecord.swift */; };
 		187610989CDCDB70C64A0056 /* outfit-1.webp in Resources */ = {isa = PBXBuildFile; fileRef = 504B9DDF13973A533D8925BC /* outfit-1.webp */; };
@@ -97,7 +97,6 @@
 		3F5E7AF631869748B3F18F74 /* FrameLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A3F4701E39853E7B869448A /* FrameLoader.swift */; };
 		4434E9CC224A947D5BC8FD63 /* FalAvatarStandardizationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6F605079F2D6968468CCE00 /* FalAvatarStandardizationService.swift */; };
 		44360C1EC58813498FC14626 /* ProductLibraryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 251414A04E6CDF8175AC3872 /* ProductLibraryService.swift */; };
-		FACE0000000000000000B002 /* WardrobeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0000000000000000F002 /* WardrobeService.swift */; };
 		4A4F1BB87ED3BD7DF0C413F7 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = B6B48116FEE66A166D635ADA /* Supabase */; };
 		4B718F5E1C8680BCBDD7C08F /* GenerationJobService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29E71BBBA1CFBB444044694A /* GenerationJobService.swift */; };
 		4C1D7D2C2780705E46A2698D /* windy.json in Resources */ = {isa = PBXBuildFile; fileRef = F6B8C9D105280144E32EBE34 /* windy.json */; };
@@ -126,7 +125,6 @@
 		74AA75019C8C28EDD28CB289 /* FalBackgroundRemovalService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A9473A9AC05A63B161719DE /* FalBackgroundRemovalService.swift */; };
 		74C11A63C84CEF82BD4D37F3 /* Inter_28pt-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E4ADA0A6F7861DEAEA0781FD /* Inter_28pt-SemiBold.ttf */; };
 		780F959E205BE16642ED4986 /* VirtualClosetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D8BC1280D2AC0BEF07C6956 /* VirtualClosetView.swift */; };
-		FACE0000000000000000B003 /* WardrobeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0000000000000000F003 /* WardrobeView.swift */; };
 		808BE6CA0DC558E5DD9F32AA /* NotificationsPlaceholderSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 474903917CC828F9A9431A6E /* NotificationsPlaceholderSheet.swift */; };
 		8102360B51D1E0956A25F698 /* AvatarCropView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E782DC00D03C8C56B60CE3B6 /* AvatarCropView.swift */; };
 		815AE7C9B6BFEC7E1E745DCF /* AppModifiers.swift in Sources */ = {isa = PBXBuildFile; fileRef = C70BC4A54DE808065C369147 /* AppModifiers.swift */; };
@@ -193,6 +191,7 @@
 		E4F5A6B7C8D9E0F1A2B3C4D5 /* CarouselHeroSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5A6B7C8D9E0F1A2B3C4D5E6 /* CarouselHeroSupport.swift */; };
 		E5ACB4190F73659733A47E11 /* FalDressAvatarService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB4F545B0509DBB35559DD46 /* FalDressAvatarService.swift */; };
 		E6A5D2C92FCB84450014D135 /* PhoneNumberKit in Frameworks */ = {isa = PBXBuildFile; productRef = E6A5D2C82FCB84450014D135 /* PhoneNumberKit */; };
+		E6DB588E2FEBFCB100A7587D /* YafaShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E6DB58842FEBFCB100A7587D /* YafaShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E823AF5D92E1552C3529D50F /* SocialService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0200DA9B94C7FF2FD79D899 /* SocialService.swift */; };
 		E829A0C19B1DFA9A885A7B54 /* CommentsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B54F1D89D0F53C54533E7A1 /* CommentsSheet.swift */; };
 		EA8546713771C1124022E886 /* outfit-16.webp in Resources */ = {isa = PBXBuildFile; fileRef = BEB2199F4533599D5693B5A2 /* outfit-16.webp */; };
@@ -203,6 +202,12 @@
 		EEF01751448761FEB4F9D9BC /* ClosetAvatarStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58684B30A094FD812594B873 /* ClosetAvatarStorage.swift */; };
 		F7A15AB6247B925DADE4A0E4 /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81B954E0E1EBF71A99A79927 /* AuthView.swift */; };
 		FA44C3B031072C58E72871BC /* AddProductSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 662419C9FD163590FB593FB1 /* AddProductSheet.swift */; };
+		FACE0000000000000000B001 /* WardrobeItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0000000000000000F001 /* WardrobeItem.swift */; };
+		FACE0000000000000000B002 /* WardrobeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0000000000000000F002 /* WardrobeService.swift */; };
+		FACE0000000000000000B003 /* WardrobeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0000000000000000F003 /* WardrobeView.swift */; };
+		FACE0000000000000000B004 /* YafaShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0000000000000000F004 /* YafaShared.swift */; };
+		FACE0000000000000000B005 /* ExtensionSessionProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0000000000000000F005 /* ExtensionSessionProvider.swift */; };
+		FACE0000000000000000B006 /* YafaShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0000000000000000F004 /* YafaShared.swift */; };
 		FB40B9D88FCEC7C1D58FF4BF /* RotatableOutfitImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49B67EDFF1375799A0757796 /* RotatableOutfitImage.swift */; };
 		FB8F78F2E7DA0B20E0921100 /* AutoDetectProductsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AF9B1703DDDA42143804DAE /* AutoDetectProductsView.swift */; };
 		FE102BDC0F83DC35A370EAA6 /* OutfitGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DD57D3ECC6A4D838C53FBD9 /* OutfitGridView.swift */; };
@@ -217,7 +222,28 @@
 			remoteGlobalIDString = 23EBFD656AC4E943E9E34461;
 			remoteInfo = Yafa;
 		};
+		E6DB588C2FEBFCB100A7587D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 2DE8C67D2750D80E205DE85A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E6DB58832FEBFCB100A7587D;
+			remoteInfo = YafaShare;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		E6DB588F2FEBFCB100A7587D /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				E6DB588E2FEBFCB100A7587D /* YafaShare.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		01759BA1E2A8F9A68E549346 /* outfit-9.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-9.webp"; sourceTree = "<group>"; };
@@ -288,7 +314,6 @@
 		202606111200000A000001 /* ProfileShareSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileShareSheet.swift; sourceTree = "<group>"; };
 		20260620000000990A000001 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		251414A04E6CDF8175AC3872 /* ProductLibraryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductLibraryService.swift; sourceTree = "<group>"; };
-		FACE0000000000000000F002 /* WardrobeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WardrobeService.swift; sourceTree = "<group>"; };
 		257C2FEEAA3F033C9F7D2A1D /* outfit-27.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-27.webp"; sourceTree = "<group>"; };
 		29E71BBBA1CFBB444044694A /* GenerationJobService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationJobService.swift; sourceTree = "<group>"; };
 		2BD94E7C6117190A4E63A8F5 /* ProductThumbnailUploadService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductThumbnailUploadService.swift; sourceTree = "<group>"; };
@@ -332,7 +357,6 @@
 		6A852FB7BE96B45E54412928 /* UserProfileSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfileSheet.swift; sourceTree = "<group>"; };
 		6AF76DDBEC17ACF0DEB5C2B2 /* outfits.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = outfits.json; sourceTree = "<group>"; };
 		6D8BC1280D2AC0BEF07C6956 /* VirtualClosetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VirtualClosetView.swift; sourceTree = "<group>"; };
-		FACE0000000000000000F003 /* WardrobeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WardrobeView.swift; sourceTree = "<group>"; };
 		701463B9FED6F52BA2804658 /* star-anim-4.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "star-anim-4.json"; sourceTree = "<group>"; };
 		7430C4B99E445B625AABF792 /* star-anim-5.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "star-anim-5.json"; sourceTree = "<group>"; };
 		765A7EC84BEB99AC0CCD8914 /* FollowListSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FollowListSheet.swift; sourceTree = "<group>"; };
@@ -349,7 +373,6 @@
 		8456128B0E6C520224F3D108 /* melike-profile.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "melike-profile.png"; sourceTree = "<group>"; };
 		85FE161686E36DA80D27F90E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		8673AF651837F7F8A1A50BD4 /* ProductLibraryItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductLibraryItem.swift; sourceTree = "<group>"; };
-		FACE0000000000000000F001 /* WardrobeItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WardrobeItem.swift; sourceTree = "<group>"; };
 		870B827D251E84029B685BB1 /* RemixStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemixStorage.swift; sourceTree = "<group>"; };
 		8821036C1F9ED66859189654 /* outfit-10.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-10.webp"; sourceTree = "<group>"; };
 		8899AABBCCDDEEFF11223344 /* ScrollOffsetObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrollOffsetObserver.swift; sourceTree = "<group>"; };
@@ -404,6 +427,7 @@
 		DE7400C8E76CC739BA9271FE /* LocalOutfitStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalOutfitStore.swift; sourceTree = "<group>"; };
 		E4ADA0A6F7861DEAEA0781FD /* Inter_28pt-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter_28pt-SemiBold.ttf"; sourceTree = "<group>"; };
 		E684CB8A63FBEFD7F1DA7209 /* outfit-4.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-4.webp"; sourceTree = "<group>"; };
+		E6DB58842FEBFCB100A7587D /* YafaShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = YafaShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		E782DC00D03C8C56B60CE3B6 /* AvatarCropView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarCropView.swift; sourceTree = "<group>"; };
 		E9C9464710C446D7B975F055 /* Yafa.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Yafa.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9EEE7F7310371BA0DB650A1 /* public-feed.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "public-feed.json"; sourceTree = "<group>"; };
@@ -421,10 +445,44 @@
 		F6BCC4406A27B6BF439BBA9D /* Outfit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Outfit.swift; sourceTree = "<group>"; };
 		F6F605079F2D6968468CCE00 /* FalAvatarStandardizationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FalAvatarStandardizationService.swift; sourceTree = "<group>"; };
 		FA749595F4514A6C52C3341B /* GTFAdieuTRIAL-BlackSlanted.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "GTFAdieuTRIAL-BlackSlanted.otf"; sourceTree = "<group>"; };
+		FACE0000000000000000F001 /* WardrobeItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WardrobeItem.swift; sourceTree = "<group>"; };
+		FACE0000000000000000F002 /* WardrobeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WardrobeService.swift; sourceTree = "<group>"; };
+		FACE0000000000000000F003 /* WardrobeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WardrobeView.swift; sourceTree = "<group>"; };
+		FACE0000000000000000F004 /* YafaShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YafaShared.swift; sourceTree = "<group>"; };
+		FACE0000000000000000F005 /* ExtensionSessionProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionSessionProvider.swift; sourceTree = "<group>"; };
 		FDF9D01E8CA3A29D241E8B17 /* LottieView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LottieView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		E6DB58922FEBFCB100A7587D /* Exceptions for "YafaShare" folder in "YafaShare" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = E6DB58832FEBFCB100A7587D /* YafaShare */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		E6DB58852FEBFCB100A7587D /* YafaShare */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				E6DB58922FEBFCB100A7587D /* Exceptions for "YafaShare" folder in "YafaShare" target */,
+			);
+			path = YafaShare;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
 /* Begin PBXFrameworksBuildPhase section */
+		E6DB58812FEBFCB100A7587D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FACE0000000000000000C001 /* Lottie in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F5D9D2E960F3073309D3FEAA /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -627,6 +685,7 @@
 				0DB1A0987C024104E5CEBBCC /* Config */,
 				18125B4AD89E6BF4CB99938E /* YaelFits */,
 				74CAC0B0995CA26CB7573FB2 /* YafaTests */,
+				E6DB58852FEBFCB100A7587D /* YafaShare */,
 				90842B847FF4667E4FD2AB80 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -752,6 +811,8 @@
 				9536A3D80F4BDF8F985E374D /* ProductImageService.swift */,
 				251414A04E6CDF8175AC3872 /* ProductLibraryService.swift */,
 				FACE0000000000000000F002 /* WardrobeService.swift */,
+				FACE0000000000000000F004 /* YafaShared.swift */,
+				FACE0000000000000000F005 /* ExtensionSessionProvider.swift */,
 				2BD94E7C6117190A4E63A8F5 /* ProductThumbnailUploadService.swift */,
 				35C267E0A7B040C73D2CA472 /* PushNotificationService.swift */,
 				870B827D251E84029B685BB1 /* RemixStorage.swift */,
@@ -776,6 +837,7 @@
 			children = (
 				E9C9464710C446D7B975F055 /* Yafa.app */,
 				EE55D6A8AECEEB914A7A26B6 /* YafaTests.xctest */,
+				E6DB58842FEBFCB100A7587D /* YafaShare.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -833,10 +895,12 @@
 				4C575CF4187578C04611C876 /* Sources */,
 				4292E04D47E2062ECDD4FF65 /* Resources */,
 				F5D9D2E960F3073309D3FEAA /* Frameworks */,
+				E6DB588F2FEBFCB100A7587D /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				E6DB588D2FEBFCB100A7587D /* PBXTargetDependency */,
 			);
 			name = Yafa;
 			packageProductDependencies = (
@@ -867,6 +931,29 @@
 			productReference = EE55D6A8AECEEB914A7A26B6 /* YafaTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		E6DB58832FEBFCB100A7587D /* YafaShare */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E6DB58932FEBFCB100A7587D /* Build configuration list for PBXNativeTarget "YafaShare" */;
+			buildPhases = (
+				E6DB58802FEBFCB100A7587D /* Sources */,
+				E6DB58812FEBFCB100A7587D /* Frameworks */,
+				E6DB58822FEBFCB100A7587D /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				E6DB58852FEBFCB100A7587D /* YafaShare */,
+			);
+			name = YafaShare;
+			packageProductDependencies = (
+				FACE0000000000000000D001 /* Lottie */,
+			);
+			productName = YafaShare;
+			productReference = E6DB58842FEBFCB100A7587D /* YafaShare.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -874,6 +961,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
+				LastSwiftUpdateCheck = 2630;
 				LastUpgradeCheck = 1500;
 				TargetAttributes = {
 					23EBFD656AC4E943E9E34461 = {
@@ -881,6 +969,9 @@
 					};
 					ADC6973CF41C821B89708B5E = {
 						DevelopmentTeam = P5KZPUFLKJ;
+					};
+					E6DB58832FEBFCB100A7587D = {
+						CreatedOnToolsVersion = 26.3;
 					};
 				};
 			};
@@ -906,6 +997,7 @@
 			targets = (
 				23EBFD656AC4E943E9E34461 /* Yafa */,
 				ADC6973CF41C821B89708B5E /* YafaTests */,
+				E6DB58832FEBFCB100A7587D /* YafaShare */,
 			);
 		};
 /* End PBXProject section */
@@ -971,6 +1063,13 @@
 				81E4B1978611C60A4A46D661 /* stormy.json in Resources */,
 				A8FBAE75835F5B8E2408B6B1 /* sunny.json in Resources */,
 				4C1D7D2C2780705E46A2698D /* windy.json in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E6DB58822FEBFCB100A7587D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1059,6 +1158,8 @@
 				3A4491708C31E6C0FE1817E2 /* ProductImageView.swift in Sources */,
 				0E7F75E0908D4E70379B08A5 /* ProductLibraryItem.swift in Sources */,
 				FACE0000000000000000B001 /* WardrobeItem.swift in Sources */,
+				FACE0000000000000000B004 /* YafaShared.swift in Sources */,
+				FACE0000000000000000B005 /* ExtensionSessionProvider.swift in Sources */,
 				44360C1EC58813498FC14626 /* ProductLibraryService.swift in Sources */,
 				FACE0000000000000000B002 /* WardrobeService.swift in Sources */,
 				FF542F98F1BFD9E0DA427831 /* ProductThumbnailUploadService.swift in Sources */,
@@ -1131,6 +1232,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E6DB58802FEBFCB100A7587D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FACE0000000000000000B006 /* YafaShared.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -1138,6 +1247,11 @@
 			isa = PBXTargetDependency;
 			target = 23EBFD656AC4E943E9E34461 /* Yafa */;
 			targetProxy = 77BCF22E5DDB71473D959616 /* PBXContainerItemProxy */;
+		};
+		E6DB588D2FEBFCB100A7587D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E6DB58832FEBFCB100A7587D /* YafaShare */;
+			targetProxy = E6DB588C2FEBFCB100A7587D /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -1150,7 +1264,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = YaelFits/YaelFits.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 45;
+				CURRENT_PROJECT_VERSION = 47;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = YaelFits/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1273,7 +1387,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = YaelFits/YaelFits.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 45;
+				CURRENT_PROJECT_VERSION = 47;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = YaelFits/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1347,6 +1461,82 @@
 			};
 			name = Release;
 		};
+		E6DB58902FEBFCB100A7587D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CODE_SIGN_ENTITLEMENTS = YafaShare/YafaShare.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = YafaShare/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = YafaShare;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.yafa.Yafa.YafaShare;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		E6DB58912FEBFCB100A7587D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CODE_SIGN_ENTITLEMENTS = YafaShare/YafaShare.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = YafaShare/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = YafaShare;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.yafa.Yafa.YafaShare;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -1373,6 +1563,15 @@
 			buildConfigurations = (
 				223BD85F182ED8E1901D33DD /* Debug */,
 				D3C71B3A4B743FF56871E484 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		E6DB58932FEBFCB100A7587D /* Build configuration list for PBXNativeTarget "YafaShare" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E6DB58902FEBFCB100A7587D /* Debug */,
+				E6DB58912FEBFCB100A7587D /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
@@ -1416,6 +1615,11 @@
 
 /* Begin XCSwiftPackageProductDependency section */
 		87088DFCBDEF106E1E3BF96C /* Lottie */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7BB966226F388D7967BC5DFF /* XCRemoteSwiftPackageReference "lottie-ios" */;
+			productName = Lottie;
+		};
+		FACE0000000000000000D001 /* Lottie */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 7BB966226F388D7967BC5DFF /* XCRemoteSwiftPackageReference "lottie-ios" */;
 			productName = Lottie;

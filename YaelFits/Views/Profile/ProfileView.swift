@@ -674,8 +674,10 @@ struct ProfileView: View {
     /// only on the auth screen) — also where App Store review expects them.
     private var accountExtrasSection: some View {
         VStack(spacing: LayoutMetrics.small) {
-            settingsRow("GET THE CHROME EXTENSION") { showGetExtension = true }
-            settingsRow("LINK BROWSER EXTENSION") { showLinkExtension = true }
+            // Chrome-extension rows ("GET THE CHROME EXTENSION" / "LINK BROWSER
+            // EXTENSION") hidden until the Chrome extension is live on the Web
+            // Store — avoids App Review flagging a not-yet-available companion
+            // / "coming soon" feature. Re-add both rows when it ships.
             settingsRow("BLOCKED ACCOUNTS") { showBlockedAccounts = true }
             settingsRow("TERMS OF SERVICE") {
                 if let url = URL(string: AppConfig.termsOfServiceURL) { openURL(url) }

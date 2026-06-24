@@ -24,10 +24,23 @@ class AuthManager {
         }
         isLoading = false
 
+        // Make sure the Share Extension has a usable session on every launch
+        // (covers installs/updates where it was never provisioned).
+        if session != nil {
+            Task { await ExtensionSessionProvider.provisionIfMissing() }
+        }
+
         for await (event, session) in supabase.auth.authStateChanges {
             guard [.signedIn, .signedOut, .tokenRefreshed].contains(event) else { continue }
             await MainActor.run {
                 self.session = session
+            }
+            // Keep the Share Extension's dedicated session in step with login
+            // state. (tokenRefreshed is a no-op — the extension self-refreshes.)
+            switch event {
+            case .signedIn:  Task { await ExtensionSessionProvider.provision() }
+            case .signedOut: ExtensionSessionProvider.clear()
+            default: break
             }
         }
     }

@@ -40,6 +40,11 @@ struct WardrobeItem: Codable, Identifiable, Hashable, Sendable {
     /// `'owned'`), enforced by a check constraint.
     let status: String
 
+    /// `"generating"` while the Share-Extension save is still having its
+    /// thumbnail polished by FAL, `"ready"` once the cut-out has landed
+    /// (the default for every other row). Optional so older rows decode.
+    let thumbStatus: String?
+
     let createdAt: Date?
 
     enum CodingKeys: String, CodingKey {
@@ -47,6 +52,7 @@ struct WardrobeItem: Codable, Identifiable, Hashable, Sendable {
         case userId = "user_id"
         case imageURL = "image_url"
         case sourceURL = "source_url"
+        case thumbStatus = "thumb_status"
         case createdAt = "created_at"
     }
 
@@ -67,6 +73,10 @@ struct WardrobeItem: Codable, Identifiable, Hashable, Sendable {
     }
 
     var isWishlist: Bool { status == WardrobeStatus.wishlist.rawValue }
+
+    /// True while the FAL cut-out is still being generated (shared from
+    /// the iOS Share Extension). Drives the closet's sparkle overlay.
+    var isPolishing: Bool { thumbStatus == "generating" }
 }
 
 /// A fuzzy "already in your closet?" match returned by the

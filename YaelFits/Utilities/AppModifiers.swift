@@ -201,11 +201,17 @@ struct TrimmedRemoteImage: View {
     /// Inset applied to the trimmed image inside its frame (breathing room).
     var contentPadding: CGFloat = 0
 
+    /// Fired (main actor) whenever a freshly-loaded image is shown — lets the
+    /// closet cell time its "polish complete" flourish to the moment the
+    /// cut-out actually appears, not when polishing merely flips off.
+    var onLoad: (() -> Void)? = nil
+
     @State private var image: UIImage?
 
-    init(url: URL?, contentPadding: CGFloat = 0) {
+    init(url: URL?, contentPadding: CGFloat = 0, onLoad: (() -> Void)? = nil) {
         self.url = url
         self.contentPadding = contentPadding
+        self.onLoad = onLoad
         // Seed synchronously from cache so there's no blank frame.
         if let url, let cached = TrimmedImageCache.shared.object(forKey: url as NSURL) {
             _image = State(initialValue: cached)
@@ -228,11 +234,22 @@ struct TrimmedRemoteImage: View {
     }
 
     private func load() async {
-        guard image == nil, let url else { return }
+        guard let url else { return }
+        // Cache hit (including the URL we're already showing) — adopt it.
         if let cached = TrimmedImageCache.shared.object(forKey: url as NSURL) {
-            image = cached
+            if image !== cached {
+                await MainActor.run {
+                    withAnimation(.easeOut(duration: 0.2)) { image = cached }
+                    onLoad?()
+                }
+            }
             return
         }
+        // Cache miss — fetch this URL even when we're already showing a
+        // previous one. The thumbnail swaps raw → cut-out in place when the
+        // Share-Extension polish finishes and `image_url` changes; the old
+        // `guard image == nil` blocked that reload until the view was
+        // recreated (closing/reopening the closet).
         guard let (data, _) = try? await URLSession.shared.data(from: url),
               let raw = UIImage(data: data) else { return }
         let trimmed = await Task.detached(priority: .userInitiated) {
@@ -240,7 +257,8 @@ struct TrimmedRemoteImage: View {
         }.value
         TrimmedImageCache.shared.setObject(trimmed, forKey: url as NSURL)
         await MainActor.run {
-            withAnimation(.easeOut(duration: 0.15)) { image = trimmed }
+            withAnimation(.easeOut(duration: 0.2)) { image = trimmed }
+            onLoad?()
         }
     }
 }
