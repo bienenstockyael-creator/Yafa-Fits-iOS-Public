@@ -1052,7 +1052,8 @@ struct LinkExtensionView: View {
         do {
             code = try await PairingService.createCode(userId: uid).code
         } catch {
-            errorText = "Couldn't create a code — try again."
+            errorText = "Couldn't create a code.\n\(error.localizedDescription)"
+            print("[Pairing] createCode failed: \(error)")
         }
         isLoading = false
     }
