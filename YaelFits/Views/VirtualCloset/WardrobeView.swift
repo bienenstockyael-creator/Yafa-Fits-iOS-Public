@@ -899,6 +899,10 @@ private struct ProductLightbox: View {
     /// Latches whether the in-progress drag began in full-screen mode, so a
     /// single card-mode drag can only expand (never also dismiss).
     @State private var dragStartFull: Bool?
+    /// Captured ONCE on appear so the layout is stable — reading window insets
+    /// every render jittered the grow (scene ordering isn't deterministic).
+    @State private var insetTop: CGFloat = 47
+    @State private var insetBottom: CGFloat = 34
 
     /// Real device safe-area insets from the key window. We position content
     /// manually because the overlay ignores the safe area (so SwiftUI reports
@@ -931,7 +935,6 @@ private struct ProductLightbox: View {
     }
 
     var body: some View {
-        let insets = screenInsets
         ZStack {
             VStack(spacing: 0) {
                 grabber
@@ -942,21 +945,27 @@ private struct ProductLightbox: View {
             // lives INSIDE the background so the lavender fills behind the bars;
             // in card mode the background hugs the content and the inset becomes
             // an outer margin below.
-            .padding(.top, isFull ? insets.top : 0)
-            .padding(.bottom, isFull ? insets.bottom : 0)
+            .padding(.top, isFull ? insetTop : 0)
+            .padding(.bottom, isFull ? insetBottom : 0)
             .background(AppPalette.groupedBackground)
             // Card → square edge-to-edge as it goes full screen.
             .clipShape(RoundedRectangle(cornerRadius: isFull ? 0 : 28, style: .continuous))
-            .padding(.top, isFull ? 0 : insets.top + 8)
-            .padding(.bottom, isFull ? 0 : insets.bottom + 8)
+            .padding(.top, isFull ? 0 : insetTop + 8)
+            .padding(.bottom, isFull ? 0 : insetBottom + 8)
             .padding(.horizontal, isFull ? 0 : 10)
             .shadow(color: .black.opacity(isFull ? 0 : 0.18), radius: isFull ? 0 : 30, y: isFull ? 0 : 12)
             // Follow the finger when pulling the full sheet down to dismiss.
             .offset(y: sheetDrag)
         }
+        // Fill the screen via the parent overlay's safe-area bypass — NOT by
+        // ignoring the safe area on this (scaling) view, which moved the grow
+        // anchor and jittered the animation.
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // Fill the whole screen; content insets are applied manually above.
-        .ignoresSafeArea()
+        .onAppear {
+            let i = screenInsets
+            insetTop = i.top
+            insetBottom = i.bottom
+        }
         // ONE unified gesture: in card mode any drag expands to full; in full
         // mode a pull-down at the very top dismisses. Simultaneous, so the
         // ScrollView still scrolls normally underneath it.
