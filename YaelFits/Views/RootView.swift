@@ -427,16 +427,15 @@ struct RootView: View {
         .overlay {
             if showsCloset, let userId = store.userId {
                 WardrobeView(userId: userId, onClose: {
-                    withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
+                    withAnimation(.spring(response: 0.24, dampingFraction: 0.95)) {
                         showsCloset = false
                     }
                 })
                 .environment(store)
                 .background(AppPalette.groupedBackground)
-                .transition(
-                    .scale(scale: 0.04, anchor: UnitPoint(x: 0.86, y: 0.9))
-                        .combined(with: .opacity)
-                )
+                // Same iOS app-launch feel as the product lightbox: grows out of
+                // the closet button (bottom-right) with rounded corners in flight.
+                .transition(.growFromPoint(UnitPoint(x: 0.86, y: 0.9)))
             }
         }
         .sheet(isPresented: $showsSettingsSheet) {
@@ -1384,7 +1383,7 @@ struct RootView: View {
             let impact = UIImpactFeedbackGenerator(style: .light)
             impact.impactOccurred()
             // Grow the closet page out of this button (see the .overlay below).
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) {
+            withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
                 showsCloset = true
             }
         } label: {
@@ -1591,6 +1590,34 @@ struct FavoritesSheetView: View {
         }
         .padding(LayoutMetrics.small)
         .appCard(cornerRadius: 20, shadowRadius: 0, shadowY: 0)
+    }
+}
+
+/// Scales a view to/from a point while rounding its corners in flight and
+/// fading. scaleEffect / opacity / RoundedRectangle corner are each animatable,
+/// so the .modifier transition interpolates all three together.
+private struct GrowFromPointModifier: ViewModifier {
+    var scale: CGFloat
+    var corner: CGFloat
+    var opacity: CGFloat
+    var anchor: UnitPoint
+    func body(content: Content) -> some View {
+        content
+            .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
+            .scaleEffect(scale, anchor: anchor)
+            .opacity(opacity)
+    }
+}
+
+extension AnyTransition {
+    /// iOS app-launch style: a page grows out of (and shrinks back into) the
+    /// `anchor` point with rounded corners while it travels, settling SQUARE so
+    /// a full-screen page fills cleanly to the device's own rounded bezel.
+    static func growFromPoint(_ anchor: UnitPoint, cornerRadius: CGFloat = 44) -> AnyTransition {
+        .modifier(
+            active: GrowFromPointModifier(scale: 0.04, corner: cornerRadius, opacity: 0, anchor: anchor),
+            identity: GrowFromPointModifier(scale: 1, corner: 0, opacity: 1, anchor: anchor)
+        )
     }
 }
 
