@@ -128,36 +128,40 @@ struct WardrobeView: View {
                 .task { await load() }
                 .onDisappear { pollTask?.cancel() }
         }
-        // Tap-to-edit opens IN PLACE as a hero lightbox (the product image
-        // morphs out of its tile) — not a sheet-on-sheet.
+        // Backdrop dims in place — it must NOT travel with the card. Its OWN
+        // overlay so its existence toggles independently and its .opacity
+        // transition actually fires.
+        .overlay {
+            if selectedItem != nil {
+                Color.black.opacity(0.32)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture { closeLightbox() }
+                    .transition(.opacity)
+            }
+        }
+        // Tap-to-edit opens IN PLACE as a lightbox that grows out of the tapped
+        // tile — not a sheet-on-sheet. SEPARATE overlay from the backdrop: the
+        // .scale transition must be the root of its own inserted subtree, or
+        // SwiftUI swallows it (a child of a ZStack that appears as a whole gets
+        // only the container's default opacity — a pure fade, no scale).
         .overlay {
             if let item = selectedItem {
-                ZStack {
-                    // Backdrop dims in place — it must NOT travel with the card,
-                    // so it fades on its own and never reads as a moving layer.
-                    Color.black.opacity(0.32)
-                        .ignoresSafeArea()
-                        .contentShape(Rectangle())
-                        .onTapGesture { closeLightbox() }
-                        .transition(.opacity)
-
-                    ProductLightbox(
-                        item: item,
-                        userId: userId,
-                        onClose: { closeLightbox() },
-                        onChanged: { await load() },
-                        onDeleted: {
-                            withAnimation(.spring(response: 0.42, dampingFraction: 0.9)) {
-                                _ = deletedItemIDs.insert(item.id)
-                            }
+                ProductLightbox(
+                    item: item,
+                    userId: userId,
+                    onClose: { closeLightbox() },
+                    onChanged: { await load() },
+                    onDeleted: {
+                        withAnimation(.spring(response: 0.42, dampingFraction: 0.9)) {
+                            _ = deletedItemIDs.insert(item.id)
                         }
-                    )
-                    .environment(store)
-                    // Start small and tight at the tile so the card visibly
-                    // CLUSTERS on the product and grows outward from there —
-                    // a large start scale just reads as a fade in the centre.
-                    .transition(.scale(scale: 0.12, anchor: tapAnchor).combined(with: .opacity))
-                }
+                    }
+                )
+                .environment(store)
+                // Start small and tight at the tile so the card visibly CLUSTERS
+                // on the product and grows outward from there.
+                .transition(.scale(scale: 0.12, anchor: tapAnchor).combined(with: .opacity))
             }
         }
         // Keep the closet sheet from swipe-dismissing while a lightbox is open.
