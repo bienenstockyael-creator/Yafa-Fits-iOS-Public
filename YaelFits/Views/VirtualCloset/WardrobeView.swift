@@ -102,7 +102,7 @@ struct WardrobeView: View {
     /// Shrink the lightbox back into its tile — quick and clean (no bounce) so it
     /// settles into the icon the way an app does when you swipe it closed.
     private func closeLightbox() {
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.94)) {
+        withAnimation(.spring(response: 0.24, dampingFraction: 0.95)) {
             selectedItem = nil
         }
     }
@@ -132,13 +132,20 @@ struct WardrobeView: View {
         // overlay so its existence toggles independently and its .opacity
         // transition actually fires.
         .overlay {
-            if selectedItem != nil {
-                Color.black.opacity(0.32)
-                    .ignoresSafeArea()
-                    .contentShape(Rectangle())
-                    .onTapGesture { closeLightbox() }
-                    .transition(.opacity)
+            // Persistent ZStack so the child's .opacity transition fires while
+            // hit-testing re-evaluates LIVE. The moment a close sets selectedItem
+            // = nil, the fading backdrop stops intercepting taps and they fall
+            // through to the grid — so the exit never blocks opening another item.
+            ZStack {
+                if selectedItem != nil {
+                    Color.black.opacity(0.32)
+                        .ignoresSafeArea()
+                        .contentShape(Rectangle())
+                        .onTapGesture { closeLightbox() }
+                        .transition(.opacity)
+                }
             }
+            .allowsHitTesting(selectedItem != nil)
         }
         // Tap-to-edit opens IN PLACE as a lightbox that grows out of the tapped
         // tile — not a sheet-on-sheet. SEPARATE overlay from the backdrop: the
@@ -146,23 +153,29 @@ struct WardrobeView: View {
         // SwiftUI swallows it (a child of a ZStack that appears as a whole gets
         // only the container's default opacity — a pure fade, no scale).
         .overlay {
-            if let item = selectedItem {
-                ProductLightbox(
-                    item: item,
-                    userId: userId,
-                    onClose: { closeLightbox() },
-                    onChanged: { await load() },
-                    onDeleted: {
-                        withAnimation(.spring(response: 0.42, dampingFraction: 0.9)) {
-                            _ = deletedItemIDs.insert(item.id)
+            // Same pattern: persistent ZStack keeps the .scale transition alive
+            // while hit-testing turns off the instant we start closing, so the
+            // exiting card never swallows a tap meant for another tile.
+            ZStack {
+                if let item = selectedItem {
+                    ProductLightbox(
+                        item: item,
+                        userId: userId,
+                        onClose: { closeLightbox() },
+                        onChanged: { await load() },
+                        onDeleted: {
+                            withAnimation(.spring(response: 0.42, dampingFraction: 0.9)) {
+                                _ = deletedItemIDs.insert(item.id)
+                            }
                         }
-                    }
-                )
-                .environment(store)
-                // Start small and tight at the tile so the card visibly CLUSTERS
-                // on the product and grows outward from there.
-                .transition(.scale(scale: 0.12, anchor: tapAnchor).combined(with: .opacity))
+                    )
+                    .environment(store)
+                    // Start small and tight at the tile so the card visibly
+                    // CLUSTERS on the product and grows outward from there.
+                    .transition(.scale(scale: 0.12, anchor: tapAnchor).combined(with: .opacity))
+                }
             }
+            .allowsHitTesting(selectedItem != nil)
         }
         // Keep the closet sheet from swipe-dismissing while a lightbox is open.
         .interactiveDismissDisabled(selectedItem != nil)
@@ -237,9 +250,9 @@ struct WardrobeView: View {
                                 guard !isPinching else { return }
                                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                                 tapAnchor = anchorPoint(for: item.id)
-                                // iOS app-launch feel: glides up from the tile and
-                                // settles softly — light and flowy, not rubbery.
-                                withAnimation(.spring(response: 0.5, dampingFraction: 0.84)) {
+                                // iOS app-launch feel: springs up from the tile and
+                                // settles softly — snappy and light, not rubbery.
+                                withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
                                     selectedItem = item
                                 }
                             } label: {
