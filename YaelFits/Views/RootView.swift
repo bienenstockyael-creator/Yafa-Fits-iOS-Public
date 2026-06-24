@@ -427,7 +427,8 @@ struct RootView: View {
         .overlay {
             if showsCloset, let userId = store.userId {
                 WardrobeView(userId: userId, onClose: {
-                    withAnimation(.spring(response: 0.24, dampingFraction: 0.95)) {
+                    // Same spring as the open so the exit mirrors the entry.
+                    withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
                         showsCloset = false
                     }
                 })

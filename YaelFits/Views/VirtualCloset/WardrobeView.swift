@@ -99,10 +99,10 @@ struct WardrobeView: View {
         return UnitPoint(x: f.midX / screen.width, y: f.midY / screen.height)
     }
 
-    /// Shrink the lightbox back into its tile — quick and clean (no bounce) so it
-    /// settles into the icon the way an app does when you swipe it closed.
+    /// Shrink the lightbox back into its tile. SAME spring as the open so the
+    /// exit feels symmetric with the entry, not abrupt.
     private func closeLightbox() {
-        withAnimation(.spring(response: 0.24, dampingFraction: 0.95)) {
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
             selectedItem = nil
         }
     }
@@ -114,6 +114,10 @@ struct WardrobeView: View {
                 .navigationTitle("Closet")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbarColorScheme(.light, for: .navigationBar)
+                // Match the nav bar to the page so the top doesn't read as a
+                // white strip above the lavender content.
+                .toolbarBackground(AppPalette.groupedBackground, for: .navigationBar)
+                .toolbarBackground(.visible, for: .navigationBar)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
                         Button("Close") { if let onClose { onClose() } else { dismiss() } }
@@ -139,13 +143,15 @@ struct WardrobeView: View {
             ZStack {
                 if selectedItem != nil {
                     Color.black.opacity(0.32)
-                        .ignoresSafeArea()
                         .contentShape(Rectangle())
                         .onTapGesture { closeLightbox() }
                         .transition(.opacity)
                 }
             }
             .allowsHitTesting(selectedItem != nil)
+            // The overlay (not just the Color) must ignore the safe area, or it's
+            // bounded below the nav bar and the dim never reaches the status bar.
+            .ignoresSafeArea()
         }
         // Tap-to-edit opens IN PLACE as a lightbox that grows out of the tapped
         // tile — not a sheet-on-sheet. SEPARATE overlay from the backdrop: the
@@ -176,6 +182,9 @@ struct WardrobeView: View {
                 }
             }
             .allowsHitTesting(selectedItem != nil)
+            // Let the lightbox fill the entire screen (incl. behind the bars);
+            // ProductLightbox insets its own content using the window safe area.
+            .ignoresSafeArea()
         }
         // Keep the closet sheet from swipe-dismissing while a lightbox is open.
         .interactiveDismissDisabled(selectedItem != nil)
@@ -887,6 +896,19 @@ private struct ProductLightbox: View {
     @State private var atTop = true
     /// Live downward offset while pulling the full sheet down to dismiss.
     @State private var sheetDrag: CGFloat = 0
+    /// Latches whether the in-progress drag began in full-screen mode, so a
+    /// single card-mode drag can only expand (never also dismiss).
+    @State private var dragStartFull: Bool?
+
+    /// Real device safe-area insets from the key window. We position content
+    /// manually because the overlay ignores the safe area (so SwiftUI reports
+    /// zero insets inside it).
+    private var screenInsets: UIEdgeInsets {
+        (UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.keyWindow?.safeAreaInsets)
+            ?? UIEdgeInsets(top: 47, left: 0, bottom: 34, right: 0)
+    }
 
     init(
         item: WardrobeDisplayItem,
@@ -909,30 +931,32 @@ private struct ProductLightbox: View {
     }
 
     var body: some View {
+        let insets = screenInsets
         ZStack {
-            // Full screen: a full-bleed background fills behind the status bar so
-            // the page actually reaches the top edge (the inset card stops at the
-            // safe area). Card mode keeps its own padded/clipped background below.
-            if isFull {
-                AppPalette.groupedBackground.ignoresSafeArea()
-            }
-
             VStack(spacing: 0) {
                 grabber
                 topBar
                 scrollBody
             }
-            .background(isFull ? Color.clear : AppPalette.groupedBackground)
+            // Clear the dynamic island / home indicator. In full mode the inset
+            // lives INSIDE the background so the lavender fills behind the bars;
+            // in card mode the background hugs the content and the inset becomes
+            // an outer margin below.
+            .padding(.top, isFull ? insets.top : 0)
+            .padding(.bottom, isFull ? insets.bottom : 0)
+            .background(AppPalette.groupedBackground)
             // Card → square edge-to-edge as it goes full screen.
             .clipShape(RoundedRectangle(cornerRadius: isFull ? 0 : 28, style: .continuous))
+            .padding(.top, isFull ? 0 : insets.top + 8)
+            .padding(.bottom, isFull ? 0 : insets.bottom + 8)
             .padding(.horizontal, isFull ? 0 : 10)
-            .padding(.top, isFull ? 0 : 52)
-            .padding(.bottom, isFull ? 0 : 10)
             .shadow(color: .black.opacity(isFull ? 0 : 0.18), radius: isFull ? 0 : 30, y: isFull ? 0 : 12)
             // Follow the finger when pulling the full sheet down to dismiss.
             .offset(y: sheetDrag)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Fill the whole screen; content insets are applied manually above.
+        .ignoresSafeArea()
         // ONE unified gesture: in card mode any drag expands to full; in full
         // mode a pull-down at the very top dismisses. Simultaneous, so the
         // ScrollView still scrolls normally underneath it.
@@ -996,14 +1020,29 @@ private struct ProductLightbox: View {
     private var sheetGesture: some Gesture {
         DragGesture(minimumDistance: 10, coordinateSpace: .local)
             .onChanged { v in
-                if !isFull {
-                    if abs(v.translation.height) > 10 { setExpanded(true) }
-                } else if atTop && v.translation.height > 0 {
+                // Latch the intent to the state at the START of the drag, so a
+                // card-mode drag only ever expands — it can't expand AND then
+                // dismiss in the same motion (the "flash full then close" bug).
+                let startedFull = dragStartFull ?? isFull
+                if dragStartFull == nil { dragStartFull = isFull }
+
+                if !startedFull {
+                    if !isFull, abs(v.translation.height) > 10 { setExpanded(true) }
+                } else if atTop, v.translation.height > 0 {
                     sheetDrag = v.translation.height * 0.7
                 }
             }
             .onEnded { v in
-                guard isFull else { return }
+                let startedFull = dragStartFull ?? isFull
+                dragStartFull = nil
+
+                // A card-started drag only expands; never dismisses here.
+                guard startedFull else {
+                    if sheetDrag != 0 {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) { sheetDrag = 0 }
+                    }
+                    return
+                }
                 if atTop {
                     let dy = v.translation.height
                     let flick = v.predictedEndTranslation.height
@@ -1012,9 +1051,7 @@ private struct ProductLightbox: View {
                         return
                     }
                 }
-                if sheetDrag != 0 {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) { sheetDrag = 0 }
-                }
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) { sheetDrag = 0 }
             }
     }
 
