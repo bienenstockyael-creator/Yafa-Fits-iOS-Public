@@ -30,7 +30,7 @@ $func$;
 
 create table if not exists public.pairing_codes (
   code        text primary key default public.gen_pairing_code(),
-  user_id     uuid not null references auth.users(id) on delete cascade,
+  user_id     uuid not null default auth.uid() references auth.users(id) on delete cascade,
   created_at  timestamptz not null default now(),
   expires_at  timestamptz not null default (now() + interval '10 minutes'),
   consumed_at timestamptz

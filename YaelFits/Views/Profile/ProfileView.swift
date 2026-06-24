@@ -1046,11 +1046,11 @@ struct LinkExtensionView: View {
     }
 
     private func generate() async {
-        guard let uid = store.userId else { errorText = "You're not signed in."; return }
+        guard store.userId != nil else { errorText = "You're not signed in."; return }
         isLoading = true
         errorText = nil
         do {
-            code = try await PairingService.createCode(userId: uid).code
+            code = try await PairingService.createCode().code
         } catch {
             errorText = "Couldn't create a code.\n\(error.localizedDescription)"
             print("[Pairing] createCode failed: \(error)")

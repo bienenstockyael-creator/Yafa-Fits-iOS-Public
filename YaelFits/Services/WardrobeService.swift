@@ -171,11 +171,14 @@ enum PairingService {
     /// Creates a short-lived, single-use pairing code for this user (the DB
     /// generates the code + expiry). The browser extension redeems it via the
     /// `redeem-pairing-code` edge function to obtain a session.
-    static func createCode(userId: UUID) async throws -> PairingCode {
-        struct Insert: Encodable { let user_id: String }
+    static func createCode() async throws -> PairingCode {
+        // Insert an empty row: the DB fills user_id from auth.uid() (its
+        // default) and generates the code + expiry. This guarantees the RLS
+        // check (user_id = auth.uid()) passes — no client-supplied id to drift.
+        struct Insert: Encodable {}
         let rows: [PairingCode] = try await supabase
             .from("pairing_codes")
-            .insert(Insert(user_id: userId.uuidString))
+            .insert(Insert())
             .select("code, expires_at")
             .execute()
             .value
