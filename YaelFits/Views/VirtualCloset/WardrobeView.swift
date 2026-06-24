@@ -99,6 +99,14 @@ struct WardrobeView: View {
         return UnitPoint(x: f.midX / screen.width, y: f.midY / screen.height)
     }
 
+    /// Shrink the lightbox back into its tile. Tighter than the open spring (less
+    /// bounce) so it doesn't wobble as it disappears.
+    private func closeLightbox() {
+        withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) {
+            selectedItem = nil
+        }
+    }
+
     var body: some View {
         NavigationStack {
             content
@@ -124,25 +132,31 @@ struct WardrobeView: View {
         // morphs out of its tile) — not a sheet-on-sheet.
         .overlay {
             if let item = selectedItem {
-                ProductLightbox(
-                    item: item,
-                    userId: userId,
-                    onClose: {
-                        withAnimation(.timingCurve(0.22, 0.84, 0.18, 1, duration: 0.32)) {
-                            selectedItem = nil
+                ZStack {
+                    // Backdrop dims in place — it must NOT travel with the card,
+                    // so it fades on its own and never reads as a moving layer.
+                    Color.black.opacity(0.32)
+                        .ignoresSafeArea()
+                        .contentShape(Rectangle())
+                        .onTapGesture { closeLightbox() }
+                        .transition(.opacity)
+
+                    ProductLightbox(
+                        item: item,
+                        userId: userId,
+                        onClose: { closeLightbox() },
+                        onChanged: { await load() },
+                        onDeleted: {
+                            withAnimation(.spring(response: 0.42, dampingFraction: 0.9)) {
+                                _ = deletedItemIDs.insert(item.id)
+                            }
                         }
-                    },
-                    onChanged: { await load() },
-                    onDeleted: {
-                        withAnimation(.spring(response: 0.42, dampingFraction: 0.9)) {
-                            _ = deletedItemIDs.insert(item.id)
-                        }
-                    }
-                )
-                .environment(store)
-                // Image + card are ONE element that grows out of / shrinks back
-                // into the tapped tile (anchored at its on-screen position).
-                .transition(.scale(scale: 0.5, anchor: tapAnchor).combined(with: .opacity))
+                    )
+                    .environment(store)
+                    // The card grows out of / shrinks back into the tapped tile,
+                    // anchored at its on-screen position.
+                    .transition(.scale(scale: 0.46, anchor: tapAnchor).combined(with: .opacity))
+                }
             }
         }
         // Keep the closet sheet from swipe-dismissing while a lightbox is open.
@@ -218,9 +232,9 @@ struct WardrobeView: View {
                                 guard !isPinching else { return }
                                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                                 tapAnchor = anchorPoint(for: item.id)
-                                // Fast, smooth (the app's carousel curve) — long
-                                // travels never feel slow at a fixed duration.
-                                withAnimation(.timingCurve(0.22, 0.84, 0.18, 1, duration: 0.34)) {
+                                // Quick out of the tile, then a subtle bounce as it
+                                // lands — elegant without feeling slow on long travels.
+                                withAnimation(.spring(response: 0.44, dampingFraction: 0.72)) {
                                     selectedItem = item
                                 }
                             } label: {
@@ -864,42 +878,37 @@ private struct ProductLightbox: View {
     }
 
     var body: some View {
-        ZStack {
-            // Dim the closet behind; tap outside the card to dismiss.
-            Color.black.opacity(0.32)
-                .ignoresSafeArea()
-                .contentShape(Rectangle())
-                .onTapGesture { onClose() }
-
-            VStack(spacing: 0) {
-                topBar
-                ScrollView {
-                    VStack(spacing: LayoutMetrics.large) {
-                        heroImage
-                        formCard
-                        statusSection
-                        if !sourceURL.isEmpty, let linkURL = URL(string: sourceURL) {
-                            openLinkButton(linkURL)
-                        }
-                        taggedOnSection
-                        if let saveError {
-                            Text(saveError)
-                                .font(.system(size: 12))
-                                .foregroundStyle(.red)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        deleteButton
+        // Just the card. The dimming backdrop lives in the parent overlay so it
+        // can fade in place while only this card grows out of the tapped tile.
+        VStack(spacing: 0) {
+            topBar
+            ScrollView {
+                VStack(spacing: LayoutMetrics.large) {
+                    heroImage
+                    formCard
+                    statusSection
+                    if !sourceURL.isEmpty, let linkURL = URL(string: sourceURL) {
+                        openLinkButton(linkURL)
                     }
-                    .padding(LayoutMetrics.screenPadding)
+                    taggedOnSection
+                    if let saveError {
+                        Text(saveError)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.red)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    deleteButton
                 }
+                .padding(LayoutMetrics.screenPadding)
             }
-            .background(AppPalette.groupedBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-            .padding(.horizontal, 10)
-            .padding(.top, 52)
-            .padding(.bottom, 10)
-            .shadow(color: .black.opacity(0.18), radius: 30, y: 12)
         }
+        .background(AppPalette.groupedBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .padding(.horizontal, 10)
+        .padding(.top, 52)
+        .padding(.bottom, 10)
+        .shadow(color: .black.opacity(0.18), radius: 30, y: 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .alert("Remove from closet?", isPresented: $showDeleteConfirm) {
             Button("Remove", role: .destructive) { Task { await deleteItem() } }
             Button("Cancel", role: .cancel) {}
