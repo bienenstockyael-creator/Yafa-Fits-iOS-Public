@@ -849,9 +849,9 @@ private struct WardrobeItemCell: View {
 ///     saving *promotes* it by creating a real `products` row. The
 ///     union dedup then collapses the inline copy into the new row,
 ///     so it becomes editable from then on.
-/// Tap-to-edit "lightbox" for a closet product. Opens in place — the tapped
-/// tile's image morphs (matched-geometry) into this card and back on dismiss —
-/// instead of a sheet-on-sheet. Mirrors the outfit grid → carousel hero.
+/// Tap-to-edit "lightbox" for a closet product. Opens in place — the card grows
+/// out of the tapped tile and shrinks back on dismiss — instead of a
+/// sheet-on-sheet. Drag the header up to go full screen, down to collapse.
 private struct ProductLightbox: View {
     let item: WardrobeDisplayItem
     let userId: UUID
@@ -874,6 +874,9 @@ private struct ProductLightbox: View {
     @State private var isSaving = false
     @State private var saveError: String?
     @State private var showDeleteConfirm = false
+    /// Inset card vs. edge-to-edge full screen. Drag the header up to expand,
+    /// down to collapse, down again from the card to dismiss.
+    @State private var isFull = false
 
     init(
         item: WardrobeDisplayItem,
@@ -899,7 +902,16 @@ private struct ProductLightbox: View {
         // Just the card. The dimming backdrop lives in the parent overlay so it
         // can fade in place while only this card grows out of the tapped tile.
         VStack(spacing: 0) {
-            topBar
+            // The header doubles as the drag handle. It sits ABOVE the ScrollView
+            // so dragging it never competes with content scrolling.
+            VStack(spacing: 0) {
+                grabber
+                topBar
+            }
+            .background(AppPalette.groupedBackground)
+            .contentShape(Rectangle())
+            .gesture(headerDrag)
+
             ScrollView {
                 VStack(spacing: LayoutMetrics.large) {
                     heroImage
@@ -921,17 +933,53 @@ private struct ProductLightbox: View {
             }
         }
         .background(AppPalette.groupedBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .padding(.horizontal, 10)
-        .padding(.top, 52)
-        .padding(.bottom, 10)
-        .shadow(color: .black.opacity(0.18), radius: 30, y: 12)
+        // Card → square edge-to-edge as it goes full screen.
+        .clipShape(RoundedRectangle(cornerRadius: isFull ? 0 : 28, style: .continuous))
+        .padding(.horizontal, isFull ? 0 : 10)
+        .padding(.top, isFull ? 0 : 52)
+        .padding(.bottom, isFull ? 0 : 10)
+        .shadow(color: .black.opacity(isFull ? 0 : 0.18), radius: isFull ? 0 : 30, y: isFull ? 0 : 12)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .alert("Remove from closet?", isPresented: $showDeleteConfirm) {
             Button("Remove", role: .destructive) { Task { await deleteItem() } }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This removes “\(item.name)” from your closet and untags it from any outfits it's on.")
+        }
+    }
+
+    /// Small drag affordance at the very top of the card.
+    private var grabber: some View {
+        Capsule()
+            .fill(AppPalette.textFaint.opacity(0.55))
+            .frame(width: 36, height: 5)
+            .padding(.top, 8)
+            .padding(.bottom, 2)
+            .frame(maxWidth: .infinity)
+    }
+
+    /// Header drag: flick up → full screen; flick down → collapse to the card;
+    /// flick down again from the card → dismiss. Direction wins on either a
+    /// committed distance or a fast flick (predicted end).
+    private var headerDrag: some Gesture {
+        DragGesture(minimumDistance: 12, coordinateSpace: .local)
+            .onEnded { value in
+                let dy = value.translation.height
+                let flick = value.predictedEndTranslation.height
+                let up = dy < -46 || flick < -160
+                let down = dy > 46 || flick > 160
+                if !isFull {
+                    if up { setExpanded(true) }
+                    else if down { onClose() }
+                } else if down {
+                    setExpanded(false)
+                }
+            }
+    }
+
+    private func setExpanded(_ full: Bool) {
+        withAnimation(.spring(response: 0.42, dampingFraction: 0.86)) {
+            isFull = full
         }
     }
 
