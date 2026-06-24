@@ -32,6 +32,8 @@ struct WardrobeView: View {
     @State private var statusFilter: WardrobeStatus? = nil      // nil == All
     @State private var searchText: String = ""
     @State private var selectedItem: WardrobeDisplayItem?
+    /// Shared namespace for the tap-to-lightbox hero morph (grid tile ↔ card).
+    @Namespace private var heroNS
     @State private var showGetExtension = false
     /// Items deleted this session — filtered out immediately so the grid
     /// updates even before the (cached) outfit list re-syncs.
@@ -98,21 +100,6 @@ struct WardrobeView: View {
                             .foregroundStyle(AppPalette.textMuted)
                     }
                 }
-                .sheet(item: $selectedItem) { item in
-                    WardrobeItemDetailSheet(
-                        item: item,
-                        userId: userId,
-                        onChanged: { await load() },
-                        onDeleted: {
-                            withAnimation(.spring(response: 0.42, dampingFraction: 0.9)) {
-                                _ = deletedItemIDs.insert(item.id)
-                            }
-                        }
-                    )
-                    .environment(store)
-                    .presentationDragIndicator(.visible)
-                    .presentationBackground(AppPalette.groupedBackground)
-                }
                 .sheet(isPresented: $showGetExtension) {
                     GetExtensionSheet()
                         .presentationDragIndicator(.visible)
@@ -120,8 +107,34 @@ struct WardrobeView: View {
                 .task { await load() }
                 .onDisappear { pollTask?.cancel() }
         }
-        // Fixed light palette across the app — keep the sheet light so the
-        // search field text stays readable in dark mode.
+        // Tap-to-edit opens IN PLACE as a hero lightbox (the product image
+        // morphs out of its tile) — not a sheet-on-sheet.
+        .overlay {
+            if let item = selectedItem {
+                ProductLightbox(
+                    item: item,
+                    userId: userId,
+                    namespace: heroNS,
+                    onClose: {
+                        withAnimation(.spring(response: 0.44, dampingFraction: 0.85)) {
+                            selectedItem = nil
+                        }
+                    },
+                    onChanged: { await load() },
+                    onDeleted: {
+                        withAnimation(.spring(response: 0.42, dampingFraction: 0.9)) {
+                            _ = deletedItemIDs.insert(item.id)
+                        }
+                    }
+                )
+                .environment(store)
+                .transition(.opacity)
+            }
+        }
+        // Keep the closet sheet from swipe-dismissing while a lightbox is open.
+        .interactiveDismissDisabled(selectedItem != nil)
+        // Fixed light palette across the app — keep it light so the search
+        // field text stays readable in dark mode.
         .preferredColorScheme(.light)
     }
 
@@ -190,12 +203,16 @@ struct WardrobeView: View {
                                 // pinch can register.
                                 guard !isPinching else { return }
                                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                selectedItem = item
+                                withAnimation(.spring(response: 0.44, dampingFraction: 0.82)) {
+                                    selectedItem = item
+                                }
                             } label: {
                                 WardrobeItemCell(
                                     item: item,
                                     showCategory: columnCount <= 2 && categoryFilter == nil && statusFilter == nil,
-                                    showWishlistTag: columnCount <= 2
+                                    showWishlistTag: columnCount <= 2,
+                                    heroNamespace: heroNS,
+                                    isHeroActive: selectedItem?.id == item.id
                                 )
                             }
                             .buttonStyle(.plain)
@@ -657,6 +674,12 @@ private struct WardrobeItemCell: View {
     var showCategory: Bool = false
     /// Show the wishlist tag for wishlist items (2 columns).
     var showWishlistTag: Bool = false
+    /// Namespace for the tap-to-lightbox hero morph — the product image is the
+    /// shared element that flies into the expanded ProductLightbox and back.
+    let heroNamespace: Namespace.ID
+    /// True while THIS item is open in the lightbox: the cell yields its image
+    /// (holds the space) so the matched-geometry morph owns it.
+    var isHeroActive: Bool = false
 
     private var isWishlist: Bool { item.status == .wishlist }
 
@@ -675,17 +698,23 @@ private struct WardrobeItemCell: View {
             Color.clear
                 .aspectRatio(0.85, contentMode: .fit)
                 .overlay {
-                    TrimmedRemoteImage(url: item.resolvedImageURL, contentPadding: 6, onLoad: {
-                        // Cut-out finished loading — retire the sparkles now
-                        // (only once polishing has actually ended).
-                        if !item.isPolishing {
-                            lingerTask?.cancel()
-                            showSparkles = false
-                        }
-                    })
-                        // Keep the raw photo dimmed under the sparkles until the
-                        // cut-out is ready, so they resolve together.
-                        .opacity(showSparkles ? 0.25 : 1)
+                    if isHeroActive {
+                        // Image is flying in the lightbox — hold its space here.
+                        Color.clear
+                    } else {
+                        TrimmedRemoteImage(url: item.resolvedImageURL, contentPadding: 6, onLoad: {
+                            // Cut-out finished loading — retire the sparkles now
+                            // (only once polishing has actually ended).
+                            if !item.isPolishing {
+                                lingerTask?.cancel()
+                                showSparkles = false
+                            }
+                        })
+                            // Keep the raw photo dimmed under the sparkles until
+                            // the cut-out is ready, so they resolve together.
+                            .opacity(showSparkles ? 0.25 : 1)
+                            .matchedGeometryEffect(id: "closet-hero-\(item.id)", in: heroNamespace)
+                    }
                 }
                 .overlay {
                     // The app's generation Lottie sparkles — shown while
@@ -758,15 +787,22 @@ private struct WardrobeItemCell: View {
 ///     saving *promotes* it by creating a real `products` row. The
 ///     union dedup then collapses the inline copy into the new row,
 ///     so it becomes editable from then on.
-private struct WardrobeItemDetailSheet: View {
+/// Tap-to-edit "lightbox" for a closet product. Opens in place — the tapped
+/// tile's image morphs (matched-geometry) into this card and back on dismiss —
+/// instead of a sheet-on-sheet. Mirrors the outfit grid → carousel hero.
+private struct ProductLightbox: View {
     let item: WardrobeDisplayItem
     let userId: UUID
+    /// Shared namespace — the product image is the hero element flown from the
+    /// grid tile into this card.
+    let namespace: Namespace.ID
+    /// Dismiss the lightbox (parent reverses the morph back to the tile).
+    var onClose: () -> Void
     /// Called after a successful save so the closet can reload.
     var onChanged: () async -> Void
     /// Called after a successful delete so the closet can drop it locally.
     var onDeleted: () -> Void
 
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @Environment(OutfitStore.self) private var store
 
@@ -783,11 +819,15 @@ private struct WardrobeItemDetailSheet: View {
     init(
         item: WardrobeDisplayItem,
         userId: UUID,
+        namespace: Namespace.ID,
+        onClose: @escaping () -> Void,
         onChanged: @escaping () async -> Void,
         onDeleted: @escaping () -> Void = {}
     ) {
         self.item = item
         self.userId = userId
+        self.namespace = namespace
+        self.onClose = onClose
         self.onChanged = onChanged
         self.onDeleted = onDeleted
         _name = State(initialValue: item.name)
@@ -799,54 +839,86 @@ private struct WardrobeItemDetailSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: LayoutMetrics.large) {
-                    productImage
-                    formCard
-                    statusSection
-                    if !sourceURL.isEmpty, let linkURL = URL(string: sourceURL) {
-                        openLinkButton(linkURL)
+        ZStack {
+            // Dim the closet behind; tap outside the card to dismiss.
+            Color.black.opacity(0.32)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture { onClose() }
+
+            VStack(spacing: 0) {
+                topBar
+                ScrollView {
+                    VStack(spacing: LayoutMetrics.large) {
+                        heroImage
+                        formCard
+                        statusSection
+                        if !sourceURL.isEmpty, let linkURL = URL(string: sourceURL) {
+                            openLinkButton(linkURL)
+                        }
+                        taggedOnSection
+                        if let saveError {
+                            Text(saveError)
+                                .font(.system(size: 12))
+                                .foregroundStyle(.red)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        deleteButton
                     }
-                    taggedOnSection
-                    if let saveError {
-                        Text(saveError)
-                            .font(.system(size: 12))
-                            .foregroundStyle(.red)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    deleteButton
+                    .padding(LayoutMetrics.screenPadding)
                 }
-                .padding(LayoutMetrics.screenPadding)
             }
             .background(AppPalette.groupedBackground)
-            .navigationTitle("Edit item")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarColorScheme(.light, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
-                        .font(.system(size: 14))
-                        .foregroundStyle(AppPalette.textMuted)
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Save") { Task { await save() } }
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(canSave ? AppPalette.textStrong : AppPalette.textFaint)
-                        .disabled(!canSave)
-                }
-            }
+            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .padding(.horizontal, 10)
+            .padding(.top, 52)
+            .padding(.bottom, 10)
+            .shadow(color: .black.opacity(0.18), radius: 30, y: 12)
         }
-        // The app uses a fixed light palette; pin the sheet to light so
-        // system controls (text fields, segmented picker) stay readable
-        // even when the phone is in dark mode.
-        .preferredColorScheme(.light)
         .alert("Remove from closet?", isPresented: $showDeleteConfirm) {
             Button("Remove", role: .destructive) { Task { await deleteItem() } }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This removes “\(item.name)” from your closet and untags it from any outfits it's on.")
         }
+    }
+
+    private var topBar: some View {
+        HStack(spacing: 0) {
+            Button { onClose() } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppPalette.textMuted)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            Spacer()
+            Text("Edit item")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(AppPalette.textStrong)
+            Spacer()
+            Button { Task { await save() } } label: {
+                Text("Save")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(canSave ? AppPalette.textStrong : AppPalette.textFaint)
+                    .frame(height: 44)
+                    .padding(.horizontal, 14)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(!canSave)
+        }
+        .padding(.top, 4)
+    }
+
+    /// The hero element — morphs out of the tapped grid tile via matched geometry.
+    private var heroImage: some View {
+        TrimmedRemoteImage(url: item.resolvedImageURL)
+            .matchedGeometryEffect(id: "closet-hero-\(item.id)", in: namespace)
+            .frame(height: 220)
+            .frame(maxWidth: .infinity)
+            .padding(.top, LayoutMetrics.xSmall)
     }
 
     private var canSave: Bool {
@@ -873,18 +945,10 @@ private struct WardrobeItemDetailSheet: View {
             try await WardrobeService.deleteItem(productId: item.productId, name: item.name)
             onDeleted()
             await onChanged()
-            dismiss()
+            onClose()
         } catch {
             saveError = error.localizedDescription
         }
-    }
-
-    /// Product floats directly on the grouped background — no card.
-    private var productImage: some View {
-        TrimmedRemoteImage(url: item.resolvedImageURL)
-            .frame(height: 190)
-            .frame(maxWidth: .infinity)
-            .padding(.top, LayoutMetrics.xSmall)
     }
 
     /// All editable fields in one inset card with hairline row dividers
@@ -1063,7 +1127,7 @@ private struct WardrobeItemDetailSheet: View {
                 )
             }
             await onChanged()
-            dismiss()
+            onClose()
         } catch {
             saveError = error.localizedDescription
             isSaving = false
