@@ -153,9 +153,10 @@ struct WardrobeView: View {
                         }
                     )
                     .environment(store)
-                    // The card grows out of / shrinks back into the tapped tile,
-                    // anchored at its on-screen position.
-                    .transition(.scale(scale: 0.46, anchor: tapAnchor).combined(with: .opacity))
+                    // Start small and tight at the tile so the card visibly
+                    // CLUSTERS on the product and grows outward from there —
+                    // a large start scale just reads as a fade in the centre.
+                    .transition(.scale(scale: 0.12, anchor: tapAnchor).combined(with: .opacity))
                 }
             }
         }
