@@ -99,10 +99,10 @@ struct WardrobeView: View {
         return UnitPoint(x: f.midX / screen.width, y: f.midY / screen.height)
     }
 
-    /// Shrink the lightbox back into its tile. Tighter than the open spring (less
-    /// bounce) so it doesn't wobble as it disappears.
+    /// Shrink the lightbox back into its tile — quick and clean (no bounce) so it
+    /// settles into the icon the way an app does when you swipe it closed.
     private func closeLightbox() {
-        withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) {
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.94)) {
             selectedItem = nil
         }
     }
@@ -233,9 +233,9 @@ struct WardrobeView: View {
                                 guard !isPinching else { return }
                                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                                 tapAnchor = anchorPoint(for: item.id)
-                                // Quick out of the tile, then a subtle bounce as it
-                                // lands — elegant without feeling slow on long travels.
-                                withAnimation(.spring(response: 0.44, dampingFraction: 0.72)) {
+                                // iOS app-launch feel: glides up from the tile and
+                                // settles softly — light and flowy, not rubbery.
+                                withAnimation(.spring(response: 0.5, dampingFraction: 0.84)) {
                                     selectedItem = item
                                 }
                             } label: {
