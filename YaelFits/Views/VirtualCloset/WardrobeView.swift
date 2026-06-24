@@ -35,8 +35,10 @@ struct WardrobeView: View {
     @State private var statusFilter: WardrobeStatus? = nil      // nil == All
     @State private var searchText: String = ""
     @State private var selectedItem: WardrobeDisplayItem?
-    /// Shared namespace for the tap-to-lightbox hero morph (grid tile ↔ card).
-    @Namespace private var heroNS
+    /// Global frames of the grid tiles + the anchor of the last-tapped one, so
+    /// the lightbox grows out of (and shrinks back into) the product's spot.
+    @State private var cellFrames: [String: CGRect] = [:]
+    @State private var tapAnchor: UnitPoint = .center
     @State private var showGetExtension = false
     /// Items deleted this session — filtered out immediately so the grid
     /// updates even before the (cached) outfit list re-syncs.
@@ -89,6 +91,14 @@ struct WardrobeView: View {
         "\(categoryFilter?.rawValue ?? "all")|\(statusFilter?.rawValue ?? "all")"
     }
 
+    /// The tapped tile's centre as a UnitPoint of the screen — the grow/shrink
+    /// anchor for the lightbox. Falls back to centre if not captured yet.
+    private func anchorPoint(for id: String) -> UnitPoint {
+        let screen = UIScreen.main.bounds.size
+        guard screen.width > 0, screen.height > 0, let f = cellFrames[id] else { return .center }
+        return UnitPoint(x: f.midX / screen.width, y: f.midY / screen.height)
+    }
+
     var body: some View {
         NavigationStack {
             content
@@ -117,9 +127,8 @@ struct WardrobeView: View {
                 ProductLightbox(
                     item: item,
                     userId: userId,
-                    namespace: heroNS,
                     onClose: {
-                        withAnimation(.spring(response: 0.44, dampingFraction: 0.85)) {
+                        withAnimation(.timingCurve(0.22, 0.84, 0.18, 1, duration: 0.32)) {
                             selectedItem = nil
                         }
                     },
@@ -131,7 +140,9 @@ struct WardrobeView: View {
                     }
                 )
                 .environment(store)
-                .transition(.opacity)
+                // Image + card are ONE element that grows out of / shrinks back
+                // into the tapped tile (anchored at its on-screen position).
+                .transition(.scale(scale: 0.5, anchor: tapAnchor).combined(with: .opacity))
             }
         }
         // Keep the closet sheet from swipe-dismissing while a lightbox is open.
@@ -206,7 +217,10 @@ struct WardrobeView: View {
                                 // pinch can register.
                                 guard !isPinching else { return }
                                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                withAnimation(.spring(response: 0.44, dampingFraction: 0.82)) {
+                                tapAnchor = anchorPoint(for: item.id)
+                                // Fast, smooth (the app's carousel curve) — long
+                                // travels never feel slow at a fixed duration.
+                                withAnimation(.timingCurve(0.22, 0.84, 0.18, 1, duration: 0.34)) {
                                     selectedItem = item
                                 }
                             } label: {
@@ -214,8 +228,15 @@ struct WardrobeView: View {
                                     item: item,
                                     showCategory: columnCount <= 2 && categoryFilter == nil && statusFilter == nil,
                                     showWishlistTag: columnCount <= 2,
-                                    heroNamespace: heroNS,
                                     isHeroActive: selectedItem?.id == item.id
+                                )
+                                .background(
+                                    GeometryReader { proxy in
+                                        Color.clear.preference(
+                                            key: CellFrameKey.self,
+                                            value: [item.id: proxy.frame(in: .global)]
+                                        )
+                                    }
                                 )
                             }
                             .buttonStyle(.plain)
@@ -239,6 +260,7 @@ struct WardrobeView: View {
             .transition(gridTransition)
         }
         .scrollIndicators(.hidden)
+        .onPreferenceChange(CellFrameKey.self) { cellFrames = $0 }
         // Top fade as a lightweight OVERLAY (background colour → clear) over
         // just the top edge — so items dissolve under the pills WITHOUT
         // masking the whole ScrollView (which was clipping the bottom).
@@ -671,17 +693,23 @@ struct WardrobeDisplayItem: Identifiable, Hashable {
 
 // MARK: - Cell
 
+/// Collects each grid tile's global frame (keyed by item id) so the lightbox
+/// can grow out of the exact tile that was tapped.
+private struct CellFrameKey: PreferenceKey {
+    static var defaultValue: [String: CGRect] = [:]
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, b in b })
+    }
+}
+
 private struct WardrobeItemCell: View {
     let item: WardrobeDisplayItem
     /// Show the category pill (only on the All filter, 2 columns).
     var showCategory: Bool = false
     /// Show the wishlist tag for wishlist items (2 columns).
     var showWishlistTag: Bool = false
-    /// Namespace for the tap-to-lightbox hero morph — the product image is the
-    /// shared element that flies into the expanded ProductLightbox and back.
-    let heroNamespace: Namespace.ID
-    /// True while THIS item is open in the lightbox: the cell yields its image
-    /// (holds the space) so the matched-geometry morph owns it.
+    /// True while THIS item is open in the lightbox — the cell holds its space
+    /// (clear) so the growing lightbox owns the visual.
     var isHeroActive: Bool = false
 
     private var isWishlist: Bool { item.status == .wishlist }
@@ -716,7 +744,6 @@ private struct WardrobeItemCell: View {
                             // Keep the raw photo dimmed under the sparkles until
                             // the cut-out is ready, so they resolve together.
                             .opacity(showSparkles ? 0.25 : 1)
-                            .matchedGeometryEffect(id: "closet-hero-\(item.id)", in: heroNamespace)
                     }
                 }
                 .overlay {
@@ -796,10 +823,7 @@ private struct WardrobeItemCell: View {
 private struct ProductLightbox: View {
     let item: WardrobeDisplayItem
     let userId: UUID
-    /// Shared namespace — the product image is the hero element flown from the
-    /// grid tile into this card.
-    let namespace: Namespace.ID
-    /// Dismiss the lightbox (parent reverses the morph back to the tile).
+    /// Dismiss the lightbox (parent reverses the grow back into the tile).
     var onClose: () -> Void
     /// Called after a successful save so the closet can reload.
     var onChanged: () async -> Void
@@ -822,14 +846,12 @@ private struct ProductLightbox: View {
     init(
         item: WardrobeDisplayItem,
         userId: UUID,
-        namespace: Namespace.ID,
         onClose: @escaping () -> Void,
         onChanged: @escaping () async -> Void,
         onDeleted: @escaping () -> Void = {}
     ) {
         self.item = item
         self.userId = userId
-        self.namespace = namespace
         self.onClose = onClose
         self.onChanged = onChanged
         self.onDeleted = onDeleted
@@ -851,31 +873,22 @@ private struct ProductLightbox: View {
 
             VStack(spacing: 0) {
                 topBar
-                    // Chrome unfurls with the form (below), not a flat fade.
-                    .transition(.scale(scale: 0.96, anchor: .top).combined(with: .opacity))
                 ScrollView {
                     VStack(spacing: LayoutMetrics.large) {
                         heroImage
-                            // Image flies in solid (matched-geometry only) — no
-                            // fade — so it never reads as a separate element.
-                            .transition(.identity)
-                        VStack(spacing: LayoutMetrics.large) {
-                            formCard
-                            statusSection
-                            if !sourceURL.isEmpty, let linkURL = URL(string: sourceURL) {
-                                openLinkButton(linkURL)
-                            }
-                            taggedOnSection
-                            if let saveError {
-                                Text(saveError)
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(.red)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            deleteButton
+                        formCard
+                        statusSection
+                        if !sourceURL.isEmpty, let linkURL = URL(string: sourceURL) {
+                            openLinkButton(linkURL)
                         }
-                        // The form grows out from just under the morphing image.
-                        .transition(.scale(scale: 0.96, anchor: .top).combined(with: .opacity))
+                        taggedOnSection
+                        if let saveError {
+                            Text(saveError)
+                                .font(.system(size: 12))
+                                .foregroundStyle(.red)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        deleteButton
                     }
                     .padding(LayoutMetrics.screenPadding)
                 }
@@ -924,10 +937,9 @@ private struct ProductLightbox: View {
         .padding(.top, 4)
     }
 
-    /// The hero element — morphs out of the tapped grid tile via matched geometry.
+    /// The product image at the top of the lightbox card.
     private var heroImage: some View {
         TrimmedRemoteImage(url: item.resolvedImageURL)
-            .matchedGeometryEffect(id: "closet-hero-\(item.id)", in: namespace)
             .frame(height: 220)
             .frame(maxWidth: .infinity)
             .padding(.top, LayoutMetrics.xSmall)
