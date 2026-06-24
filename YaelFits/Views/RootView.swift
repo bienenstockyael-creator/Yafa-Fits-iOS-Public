@@ -434,6 +434,10 @@ struct RootView: View {
                 })
                 .environment(store)
                 .background(AppPalette.groupedBackground)
+                // Fill the whole screen. This .overlay respects the safe area, so
+                // without this the page (and the lightbox nested inside it) is
+                // clamped below the bars — the real reason nothing went full screen.
+                .ignoresSafeArea()
                 // Same iOS app-launch feel as the product lightbox: grows out of
                 // the closet button (bottom-right) with rounded corners in flight.
                 .transition(.growFromPoint(UnitPoint(x: 0.86, y: 0.9)))
