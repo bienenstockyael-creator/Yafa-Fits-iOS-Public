@@ -167,22 +167,31 @@ struct PairingCode: Decodable, Sendable {
     let expires_at: String
 }
 
+enum PairingError: LocalizedError {
+    case failed(String)
+    var errorDescription: String? {
+        switch self { case .failed(let m): return m }
+    }
+}
+
 enum PairingService {
-    /// Creates a short-lived, single-use pairing code for this user (the DB
-    /// generates the code + expiry). The browser extension redeems it via the
-    /// `redeem-pairing-code` edge function to obtain a session.
+    /// Creates a short-lived, single-use pairing code for the signed-in user
+    /// via the `create-pairing-code` edge function (service-role insert keyed
+    /// to the verified caller — no RLS/uid drift). Returns the generated code.
     static func createCode() async throws -> PairingCode {
-        // Insert an empty row: the DB fills user_id from auth.uid() (its
-        // default) and generates the code + expiry. This guarantees the RLS
-        // check (user_id = auth.uid()) passes — no client-supplied id to drift.
-        struct Insert: Encodable {}
-        let rows: [PairingCode] = try await supabase
-            .from("pairing_codes")
-            .insert(Insert())
-            .select("code, expires_at")
-            .execute()
-            .value
-        guard let first = rows.first else { throw WardrobeError.insertFailed }
-        return first
+        let url = SupabaseConfig.url.appendingPathComponent("functions/v1/create-pairing-code")
+        let jwt = try await supabase.auth.session.accessToken
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            let body = String(data: data, encoding: .utf8) ?? "(no body)"
+            throw PairingError.failed(body)
+        }
+        return try JSONDecoder().decode(PairingCode.self, from: data)
     }
 }
