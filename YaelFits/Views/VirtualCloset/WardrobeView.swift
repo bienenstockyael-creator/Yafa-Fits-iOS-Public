@@ -734,6 +734,13 @@ private struct CellFrameKey: PreferenceKey {
     }
 }
 
+/// Reports the lightbox scroll content's top offset (0 at rest, negative as it
+/// scrolls up) so the sheet knows when it's pinned to the top.
+private struct ScrollTopKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
 private struct WardrobeItemCell: View {
     let item: WardrobeDisplayItem
     /// Show the category pill (only on the All filter, 2 columns).
@@ -874,9 +881,12 @@ private struct ProductLightbox: View {
     @State private var isSaving = false
     @State private var saveError: String?
     @State private var showDeleteConfirm = false
-    /// Inset card vs. edge-to-edge full screen. Drag the header up to expand,
-    /// down to collapse, down again from the card to dismiss.
+    /// Inset card vs. edge-to-edge full screen.
     @State private var isFull = false
+    /// Whether the scroll content is pinned to the top (gates pull-to-dismiss).
+    @State private var atTop = true
+    /// Live downward offset while pulling the full sheet down to dismiss.
+    @State private var sheetDrag: CGFloat = 0
 
     init(
         item: WardrobeDisplayItem,
@@ -899,53 +909,74 @@ private struct ProductLightbox: View {
     }
 
     var body: some View {
-        // Just the card. The dimming backdrop lives in the parent overlay so it
-        // can fade in place while only this card grows out of the tapped tile.
-        VStack(spacing: 0) {
-            // The header doubles as the drag handle. It sits ABOVE the ScrollView
-            // so dragging it never competes with content scrolling.
+        ZStack {
+            // Full screen: a full-bleed background fills behind the status bar so
+            // the page actually reaches the top edge (the inset card stops at the
+            // safe area). Card mode keeps its own padded/clipped background below.
+            if isFull {
+                AppPalette.groupedBackground.ignoresSafeArea()
+            }
+
             VStack(spacing: 0) {
                 grabber
                 topBar
+                scrollBody
             }
-            .background(AppPalette.groupedBackground)
-            .contentShape(Rectangle())
-            .gesture(headerDrag)
-
-            ScrollView {
-                VStack(spacing: LayoutMetrics.large) {
-                    heroImage
-                    formCard
-                    statusSection
-                    if !sourceURL.isEmpty, let linkURL = URL(string: sourceURL) {
-                        openLinkButton(linkURL)
-                    }
-                    taggedOnSection
-                    if let saveError {
-                        Text(saveError)
-                            .font(.system(size: 12))
-                            .foregroundStyle(.red)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    deleteButton
-                }
-                .padding(LayoutMetrics.screenPadding)
-            }
+            .background(isFull ? Color.clear : AppPalette.groupedBackground)
+            // Card → square edge-to-edge as it goes full screen.
+            .clipShape(RoundedRectangle(cornerRadius: isFull ? 0 : 28, style: .continuous))
+            .padding(.horizontal, isFull ? 0 : 10)
+            .padding(.top, isFull ? 0 : 52)
+            .padding(.bottom, isFull ? 0 : 10)
+            .shadow(color: .black.opacity(isFull ? 0 : 0.18), radius: isFull ? 0 : 30, y: isFull ? 0 : 12)
+            // Follow the finger when pulling the full sheet down to dismiss.
+            .offset(y: sheetDrag)
         }
-        .background(AppPalette.groupedBackground)
-        // Card → square edge-to-edge as it goes full screen.
-        .clipShape(RoundedRectangle(cornerRadius: isFull ? 0 : 28, style: .continuous))
-        .padding(.horizontal, isFull ? 0 : 10)
-        .padding(.top, isFull ? 0 : 52)
-        .padding(.bottom, isFull ? 0 : 10)
-        .shadow(color: .black.opacity(isFull ? 0 : 0.18), radius: isFull ? 0 : 30, y: isFull ? 0 : 12)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // ONE unified gesture: in card mode any drag expands to full; in full
+        // mode a pull-down at the very top dismisses. Simultaneous, so the
+        // ScrollView still scrolls normally underneath it.
+        .simultaneousGesture(sheetGesture)
         .alert("Remove from closet?", isPresented: $showDeleteConfirm) {
             Button("Remove", role: .destructive) { Task { await deleteItem() } }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This removes “\(item.name)” from your closet and untags it from any outfits it's on.")
         }
+    }
+
+    /// Everything below the fixed header, in one scroll view. A zero-size probe
+    /// reports the content's offset so we know when it's pinned to the top.
+    private var scrollBody: some View {
+        ScrollView {
+            VStack(spacing: LayoutMetrics.large) {
+                heroImage
+                formCard
+                statusSection
+                if !sourceURL.isEmpty, let linkURL = URL(string: sourceURL) {
+                    openLinkButton(linkURL)
+                }
+                taggedOnSection
+                if let saveError {
+                    Text(saveError)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.red)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                deleteButton
+            }
+            .padding(LayoutMetrics.screenPadding)
+            .background(
+                GeometryReader { proxy in
+                    Color.clear.preference(
+                        key: ScrollTopKey.self,
+                        value: proxy.frame(in: .named("lightboxScroll")).minY
+                    )
+                }
+            )
+        }
+        .coordinateSpace(name: "lightboxScroll")
+        .onPreferenceChange(ScrollTopKey.self) { atTop = $0 >= -1 }
     }
 
     /// Small drag affordance at the very top of the card.
@@ -958,21 +989,31 @@ private struct ProductLightbox: View {
             .frame(maxWidth: .infinity)
     }
 
-    /// Header drag: flick up → full screen; flick down → collapse to the card;
-    /// flick down again from the card → dismiss. Direction wins on either a
-    /// committed distance or a fast flick (predicted end).
-    private var headerDrag: some Gesture {
-        DragGesture(minimumDistance: 12, coordinateSpace: .local)
-            .onEnded { value in
-                let dy = value.translation.height
-                let flick = value.predictedEndTranslation.height
-                let up = dy < -46 || flick < -160
-                let down = dy > 46 || flick > 160
+    /// Unified scroll/drag behaviour:
+    ///   • card mode → any drag past a small threshold expands to full screen
+    ///   • full + pinned to top → pulling down rubber-bands; a committed pull or
+    ///     fast flick dismisses, otherwise it springs back
+    private var sheetGesture: some Gesture {
+        DragGesture(minimumDistance: 10, coordinateSpace: .local)
+            .onChanged { v in
                 if !isFull {
-                    if up { setExpanded(true) }
-                    else if down { onClose() }
-                } else if down {
-                    setExpanded(false)
+                    if abs(v.translation.height) > 10 { setExpanded(true) }
+                } else if atTop && v.translation.height > 0 {
+                    sheetDrag = v.translation.height * 0.7
+                }
+            }
+            .onEnded { v in
+                guard isFull else { return }
+                if atTop {
+                    let dy = v.translation.height
+                    let flick = v.predictedEndTranslation.height
+                    if dy > 120 || flick > 320 {
+                        onClose()
+                        return
+                    }
+                }
+                if sheetDrag != 0 {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) { sheetDrag = 0 }
                 }
             }
     }
