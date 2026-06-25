@@ -318,6 +318,19 @@ private struct VibesLeaderboardBust: View {
         let handle = profile.username.map { "@\($0)" } ?? profile.handle
         ZStack {
             bustImage
+                // Dissolve the hard top edge of the crop / cut-out into the
+                // background — a gradual fade like the closet grid's top edge,
+                // so the bust reads as fading in rather than being clipped.
+                .mask(
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: 0),
+                            .init(color: .black, location: 0.18)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
             HighlighterUsername(
                 text: handle,
                 color: accent,
