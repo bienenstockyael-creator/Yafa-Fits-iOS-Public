@@ -280,6 +280,11 @@ struct VibesLeaderboardSheet: View {
                 .padding(.bottom, 24)
             }
             .scrollIndicators(.hidden)
+            // The TabView(.page) host (a UIPageViewController) insets its pages
+            // to the safe area, which clips this ScrollView at the home-indicator
+            // line. Make the scroll frame itself bleed to the physical bottom so
+            // rows clip at the true device edge — no background strip below.
+            .ignoresSafeArea(.container, edges: .bottom)
         }
     }
 
