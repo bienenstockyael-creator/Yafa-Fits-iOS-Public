@@ -54,6 +54,9 @@ struct WardrobeView: View {
     @State private var cellFrames: [String: CGRect] = [:]
     @State private var tapAnchor: UnitPoint = .center
     @State private var showGetExtension = false
+    /// Live downward offset while swiping the closet page down to dismiss it
+    /// (like a sheet). Drives the pull; release past a threshold closes it.
+    @State private var closetDragOffset: CGFloat = 0
     /// Items deleted this session — filtered out immediately so the grid
     /// updates even before the (cached) outfit list re-syncs.
     @State private var deletedItemIDs: Set<String> = []
@@ -139,6 +142,8 @@ struct WardrobeView: View {
                 content
             }
         }
+        // Follow the finger while swiping the closet down to dismiss.
+        .offset(y: closetDragOffset)
         .task { await load() }
         .onDisappear { pollTask?.cancel() }
         .sheet(isPresented: $showGetExtension) {
@@ -232,6 +237,31 @@ struct WardrobeView: View {
         .frame(height: 44)
         .padding(.horizontal, LayoutMetrics.screenPadding)
         .padding(.top, 6)
+        // Swipe the top of the page down to dismiss — like a sheet.
+        .contentShape(Rectangle())
+        .gesture(closetDismissDrag)
+    }
+
+    /// Swipe-down-to-dismiss for the whole closet page (the closet is a
+    /// fullScreenCover, which has no built-in interactive dismiss). Disabled
+    /// while a product lightbox is open so it can't fight the lightbox.
+    private var closetDismissDrag: some Gesture {
+        DragGesture()
+            .onChanged { v in
+                guard selectedItem == nil else { return }
+                closetDragOffset = max(0, v.translation.height)
+            }
+            .onEnded { v in
+                guard selectedItem == nil else { return }
+                if v.translation.height > 120 || v.predictedEndTranslation.height > 350 {
+                    // Dismiss — the cover's slide-down continues from the offset.
+                    if let onClose { onClose() } else { dismiss() }
+                } else {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                        closetDragOffset = 0
+                    }
+                }
+            }
     }
 
     /// Same look as the public-feed search bar (appCard 14 / search icon /

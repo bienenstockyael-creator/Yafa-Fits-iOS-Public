@@ -510,6 +510,9 @@ struct RootView: View {
             if let userId = store.userId {
                 WardrobeView(userId: userId, onClose: { showsCloset = false })
                     .environment(store)
+                    // Transparent backdrop so swiping the closet down reveals the
+                    // feed behind (the closet fills the screen when not dragged).
+                    .presentationBackground(.clear)
             }
         }
     }
