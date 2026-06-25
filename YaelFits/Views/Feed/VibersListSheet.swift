@@ -492,11 +492,8 @@ enum PlaceholderBust {
 
     static func image(for profile: Profile) -> UIImage? {
         let chosen = pool(for: guessGender(profile))
-        if !chosen.isEmpty {
-            return chosen[stableIndex(seed: profile.id.uuidString, count: chosen.count)]
-        }
-        // No prefixed assets bundled yet → the legacy single bust, if present.
-        return legacy
+        guard !chosen.isEmpty else { return nil }
+        return chosen[stableIndex(seed: profile.id.uuidString, count: chosen.count)]
     }
 
     // Pools, decoded once. `bust-m-*` = men, `bust-f-*` = women.
@@ -520,13 +517,6 @@ enum PlaceholderBust {
             .compactMap { try? Data(contentsOf: $0) }
             .compactMap { UIImage(data: $0) }
     }
-
-    /// Legacy single bust shipped before the gendered pools existed.
-    private static let legacy: UIImage? = {
-        guard let url = Bundle.main.url(forResource: "bust-placeholder", withExtension: "webp"),
-              let data = try? Data(contentsOf: url) else { return nil }
-        return UIImage(data: data)
-    }()
 
     // MARK: Gender guess
 
