@@ -700,25 +700,42 @@ struct ProfileView: View {
     /// only on the auth screen) — also where App Store review expects them.
     private var accountExtrasSection: some View {
         VStack(spacing: LayoutMetrics.small) {
-            // Chrome-extension rows ("GET THE CHROME EXTENSION" / "LINK BROWSER
-            // EXTENSION") hidden until the Chrome extension is live on the Web
-            // Store — avoids App Review flagging a not-yet-available companion
-            // / "coming soon" feature. Re-add both rows when it ships.
+            // Action rows.
             settingsRow("BLOCKED ACCOUNTS") { showBlockedAccounts = true }
-            settingsRow("TERMS OF SERVICE") {
-                if let url = URL(string: AppConfig.termsOfServiceURL) { openURL(url) }
+            settingsRow("GET THE CHROME EXTENSION") { showGetExtension = true }
+            settingsRow("LINK BROWSER EXTENSION") { showLinkExtension = true }
+
+            // Legal + attribution collapsed into ONE compact footer line instead
+            // of a full row each, so the settings list stays short. The
+            // "\u{F8FF} Weather" mark + its link satisfies the required WeatherKit
+            // attribution (App Store Guideline 5.2.5).
+            HStack(spacing: 8) {
+                legalFooterLink("Terms", AppConfig.termsOfServiceURL)
+                legalFooterDot
+                legalFooterLink("Privacy", AppConfig.privacyPolicyURL)
+                legalFooterDot
+                legalFooterLink("\u{F8FF} Weather", AppConfig.weatherAttributionURL)
             }
-            settingsRow("PRIVACY POLICY") {
-                if let url = URL(string: AppConfig.privacyPolicyURL) { openURL(url) }
-            }
-            // Required Apple Weather attribution — outfits are tagged with the
-            // current weather via WeatherKit, so we surface the Apple Weather
-            // trademark and a link to the other-data-sources page (App Store
-            // Guideline 5.2.5 / WeatherKit attribution requirements).
-            settingsRow("WEATHER DATA BY \u{F8FF} WEATHER") {
-                if let url = URL(string: AppConfig.weatherAttributionURL) { openURL(url) }
-            }
+            .padding(.top, LayoutMetrics.xSmall)
         }
+    }
+
+    private var legalFooterDot: some View {
+        Text("·")
+            .font(.system(size: 11))
+            .foregroundStyle(AppPalette.textFaint.opacity(0.5))
+    }
+
+    private func legalFooterLink(_ text: String, _ urlString: String) -> some View {
+        Button {
+            if let url = URL(string: urlString) { openURL(url) }
+        } label: {
+            Text(text)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(AppPalette.textFaint)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     /// The user's favorited *own* outfits — drives the Favorites stat.

@@ -712,9 +712,22 @@ struct WardrobeView: View {
                     .lineSpacing(2)
             }
             .padding(.horizontal, LayoutMetrics.xLarge)
-            // "Save from your desktop" / Chrome-extension entry hidden until
-            // the Chrome extension is live on the Web Store (avoids a 2.1
-            // "coming soon" flag). Re-add this button when it ships.
+
+            // Desktop / Chrome-extension entry (live on the Web Store).
+            Button { showGetExtension = true } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "puzzlepiece.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                    Text("Save from your desktop")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                .foregroundStyle(AppPalette.textStrong)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 11)
+                .appCapsule(shadowRadius: 0, shadowY: 0)
+            }
+            .buttonStyle(SolidPressButtonStyle())
+            .padding(.top, 4)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -1645,7 +1658,7 @@ struct GetExtensionSheet: View {
     @Environment(\.openURL) private var openURL
 
     /// Set to true once the extension is live on the Web Store.
-    private let isLive = false
+    private let isLive = true
     private let storeURL = URL(string: "https://chromewebstore.google.com/detail/cjeoackfbfomhbcneibfpfddapklgopg")!
 
     var body: some View {
