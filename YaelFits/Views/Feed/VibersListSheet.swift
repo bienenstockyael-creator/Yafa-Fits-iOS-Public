@@ -368,8 +368,8 @@ private struct StaggeredAppear: ViewModifier {
             .opacity(shown ? 1 : 0)
             .offset(y: shown ? 0 : 10)
             .onAppear {
-                let delay = min(Double(index) * 0.06, 0.4)
-                withAnimation(.easeOut(duration: 0.45).delay(delay)) {
+                let delay = min(Double(index) * 0.045, 0.3)
+                withAnimation(.easeOut(duration: 0.36).delay(delay)) {
                     shown = true
                 }
             }
