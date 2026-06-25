@@ -258,29 +258,28 @@ struct VibesLeaderboardSheet: View {
                         row(rank: index + 1, entry: entry)
                     }
                 }
-                // Pull everything in from the edges, and clear the bottom so the
-                // last row never clips against the viewport / home indicator.
+                // Top/bottom padding ≥ the fade heights so the first row at rest
+                // and the last row at full scroll read crisply (outside the fade
+                // zones), while everything in between dissolves at the edges.
                 .padding(.horizontal, 40)
-                .padding(.top, LayoutMetrics.medium)
-                .padding(.bottom, 80)
+                .padding(.top, 76)
+                .padding(.bottom, 100)
             }
             .scrollIndicators(.hidden)
-            // Top fade so rows dissolve under the header instead of hard-cutting
-            // at its edge as they scroll up — same treatment as the closet grid.
-            // Taller than the closet's (busts are big) for a gentler dissolve.
-            .overlay(alignment: .top) {
-                LinearGradient(
-                    colors: [AppPalette.groupedBackground, AppPalette.groupedBackground.opacity(0)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: 48)
-                .allowsHitTesting(false)
-            }
-            // Extend the list THROUGH the bottom safe area so rows scroll to the
-            // physical bottom of the viewport — no background strip / gap above
-            // the home indicator.
+            // Run the list to the physical bottom of the sheet (no safe-area gap)...
             .ignoresSafeArea(.container, edges: .bottom)
+            // ...then dissolve BOTH edges so rows fade gradually under the header
+            // and at the bottom instead of hard-cutting at either edge. Tall fades
+            // (64pt) because the busts themselves are tall.
+            .mask {
+                VStack(spacing: 0) {
+                    LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
+                        .frame(height: 64)
+                    Color.black
+                    LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                        .frame(height: 64)
+                }
+            }
         }
     }
 
