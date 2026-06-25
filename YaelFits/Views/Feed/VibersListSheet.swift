@@ -283,6 +283,12 @@ private struct VibesLeaderboardBust: View {
     let profile: Profile
     var avatarSize: CGFloat = 86
 
+    /// A cut-out we generated on-the-fly for someone who didn't have one. Once
+    /// set, it renders exactly like a native cut-out. (The server also persists
+    /// it to their profile, so next time it arrives in `avatarCutoutUrl`.)
+    @State private var generatedCutoutUrl: String?
+    private var cutoutURL: String? { profile.avatarCutoutUrl ?? generatedCutoutUrl }
+
     private var s: CGFloat { avatarSize / 132 }            // liveAvatarSize
     private var frameWidth: CGFloat { 180 * s }            // liveBustFrameWidth
     private var extraHeight: CGFloat { 32 * s }            // liveBustExtraHeight
@@ -304,11 +310,18 @@ private struct VibesLeaderboardBust: View {
             .allowsHitTesting(false)
         }
         .frame(width: frameWidth, height: avatarSize + extraHeight)
+        .task {
+            // No cut-out yet → generate + cache one server-side (idempotent;
+            // only fires for rows that actually appear, via the LazyVStack).
+            guard profile.avatarCutoutUrl == nil, generatedCutoutUrl == nil else { return }
+            let url = await VibesService.ensureBustCutout(userId: profile.id)
+            if let url { withAnimation(.easeOut(duration: 0.25)) { generatedCutoutUrl = url } }
+        }
     }
 
     @ViewBuilder
     private var bustImage: some View {
-        if let cutout = profile.avatarCutoutUrl, let url = URL(string: cutout) {
+        if let cutout = cutoutURL, let url = URL(string: cutout) {
             // True transparent bust — fit so hair / shoulders aren't clipped.
             AsyncImage(url: url) { phase in
                 if let image = phase.image {

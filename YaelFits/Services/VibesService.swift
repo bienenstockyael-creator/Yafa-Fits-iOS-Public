@@ -229,6 +229,31 @@ enum VibesService {
             return []
         }
     }
+
+    /// Ensure a leaderboard user has a bust cut-out: the `ensure-bust-cutout`
+    /// Edge Function generates one (FAL bg-removal) and saves it to their
+    /// profile if they don't have one — idempotent + cached, so it runs once
+    /// per person ever. Returns the cut-out URL, or nil (no avatar / failed).
+    static func ensureBustCutout(userId: UUID) async -> String? {
+        struct Body: Encodable { let user_id: String }
+        struct Result: Decodable { let cutout_url: String? }
+        do {
+            let url = SupabaseConfig.url.appendingPathComponent("functions/v1/ensure-bust-cutout")
+            let jwt = try await supabase.auth.session.accessToken
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.timeoutInterval = 120 // FAL bg-removal + polling can be slow
+            request.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONEncoder().encode(Body(user_id: userId.uuidString))
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse,
+                  (200..<300).contains(http.statusCode) else { return nil }
+            return try JSONDecoder().decode(Result.self, from: data).cutout_url
+        } catch {
+            return nil
+        }
+    }
 }
 
 /// Which leaderboard ranking to show.
