@@ -96,7 +96,11 @@ struct WardrobeView: View {
     private func anchorPoint(for id: String) -> UnitPoint {
         let screen = UIScreen.main.bounds.size
         guard screen.width > 0, screen.height > 0, let f = cellFrames[id] else { return .center }
-        return UnitPoint(x: f.midX / screen.width, y: f.midY / screen.height)
+        // Clamp to the screen — a tile scrolled partly off-screen can report a
+        // midY beyond the bounds, which would grow the card from off-screen.
+        let x = min(max(f.midX / screen.width, 0), 1)
+        let y = min(max(f.midY / screen.height, 0), 1)
+        return UnitPoint(x: x, y: y)
     }
 
     /// Shrink the lightbox back into its tile. SAME spring as the open so the
@@ -171,6 +175,11 @@ struct WardrobeView: View {
                         }
                     )
                     .environment(store)
+                    // Per-item identity: switching items (or tapping a new tile
+                    // while one is closing) must build a FRESH lightbox, or the
+                    // reused @State form keeps the previous item's name/category
+                    // while the image shows the new one (the mismatched card).
+                    .id(item.id)
                     // Start small and tight at the tile so the card visibly
                     // CLUSTERS on the product and grows outward from there.
                     .transition(.scale(scale: 0.12, anchor: tapAnchor).combined(with: .opacity))
@@ -966,8 +975,7 @@ private struct ProductLightbox: View {
             // an outer margin below.
             .padding(.top, isFull ? insetTop : 0)
             .padding(.bottom, isFull ? insetBottom : 0)
-            // DEBUG: red when full so the exact card bounds are unmistakable.
-            .background(isFull ? Color.red : AppPalette.groupedBackground)
+            .background(AppPalette.groupedBackground)
             // Card → square edge-to-edge as it goes full screen.
             .clipShape(RoundedRectangle(cornerRadius: isFull ? 0 : 28, style: .continuous))
             .padding(.top, isFull ? 0 : insetTop + 8)
