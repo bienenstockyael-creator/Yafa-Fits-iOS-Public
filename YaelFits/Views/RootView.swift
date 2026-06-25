@@ -117,6 +117,11 @@ struct RootView: View {
     var body: some View {
         @Bindable var store = store
 
+        // Outer ZStack so the closet (added as a sibling at the very end) lives
+        // OUTSIDE the .safeAreaInset(.bottom)/tab bar below — that inset reshapes
+        // the safe area and was clamping the closet page (and its lightbox) off
+        // the top and bottom edges, no matter how many ignoresSafeArea we added.
+        ZStack {
         ZStack(alignment: .top) {
             backgroundColor.ignoresSafeArea()
 
@@ -421,28 +426,6 @@ struct RootView: View {
             transitionTask?.cancel()
             morphPrepTask?.cancel()
         }
-        // The closet is a full-screen PAGE that grows out of the closet button
-        // (bottom-right) rather than a sheet — so its inner gestures (category
-        // swipe, lightbox) never fight a sheet's drag-to-dismiss.
-        .overlay {
-            if showsCloset, let userId = store.userId {
-                WardrobeView(userId: userId, onClose: {
-                    // Same spring as the open so the exit mirrors the entry.
-                    withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
-                        showsCloset = false
-                    }
-                })
-                .environment(store)
-                .background(AppPalette.groupedBackground)
-                // Fill the whole screen. This .overlay respects the safe area, so
-                // without this the page (and the lightbox nested inside it) is
-                // clamped below the bars — the real reason nothing went full screen.
-                .ignoresSafeArea()
-                // Same iOS app-launch feel as the product lightbox: grows out of
-                // the closet button (bottom-right) with rounded corners in flight.
-                .transition(.growFromPoint(UnitPoint(x: 0.86, y: 0.9)))
-            }
-        }
         .sheet(isPresented: $showsSettingsSheet) {
             // The full settings/profile screen — theme toggles, follow
             // stats, profile editing, Virtual Closet, sign out. Lives
@@ -522,6 +505,25 @@ struct RootView: View {
                 onClose: { showsAvatarOnboarding = false }
             )
             .environment(store)
+        }
+
+        // Closet PAGE — a top-level sibling of the main UI, OUTSIDE the bottom
+        // safeAreaInset/tab bar, so it fills the entire screen and renders over
+        // everything (including the tab bar). Grows out of the closet button.
+        if showsCloset, let userId = store.userId {
+            WardrobeView(userId: userId, onClose: {
+                // Same spring as the open so the exit mirrors the entry.
+                withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+                    showsCloset = false
+                }
+            })
+            .environment(store)
+            .background(AppPalette.groupedBackground)
+            .ignoresSafeArea()
+            // Same iOS app-launch feel as the product lightbox: grows out of the
+            // closet button (bottom-right) with rounded corners in flight.
+            .transition(.growFromPoint(UnitPoint(x: 0.86, y: 0.9)))
+        }
         }
     }
 
