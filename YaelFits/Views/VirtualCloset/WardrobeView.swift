@@ -1034,6 +1034,10 @@ private struct ProductLightbox: View {
             // reaches the very edge instead of clipping above it.
             .padding(.top, (isFull ? insetTop : 0) + 40)
             .padding(.bottom, (isFull ? insetBottom : 0) + LayoutMetrics.large)
+            // Tap anywhere on the page (but not on a field/control) to dismiss the
+            // keyboard. Text fields consume their own taps, so they still focus.
+            .contentShape(Rectangle())
+            .onTapGesture { dismissKeyboard() }
             .background(
                 GeometryReader { proxy in
                     Color.clear.preference(
@@ -1044,6 +1048,7 @@ private struct ProductLightbox: View {
             )
         }
         .coordinateSpace(name: "lightboxScroll")
+        .scrollDismissesKeyboard(.interactively)
         .onPreferenceChange(ScrollTopKey.self) { atTop = $0 >= -1 }
     }
 
@@ -1106,6 +1111,13 @@ private struct ProductLightbox: View {
         withAnimation(.spring(response: 0.42, dampingFraction: 0.86)) {
             isFull = full
         }
+    }
+
+    /// Resign first responder so a tap outside the keyboard / a field closes it.
+    private func dismissKeyboard() {
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
+        )
     }
 
     /// The only pinned controls — X (left) and Save (right). A short fade behind
