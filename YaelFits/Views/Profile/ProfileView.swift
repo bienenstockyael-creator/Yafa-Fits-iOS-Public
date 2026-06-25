@@ -5,6 +5,7 @@ struct ProfileView: View {
     @Environment(OutfitStore.self) private var store
     @Environment(AuthManager.self) private var auth
     @Environment(\.openURL) private var openURL
+    @Environment(\.dismiss) private var dismiss
 
     @State private var username = ""
     @State private var displayName = ""
@@ -119,6 +120,21 @@ struct ProfileView: View {
         .scrollIndicators(.hidden)
         .scrollDismissesKeyboard(.interactively)
         .background(AppPalette.pageBackground)
+        // Trailing button: "Save" (and saves) whenever there are unsaved edits —
+        // always reachable even when the inline Save is behind the keyboard —
+        // otherwise "Done" to dismiss.
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    if hasProfileChanges { saveProfile() } else { dismiss() }
+                } label: {
+                    Text(hasProfileChanges ? "Save" : "Done")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AppPalette.textPrimary)
+                }
+                .disabled(isSaving)
+            }
+        }
         // Credit-chip explainer modal — mounted INSIDE the sheet
         // (rather than at the app root) because SwiftUI sheets
         // present in a separate hosting context. A root-level

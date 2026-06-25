@@ -431,13 +431,9 @@ struct RootView: View {
                     .environment(store)
                     .navigationTitle("Settings")
                     .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button("Done") { showsSettingsSheet = false }
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(AppPalette.textPrimary)
-                        }
-                    }
+                    // The trailing Done/Save button is provided by ProfileView so
+                    // it can flip to "Save" (and actually save) when there are
+                    // unsaved edits — the inline Save can hide behind the keyboard.
             }
             .presentationDragIndicator(.visible)
         }
