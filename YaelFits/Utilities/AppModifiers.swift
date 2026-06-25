@@ -203,6 +203,39 @@ extension View {
     }
 }
 
+// MARK: - Sheet header
+
+/// Standard modal-sheet header used across the app: a circular X on the left,
+/// a small monospaced all-caps title centered, balanced by a clear 36pt spacer
+/// on the right so the title stays optically centered.
+struct AppSheetHeader: View {
+    let title: String
+    let onClose: () -> Void
+
+    var body: some View {
+        HStack {
+            Button(action: onClose) {
+                AppIcon(glyph: .xmark, size: 12, color: AppPalette.iconPrimary)
+                    .frame(width: 36, height: 36)
+                    .appCircle()
+            }
+            .buttonStyle(SolidPressButtonStyle())
+            .accessibilityLabel("Close")
+
+            Spacer()
+
+            Text(title)
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .tracking(2)
+                .foregroundStyle(AppPalette.textFaint)
+
+            Spacer()
+
+            Color.clear.frame(width: 36, height: 36)
+        }
+    }
+}
+
 // MARK: - Trimmed remote product image
 
 /// Loads a remote product image and crops its transparent margins so

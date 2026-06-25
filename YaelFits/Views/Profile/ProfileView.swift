@@ -568,10 +568,12 @@ struct ProfileView: View {
             LinkExtensionView()
                 .environment(store)
                 .presentationDragIndicator(.visible)
+                .roundedSheetBackground()
         }
         .sheet(isPresented: $showGetExtension) {
             GetExtensionSheet()
                 .presentationDragIndicator(.visible)
+                .roundedSheetBackground()
         }
         .sheet(isPresented: $showVibersOnMe) {
             if let userId = store.userId {
@@ -1071,7 +1073,13 @@ struct LinkExtensionView: View {
     @State private var errorText: String?
 
     var body: some View {
-        VStack(spacing: LayoutMetrics.large) {
+        VStack(spacing: 0) {
+            AppSheetHeader(title: "CHROME EXTENSION") { dismiss() }
+                .padding(.horizontal, LayoutMetrics.screenPadding)
+                .padding(.top, LayoutMetrics.medium)
+                .padding(.bottom, LayoutMetrics.small)
+
+            VStack(spacing: LayoutMetrics.large) {
             VStack(spacing: 8) {
                 Text("Link browser extension")
                     .font(.system(size: 20, weight: .bold))
@@ -1119,8 +1127,8 @@ struct LinkExtensionView: View {
             .padding(.horizontal, LayoutMetrics.large)
 
             Spacer()
+            }
         }
-        .padding(.top, LayoutMetrics.xLarge)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AppPalette.groupedBackground.ignoresSafeArea())
         .preferredColorScheme(.light)

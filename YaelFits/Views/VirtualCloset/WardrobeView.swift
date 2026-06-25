@@ -162,6 +162,7 @@ struct WardrobeView: View {
         .sheet(isPresented: $showGetExtension) {
             GetExtensionSheet()
                 .presentationDragIndicator(.visible)
+                .roundedSheetBackground()
         }
         // Backdrop dims in place — it must NOT travel with the card. Its OWN
         // overlay so its existence toggles independently and its .opacity
@@ -1662,7 +1663,13 @@ struct GetExtensionSheet: View {
     private let storeURL = URL(string: "https://chromewebstore.google.com/detail/cjeoackfbfomhbcneibfpfddapklgopg")!
 
     var body: some View {
-        VStack(spacing: LayoutMetrics.large) {
+        VStack(spacing: 0) {
+            AppSheetHeader(title: "CHROME EXTENSION") { dismiss() }
+                .padding(.horizontal, LayoutMetrics.screenPadding)
+                .padding(.top, LayoutMetrics.medium)
+                .padding(.bottom, LayoutMetrics.small)
+
+            VStack(spacing: LayoutMetrics.large) {
             VStack(spacing: 12) {
                 Image(systemName: "puzzlepiece.fill")
                     .font(.system(size: 26))
@@ -1722,10 +1729,10 @@ struct GetExtensionSheet: View {
                 .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(AppPalette.cardFill))
                 .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
             }
+            }
+            .padding(.bottom, LayoutMetrics.large)
+            .padding(.horizontal, LayoutMetrics.large)
         }
-        .padding(.top, LayoutMetrics.xLarge)
-        .padding(.bottom, LayoutMetrics.large)
-        .padding(.horizontal, LayoutMetrics.large)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AppPalette.groupedBackground.ignoresSafeArea())
         .preferredColorScheme(.light)
