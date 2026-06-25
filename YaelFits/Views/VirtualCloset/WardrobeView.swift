@@ -1703,7 +1703,9 @@ struct GetExtensionSheet: View {
                 // (AirDrop to their Mac / Messages / Copy) to get it onto their
                 // computer, rather than opening a store page they can't install
                 // from here.
-                ShareLink(item: storeURL) {
+                // Explicit preview so ShareLink doesn't stall fetching the
+                // store page's metadata before the share sheet can open.
+                ShareLink(item: storeURL, preview: SharePreview("Yafa for Chrome")) {
                     HStack(spacing: 7) {
                         Image(systemName: "square.and.arrow.up")
                             .font(.system(size: 12, weight: .semibold))
