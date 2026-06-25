@@ -750,6 +750,23 @@ struct OnboardingFlow: View {
                     pendingHeaderStyle == .minimal ? nil : pendingAccentHex
             }
 
+            // If we didn't already store a bust cut-out (user picked a
+            // non-bust style, or the live preview hadn't finished
+            // processing), generate + persist one from the SQUARE crop in
+            // the background so a clean bust is always on file for the Best
+            // Dressed leaderboard / a later switch to the bust style.
+            // Fire-and-forget — onboarding must not block on FAL.
+            if cutoutURL == nil, let square = pendingSquareImage {
+                Task {
+                    if let url = await AvatarService
+                        .generateAndStoreCutout(from: square, userId: userId) {
+                        await MainActor.run {
+                            store.currentProfile?.avatarCutoutUrl = url
+                        }
+                    }
+                }
+            }
+
         case .phone:
             // Hash the phone number client-side (E.164 normalize
             // + SHA-256) then send the hash — same path

@@ -143,7 +143,7 @@ struct ProfileHeader: View {
         }
         .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhoto, matching: .images)
         .fullScreenCover(item: $pendingCropImage) { wrapper in
-            AvatarCropView(image: wrapper.image) { croppedImage, _ in
+            AvatarCropView(image: wrapper.image) { croppedImage, squareCrop in
                 pendingCropImage = nil
                 selectedPhoto = nil
                 avatarImage = croppedImage
@@ -156,7 +156,7 @@ struct ProfileHeader: View {
                 // sheet can feed it to FAL for the bust cutout.
                 originalImage = wrapper.image
                 Task {
-                    await uploadAvatar(croppedImage)
+                    await uploadAvatar(croppedImage, square: squareCrop)
                     // Initial-photo flow only: kick the user
                     // into the customize sheet right after the
                     // first upload so "tap edit photo →
@@ -185,7 +185,7 @@ struct ProfileHeader: View {
                     existingCutoutURL: store.currentProfile?.avatarCutoutUrl,
                     initialStyle: ProfileHeaderStyle.parse(store.currentProfile?.headerStyle),
                     initialAccentHex: store.currentProfile?.headerAccentColor,
-                    onPhotoPicked: { cropped, original in
+                    onPhotoPicked: { cropped, original, square in
                         // The customize sheet stays open through
                         // the picker + crop flow. When the user
                         // confirms, the sheet hands us the new
@@ -195,7 +195,7 @@ struct ProfileHeader: View {
                         avatarImage = cropped
                         originalImage = original
                         Task {
-                            await uploadAvatar(cropped)
+                            await uploadAvatar(cropped, square: square)
                         }
                     },
                     onSave: { style, accentHex, cutoutImage in
@@ -670,18 +670,15 @@ struct ProfileHeader: View {
         await MainActor.run { store[keyPath: keyPath] = image }
     }
 
-    private func uploadAvatar(_ image: UIImage) async {
+    private func uploadAvatar(_ image: UIImage, square: UIImage) async {
         guard let userId = auth.userId else { return }
         await MainActor.run { isUploadingAvatar = true }
         do {
             let avatarURLString = try await AvatarService.uploadAvatar(image, userId: userId)
-            // A new avatar invalidates any previously-stored
-            // bust cutout — that PNG was derived from the OLD
-            // photo and would composite incorrectly on the new
-            // one. Clear it server-side so any concurrent
-            // viewers fetch the (correct) fallback until the
-            // user lands on bust again and the customize sheet
-            // re-runs FAL.
+            // A new avatar invalidates the previously-stored bust
+            // cutout — that PNG was derived from the OLD photo.
+            // Clear it immediately so stale silhouettes don't show,
+            // then regenerate below from the new framing.
             try? await SocialService.updateHeaderCustomization(
                 userId: userId,
                 style: ProfileHeaderStyle.parse(store.currentProfile?.headerStyle),
@@ -691,15 +688,26 @@ struct ProfileHeader: View {
             await MainActor.run {
                 store.currentProfile?.avatarUrl = avatarURLString
                 store.currentProfile?.avatarCutoutUrl = nil
-                // Drop the in-memory cutout too — same reason
-                // we cleared the server URL: it was generated
-                // from the prior photo and would composite the
-                // wrong silhouette over the new pixels.
                 store.currentAvatarCutoutImage = nil
                 if let profile = store.currentProfile {
                     LocalCache.saveProfile(profile, userId: userId)
                 }
                 isUploadingAvatar = false
+            }
+            // Always regenerate the bust cut-out from the SQUARE crop the user
+            // just framed — regardless of header style — so a clean,
+            // square-sourced bust is on file for the bust header AND the Best
+            // Dressed leaderboard. (The circle avatar can't produce this: bg-
+            // removing it would bake the circle edge into the silhouette.)
+            if let cutoutURL = await AvatarService
+                .generateAndStoreCutout(from: square, userId: userId) {
+                await MainActor.run {
+                    store.currentProfile?.avatarCutoutUrl = cutoutURL
+                    store.currentAvatarCutoutImage = nil
+                    if let profile = store.currentProfile {
+                        LocalCache.saveProfile(profile, userId: userId)
+                    }
+                }
             }
         } catch {
             await MainActor.run { isUploadingAvatar = false }

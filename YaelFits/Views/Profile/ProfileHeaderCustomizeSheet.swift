@@ -61,7 +61,7 @@ struct ProfileHeaderCustomizeSheet: View {
     /// receives. The sheet stays presented through the whole
     /// flow — picker + cropper are stacked on TOP of the sheet
     /// rather than dismissing it.
-    let onPhotoPicked: (_ cropped: UIImage, _ original: UIImage) -> Void
+    let onPhotoPicked: (_ cropped: UIImage, _ original: UIImage, _ square: UIImage) -> Void
 
     /// Called when the user taps Save. Provides the committed
     /// values. Parent handles uploading the cutout PNG (if any)
@@ -113,7 +113,7 @@ struct ProfileHeaderCustomizeSheet: View {
         existingCutoutURL: String?,
         initialStyle: ProfileHeaderStyle,
         initialAccentHex: String?,
-        onPhotoPicked: @escaping (UIImage, UIImage) -> Void,
+        onPhotoPicked: @escaping (UIImage, UIImage, UIImage) -> Void,
         onSave: @escaping (ProfileHeaderStyle, String?, UIImage?) -> Void,
         onDismiss: @escaping () -> Void
     ) {
@@ -227,7 +227,7 @@ struct ProfileHeaderCustomizeSheet: View {
                 // the user's framing even if they picked here on a
                 // non-bust style and swipe to bust later.
                 pendingSquareCrop = square
-                onPhotoPicked(cropped, wrapper.image)
+                onPhotoPicked(cropped, wrapper.image, square)
                 // If the user is already on bust, kick off
                 // FAL bg-removal immediately so the new photo
                 // gets cut out without requiring a swipe-away-

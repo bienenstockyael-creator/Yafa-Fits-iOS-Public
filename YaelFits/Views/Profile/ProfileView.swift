@@ -179,11 +179,11 @@ struct ProfileView: View {
             }
         }
         .fullScreenCover(item: $pendingCropImage) { wrapper in
-            AvatarCropView(image: wrapper.image) { croppedImage, _ in
+            AvatarCropView(image: wrapper.image) { croppedImage, squareCrop in
                 pendingCropImage = nil
                 selectedPhoto = nil
                 avatarImage = croppedImage
-                Task { await uploadAvatar(croppedImage) }
+                Task { await uploadAvatar(croppedImage, square: squareCrop) }
             } onCancel: {
                 pendingCropImage = nil
                 selectedPhoto = nil
@@ -791,7 +791,7 @@ struct ProfileView: View {
         }
     }
 
-    private func uploadAvatar(_ image: UIImage) async {
+    private func uploadAvatar(_ image: UIImage, square: UIImage) async {
         guard let userId = auth.userId else { return }
 
         await MainActor.run {
@@ -808,10 +808,30 @@ struct ProfileView: View {
                 }
                 isUploadingAvatar = false
             }
+            // Regenerate the bust cut-out from the new framing so the bust
+            // header / Best Dressed leaderboard always reflect the current
+            // photo. Off the critical path — the avatar is already live; the
+            // cut-out lands a few seconds later and the UI refreshes then.
+            await regenerateCutout(from: square, userId: userId)
         } catch {
             await MainActor.run {
                 uploadError = error.localizedDescription
                 isUploadingAvatar = false
+            }
+        }
+    }
+
+    /// Generates + persists a fresh square-sourced bust cut-out, then mirrors
+    /// the new URL into the store and clears the cached cut-out image so the
+    /// bust re-renders from the new photo instead of a stale one.
+    private func regenerateCutout(from square: UIImage, userId: UUID) async {
+        guard let cutoutURL = await AvatarService
+            .generateAndStoreCutout(from: square, userId: userId) else { return }
+        await MainActor.run {
+            store.currentProfile?.avatarCutoutUrl = cutoutURL
+            store.currentAvatarCutoutImage = nil
+            if let profile = store.currentProfile {
+                LocalCache.saveProfile(profile, userId: userId)
             }
         }
     }
