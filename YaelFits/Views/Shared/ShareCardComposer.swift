@@ -452,7 +452,7 @@ struct ShareCardComposer: View {
                     .frame(width: 36, height: 36)
                     .appCircle()
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
 
             Spacer()
 
@@ -1981,7 +1981,7 @@ struct ShareCardComposer: View {
                                 .padding(-3.5)
                         )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SolidPressButtonStyle())
             }
         }
         .frame(height: 24)
@@ -2108,7 +2108,7 @@ struct ShareCardComposer: View {
                 .frame(height: 36)
                 .appCapsule()
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
             .disabled(exporting)
 
             Button {
@@ -2138,7 +2138,7 @@ struct ShareCardComposer: View {
                 .frame(height: 36)
                 .appCapsule()
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
             .disabled(exporting)
         }
     }
@@ -2800,7 +2800,7 @@ private struct ShareFormatPickerSheet: View {
                     .foregroundStyle(AppPalette.textMuted)
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
         .frame(maxWidth: .infinity)
     }
 }

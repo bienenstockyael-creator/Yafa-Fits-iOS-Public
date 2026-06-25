@@ -195,7 +195,7 @@ struct ProfileView: View {
                     }
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
 
             if let uploadError {
                 Text(uploadError)
@@ -447,7 +447,7 @@ struct ProfileView: View {
             .appCapsule(shadowRadius: hasProfileChanges ? 6 : 0, shadowY: hasProfileChanges ? 3 : 0)
             .animation(.easeInOut(duration: 0.2), value: hasProfileChanges)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
         .disabled(isSaving || (!hasProfileChanges && !showSaved))
     }
 
@@ -465,13 +465,13 @@ struct ProfileView: View {
                 // the closet, so it lands in this slot.
                 Button { showFavoritesSheet = true } label: {
                     statItem(count: favoritedOwnCount, label: "Favorites")
-                }.buttonStyle(.plain)
+                }.buttonStyle(SolidPressButtonStyle())
                 Button { showFollowing = true } label: {
                     statItem(count: followingIds.count, label: "Following")
-                }.buttonStyle(.plain)
+                }.buttonStyle(SolidPressButtonStyle())
                 Button { showSavedSheet = true } label: {
                     statItem(count: store.savedIds.count, label: "Saved")
-                }.buttonStyle(.plain)
+                }.buttonStyle(SolidPressButtonStyle())
             }
 
             // Credits — vibes left to give this week + free 3D
@@ -495,7 +495,7 @@ struct ProfileView: View {
                             : "left this week"
                     )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SolidPressButtonStyle())
 
                 Button {
                     Analytics.log("profile_3d_credit_chip_tapped")
@@ -510,7 +510,7 @@ struct ProfileView: View {
                         label: gen3DChipLabel
                     )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SolidPressButtonStyle())
             }
             .padding(.top, LayoutMetrics.xSmall)
         }
@@ -518,29 +518,25 @@ struct ProfileView: View {
             FollowListSheet(title: "Followers", userIds: followerIds)
                 .environment(store)
                 .presentationDragIndicator(.visible)
-                .presentationBackground(AppPalette.groupedBackground)
-                .presentationCornerRadius(28)
+                .roundedSheetBackground()
         }
         .sheet(isPresented: $showFollowing) {
             FollowListSheet(title: "Following", userIds: followingIds)
                 .environment(store)
                 .presentationDragIndicator(.visible)
-                .presentationBackground(AppPalette.groupedBackground)
-                .presentationCornerRadius(28)
+                .roundedSheetBackground()
         }
         .sheet(isPresented: $showSavedSheet) {
             SavedOutfitsSheet()
                 .environment(store)
                 .presentationDragIndicator(.visible)
-                .presentationBackground(AppPalette.groupedBackground)
-                .presentationCornerRadius(28)
+                .roundedSheetBackground()
         }
         .sheet(isPresented: $showFavoritesSheet) {
             FavoritesSheetView()
                 .environment(store)
                 .presentationDragIndicator(.visible)
-                .presentationBackground(AppPalette.groupedBackground)
-                .presentationCornerRadius(28)
+                .roundedSheetBackground()
         }
         .sheet(isPresented: $showLinkExtension) {
             LinkExtensionView()
@@ -556,8 +552,7 @@ struct ProfileView: View {
                 VibersListSheet(source: .user(userId))
                     .environment(store)
                     .presentationDragIndicator(.visible)
-                    .presentationBackground(AppPalette.groupedBackground)
-                    .presentationCornerRadius(28)
+                    .roundedSheetBackground()
             }
         }
         .task {
@@ -708,7 +703,7 @@ struct ProfileView: View {
                 .frame(height: 34)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     private var signOutSection: some View {
@@ -724,7 +719,7 @@ struct ProfileView: View {
                     .frame(height: 44)
                     .appCapsule(shadowRadius: 0, shadowY: 0)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
 
             Button {
                 showDeleteConfirmation = true
@@ -742,7 +737,7 @@ struct ProfileView: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: 44)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
             .disabled(isDeletingAccount)
         }
     }
@@ -955,7 +950,7 @@ struct BlockedAccountsSheet: View {
                                 .frame(height: 32)
                                 .appCapsule(shadowRadius: 0, shadowY: 0)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(SolidPressButtonStyle())
                     }
                     .padding(LayoutMetrics.xSmall)
                     .appCard(cornerRadius: 16, shadowRadius: 2, shadowY: 1)
@@ -1037,7 +1032,7 @@ struct LinkExtensionView: View {
                     .frame(height: 50)
                     .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(AppPalette.textStrong))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
             .disabled(isLoading)
             .padding(.horizontal, LayoutMetrics.large)
 

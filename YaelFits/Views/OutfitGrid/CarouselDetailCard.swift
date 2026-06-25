@@ -132,7 +132,7 @@ struct CarouselDetailCard: View {
                                 .frame(height: 26)
                                 .appCapsule(shadowRadius: 0, shadowY: 0)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(SolidPressButtonStyle())
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -277,7 +277,7 @@ struct CarouselDetailCard: View {
             }
             .frame(maxWidth: .infinity, alignment: .center)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     private var emptyTagRow: some View {
@@ -300,7 +300,7 @@ struct CarouselDetailCard: View {
             .frame(height: 26)
             .appCapsule(shadowRadius: 0, shadowY: 0)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
         .frame(maxWidth: .infinity, alignment: .center)
     }
 
@@ -343,7 +343,7 @@ struct CarouselDetailCard: View {
                                 .foregroundStyle(.white)
                                 .background(Color(red: 0.85, green: 0.25, blue: 0.25).clipShape(Circle()))
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(SolidPressButtonStyle())
                         .offset(x: 6, y: -6)
                     }
                 }
@@ -381,7 +381,7 @@ struct CarouselDetailCard: View {
                                     .font(.system(size: 8, weight: .bold))
                                     .foregroundStyle(AppPalette.textFaint)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(SolidPressButtonStyle())
                         }
                         .padding(.horizontal, 10)
                         .frame(height: 30)
@@ -431,7 +431,7 @@ struct CarouselDetailCard: View {
                                         .padding(.horizontal, LayoutMetrics.xSmall)
                                         .padding(.vertical, 9)
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(SolidPressButtonStyle())
                                 if suggestion != tagSuggestions.last {
                                     Divider().opacity(0.5)
                                 }
@@ -512,7 +512,7 @@ struct CarouselDetailCard: View {
                         .frame(width: 100, height: 32, alignment: .top)
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
 
             // BUY pill on viewer surfaces — same capsule chrome as
             // the rest of the app's primary buttons (Publish, Save,
@@ -531,7 +531,7 @@ struct CarouselDetailCard: View {
                         .frame(height: 48)
                         .appCapsule(shadowRadius: 0, shadowY: 0)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SolidPressButtonStyle())
             }
         }
     }
@@ -591,7 +591,7 @@ struct CarouselDetailCard: View {
                 .frame(width: 48, height: 48)
                 .appCircle()
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     /// Same capsule style as the other card buttons — placeholder
@@ -608,7 +608,7 @@ struct CarouselDetailCard: View {
                 .frame(height: 48)
                 .appCapsule(shadowRadius: 0, shadowY: 0)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     /// Top-right Edit/Save toggle. Sits inline with the date/location
@@ -648,7 +648,7 @@ struct CarouselDetailCard: View {
                     .appCircle(shadowRadius: 0, shadowY: 0)
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     /// Top-left Cancel button visible only in edit mode. Discards
@@ -667,7 +667,7 @@ struct CarouselDetailCard: View {
                 .frame(height: 48)
                 .appCapsule(shadowRadius: 0, shadowY: 0)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     /// + button that triggers the Quick Add (auto-detect) flow.
@@ -692,7 +692,7 @@ struct CarouselDetailCard: View {
             .frame(width: 48, height: 48)
             .appCircle(shadowRadius: 0, shadowY: 0)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
         .disabled(isLoadingAutoDetect)
     }
 
@@ -713,7 +713,7 @@ struct CarouselDetailCard: View {
                 .frame(width: 48, height: 48)
                 .appCircle(shadowRadius: 0, shadowY: 0)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     /// Save any in-flight edits, then dismiss the card. Used by the

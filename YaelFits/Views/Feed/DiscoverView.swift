@@ -70,7 +70,7 @@ struct DiscoverView: View {
                     AppIcon(glyph: .xmark, size: 12, color: AppPalette.textFaint)
                         .frame(width: 28, height: 28)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SolidPressButtonStyle())
             }
         }
         .padding(.horizontal, 14)
@@ -163,7 +163,7 @@ struct DiscoverView: View {
                     }
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
 
             Spacer()
 
@@ -184,7 +184,7 @@ struct DiscoverView: View {
                         .frame(height: 32)
                         .appCapsule(shadowRadius: 0, shadowY: 0)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SolidPressButtonStyle())
             }
         }
         .padding(LayoutMetrics.xSmall)

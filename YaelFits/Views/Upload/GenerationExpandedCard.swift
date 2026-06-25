@@ -607,7 +607,7 @@ struct GenerationExpandedCard: View {
             .frame(minHeight: 36)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     private var flatToggleSwitch: some View {
@@ -635,7 +635,7 @@ struct GenerationExpandedCard: View {
                 .frame(maxWidth: .infinity)
                 .frame(minHeight: 30)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     // MARK: - Drag dismiss

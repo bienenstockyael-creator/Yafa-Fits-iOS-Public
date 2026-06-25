@@ -78,7 +78,7 @@ struct VibeButton: View {
             .contentShape(Rectangle())
             .offset(x: shakeOffset)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
         .frame(minHeight: LayoutMetrics.touchTarget)
         .onChange(of: isVibedByMe) { _, vibed in
             // Re-anchor the morph at multiple points throughout

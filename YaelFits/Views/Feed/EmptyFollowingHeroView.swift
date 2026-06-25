@@ -626,7 +626,7 @@ private struct FriendsButtonView: View {
             .frame(height: 48)
             .appCapsule(shadowRadius: 8, shadowY: 4)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
         .scaleEffect(entryProgress * buttonVis)
         .opacity(entryProgress * buttonVis)
         .position(
@@ -674,7 +674,7 @@ private struct AvatarBubble: View {
                     shadowY: 6
                 )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
 
             // Curved username pill hugging the avatar's bottom arc.
             // Drawn before the badge so the badge ends up on top of
@@ -701,7 +701,7 @@ private struct AvatarBubble: View {
                     .frame(width: 28, height: 28)
                     .appCircle(shadowRadius: 4, shadowY: 2)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
             // Pull the badge inward so it overlaps the avatar's
             // upper-right edge — Instagram/Snap-style "stuck on"
             // look. Centre-to-centre distance is `45 √2 ≈ 63.6`,

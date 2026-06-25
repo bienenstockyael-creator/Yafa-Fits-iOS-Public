@@ -89,7 +89,7 @@ struct CreditPaywall: View {
                     .frame(width: 36, height: 36)
                     .appCircle()
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
             .accessibilityLabel("Close")
 
             Spacer()
@@ -202,7 +202,7 @@ struct CreditPaywall: View {
             .frame(height: 44)
             .appCapsule(shadowRadius: 6, shadowY: 3)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
         .disabled(isPurchasing)
         .accessibilityLabel("Buy \(selectedBundle.credits) credits for \(priceLookup(selectedBundle) ?? selectedBundle.fallbackPriceUSD)")
     }
@@ -291,7 +291,7 @@ private struct BundleCard: View {
                     )
             )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(bundle.title), \(bundle.subtitle), \(priceText)")
         .accessibilityAddTraits(isSelected ? .isSelected : [])

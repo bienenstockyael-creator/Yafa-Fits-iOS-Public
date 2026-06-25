@@ -65,7 +65,7 @@ struct VibesFirstUseModal: View {
                     .frame(height: 44)
                     .appCapsule(shadowRadius: 0, shadowY: 0)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
             .padding(.top, LayoutMetrics.xSmall)
         }
         .padding(.horizontal, LayoutMetrics.large)

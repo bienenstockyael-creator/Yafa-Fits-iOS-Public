@@ -35,7 +35,7 @@ struct RemixArchiveSheetView: View {
                     .frame(width: 36, height: 36)
                     .appCircle(shadowRadius: 0, shadowY: 0)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
             Spacer()
             Text("REMIXES")
                 .font(.system(size: 9, weight: .bold, design: .monospaced))

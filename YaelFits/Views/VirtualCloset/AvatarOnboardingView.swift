@@ -74,7 +74,7 @@ struct AvatarOnboardingView: View {
                     .frame(width: LayoutMetrics.touchTarget, height: LayoutMetrics.touchTarget)
                     .appCircle(shadowRadius: 0, shadowY: 0)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
             Spacer()
             Text("CREATE YOUR AVATAR")
                 .font(.system(size: 9, weight: .bold, design: .monospaced))
@@ -149,14 +149,14 @@ struct AvatarOnboardingView: View {
                 } label: {
                     uploadSourceCard(icon: .image, title: "Camera Roll")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SolidPressButtonStyle())
 
                 Button {
                     showsCamera = true
                 } label: {
                     uploadSourceCard(icon: .camera, title: "Camera")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SolidPressButtonStyle())
             }
             .frame(maxWidth: 360)
             .padding(.horizontal, LayoutMetrics.screenPadding)
@@ -283,7 +283,7 @@ struct AvatarOnboardingView: View {
                         .fill(AppPalette.textStrong)
                 )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     private func secondaryButton(title: String, action: @escaping () -> Void) -> some View {
@@ -296,7 +296,7 @@ struct AvatarOnboardingView: View {
                 .frame(height: 48)
                 .appRoundedRect(cornerRadius: 16, shadowRadius: 0, shadowY: 0)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     // MARK: - Photo picker plumbing

@@ -218,7 +218,7 @@ struct OnboardingFlow: View {
                         .frame(width: 36, height: 36)
                         .appCircle()
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SolidPressButtonStyle())
                 .accessibilityLabel("Back")
             } else {
                 Color.clear.frame(width: 36, height: 36)
@@ -438,7 +438,7 @@ struct OnboardingFlow: View {
                         .foregroundStyle(AppPalette.textMuted)
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
             .accessibilityLabel("Add profile picture")
 
             // Caps title 120pt above the circle's center —
@@ -518,7 +518,7 @@ struct OnboardingFlow: View {
                                     .padding(-3.5)
                             )
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SolidPressButtonStyle())
                     .accessibilityLabel(ProfileHeaderAccentColor.accessibilityName(for: hex))
                     .accessibilityAddTraits(hex == pendingAccentHex ? .isSelected : [])
                 }
@@ -551,7 +551,7 @@ struct OnboardingFlow: View {
                             .padding(.vertical, 8)
                             .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SolidPressButtonStyle())
                     .accessibilityLabel("Select \(style.displayName) style")
                     .accessibilityAddTraits(style == pendingHeaderStyle ? .isSelected : [])
                 }
@@ -609,7 +609,7 @@ struct OnboardingFlow: View {
                 shadowY: canAdvance ? 3 : 0
             )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
         .disabled(!canAdvance || isAdvancing)
         .accessibilityLabel(primaryButtonTitle.capitalized)
     }

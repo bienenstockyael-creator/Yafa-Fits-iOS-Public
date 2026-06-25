@@ -139,8 +139,7 @@ struct LinkedProductOutfitsSheet: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
-        .presentationBackground(AppPalette.groupedBackground)
-        .presentationCornerRadius(28)
+        .roundedSheetBackground()
     }
 }
 

@@ -112,7 +112,7 @@ struct VibersListSheet: View {
             }
             .padding(.vertical, LayoutMetrics.xSmall)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     private func load() async {

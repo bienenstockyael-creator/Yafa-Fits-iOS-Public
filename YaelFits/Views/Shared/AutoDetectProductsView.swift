@@ -91,7 +91,7 @@ struct AutoDetectProductsView: View {
                                 Capsule(style: .continuous).fill(Color.black)
                             )
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SolidPressButtonStyle())
                     .padding(.bottom, LayoutMetrics.medium)
                 }
                 // Stay pinned at the bottom; it's fine for the keyboard to
@@ -165,7 +165,7 @@ struct AutoDetectProductsView: View {
                         .frame(height: 40)
                         .appCapsule()
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SolidPressButtonStyle())
                 Spacer()
                 Button {
                     if showsSkipAction {
@@ -196,7 +196,7 @@ struct AutoDetectProductsView: View {
                     .frame(height: 40)
                     .appCapsule()
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SolidPressButtonStyle())
                 .disabled(isSaving)
             }
         }
@@ -640,7 +640,7 @@ struct AutoDetectProductsView: View {
                         } label: {
                             suggestionChip(item)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(SolidPressButtonStyle())
                     }
                 }
                 .padding(.horizontal, LayoutMetrics.screenPadding)
@@ -1070,7 +1070,7 @@ private struct SlotWidgetView: View {
             .frame(width: 44, height: 44)
             .contentShape(Circle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     private var thumbnailArea: some View {
@@ -1194,7 +1194,7 @@ private struct SlotWidgetView: View {
                             radius: 10, y: 0
                         )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SolidPressButtonStyle())
                 .disabled(isEmpty)
                 .animation(.easeInOut(duration: 0.18), value: isEmpty)
             }
@@ -1215,7 +1215,7 @@ private struct SlotWidgetView: View {
                         .frame(width: 44, height: 44)
                         .appCircle()
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SolidPressButtonStyle())
 
                 Button(action: onAccept) {
                     ZStack {
@@ -1230,7 +1230,7 @@ private struct SlotWidgetView: View {
                     }
                     .frame(width: 44, height: 44)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SolidPressButtonStyle())
             }
             .frame(maxWidth: .infinity, alignment: .center)
         case .accepted:
@@ -1249,7 +1249,7 @@ private struct SlotWidgetView: View {
                     .frame(height: 40)
                     .appCapsule()
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
         }
     }
 }

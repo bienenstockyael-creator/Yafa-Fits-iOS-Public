@@ -180,6 +180,27 @@ extension View {
     ) -> some View {
         modifier(AppRoundedRectModifier(cornerRadius: cornerRadius, shadowRadius: shadowRadius, shadowY: shadowY))
     }
+
+    /// Solid, rounded-top sheet background. A plain `.presentationBackground(Color)`
+    /// fills the whole presentation rect and renders SQUARE corners; drawing the
+    /// rounded shape ourselves guarantees the rounding (the transparent corners
+    /// reveal the dimmed content behind, like a normal sheet).
+    func roundedSheetBackground(
+        _ color: Color = AppPalette.groupedBackground,
+        radius: CGFloat = 24
+    ) -> some View {
+        presentationBackground {
+            UnevenRoundedRectangle(
+                topLeadingRadius: radius,
+                bottomLeadingRadius: 0,
+                bottomTrailingRadius: 0,
+                topTrailingRadius: radius,
+                style: .continuous
+            )
+            .fill(color)
+            .ignoresSafeArea()
+        }
+    }
 }
 
 // MARK: - Trimmed remote product image

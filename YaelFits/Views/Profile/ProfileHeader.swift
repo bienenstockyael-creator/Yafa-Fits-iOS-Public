@@ -222,16 +222,14 @@ struct ProfileHeader: View {
                     onDismiss: { showCustomizeSheet = false }
                 )
                 .presentationDragIndicator(.visible)
-                .presentationBackground(AppPalette.groupedBackground)
-                .presentationCornerRadius(28)
+                .roundedSheetBackground()
             }
         }
         .sheet(isPresented: $showFollowers) {
             FollowListSheet(title: "Followers", userIds: followerIds)
                 .environment(store)
                 .presentationDragIndicator(.visible)
-                .presentationBackground(AppPalette.groupedBackground)
-                .presentationCornerRadius(28)
+                .roundedSheetBackground()
         }
     }
 
@@ -344,7 +342,7 @@ struct ProfileHeader: View {
                 }
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
         .accessibilityLabel(avatarImage == nil ? "Add profile photo" : "Edit profile photo")
     }
 
@@ -541,7 +539,7 @@ struct ProfileHeader: View {
             } label: {
                 statSegment(count: followerIds.count, label: followerIds.count == 1 ? "follower" : "followers")
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
 
             if vibesReceived > 0 {
                 Text("·")

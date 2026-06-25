@@ -375,7 +375,7 @@ struct ProfileShareSheet: View {
                             .frame(height: 44)
                             .appCapsule(shadowRadius: 0, shadowY: 0)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SolidPressButtonStyle())
                     .padding(.top, LayoutMetrics.xSmall)
                 }
                 .padding(.horizontal, LayoutMetrics.large)
@@ -402,7 +402,7 @@ struct ProfileShareSheet: View {
                     .frame(width: 36, height: 36)
                     .appCircle()
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
             .accessibilityLabel("Close")
 
             Spacer()
@@ -671,7 +671,7 @@ struct ProfileShareSheet: View {
                 .frame(height: 44)
                 .appCapsule(shadowRadius: 6, shadowY: 3)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
         .disabled(shareURL == nil)
         .sheet(isPresented: Binding(
             get: { activeShareURL != nil },

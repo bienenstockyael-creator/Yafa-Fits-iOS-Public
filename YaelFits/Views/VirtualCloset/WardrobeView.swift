@@ -225,7 +225,7 @@ struct WardrobeView: View {
                         .frame(width: 36, height: 36)
                         .appCircle()
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SolidPressButtonStyle())
                 Spacer()
             }
         }
@@ -251,7 +251,7 @@ struct WardrobeView: View {
                         .font(.system(size: 14))
                         .foregroundStyle(AppPalette.textFaint)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SolidPressButtonStyle())
             }
         }
         .padding(.horizontal, 14)
@@ -326,7 +326,7 @@ struct WardrobeView: View {
                                     }
                                 )
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(SolidPressButtonStyle())
                         }
                     }
                     .padding(.horizontal, LayoutMetrics.screenPadding)
@@ -484,7 +484,7 @@ struct WardrobeView: View {
                 // treatment as TagPill / appCapsule everywhere else).
                 .appCapsule(shadowRadius: 0, shadowY: 0)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     // MARK: - Category swipe
@@ -1066,7 +1066,7 @@ private struct ProductLightbox: View {
             // Top: clear the island (full) + the floating X/Save pills. Bottom:
             // clear the home indicator (full) — as SCROLLABLE padding so the last
             // row reaches the very edge instead of clipping above it.
-            .padding(.top, (isFull ? insetTop : 0) + 52)
+            .padding(.top, (isFull ? insetTop : 0) + LayoutMetrics.screenPadding + 44)
             .padding(.bottom, (isFull ? insetBottom : 0) + LayoutMetrics.large)
             // Tap anywhere on the page (but not on a field/control) to dismiss the
             // keyboard. Text fields consume their own taps, so they still focus.
@@ -1172,7 +1172,7 @@ private struct ProductLightbox: View {
                     .frame(width: 36, height: 36)
                     .appCircle()
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
             Spacer()
             Button { Task { await save() } } label: {
                 Text("Save")
@@ -1182,11 +1182,12 @@ private struct ProductLightbox: View {
                     .frame(height: 36)
                     .appCapsule()
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
             .disabled(!canSave)
         }
         .padding(.horizontal, LayoutMetrics.screenPadding)
-        .padding(.top, topInset + 6)
+        // Same breathing room above the buttons as the side padding.
+        .padding(.top, topInset + LayoutMetrics.screenPadding)
         .frame(maxWidth: .infinity, alignment: .top)
     }
 
@@ -1213,7 +1214,7 @@ private struct ProductLightbox: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: 46)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
         .padding(.top, LayoutMetrics.xSmall)
     }
 
@@ -1334,7 +1335,7 @@ private struct ProductLightbox: View {
             .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white))
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     /// Mini carousel of the outfits this product is currently tagged on.
@@ -1552,7 +1553,7 @@ struct GetExtensionSheet: View {
                         .frame(height: 52)
                         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(AppPalette.textStrong))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SolidPressButtonStyle())
             } else {
                 HStack(spacing: 7) {
                     Image(systemName: "clock")

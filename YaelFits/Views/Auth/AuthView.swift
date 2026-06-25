@@ -147,7 +147,7 @@ struct AuthView: View {
                             .foregroundStyle(AppPalette.textMuted)
                             .frame(width: 44, height: 50)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SolidPressButtonStyle())
                     .transition(.opacity)
                 }
             }
@@ -191,7 +191,7 @@ struct AuthView: View {
                 .animation(.easeInOut(duration: 0.2), value: submitActive)
             }
             .disabled(isSubmitting || !submitActive)
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
             .padding(.top, LayoutMetrics.xSmall)
         }
     }
@@ -209,7 +209,7 @@ struct AuthView: View {
                 .font(.system(size: 12))
                 .foregroundStyle(AppPalette.textMuted)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
         .padding(.top, LayoutMetrics.medium)
         .opacity(isSignUp ? 0 : 1)
         .allowsHitTesting(!isSignUp)
@@ -294,7 +294,7 @@ struct AuthView: View {
                             in: RoundedRectangle(cornerRadius: 10, style: .continuous)
                         )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SolidPressButtonStyle())
             }
         }
         .padding(3)

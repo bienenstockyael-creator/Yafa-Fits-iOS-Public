@@ -542,7 +542,7 @@ struct CalendarDetailSheet: View {
                             .foregroundStyle(AppPalette.textSecondary)
                     }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SolidPressButtonStyle())
             } else {
                 Text(outfit.numericDateLabel(useFahrenheit: useFahrenheit))
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
@@ -557,7 +557,7 @@ struct CalendarDetailSheet: View {
                     .frame(width: 32, height: 32)
                     .appCircle(shadowRadius: 0, shadowY: 0)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
         }
         .padding(.bottom, 6)
     }
@@ -621,7 +621,7 @@ struct CalendarDetailSheet: View {
                     }
                     .frame(height: 36)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SolidPressButtonStyle())
             }
 
             if isExpanded {
@@ -673,7 +673,7 @@ struct CalendarDetailSheet: View {
                             .frame(height: 36)
                             .appCapsule(shadowRadius: 0, shadowY: 0)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SolidPressButtonStyle())
                     .transition(.scale.combined(with: .opacity))
                 }
             }
@@ -734,8 +734,7 @@ struct CalendarDetailSheet: View {
             .padding(LayoutMetrics.medium)
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
-            .presentationBackground(AppPalette.pageBackground)
-            .presentationCornerRadius(28)
+            .roundedSheetBackground(AppPalette.pageBackground)
         }
     }
 
@@ -754,7 +753,7 @@ struct CalendarDetailSheet: View {
             .padding(.horizontal, LayoutMetrics.xSmall)
             .appCapsule(shadowRadius: 0, shadowY: 0)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     private var calEditableProductRow: some View {
@@ -768,7 +767,7 @@ struct CalendarDetailSheet: View {
                         .frame(width: 36, height: 36)
                         .appCircle(shadowRadius: 0, shadowY: 0)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SolidPressButtonStyle())
 
                 Button {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -792,7 +791,7 @@ struct CalendarDetailSheet: View {
                     // AI-action accent: soft purple halo (matches carousel).
                     .shadow(color: AppPalette.aiAccent.opacity(0.18), radius: 8, y: 0)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SolidPressButtonStyle())
                 .disabled(isLoadingAutoDetect)
 
                 ForEach(outfit.products ?? [], id: \.id) { product in
@@ -814,7 +813,7 @@ struct CalendarDetailSheet: View {
                                 .foregroundStyle(.white)
                                 .background(Color(red: 0.85, green: 0.25, blue: 0.25).clipShape(Circle()))
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(SolidPressButtonStyle())
                         .offset(x: 6, y: -6)
                     }
                 }
@@ -835,7 +834,7 @@ struct CalendarDetailSheet: View {
                         .frame(width: 36, height: 36)
                         .appCircle(shadowRadius: 0, shadowY: 0)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SolidPressButtonStyle())
 
                     ForEach(editableTags, id: \.self) { tag in
                         HStack(spacing: 4) {
@@ -850,7 +849,7 @@ struct CalendarDetailSheet: View {
                                     .font(.system(size: 8, weight: .bold))
                                     .foregroundStyle(AppPalette.textFaint)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(SolidPressButtonStyle())
                         }
                         .padding(.horizontal, 10)
                         .frame(height: 30)
@@ -900,7 +899,7 @@ struct CalendarDetailSheet: View {
                                         .padding(.horizontal, LayoutMetrics.xSmall)
                                         .padding(.vertical, 9)
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(SolidPressButtonStyle())
                                 if s != suggestions.last { Divider().opacity(0.5) }
                             }
                         }
@@ -956,7 +955,7 @@ struct CalendarDetailSheet: View {
                 .frame(width: 36, height: 36)
                 .appCircle(shadowRadius: 0, shadowY: 0)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     private var calShareButton: some View {
@@ -969,7 +968,7 @@ struct CalendarDetailSheet: View {
                 .frame(width: 36, height: 36)
                 .appCircle(shadowRadius: 0, shadowY: 0)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     private var publishButton: some View {
@@ -994,7 +993,7 @@ struct CalendarDetailSheet: View {
                     .appCapsule(shadowRadius: 0, shadowY: 0)
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
         .disabled(isTogglingPublish || isPublished == nil)
     }
 
@@ -1020,7 +1019,7 @@ struct CalendarDetailSheet: View {
                 .frame(width: 36, height: 36)
                 .appCircle(shadowRadius: 0, shadowY: 0)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     private func productRow(_ products: [Product]) -> some View {
@@ -1056,7 +1055,7 @@ struct CalendarDetailSheet: View {
             HStack { EmptyProductCard() }
                 .frame(maxWidth: .infinity, alignment: .center)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     private func productCell(_ product: Product) -> some View {
@@ -1076,7 +1075,7 @@ struct CalendarDetailSheet: View {
                     .frame(width: 72)
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     private func calendarProductImage(_ product: Product) -> some View {

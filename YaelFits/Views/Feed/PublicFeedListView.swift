@@ -212,8 +212,7 @@ struct PublicFeedListView: View {
             )
             .presentationDetents([.height(380)])
             .presentationDragIndicator(.visible)
-            .presentationBackground(AppPalette.groupedBackground)
-            .presentationCornerRadius(28)
+            .roundedSheetBackground()
         }
         .fullScreenCover(item: $selectedDiscoveryProfile) { profile in
             UserProfileView(
@@ -322,7 +321,7 @@ struct PublicFeedListView: View {
             .frame(height: 40)
             .appCard(cornerRadius: 14, shadowRadius: 4, shadowY: 2)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
         .opacity(hasScrolled ? 0 : 1)
     }
 
@@ -353,7 +352,7 @@ struct PublicFeedListView: View {
                 }
             }
             .frame(minHeight: 44)
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
 
             Spacer()
         }
@@ -391,14 +390,13 @@ struct PublicFeedListView: View {
                 }
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
         .sheet(isPresented: $showsNotifications) {
             NotificationsPlaceholderSheet()
                 .environment(store)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
-                .presentationBackground(AppPalette.groupedBackground)
-                .presentationCornerRadius(28)
+                .roundedSheetBackground()
         }
     }
 
@@ -411,7 +409,7 @@ struct PublicFeedListView: View {
                 .frame(width: 48, height: 48)
                 .appCircle(shadowRadius: 12, shadowY: 6)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
         .transition(.opacity)
     }
 
@@ -446,7 +444,7 @@ struct PublicFeedListView: View {
                 .padding(.horizontal, 28)
                 .appCapsule(shadowRadius: 8, shadowY: 4)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
 
             Spacer()
         }
@@ -726,8 +724,7 @@ struct FeedPostCard: View {
             VibersListSheet(source: .outfit(post.outfitId))
                 .environment(store)
                 .presentationDragIndicator(.visible)
-                .presentationBackground(AppPalette.groupedBackground)
-                .presentationCornerRadius(28)
+                .roundedSheetBackground()
         }
         .sheet(isPresented: $showComments, onDismiss: {
             Task {
@@ -743,8 +740,7 @@ struct FeedPostCard: View {
                 .environment(store)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
-                .presentationBackground(AppPalette.groupedBackground)
-                .presentationCornerRadius(28)
+                .roundedSheetBackground()
         }
         .task(id: post.outfitId) {
             // If outfit isn't in local store (another user's outfit), fetch from Supabase
@@ -790,7 +786,7 @@ struct FeedPostCard: View {
                     }
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
             .fullScreenCover(isPresented: $showUserProfile) {
                 if let authorId = post.authorId {
                     UserProfileView(userId: authorId, onDismiss: { showUserProfile = false })
@@ -830,7 +826,7 @@ struct FeedPostCard: View {
                             Circle().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75)
                         )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SolidPressButtonStyle())
             }
 
             if let authorId = post.authorId, authorId != store.userId {
@@ -900,7 +896,7 @@ struct FeedPostCard: View {
                 .frame(height: 28)
                 .appCapsule(shadowRadius: 2, shadowY: 1)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     private func outfitContent(_ outfit: Outfit) -> some View {
@@ -1097,7 +1093,7 @@ struct FeedPostCard: View {
                                         .overlay(Capsule().strokeBorder(Color.white.opacity(0.6), lineWidth: 0.8))
                                 }
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(SolidPressButtonStyle())
                             .opacity(cartOpen ? 1 : 0)
                             .scaleEffect(cartOpen ? 1 : 0.85)
                             .animation(
@@ -1164,7 +1160,7 @@ struct FeedPostCard: View {
                 }
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
         .modifier(LongPressIfPresent(action: longPressAction))
         .frame(minWidth: LayoutMetrics.touchTarget, minHeight: LayoutMetrics.touchTarget)
     }

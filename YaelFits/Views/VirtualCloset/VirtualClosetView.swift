@@ -138,7 +138,7 @@ struct VirtualClosetView: View {
                     .frame(width: 36, height: 36)
                     .appCircle(shadowRadius: 0, shadowY: 0)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
             Spacer()
             VStack(spacing: 4) {
                 Text("VIRTUAL CLOSET")
@@ -156,7 +156,7 @@ struct VirtualClosetView: View {
                     .frame(width: 36, height: 36)
                     .appCircle(shadowRadius: 0, shadowY: 0)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
         }
         .padding(.horizontal, LayoutMetrics.screenPadding)
         .padding(.top, 8)
@@ -204,7 +204,7 @@ struct VirtualClosetView: View {
                     Capsule().fill(active ? Color.white : Color.clear)
                 )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     // MARK: - Stage
@@ -467,7 +467,7 @@ struct VirtualClosetView: View {
             .appCapsule()
             .opacity(canAct ? 1.0 : 0.4)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
         .disabled(!canAct || savedToRemixes)
         .animation(.easeInOut(duration: 0.2), value: inSaveMode)
         .animation(.easeInOut(duration: 0.2), value: savedToRemixes)
@@ -511,7 +511,7 @@ struct VirtualClosetView: View {
                     .stroke(AppPalette.textFaint.opacity(0.4), lineWidth: 0.5)
             )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     private var dressingOverlay: some View {

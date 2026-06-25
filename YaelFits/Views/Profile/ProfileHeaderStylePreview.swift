@@ -52,7 +52,7 @@ struct ProfileHeaderStylePreview: View {
             } label: {
                 avatarBlock
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
             .disabled(onTapAvatar == nil)
             .accessibilityLabel("\(style.displayName) header preview")
             .accessibilityHint(onTapAvatar == nil ? "" : "Double-tap to change photo")

@@ -155,7 +155,7 @@ private struct CreateProductView: View {
                     }
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
 
             if let err = processingError {
                 Text(err)
@@ -207,7 +207,7 @@ private struct CreateProductView: View {
             .padding(.horizontal, LayoutMetrics.screenPadding)
             .padding(.vertical, LayoutMetrics.xSmall)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
         .disabled(!canSave || isSaving)
         .background(AppPalette.groupedBackground)
     }
@@ -336,7 +336,7 @@ private struct LibraryPickerView: View {
                             } label: {
                                 libraryRow(product)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(SolidPressButtonStyle())
                             Divider().opacity(0.5).padding(.leading, 72)
                         }
                     }

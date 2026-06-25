@@ -120,7 +120,7 @@ struct PasswordResetView: View {
         }
         .disabled(isSubmitting || disabled)
         .opacity(disabled ? 0.45 : 1)
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
         .padding(.top, 4)
     }
 
@@ -145,7 +145,7 @@ struct PasswordResetView: View {
                 .font(.system(size: 12))
                 .foregroundStyle(AppPalette.textMuted)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
         .padding(.top, 8)
     }
 

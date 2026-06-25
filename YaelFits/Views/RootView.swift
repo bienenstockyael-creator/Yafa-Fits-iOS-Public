@@ -469,8 +469,7 @@ struct RootView: View {
                 onDismiss: { showCreditPaywall = false }
             )
             .presentationDragIndicator(.visible)
-            .presentationBackground(AppPalette.groupedBackground)
-            .presentationCornerRadius(28)
+            .roundedSheetBackground()
             .task { await refreshPaywallBalance() }
         }
         .fullScreenCover(isPresented: $showsVirtualCloset) {
@@ -869,7 +868,7 @@ struct RootView: View {
                 .background(Circle().fill(Color(red: 0.95, green: 0.95, blue: 0.96).opacity(0.98)))
                 .overlay(Circle().stroke(Color(red: 0.88, green: 0.89, blue: 0.91).opacity(0.9), lineWidth: 0.8))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     /// "Add me on Yafa" share entry point. Opens the
@@ -895,7 +894,7 @@ struct RootView: View {
                     .background(Circle().fill(Color(red: 0.95, green: 0.95, blue: 0.96).opacity(0.98)))
                     .overlay(Circle().stroke(Color(red: 0.88, green: 0.89, blue: 0.91).opacity(0.9), lineWidth: 0.8))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
         }
     }
 
@@ -1093,7 +1092,7 @@ struct RootView: View {
             }
         }
         .frame(minHeight: 44)
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     /// X button shown in the top-left while the carousel is open
@@ -1113,7 +1112,7 @@ struct RootView: View {
                 .frame(width: LayoutMetrics.touchTarget, height: LayoutMetrics.touchTarget)
                 .appCircle()
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
         .frame(minHeight: 44)
     }
 
@@ -1314,7 +1313,7 @@ struct RootView: View {
             .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
         .accessibilityLabel(label)
     }
 
@@ -1356,7 +1355,7 @@ struct RootView: View {
                     }
                 }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     private func setTemperatureUnit(_ useFahrenheit: Bool) {
@@ -1391,7 +1390,9 @@ struct RootView: View {
             .frame(width: 48, height: 48)
             .appCircle()
         }
-        .buttonStyle(.plain)
+        // Not .plain — that dims the whole button (incl. its bg) on press.
+        // SolidPressButtonStyle keeps the fill solid and uses a subtle scale.
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     private var loadingOverlay: some View {
@@ -1552,8 +1553,7 @@ struct FavoritesSheetView: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
-        .presentationBackground(AppPalette.groupedBackground)
-        .presentationCornerRadius(28)
+        .roundedSheetBackground()
     }
 
     private func favoriteOutfitRow(_ outfit: Outfit) -> some View {

@@ -102,7 +102,7 @@ struct CommentsSheet: View {
                     size: 32
                 )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
@@ -113,7 +113,7 @@ struct CommentsSheet: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(AppPalette.textStrong)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SolidPressButtonStyle())
 
                     Text(RelativeTime.short(from: comment.createdAt))
                         .font(.system(size: 10))
@@ -128,7 +128,7 @@ struct CommentsSheet: View {
                             AppIcon(glyph: .xmark, size: 10, color: AppPalette.textFaint)
                                 .frame(width: 24, height: 24)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(SolidPressButtonStyle())
                     } else {
                         Menu {
                             Button {
@@ -188,7 +188,7 @@ struct CommentsSheet: View {
                         .appCircle(shadowRadius: 2, shadowY: 1)
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
             .disabled(newCommentText.trimmingCharacters(in: .whitespaces).isEmpty || isSending)
         }
         .padding(.horizontal, LayoutMetrics.screenPadding)
@@ -341,7 +341,7 @@ struct ReportSheet: View {
                         .padding(LayoutMetrics.small)
                         .appCard(cornerRadius: 14, shadowRadius: 2, shadowY: 1)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SolidPressButtonStyle())
                 }
 
                 TextField("Add details (optional)", text: $details, axis: .vertical)
@@ -367,7 +367,7 @@ struct ReportSheet: View {
                     .background(AppPalette.textPrimary)
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SolidPressButtonStyle())
                 .disabled(selectedReason == nil || isSubmitting)
                 .opacity(selectedReason == nil ? 0.5 : 1)
                 .padding(.top, LayoutMetrics.xSmall)
@@ -404,7 +404,7 @@ struct ReportSheet: View {
                         .frame(height: 48)
                         .appCard(cornerRadius: 14, shadowRadius: 2, shadowY: 1)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SolidPressButtonStyle())
                 .padding(.horizontal, LayoutMetrics.screenPadding)
                 .padding(.top, LayoutMetrics.small)
             }

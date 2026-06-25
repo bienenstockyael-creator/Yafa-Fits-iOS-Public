@@ -48,6 +48,6 @@ struct ViewModeTogglePill: View {
                     }
                 }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 }

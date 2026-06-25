@@ -144,7 +144,7 @@ struct PublishSheet: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(LayoutMetrics.medium)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SolidPressButtonStyle())
                 .disabled(isLoadingAutoDetect)
 
                 Divider().opacity(0.5)
@@ -165,7 +165,7 @@ struct PublishSheet: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(LayoutMetrics.medium)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SolidPressButtonStyle())
             }
             .appCard(cornerRadius: LayoutMetrics.cardCornerRadius)
         }
@@ -229,7 +229,7 @@ struct PublishSheet: View {
                         .background(AppPalette.groupedBackground)
                         .clipShape(Circle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SolidPressButtonStyle())
             }
             .padding(LayoutMetrics.medium)
 
@@ -296,7 +296,7 @@ struct PublishSheet: View {
             .padding(.horizontal, LayoutMetrics.screenPadding)
             .padding(.bottom, LayoutMetrics.xLarge)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
         .disabled(isPublishing)
         .background(AppPalette.groupedBackground.ignoresSafeArea())
     }

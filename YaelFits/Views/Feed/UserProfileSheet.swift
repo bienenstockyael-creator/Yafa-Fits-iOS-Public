@@ -228,15 +228,13 @@ struct UserProfileView: View {
             FollowListSheet(title: "Followers", userIds: followerIds.filter { !store.blockedUserIds.contains($0) })
                 .environment(store)
                 .presentationDragIndicator(.visible)
-                .presentationBackground(AppPalette.groupedBackground)
-                .presentationCornerRadius(28)
+                .roundedSheetBackground()
         }
         .sheet(isPresented: $showFollowing) {
             FollowListSheet(title: "Following", userIds: followingIds.filter { !store.blockedUserIds.contains($0) })
                 .environment(store)
                 .presentationDragIndicator(.visible)
-                .presentationBackground(AppPalette.groupedBackground)
-                .presentationCornerRadius(28)
+                .roundedSheetBackground()
         }
     }
 
@@ -256,7 +254,7 @@ struct UserProfileView: View {
                     .frame(width: 36, height: 36)
                     .appCircle()
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
 
             Spacer()
 
@@ -279,7 +277,7 @@ struct UserProfileView: View {
                         .frame(width: 36, height: 36)
                         .appCircle()
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SolidPressButtonStyle())
             }
         }
         .padding(.horizontal, LayoutMetrics.screenPadding)
@@ -481,7 +479,7 @@ struct UserProfileView: View {
             } label: {
                 statSegment(count: followerIds.count, label: followerIds.count == 1 ? "follower" : "followers")
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
 
             if vibesReceived > 0 {
                 Text("·")
@@ -531,7 +529,7 @@ struct UserProfileView: View {
                 .frame(height: 36)
                 .appCapsule(shadowRadius: 4, shadowY: 2)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     // MARK: - Section header + grid

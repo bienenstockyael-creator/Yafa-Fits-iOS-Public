@@ -259,7 +259,7 @@ struct ProfileHeaderCustomizeSheet: View {
                     .frame(width: 36, height: 36)
                     .appCircle()
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
             .accessibilityLabel("Close")
 
             Spacer()
@@ -278,7 +278,7 @@ struct ProfileHeaderCustomizeSheet: View {
                     .frame(width: 36, height: 36)
                     .appCircle()
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
             .accessibilityLabel("Change photo")
         }
     }
@@ -356,7 +356,7 @@ struct ProfileHeaderCustomizeSheet: View {
                         .padding(.vertical, 8)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SolidPressButtonStyle())
             }
         }
         .animation(.spring(response: 0.36, dampingFraction: 0.78), value: selectedStyle)
@@ -392,7 +392,7 @@ struct ProfileHeaderCustomizeSheet: View {
                                 .padding(-3.5)
                         )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SolidPressButtonStyle())
                 .accessibilityLabel(ProfileHeaderAccentColor.accessibilityName(for: hex))
                 .accessibilityAddTraits(hex == selectedColorHex ? .isSelected : [])
             }
@@ -429,7 +429,7 @@ struct ProfileHeaderCustomizeSheet: View {
             .frame(height: 44)
             .appCapsule(shadowRadius: 6, shadowY: 3)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
         .disabled(isProcessingCutout && selectedStyle == .bust)
     }
 

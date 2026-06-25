@@ -10,7 +10,7 @@ struct TagPill: View {
             Button(action: onTap) {
                 pillLabel
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
         } else {
             pillLabel
         }

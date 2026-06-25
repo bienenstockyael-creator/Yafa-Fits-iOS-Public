@@ -481,7 +481,7 @@ struct OutfitGridView: View {
                 .padding(.horizontal, 28)
                 .appCapsule(shadowRadius: 8, shadowY: 4)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
             Spacer()
         }
     }

@@ -81,7 +81,7 @@ struct SignupVerificationView: View {
             .animation(.easeInOut(duration: 0.2), value: active)
         }
         .disabled(isSubmitting || !active)
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
         .padding(.top, LayoutMetrics.xxSmall)
     }
 
@@ -101,7 +101,7 @@ struct SignupVerificationView: View {
             .frame(height: 36)
             .background(AppPalette.cardBorder.opacity(0.5), in: Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     private func verifyCode() {

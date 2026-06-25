@@ -76,7 +76,7 @@ struct IncomingVibeToast: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .appCard(cornerRadius: 16, shadowRadius: 12, shadowY: 6)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
         .padding(.horizontal, LayoutMetrics.screenPadding)
         .padding(.top, LayoutMetrics.xSmall)
     }

@@ -99,7 +99,7 @@ struct NotificationsPlaceholderSheet: View {
             .padding(.vertical, LayoutMetrics.xSmall)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     /// Vibe-received rows show the actor's avatar with a small

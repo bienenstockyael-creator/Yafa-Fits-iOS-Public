@@ -428,8 +428,7 @@ struct CarouselView: View {
                     .environment(store)
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
-                    .presentationBackground(AppPalette.groupedBackground)
-                    .presentationCornerRadius(28)
+                    .roundedSheetBackground()
             }
         }
         .sheet(isPresented: $editCoordinator.showDatePicker) {
@@ -446,8 +445,7 @@ struct CarouselView: View {
             .padding(LayoutMetrics.medium)
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
-            .presentationBackground(AppPalette.pageBackground)
-            .presentationCornerRadius(28)
+            .roundedSheetBackground(AppPalette.pageBackground)
         }
     }
 
@@ -484,7 +482,7 @@ struct CarouselView: View {
                     }
                 }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     private var currentOutfit: Outfit? {
@@ -552,7 +550,7 @@ struct CarouselView: View {
                 .modifier(InputFieldChrome())
                 .fixedSize(horizontal: true, vertical: false)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
             .frame(maxWidth: .infinity, alignment: .trailing)
 
             // Location field — sized to content (via the placeholder
@@ -658,7 +656,7 @@ struct CarouselView: View {
                     .foregroundStyle(AppPalette.textMuted)
                     .padding(.vertical, 6)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
             .opacity(viewOnly ? 0 : 1)
             .allowsHitTesting(!viewOnly)
             .accessibilityHidden(viewOnly)
@@ -687,7 +685,7 @@ struct CarouselView: View {
             .frame(width: 48, height: 48)
             .appCircle()
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     private func shareCircleButton(outfit: Outfit) -> some View {
@@ -699,7 +697,7 @@ struct CarouselView: View {
                 .frame(width: 48, height: 48)
                 .appCircle()
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     /// Publish-to-feed toggle (owner only). A globe — the Friends/feed
@@ -731,7 +729,7 @@ struct CarouselView: View {
                 }
                 .if(!live) { $0.appCircle() }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     /// App-styled unpublish confirmation, replacing the system action
@@ -816,7 +814,7 @@ struct CarouselView: View {
                 .frame(width: 48, height: 48)
                 .appCircle()
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     // MARK: - Viewer chrome (owner uses save/share/info above)
@@ -836,7 +834,7 @@ struct CarouselView: View {
                 .frame(width: 48, height: 48)
                 .appCircle()
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     /// Opens the comments sheet for the current outfit.
@@ -849,7 +847,7 @@ struct CarouselView: View {
                 .frame(width: 48, height: 48)
                 .appCircle()
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     /// Cart — opens the detail card so the viewer can see the
@@ -865,7 +863,7 @@ struct CarouselView: View {
                 .frame(width: 48, height: 48)
                 .appCircle()
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     /// Shared open/close so Info button, swipe-up, swipe-down, and
@@ -1171,7 +1169,7 @@ struct CarouselView: View {
                 .padding(20)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SolidPressButtonStyle())
         .opacity(disabled ? 0.35 : 1)
         .disabled(disabled)
     }
