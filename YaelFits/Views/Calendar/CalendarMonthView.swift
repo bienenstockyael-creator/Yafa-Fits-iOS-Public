@@ -735,6 +735,7 @@ struct CalendarDetailSheet: View {
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
             .presentationBackground(AppPalette.pageBackground)
+            .presentationCornerRadius(28)
         }
     }
 

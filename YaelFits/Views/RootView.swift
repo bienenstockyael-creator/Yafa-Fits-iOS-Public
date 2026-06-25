@@ -470,6 +470,7 @@ struct RootView: View {
             )
             .presentationDragIndicator(.visible)
             .presentationBackground(AppPalette.groupedBackground)
+            .presentationCornerRadius(28)
             .task { await refreshPaywallBalance() }
         }
         .fullScreenCover(isPresented: $showsVirtualCloset) {
@@ -1552,6 +1553,7 @@ struct FavoritesSheetView: View {
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
         .presentationBackground(AppPalette.groupedBackground)
+        .presentationCornerRadius(28)
     }
 
     private func favoriteOutfitRow(_ outfit: Outfit) -> some View {

@@ -519,24 +519,28 @@ struct ProfileView: View {
                 .environment(store)
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppPalette.groupedBackground)
+                .presentationCornerRadius(28)
         }
         .sheet(isPresented: $showFollowing) {
             FollowListSheet(title: "Following", userIds: followingIds)
                 .environment(store)
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppPalette.groupedBackground)
+                .presentationCornerRadius(28)
         }
         .sheet(isPresented: $showSavedSheet) {
             SavedOutfitsSheet()
                 .environment(store)
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppPalette.groupedBackground)
+                .presentationCornerRadius(28)
         }
         .sheet(isPresented: $showFavoritesSheet) {
             FavoritesSheetView()
                 .environment(store)
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppPalette.groupedBackground)
+                .presentationCornerRadius(28)
         }
         .sheet(isPresented: $showLinkExtension) {
             LinkExtensionView()
@@ -553,6 +557,7 @@ struct ProfileView: View {
                     .environment(store)
                     .presentationDragIndicator(.visible)
                     .presentationBackground(AppPalette.groupedBackground)
+                    .presentationCornerRadius(28)
             }
         }
         .task {

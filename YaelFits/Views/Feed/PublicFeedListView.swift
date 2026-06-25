@@ -213,6 +213,7 @@ struct PublicFeedListView: View {
             .presentationDetents([.height(380)])
             .presentationDragIndicator(.visible)
             .presentationBackground(AppPalette.groupedBackground)
+            .presentationCornerRadius(28)
         }
         .fullScreenCover(item: $selectedDiscoveryProfile) { profile in
             UserProfileView(
@@ -397,6 +398,7 @@ struct PublicFeedListView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppPalette.groupedBackground)
+                .presentationCornerRadius(28)
         }
     }
 
@@ -725,6 +727,7 @@ struct FeedPostCard: View {
                 .environment(store)
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppPalette.groupedBackground)
+                .presentationCornerRadius(28)
         }
         .sheet(isPresented: $showComments, onDismiss: {
             Task {
@@ -741,6 +744,7 @@ struct FeedPostCard: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppPalette.groupedBackground)
+                .presentationCornerRadius(28)
         }
         .task(id: post.outfitId) {
             // If outfit isn't in local store (another user's outfit), fetch from Supabase

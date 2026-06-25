@@ -229,12 +229,14 @@ struct UserProfileView: View {
                 .environment(store)
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppPalette.groupedBackground)
+                .presentationCornerRadius(28)
         }
         .sheet(isPresented: $showFollowing) {
             FollowListSheet(title: "Following", userIds: followingIds.filter { !store.blockedUserIds.contains($0) })
                 .environment(store)
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppPalette.groupedBackground)
+                .presentationCornerRadius(28)
         }
     }
 

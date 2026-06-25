@@ -429,6 +429,7 @@ struct CarouselView: View {
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
                     .presentationBackground(AppPalette.groupedBackground)
+                    .presentationCornerRadius(28)
             }
         }
         .sheet(isPresented: $editCoordinator.showDatePicker) {
@@ -446,6 +447,7 @@ struct CarouselView: View {
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
             .presentationBackground(AppPalette.pageBackground)
+            .presentationCornerRadius(28)
         }
     }
 

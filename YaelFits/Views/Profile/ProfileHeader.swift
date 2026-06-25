@@ -223,6 +223,7 @@ struct ProfileHeader: View {
                 )
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppPalette.groupedBackground)
+                .presentationCornerRadius(28)
             }
         }
         .sheet(isPresented: $showFollowers) {
@@ -230,6 +231,7 @@ struct ProfileHeader: View {
                 .environment(store)
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppPalette.groupedBackground)
+                .presentationCornerRadius(28)
         }
     }
 
