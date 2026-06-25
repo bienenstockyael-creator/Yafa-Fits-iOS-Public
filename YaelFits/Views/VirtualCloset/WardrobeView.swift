@@ -966,7 +966,8 @@ private struct ProductLightbox: View {
             // an outer margin below.
             .padding(.top, isFull ? insetTop : 0)
             .padding(.bottom, isFull ? insetBottom : 0)
-            .background(AppPalette.groupedBackground)
+            // DEBUG: red when full so the exact card bounds are unmistakable.
+            .background(isFull ? Color.red : AppPalette.groupedBackground)
             // Card → square edge-to-edge as it goes full screen.
             .clipShape(RoundedRectangle(cornerRadius: isFull ? 0 : 28, style: .continuous))
             .padding(.top, isFull ? 0 : insetTop + 8)
@@ -1031,7 +1032,8 @@ private struct ProductLightbox: View {
         .onPreferenceChange(ScrollTopKey.self) { atTop = $0 >= -1 }
     }
 
-    /// Small drag affordance at the very top of the card.
+    /// Small drag affordance at the very top of the card. TAP to toggle full
+    /// screen (reliable path that bypasses the scroll-coordinated drag).
     private var grabber: some View {
         Capsule()
             .fill(AppPalette.textFaint.opacity(0.55))
@@ -1039,6 +1041,8 @@ private struct ProductLightbox: View {
             .padding(.top, 8)
             .padding(.bottom, 2)
             .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+            .onTapGesture { setExpanded(!isFull) }
     }
 
     /// Unified scroll/drag behaviour:
