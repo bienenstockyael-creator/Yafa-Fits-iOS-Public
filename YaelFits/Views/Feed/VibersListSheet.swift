@@ -266,6 +266,10 @@ struct VibesLeaderboardSheet: View {
                 .frame(height: 48)
                 .allowsHitTesting(false)
             }
+            // Extend the list THROUGH the bottom safe area so rows scroll to the
+            // physical bottom of the viewport — no background strip / gap above
+            // the home indicator.
+            .ignoresSafeArea(.container, edges: .bottom)
         }
     }
 
@@ -384,11 +388,17 @@ private struct VibesLeaderboardBust: View {
             // True transparent bust — fit so hair / shoulders aren't clipped.
             // Transaction animation fades the cut-out in once it decodes.
             AsyncImage(url: url, transaction: Transaction(animation: .easeInOut(duration: 0.35))) { phase in
-                if let image = phase.image {
+                switch phase {
+                case .success(let image):
                     image.resizable().aspectRatio(contentMode: .fit)
                         .transition(.opacity)
-                } else {
+                case .failure:
+                    // Couldn't load the cut-out → fall back to the framed photo.
                     framedPhoto
+                default:
+                    // Still downloading → stay blank so we NEVER flash the photo
+                    // with its background before the transparent cut-out arrives.
+                    Color.clear
                 }
             }
             .frame(width: frameWidth, height: avatarSize)
