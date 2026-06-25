@@ -999,6 +999,10 @@ private struct ProductLightbox: View {
     /// every render jittered the grow (scene ordering isn't deterministic).
     @State private var insetTop: CGFloat = 47
     @State private var insetBottom: CGFloat = 34
+    /// Defer the heavy TAGGED ON carousel (multiple outfit images that eager-load)
+    /// until the open/close scale spring has settled — building/loading it during
+    /// the spring competes for the main thread and jitters the animation.
+    @State private var showTaggedOn = false
 
     /// Real device safe-area insets from the key window. We position content
     /// manually because the overlay ignores the safe area (so SwiftUI reports
@@ -1057,6 +1061,8 @@ private struct ProductLightbox: View {
             let i = screenInsets
             insetTop = i.top
             insetBottom = i.bottom
+            // Mount the tagged-on carousel only after the open spring settles.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showTaggedOn = true }
         }
         // ONE unified gesture: in card mode any drag expands to full; in full
         // mode a pull-down at the very top dismisses. Simultaneous, so the
@@ -1086,7 +1092,7 @@ private struct ProductLightbox: View {
                 if !sourceURL.isEmpty, let linkURL = URL(string: sourceURL) {
                     openLinkButton(linkURL)
                 }
-                taggedOnSection
+                if showTaggedOn { taggedOnSection }
                 if let saveError {
                     Text(saveError)
                         .font(.system(size: 12))
