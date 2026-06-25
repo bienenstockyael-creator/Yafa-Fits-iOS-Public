@@ -168,18 +168,32 @@ struct VibesLeaderboardSheet: View {
                 .padding(.top, LayoutMetrics.small)
                 .padding(.bottom, LayoutMetrics.small)
 
-                // Two swipeable pages, in sync with the tabs above.
-                TabView(selection: $window) {
-                    page(entries: weekEntries, loading: weekLoading)
-                        .tag(VibeWindow.thisWeek)
-                    page(entries: allTimeEntries, loading: allTimeLoading)
-                        .tag(VibeWindow.allTime)
+                // Two swipeable pages, in sync with the tabs above. The top
+                // fade is a SIBLING layer on top of the pages (not inside the
+                // ScrollView, where the TabView's clipping swallowed it) so it's
+                // reliably anchored just under the tabs and dissolves rows as
+                // they scroll up. No bottom fade — the list just clips at the
+                // device edge.
+                ZStack(alignment: .top) {
+                    TabView(selection: $window) {
+                        page(entries: weekEntries, loading: weekLoading)
+                            .tag(VibeWindow.thisWeek)
+                        page(entries: allTimeEntries, loading: allTimeLoading)
+                            .tag(VibeWindow.allTime)
+                    }
+                    .tabViewStyle(.page(indexDisplayMode: .never))
+
+                    LinearGradient(
+                        colors: [AppPalette.groupedBackground, AppPalette.groupedBackground.opacity(0)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 64)
+                    .allowsHitTesting(false)
                 }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-                // The paging container must itself bleed through the bottom
-                // safe area, otherwise it clips its pages at the home-indicator
-                // line and the inner ScrollView's ignoresSafeArea has nowhere
-                // to extend into — leaving a background strip at the bottom.
+                // Bleed the paging area through the bottom safe area so the list
+                // runs to — and clips at — the physical bottom of the device,
+                // with no background strip above the home indicator.
                 .ignoresSafeArea(.container, edges: .bottom)
             }
             .background(AppPalette.groupedBackground.ignoresSafeArea())
@@ -258,28 +272,14 @@ struct VibesLeaderboardSheet: View {
                         row(rank: index + 1, entry: entry)
                     }
                 }
-                // Top/bottom padding ≥ the fade heights so the first row at rest
-                // and the last row at full scroll read crisply (outside the fade
-                // zones), while everything in between dissolves at the edges.
+                // Top padding clears the top fade so the first row reads crisply
+                // at rest; small bottom inset so the list clips right at the
+                // device edge (no fade, no gap).
                 .padding(.horizontal, 40)
-                .padding(.top, 76)
-                .padding(.bottom, 100)
+                .padding(.top, 70)
+                .padding(.bottom, 24)
             }
             .scrollIndicators(.hidden)
-            // Run the list to the physical bottom of the sheet (no safe-area gap)...
-            .ignoresSafeArea(.container, edges: .bottom)
-            // ...then dissolve BOTH edges so rows fade gradually under the header
-            // and at the bottom instead of hard-cutting at either edge. Tall fades
-            // (64pt) because the busts themselves are tall.
-            .mask {
-                VStack(spacing: 0) {
-                    LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
-                        .frame(height: 64)
-                    Color.black
-                    LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
-                        .frame(height: 64)
-                }
-            }
         }
     }
 
