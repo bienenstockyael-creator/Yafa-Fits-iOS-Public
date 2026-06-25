@@ -158,7 +158,7 @@ struct VibesLeaderboardSheet: View {
         NavigationStack {
             VStack(spacing: 0) {
                 // Centered small all-caps tab labels, underline on the selected.
-                HStack(spacing: LayoutMetrics.large) {
+                HStack(spacing: LayoutMetrics.small) {
                     tab("THIS WEEK", value: .thisWeek)
                     tab("ALL TIME", value: .allTime)
                 }
@@ -200,23 +200,22 @@ struct VibesLeaderboardSheet: View {
         Button {
             window = value
         } label: {
-            VStack(spacing: 6) {
-                Text(title)
-                    .font(.system(size: 11, weight: .semibold))
-                    .tracking(1.4)
-                    .foregroundStyle(window == value ? AppPalette.textStrong : AppPalette.textFaint)
-                // A single underline (full text width) that slides between the
-                // tabs via matched geometry. The clear capsule reserves height.
-                ZStack {
-                    Capsule().fill(Color.clear).frame(height: 2.5)
+            // The underline lives in a bottom overlay so it spans EXACTLY the
+            // label's width, and slides + resizes between the two tabs via
+            // matched geometry when the window changes.
+            Text(title)
+                .font(.system(size: 11, weight: .semibold))
+                .tracking(1.4)
+                .foregroundStyle(window == value ? AppPalette.textStrong : AppPalette.textFaint)
+                .padding(.bottom, 7)
+                .overlay(alignment: .bottom) {
                     if window == value {
                         Capsule()
                             .fill(AppPalette.textStrong)
-                            .frame(height: 2.5)
+                            .frame(height: 2)
                             .matchedGeometryEffect(id: "tab-underline", in: tabUnderline)
                     }
                 }
-            }
         }
         .buttonStyle(SolidPressButtonStyle())
     }
@@ -263,7 +262,7 @@ struct VibesLeaderboardSheet: View {
             HStack(spacing: 0) {
                 // The big Adieu rank number, with the bust laid on top of it
                 // (negative spacing = overlap; zIndex keeps the bust above).
-                HStack(spacing: -60) {
+                HStack(spacing: -80) {
                     Text("\(rank)")
                         .font(.custom("GTFAdieuTRIAL-BlackSlanted", size: 92))
                         .foregroundStyle(AppPalette.textStrong)
@@ -364,9 +363,30 @@ private struct VibesLeaderboardBust: View {
                 }
             }
             .frame(width: frameWidth, height: avatarSize)
-        } else {
+        } else if profile.avatarUrl != nil {
             framedPhoto
+        } else {
+            // Never set a photo → their gradient + initial, but shaped as a
+            // bust silhouette instead of a flat square, so it sits in the row
+            // like everyone else's bust.
+            silhouetteBust
         }
+    }
+
+    /// Placeholder bust for users with no photo: the same per-initial gradient
+    /// the round avatar uses, masked into a head-and-shoulders silhouette, with
+    /// their initial on the head.
+    private var silhouetteBust: some View {
+        let dim = avatarSize
+        return ZStack {
+            AvatarGradients.gradient(for: profile.initial)
+                .mask(BustSilhouetteShape())
+            Text(profile.initial)
+                .font(.system(size: dim * 0.20, weight: .semibold))
+                .foregroundStyle(AppPalette.textStrong)
+                .position(x: dim / 2, y: dim * 0.26)
+        }
+        .frame(width: dim, height: dim)
     }
 
     // No cut-out → frame the regular photo into a portrait bust crop.
@@ -399,5 +419,35 @@ private struct VibesLeaderboardBust: View {
                 .font(.system(size: avatarSize * 0.32, weight: .semibold))
                 .foregroundStyle(AppPalette.textMuted)
         }
+    }
+}
+
+/// Classic head-and-shoulders person silhouette: a head circle above a wide
+/// rounded "hill" of shoulders rising from the bottom, with a neck gap between
+/// them. Used to mask the no-photo gradient into a bust shape.
+private struct BustSilhouetteShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let w = rect.width
+        let h = rect.height
+        // Head — circle in the upper centre.
+        let headR = w * 0.20
+        p.addEllipse(in: CGRect(
+            x: rect.midX - headR,
+            y: rect.minY + h * 0.26 - headR,
+            width: headR * 2,
+            height: headR * 2
+        ))
+        // Shoulders — a wide ellipse rising from below the frame; only its top
+        // arc shows, giving rounded shoulders that fill the bottom width.
+        let shoulderW = w * 0.80
+        let shoulderH = h * 1.05
+        p.addEllipse(in: CGRect(
+            x: rect.midX - shoulderW / 2,
+            y: rect.minY + h * 0.62,
+            width: shoulderW,
+            height: shoulderH
+        ))
+        return p
     }
 }
