@@ -163,6 +163,7 @@
 		B0DCE549ACD950AF52F16FD0 /* DressAvatarSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5896B8C8BF7E8A341C74D09E /* DressAvatarSheetView.swift */; };
 		B18E3607CB764CEC45F54677 /* LocalOutfitStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE7400C8E76CC739BA9271FE /* LocalOutfitStore.swift */; };
 		B2AFB7640AE011959778E08F /* placeholder-1.webp in Resources */ = {isa = PBXBuildFile; fileRef = 3FC4F82EC6FC767F44CE9A4B /* placeholder-1.webp */; };
+		B0570000000000000B000001 /* bust-placeholder.webp in Resources */ = {isa = PBXBuildFile; fileRef = B0570000000000000A000001 /* bust-placeholder.webp */; };
 		B3990FC6A6666816801E6B85 /* LikersSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1669A9739DE94A4D2C6EB670 /* LikersSheet.swift */; };
 		B43A596C9FF4A02AC393AAC1 /* RemixStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 870B827D251E84029B685BB1 /* RemixStorage.swift */; };
 		B5E8DA33C230E63AB681245C /* AvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F15640B030569340C148E2F4 /* AvatarView.swift */; };
@@ -333,6 +334,7 @@
 		3E32233E0690243C6794FBE2 /* PublishSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublishSheet.swift; sourceTree = "<group>"; };
 		3E528CCFAA1423FAE69CD013 /* UploadMaskingBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadMaskingBackend.swift; sourceTree = "<group>"; };
 		3FC4F82EC6FC767F44CE9A4B /* placeholder-1.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "placeholder-1.webp"; sourceTree = "<group>"; };
+		B0570000000000000A000001 /* bust-placeholder.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "bust-placeholder.webp"; sourceTree = "<group>"; };
 		422DD784B7345E185A3C2C41 /* placeholder-3.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "placeholder-3.webp"; sourceTree = "<group>"; };
 		425FD6DB8C41635F1DC15775 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogger.swift; sourceTree = "<group>"; };
 		43F71A1221DDF5DC78BA4C36 /* PipelineJob.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PipelineJob.swift; sourceTree = "<group>"; };
@@ -538,6 +540,7 @@
 				6AF76DDBEC17ACF0DEB5C2B2 /* outfits.json */,
 				4DB2F741FB63C26764629E7F /* overcast.json */,
 				3FC4F82EC6FC767F44CE9A4B /* placeholder-1.webp */,
+				B0570000000000000A000001 /* bust-placeholder.webp */,
 				BB629BBE1A7C4B7CA2437BEC /* placeholder-2.webp */,
 				422DD784B7345E185A3C2C41 /* placeholder-3.webp */,
 				E9EEE7F7310371BA0DB650A1 /* public-feed.json */,
@@ -1050,6 +1053,7 @@
 				EDCE9F834080E234A3B809C5 /* outfits.json in Resources */,
 				9CB31FFFBB1BA5EF0D91DB03 /* overcast.json in Resources */,
 				B2AFB7640AE011959778E08F /* placeholder-1.webp in Resources */,
+				B0570000000000000B000001 /* bust-placeholder.webp in Resources */,
 				1EBCAC4AA5AF95CC63699882 /* placeholder-2.webp in Resources */,
 				077DB02F9473F88E769F9A4C /* placeholder-3.webp in Resources */,
 				A95A14866E6CEABC11DBCDDB /* public-feed.json in Resources */,

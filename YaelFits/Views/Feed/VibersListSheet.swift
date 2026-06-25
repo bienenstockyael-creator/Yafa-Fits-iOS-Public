@@ -423,21 +423,43 @@ private struct VibesLeaderboardBust: View {
         }
     }
 
-    /// Placeholder bust for users with no photo: the same per-initial gradient
-    /// the round avatar uses, masked into a head-and-shoulders silhouette, with
-    /// their initial on the head.
+    /// Placeholder bust for users with no photo: a classical sculpture bust
+    /// tinted with their per-initial gradient (the same gradient their round
+    /// avatar uses). The marble's shading multiplies over the gradient for a
+    /// 3D feel, then the bust's own alpha masks it to shape — so it sits in the
+    /// row like everyone else's real cut-out.
+    @ViewBuilder
     private var silhouetteBust: some View {
-        let dim = avatarSize
-        return ZStack {
+        if let bust = Self.bustPlaceholder {
             AvatarGradients.gradient(for: profile.initial)
-                .mask(BustSilhouetteShape())
-            Text(profile.initial)
-                .font(.system(size: dim * 0.19, weight: .semibold))
-                .foregroundStyle(AppPalette.textStrong)
-                .position(x: dim / 2, y: dim * 0.25)
+                .overlay {
+                    Image(uiImage: bust)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .blendMode(.multiply)
+                }
+                .compositingGroup()
+                .mask {
+                    Image(uiImage: bust)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                }
+                .frame(width: frameWidth, height: avatarSize)
+        } else {
+            // Asset missing → plain gradient block rather than nothing.
+            AvatarGradients.gradient(for: profile.initial)
+                .frame(width: avatarSize * 0.84, height: avatarSize)
+                .clipShape(RoundedRectangle(cornerRadius: avatarSize * 0.18, style: .continuous))
         }
-        .frame(width: dim, height: dim)
     }
+
+    /// The shared marble-bust silhouette, decoded once from the bundle.
+    private static let bustPlaceholder: UIImage? = {
+        guard let url = Bundle.main.url(forResource: "bust-placeholder", withExtension: "webp"),
+              let data = try? Data(contentsOf: url)
+        else { return nil }
+        return UIImage(data: data)
+    }()
 
     // No cut-out → frame the regular photo into a portrait bust crop.
     private var framedPhoto: some View {
@@ -473,55 +495,3 @@ private struct VibesLeaderboardBust: View {
     }
 }
 
-/// A realistic head-and-shoulders bust silhouette: an oval head connected by a
-/// neck into shoulders that slope out (trapezius curve) and fill to the bottom
-/// of the frame — one continuous figure, not a circle floating over a hill.
-/// Used to mask the no-photo gradient into a bust shape.
-private struct BustSilhouetteShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        var p = Path()
-        let w = rect.width
-        let h = rect.height
-        let cx = rect.midX
-        let topY = rect.minY
-
-        // Head — a slightly tall oval in the upper centre.
-        let headRX = w * 0.165
-        let headRY = w * 0.195
-        let headCenterY = topY + h * 0.25
-        p.addEllipse(in: CGRect(
-            x: cx - headRX,
-            y: headCenterY - headRY,
-            width: headRX * 2,
-            height: headRY * 2
-        ))
-
-        // Neck + shoulders — one closed shape that tucks under the head and
-        // slopes out to rounded shoulders, filling to the bottom of the frame.
-        let neckHalf = w * 0.085
-        let neckTopY = topY + h * 0.40        // sits inside the head's lower oval
-        let shoulderX = w * 0.46
-        let shoulderTopY = topY + h * 0.95
-        let bottomY = rect.maxY
-
-        p.move(to: CGPoint(x: cx - neckHalf, y: neckTopY))
-        // Left trapezius → shoulder ball.
-        p.addCurve(
-            to: CGPoint(x: cx - shoulderX, y: shoulderTopY),
-            control1: CGPoint(x: cx - neckHalf, y: topY + h * 0.52),
-            control2: CGPoint(x: cx - w * 0.40, y: topY + h * 0.62)
-        )
-        p.addLine(to: CGPoint(x: cx - shoulderX, y: bottomY))
-        p.addLine(to: CGPoint(x: cx + shoulderX, y: bottomY))
-        p.addLine(to: CGPoint(x: cx + shoulderX, y: shoulderTopY))
-        // Right shoulder ball → trapezius back up to the neck.
-        p.addCurve(
-            to: CGPoint(x: cx + neckHalf, y: neckTopY),
-            control1: CGPoint(x: cx + w * 0.40, y: topY + h * 0.62),
-            control2: CGPoint(x: cx + neckHalf, y: topY + h * 0.52)
-        )
-        p.closeSubpath()
-
-        return p
-    }
-}
