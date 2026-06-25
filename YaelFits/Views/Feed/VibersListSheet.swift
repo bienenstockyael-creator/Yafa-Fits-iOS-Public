@@ -304,10 +304,10 @@ struct VibesLeaderboardSheet: View {
             // close together, instead of pushing them to opposite edges.
             HStack(spacing: 0) {
                 Spacer(minLength: 0)
-                HStack(spacing: -12) {
+                HStack(spacing: -2) {
                     // The big Adieu rank number, with the bust laid on top of it
                     // (negative spacing = overlap; zIndex keeps the bust above).
-                    HStack(spacing: -80) {
+                    HStack(spacing: -54) {
                         Text("\(rank)")
                             .font(.custom("GTFAdieuTRIAL-BlackSlanted", size: 92))
                             .foregroundStyle(AppPalette.textStrong)
@@ -383,7 +383,9 @@ private struct VibesLeaderboardBust: View {
     private var cutoutURL: String? { profile.avatarCutoutUrl ?? generatedCutoutUrl }
 
     private var s: CGFloat { avatarSize / 132 }            // liveAvatarSize
-    private var frameWidth: CGFloat { 180 * s }            // liveBustFrameWidth
+    // Tighter than the profile-header bust (180): hug the bust art so the
+    // leaderboard pill can sit close instead of across a wide empty frame.
+    private var frameWidth: CGFloat { 124 * s }
     private var extraHeight: CGFloat { 32 * s }            // liveBustExtraHeight
     private var highlighterFont: CGFloat { 18 * s }        // liveHighlighterFontSize
     private var highlighterOffset: CGFloat { avatarSize * 0.38 } // bustHighlighterOffsetRatio
