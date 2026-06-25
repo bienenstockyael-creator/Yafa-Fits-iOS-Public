@@ -117,11 +117,6 @@ struct RootView: View {
     var body: some View {
         @Bindable var store = store
 
-        // Outer ZStack so the closet (added as a sibling at the very end) lives
-        // OUTSIDE the .safeAreaInset(.bottom)/tab bar below — that inset reshapes
-        // the safe area and was clamping the closet page (and its lightbox) off
-        // the top and bottom edges, no matter how many ignoresSafeArea we added.
-        ZStack {
         ZStack(alignment: .top) {
             backgroundColor.ignoresSafeArea()
 
@@ -506,24 +501,15 @@ struct RootView: View {
             )
             .environment(store)
         }
-
-        // Closet PAGE — a top-level sibling of the main UI, OUTSIDE the bottom
-        // safeAreaInset/tab bar, so it fills the entire screen and renders over
-        // everything (including the tab bar). Grows out of the closet button.
-        if showsCloset, let userId = store.userId {
-            WardrobeView(userId: userId, onClose: {
-                // Same spring as the open so the exit mirrors the entry.
-                withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
-                    showsCloset = false
-                }
-            })
-            .environment(store)
-            .background(AppPalette.groupedBackground)
-            .ignoresSafeArea()
-            // Same iOS app-launch feel as the product lightbox: grows out of the
-            // closet button (bottom-right) with rounded corners in flight.
-            .transition(.growFromPoint(UnitPoint(x: 0.86, y: 0.9)))
-        }
+        // Closet PAGE as a fullScreenCover — the only presentation that gives a
+        // true full-screen hosting context where ignoresSafeArea works. As an
+        // .overlay (even a top-level ZStack sibling) it was permanently clamped
+        // to the safe area by the bottom safeAreaInset/tab bar above it.
+        .fullScreenCover(isPresented: $showsCloset) {
+            if let userId = store.userId {
+                WardrobeView(userId: userId, onClose: { showsCloset = false })
+                    .environment(store)
+            }
         }
     }
 
