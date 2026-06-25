@@ -373,7 +373,17 @@ struct WardrobeView: View {
             ProgressView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if allItems.isEmpty {
-            emptyState
+            // Keep the closet chrome (search + categories) so an empty closet
+            // still reads as a real, just-unpopulated closet. The message stays
+            // centered on the page via the ZStack (the bars don't push it down).
+            ZStack {
+                emptyState
+                VStack(spacing: 0) {
+                    searchBar
+                    filterBar
+                    Spacer(minLength: 0)
+                }
+            }
         } else {
             VStack(spacing: 0) {
                 searchBar
@@ -695,10 +705,11 @@ struct WardrobeView: View {
                 Text("Your closet is empty")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(AppPalette.textStrong)
-                Text("Tag products on your outfits and they’ll collect here automatically.")
+                Text("Tag products on your outfits and they’ll collect here automatically. You can also save wishlist items from Safari — tap Share, then Yafa.")
                     .font(.system(size: 13))
                     .foregroundStyle(AppPalette.textMuted)
                     .multilineTextAlignment(.center)
+                    .lineSpacing(2)
             }
             .padding(.horizontal, LayoutMetrics.xLarge)
             // "Save from your desktop" / Chrome-extension entry hidden until
@@ -798,8 +809,11 @@ struct WardrobeView: View {
         }
     }
 
-    /// Categories actually present, in a stable display order.
+    /// Categories actually present, in a stable display order. When the closet
+    /// is empty, show the FULL set so the empty state still conveys the structure
+    /// the user is meant to populate.
     private var availableCategories: [WardrobeCategory] {
+        guard !allItems.isEmpty else { return WardrobeCategory.displayOrder }
         let present = Set(allItems.map(\.category))
         return WardrobeCategory.displayOrder.filter { present.contains($0) }
     }
