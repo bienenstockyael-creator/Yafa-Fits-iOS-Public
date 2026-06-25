@@ -191,7 +191,9 @@ struct VibesLeaderboardSheet: View {
             // Drives the underline slide for BOTH a tap and a page swipe.
             .animation(.spring(response: 0.34, dampingFraction: 0.82), value: window)
             .padding(.top, LayoutMetrics.small)
-            .padding(.bottom, LayoutMetrics.small)
+            // Minimal gap so the paging area (and its top fade) begins right at
+            // the tab underline — content clips AT that line, not below it.
+            .padding(.bottom, 2)
 
             // Two swipeable pages, in sync with the tabs above. The top
             // fade is a SIBLING layer on top of the pages (not inside the
@@ -284,7 +286,7 @@ struct VibesLeaderboardSheet: View {
                 // at rest; small bottom inset so the list clips right at the
                 // device edge (no fade, no gap).
                 .padding(.horizontal, 40)
-                .padding(.top, 28)
+                .padding(.top, 40)
                 .padding(.bottom, 24)
             }
             .scrollIndicators(.hidden)
@@ -326,6 +328,9 @@ struct VibesLeaderboardSheet: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 7)
                     .appCapsule(shadowRadius: 0, shadowY: 0)
+                    // Soft light-blue glow under the pill, echoing the vibe
+                    // droplet — same treatment as the weather pills.
+                    .shadow(color: Color(red: 0.58, green: 0.81, blue: 1.0).opacity(0.5), radius: 13, y: 2)
                     .rotationEffect(.degrees(7))
                 }
                 Spacer(minLength: 0)
