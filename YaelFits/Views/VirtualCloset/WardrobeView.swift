@@ -246,7 +246,10 @@ struct WardrobeView: View {
     /// fullScreenCover, which has no built-in interactive dismiss). Disabled
     /// while a product lightbox is open so it can't fight the lightbox.
     private var closetDismissDrag: some Gesture {
-        DragGesture()
+        // GLOBAL coordinate space: the header is inside the view we offset, so a
+        // .local translation would move WITH the offset and feed back into itself
+        // (the frantic jitter). Global = the finger's actual screen movement.
+        DragGesture(coordinateSpace: .global)
             .onChanged { v in
                 guard selectedItem == nil else { return }
                 closetDragOffset = max(0, v.translation.height)
