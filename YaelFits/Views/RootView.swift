@@ -1,6 +1,5 @@
 import SwiftUI
 import Lottie
-import UIKit
 
 struct RootView: View {
     @Environment(OutfitStore.self) private var store
@@ -508,21 +507,10 @@ struct RootView: View {
         // to the safe area by the bottom safeAreaInset/tab bar above it.
         .fullScreenCover(isPresented: $showsCloset) {
             if let userId = store.userId {
-                // Transparent cover so the closet can grow out of the button over
-                // the live feed; the cover itself never slides (see button above).
-                ClosetGrowCover(userId: userId, onClose: { dismissClosetInstantly() })
+                WardrobeView(userId: userId, onClose: { showsCloset = false })
                     .environment(store)
-                    .presentationBackground(.clear)
             }
         }
-    }
-
-    /// Drop the cover with no system slide-down — ClosetGrowCover has already
-    /// shrunk the page back into the button by the time this runs.
-    private func dismissClosetInstantly() {
-        UIView.setAnimationsEnabled(false)
-        showsCloset = false
-        DispatchQueue.main.async { UIView.setAnimationsEnabled(true) }
     }
 
     private var showsFloatingButtons: Bool {
@@ -1387,11 +1375,10 @@ struct RootView: View {
         Button {
             let impact = UIImpactFeedbackGenerator(style: .light)
             impact.impactOccurred()
-            // Suppress the fullScreenCover's system slide so the ONLY motion is
-            // ClosetGrowCover's grow-out-of-the-button (it animates internally).
-            UIView.setAnimationsEnabled(false)
-            showsCloset = true
-            DispatchQueue.main.async { UIView.setAnimationsEnabled(true) }
+            // Grow the closet page out of this button (see the .overlay below).
+            withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+                showsCloset = true
+            }
         } label: {
             AppIcon(
                 glyph: .tshirt,
@@ -1596,43 +1583,6 @@ struct FavoritesSheetView: View {
         }
         .padding(LayoutMetrics.small)
         .appCard(cornerRadius: 20, shadowRadius: 0, shadowY: 0)
-    }
-}
-
-/// Hosts the closet inside a transparent fullScreenCover and grows it out of /
-/// shrinks it back into the closet button using the growFromPoint transition.
-/// The cover's own slide is suppressed (UIView.setAnimationsEnabled around the
-/// present/dismiss), so this internal animation is the only motion. Because it's
-/// a TRANSITION (not a persistent scaleEffect), the page carries no scale at rest
-/// — so it still fills the screen edge-to-edge once settled.
-private struct ClosetGrowCover: View {
-    let userId: UUID
-    let onClose: () -> Void
-    @State private var shown = false
-
-    var body: some View {
-        ZStack {
-            if shown {
-                WardrobeView(userId: userId, onClose: { collapse() })
-                    .background(AppPalette.groupedBackground)
-                    .ignoresSafeArea()
-                    .transition(.growFromPoint(UnitPoint(x: 0.86, y: 0.9)))
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear {
-            // Defer one tick so the (animation-suppressed) present settles before
-            // the grow runs — otherwise the spring can be swallowed.
-            DispatchQueue.main.async {
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) { shown = true }
-            }
-        }
-    }
-
-    private func collapse() {
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) { shown = false }
-        // Let the shrink-back finish, then drop the (now empty) cover.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.42) { onClose() }
     }
 }
 
