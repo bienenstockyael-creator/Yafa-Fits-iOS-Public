@@ -35,6 +35,9 @@ struct WardrobeView: View {
     @State private var statusFilter: WardrobeStatus? = nil      // nil == All
     @State private var searchText: String = ""
     @State private var selectedItem: WardrobeDisplayItem?
+    /// Bumped on every open so each lightbox gets a fresh identity (and fresh
+    /// @State) — prevents a reused instance from opening with stale offset state.
+    @State private var lightboxOpenToken = 0
     /// Global frames of the grid tiles + the anchor of the last-tapped one, so
     /// the lightbox grows out of (and shrinks back into) the product's spot.
     @State private var cellFrames: [String: CGRect] = [:]
@@ -179,7 +182,7 @@ struct WardrobeView: View {
                     // while one is closing) must build a FRESH lightbox, or the
                     // reused @State form keeps the previous item's name/category
                     // while the image shows the new one (the mismatched card).
-                    .id(item.id)
+                    .id("\(item.id)-\(lightboxOpenToken)")
                     // Start small and tight at the tile so the card visibly
                     // CLUSTERS on the product and grows outward from there.
                     .transition(.scale(scale: 0.12, anchor: tapAnchor).combined(with: .opacity))
@@ -287,6 +290,11 @@ struct WardrobeView: View {
                                 guard !isPinching else { return }
                                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                                 tapAnchor = anchorPoint(for: item.id)
+                                // Bump the open token so every open builds a FRESH
+                                // lightbox — a rapid open/close/reopen can otherwise
+                                // reuse the instance with stale drag/offset state
+                                // (the card opening half-shifted-down).
+                                lightboxOpenToken += 1
                                 // iOS app-launch feel: springs up from the tile and
                                 // settles softly — snappy and light, not rubbery.
                                 withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
@@ -1065,7 +1073,9 @@ private struct ProductLightbox: View {
     ///   • full + pinned to top → pulling down rubber-bands; a committed pull or
     ///     fast flick dismisses, otherwise it springs back
     private var sheetGesture: some Gesture {
-        DragGesture(minimumDistance: 10, coordinateSpace: .local)
+        // Larger minimum distance so this gesture doesn't arbitrate with (and
+        // stutter) every small scroll movement.
+        DragGesture(minimumDistance: 24, coordinateSpace: .local)
             .onChanged { v in
                 // Latch the full-vs-card intent at the start (a card drag only
                 // ever expands, never also dismisses).
@@ -1083,7 +1093,9 @@ private struct ProductLightbox: View {
                 if atTop, v.translation.height > 0 {
                     if dragRefAtTop == nil { dragRefAtTop = v.translation.height }
                     let past = v.translation.height - (dragRefAtTop ?? 0)
-                    sheetDrag = max(0, past) * 0.7
+                    // Small dead zone before the sheet starts following, so a
+                    // top-edge bounce while scrolling doesn't twitch the card.
+                    sheetDrag = max(0, past - 8) * 0.6
                 } else {
                     dragRefAtTop = nil
                     if sheetDrag != 0 { sheetDrag = 0 }
