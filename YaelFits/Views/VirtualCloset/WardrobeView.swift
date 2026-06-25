@@ -211,7 +211,7 @@ struct WardrobeView: View {
             HStack {
                 Button { if let onClose { onClose() } else { dismiss() } } label: {
                     Text("Close")
-                        .font(.system(size: 13))
+                        .font(.system(size: 17))
                         .foregroundStyle(AppPalette.textMuted)
                         .contentShape(Rectangle())
                 }
@@ -1147,11 +1147,11 @@ private struct ProductLightbox: View {
     private var pinnedControls: some View {
         let topInset = (isFull ? insetTop : 0)
         return HStack(spacing: 0) {
-            // Same text-button styling as Close/Cancel + Done/Save across the
-            // app's other sheets (size 13, muted close, semibold primary).
+            // Match the iOS nav-bar button size used across the app's sheets:
+            // 17pt, muted regular Close + semibold primary Save.
             Button { onClose() } label: {
                 Text("Close")
-                    .font(.system(size: 13))
+                    .font(.system(size: 17))
                     .foregroundStyle(AppPalette.textMuted)
                     .frame(height: 44)
                     .contentShape(Rectangle())
@@ -1160,7 +1160,7 @@ private struct ProductLightbox: View {
             Spacer()
             Button { Task { await save() } } label: {
                 Text("Save")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(canSave ? AppPalette.textPrimary : AppPalette.textFaint)
                     .frame(height: 44)
                     .contentShape(Rectangle())
