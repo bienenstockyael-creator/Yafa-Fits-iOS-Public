@@ -27,6 +27,17 @@ struct WardrobeView: View {
     @State private var libraryItems: [WardrobeItem] = []
     @State private var isLoading = true
     @State private var loadError: String?
+
+    init(userId: UUID, onClose: (() -> Void)? = nil) {
+        self.userId = userId
+        self.onClose = onClose
+        // Seed from the cache so a reopen shows the last closet with no spinner;
+        // load() still refreshes from the network in the background.
+        if let cached = ClosetCache.items[userId], !cached.isEmpty {
+            _libraryItems = State(initialValue: cached)
+            _isLoading = State(initialValue: false)
+        }
+    }
     /// Re-fetches the closet while any thumbnail is still generating, so
     /// the sparkle overlay clears itself once FAL swaps in the cut-out.
     @State private var pollTask: Task<Void, Never>?
@@ -712,6 +723,7 @@ struct WardrobeView: View {
             let items = try await WardrobeService.fetchCloset(userId: userId)
             await MainActor.run {
                 libraryItems = items
+                ClosetCache.items[userId] = items
                 isLoading = false
                 schedulePollIfPolishing()
             }
@@ -769,6 +781,13 @@ struct WardrobeDisplayItem: Identifiable, Hashable {
         guard !normalized.isEmpty else { return nil }
         return AppConfig.siteBaseURL.appendingPathComponent(normalized)
     }
+}
+
+/// Last-known closet rows per user, so reopening the closet (a fullScreenCover
+/// that re-mounts WardrobeView each time) shows the products instantly instead
+/// of a spinner while the network re-fetch runs in the background.
+enum ClosetCache {
+    @MainActor static var items: [UUID: [WardrobeItem]] = [:]
 }
 
 // MARK: - Cell
@@ -1335,7 +1354,13 @@ private struct ProductLightbox: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                         }
                     }
+                    // Re-inset the items so the first aligns with the content;
+                    // combined with the negative padding below, the carousel
+                    // bleeds to the screen edges instead of clipping early.
+                    .padding(.horizontal, LayoutMetrics.screenPadding)
                 }
+                // Cancel the page's horizontal padding so the scroll is full-width.
+                .padding(.horizontal, -LayoutMetrics.screenPadding)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
