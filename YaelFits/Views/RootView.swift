@@ -1,5 +1,6 @@
 import SwiftUI
 import Lottie
+import UIKit
 
 struct RootView: View {
     @Environment(OutfitStore.self) private var store
@@ -1612,6 +1613,72 @@ extension AnyTransition {
             identity: GrowFromPointModifier(scale: 1, corner: 0, opacity: 1, anchor: anchor)
         )
     }
+}
+
+/// App-wide "tap outside the keyboard to dismiss it" behaviour. Installs a tap
+/// recognizer on every window (and any new window that becomes key, e.g. sheets)
+/// so the behaviour is identical across the whole app without per-view wiring.
+///
+/// `cancelsTouchesInView = false` means it NEVER intercepts a touch — buttons,
+/// scrolls and taps all behave exactly as before; this only *additionally*
+/// resigns first responder. The delegate skips taps on controls / text inputs so
+/// tapping a field still focuses it.
+final class GlobalKeyboardDismiss: NSObject, UIGestureRecognizerDelegate {
+    static let shared = GlobalKeyboardDismiss()
+    private override init() { super.init() }
+    private var started = false
+    private let recognizerName = "globalKeyboardDismissTap"
+
+    func start() {
+        guard !started else { return }
+        started = true
+        installOnAllWindows()
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(windowBecameKey(_:)),
+            name: UIWindow.didBecomeKeyNotification, object: nil
+        )
+    }
+
+    @objc private func windowBecameKey(_ note: Notification) {
+        if let window = note.object as? UIWindow { install(on: window) }
+    }
+
+    private func installOnAllWindows() {
+        for scene in UIApplication.shared.connectedScenes {
+            guard let ws = scene as? UIWindowScene else { continue }
+            ws.windows.forEach { install(on: $0) }
+        }
+    }
+
+    private func install(on window: UIWindow) {
+        if window.gestureRecognizers?.contains(where: { $0.name == recognizerName }) == true { return }
+        let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
+        tap.name = recognizerName
+        tap.cancelsTouchesInView = false
+        tap.delegate = self
+        window.addGestureRecognizer(tap)
+    }
+
+    @objc private func handleTap() {
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
+        )
+    }
+
+    // Don't fire on taps that land on a control or text input — let them focus.
+    func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        var view = touch.view
+        while let v = view {
+            if v is UIControl || v is UITextView { return false }
+            view = v.superview
+        }
+        return true
+    }
+
+    func gestureRecognizer(
+        _ g: UIGestureRecognizer,
+        shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer
+    ) -> Bool { true }
 }
 
 #Preview {

@@ -189,6 +189,10 @@ struct YaelFitsApp: App {
             .environment(authManager)
             .environment(vibesEffectHost)
             .environment(vibesIncomingManager)
+            .onAppear {
+                // App-wide tap-outside-to-dismiss-keyboard (every window/sheet).
+                GlobalKeyboardDismiss.shared.start()
+            }
             .task(id: authManager.userId) {
                 await PushNotificationCoordinator.shared.setUserId(authManager.userId)
                 if let userId = authManager.userId {
