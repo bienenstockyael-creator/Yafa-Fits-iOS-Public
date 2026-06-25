@@ -1082,7 +1082,7 @@ struct LinkExtensionView: View {
             VStack(spacing: LayoutMetrics.large) {
             VStack(spacing: 8) {
                 Text("Link browser extension")
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(AppPalette.textStrong)
                 Text("In Chrome, open the Yafa extension and tap **Add to Yafa** on a saved item, then enter this code.")
                     .font(.system(size: 13))
@@ -1115,12 +1115,13 @@ struct LinkExtensionView: View {
             Button {
                 Task { await generate() }
             } label: {
-                Text(code == nil ? "Generate code" : "New code")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.white)
+                Text(code == nil ? "GENERATE CODE" : "NEW CODE")
+                    .font(.system(size: 12, weight: .semibold))
+                    .tracking(1.5)
+                    .foregroundStyle(AppPalette.textPrimary)
                     .frame(maxWidth: .infinity)
                     .frame(height: 50)
-                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(AppPalette.textStrong))
+                    .appCapsule(shadowRadius: 6, shadowY: 3)
             }
             .buttonStyle(SolidPressButtonStyle())
             .disabled(isLoading)

@@ -1677,10 +1677,10 @@ struct GetExtensionSheet: View {
                     .frame(width: 64, height: 64)
                     .appCircle(shadowRadius: 0, shadowY: 0)
                 Text("Save from your desktop")
-                    .font(.system(size: 21, weight: .bold))
+                    .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(AppPalette.textStrong)
                 Text("Shopping on your laptop? Add the Yafa extension to Chrome to save products as you browse — they sync straight to your closet here.")
-                    .font(.system(size: 14))
+                    .font(.system(size: 13))
                     .foregroundStyle(AppPalette.textMuted)
                     .multilineTextAlignment(.center)
             }
@@ -1704,16 +1704,17 @@ struct GetExtensionSheet: View {
                 // computer, rather than opening a store page they can't install
                 // from here.
                 ShareLink(item: storeURL) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: 7) {
                         Image(systemName: "square.and.arrow.up")
-                            .font(.system(size: 15, weight: .semibold))
-                        Text("Send the link to your computer")
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.system(size: 12, weight: .semibold))
+                        Text("SEND LINK TO YOUR COMPUTER")
+                            .font(.system(size: 12, weight: .semibold))
+                            .tracking(1.5)
                     }
-                    .foregroundStyle(.white)
+                    .foregroundStyle(AppPalette.textPrimary)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 52)
-                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(AppPalette.textStrong))
+                    .frame(height: 50)
+                    .appCapsule(shadowRadius: 6, shadowY: 3)
                 }
                 .buttonStyle(SolidPressButtonStyle())
             } else {
