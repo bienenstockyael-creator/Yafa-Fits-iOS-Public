@@ -520,12 +520,24 @@ enum PlaceholderBust {
 
     // MARK: Gender guess
 
+    /// Explicit per-handle overrides for usernames that aren't real names and
+    /// would otherwise fall to the coin-flip (or guess wrong). Keyed by the
+    /// lowercased username.
+    private static let handleOverrides: [String: Gender] = [
+        "jaytel": .male,
+        "cobo": .male,
+    ]
+
     private static func guessGender(_ profile: Profile) -> Gender {
+        // 1. Hand-set overrides for specific handles.
+        if let handle = profile.username?.lowercased(), let g = handleOverrides[handle] {
+            return g
+        }
+        // 2. Best-guess from a real first name (display name, then username).
         for raw in [profile.displayName, profile.username].compactMap({ $0 }) {
             if let g = gender(forName: raw) { return g }
         }
-        // No name match → stable coin-flip so it's consistent per user but
-        // roughly balanced across the population.
+        // 3. No match → stable coin-flip: consistent per user, roughly balanced.
         return (fnv1a(profile.id.uuidString) & 1 == 0) ? .male : .female
     }
 
