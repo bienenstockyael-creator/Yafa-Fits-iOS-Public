@@ -188,9 +188,15 @@ struct VibesLeaderboardSheet: View {
             .toolbarColorScheme(.light, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Close") { dismiss() }
-                        .font(.system(size: 13))
-                        .foregroundStyle(AppPalette.textMuted)
+                    Button {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        dismiss()
+                    } label: {
+                        AppIcon(glyph: .xmark, size: 12, color: AppPalette.iconPrimary)
+                            .frame(width: 36, height: 36)
+                            .appCircle()
+                    }
+                    .buttonStyle(SolidPressButtonStyle())
                 }
             }
             .task { await loadAll() }
