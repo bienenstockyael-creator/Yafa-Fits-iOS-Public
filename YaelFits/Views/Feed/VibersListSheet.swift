@@ -252,6 +252,18 @@ struct VibesLeaderboardSheet: View {
                 .padding(.bottom, 80)
             }
             .scrollIndicators(.hidden)
+            // Top fade so rows dissolve under the header instead of hard-cutting
+            // at its edge as they scroll up — same treatment as the closet grid.
+            // Taller than the closet's (busts are big) for a gentler dissolve.
+            .overlay(alignment: .top) {
+                LinearGradient(
+                    colors: [AppPalette.groupedBackground, AppPalette.groupedBackground.opacity(0)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 48)
+                .allowsHitTesting(false)
+            }
         }
     }
 
@@ -317,19 +329,6 @@ private struct VibesLeaderboardBust: View {
         let handle = profile.username.map { "@\($0)" } ?? profile.handle
         ZStack {
             bustImage
-                // Dissolve the hard top edge of the crop / cut-out into the
-                // background — a gradual fade like the closet grid's top edge,
-                // so the bust reads as fading in rather than being clipped.
-                .mask(
-                    LinearGradient(
-                        stops: [
-                            .init(color: .clear, location: 0),
-                            .init(color: .black, location: 0.18)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
             HighlighterUsername(
                 text: handle,
                 color: accent,
