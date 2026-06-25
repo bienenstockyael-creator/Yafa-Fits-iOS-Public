@@ -558,13 +558,13 @@ struct WardrobeView: View {
                         }
                         .id(cat.rawValue)
                     }
-                    if hasWishlistItems {
-                        chip(title: "Wishlist", isOn: statusFilter == .wishlist) {
-                            categoryFilter = nil
-                            statusFilter = (statusFilter == .wishlist) ? nil : .wishlist
-                        }
-                        .id("wishlist")
+                    // Always present (even on an empty closet) so people know
+                    // the wishlist exists and where saved items will land.
+                    chip(title: "Wishlist", isOn: statusFilter == .wishlist) {
+                        categoryFilter = nil
+                        statusFilter = (statusFilter == .wishlist) ? nil : .wishlist
                     }
+                    .id("wishlist")
                 }
                 .padding(.horizontal, LayoutMetrics.screenPadding)
             }
@@ -615,7 +615,7 @@ struct WardrobeView: View {
     private var filterTabs: [FilterTab] {
         var tabs: [FilterTab] = [.all]
         tabs += availableCategories.map(FilterTab.category)
-        if hasWishlistItems { tabs.append(.wishlist) }
+        tabs.append(.wishlist)
         return tabs
     }
 
@@ -830,10 +830,6 @@ struct WardrobeView: View {
         guard !allItems.isEmpty else { return WardrobeCategory.displayOrder }
         let present = Set(allItems.map(\.category))
         return WardrobeCategory.displayOrder.filter { present.contains($0) }
-    }
-
-    private var hasWishlistItems: Bool {
-        allItems.contains { $0.status == .wishlist }
     }
 
     /// Aggressive normalization shared by dedup + search: lowercase,

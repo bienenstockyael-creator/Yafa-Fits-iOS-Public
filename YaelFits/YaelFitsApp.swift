@@ -176,6 +176,13 @@ struct YaelFitsApp: App {
             // the burst + wave + toast layers underneath.
             VibesFirstUseModal()
 
+            // One-time "what's new" explainer for the save-products features
+            // (Safari share + Chrome extension). Shown once per device, only to
+            // signed-in users who are past onboarding.
+            WhatsNewModal(active: authManager.isAuthenticated
+                && resolvedForUserId == authManager.userId
+                && !showOnboarding)
+
             // NOTE: The profile credit-chip InfoExplainerModal is
             // NOT mounted here at root — it must be inside the
             // Settings sheet's view hierarchy to render above the
@@ -262,5 +269,155 @@ struct YaelFitsApp: App {
             _ = LottieAnimation.named("DiscoBall")
             _ = LottieAnimation.named("disco-ball-sparkles")
         }
+    }
+}
+
+// MARK: - What's New (save-products) modal
+
+/// One-time announcement of the two ways to save products into the closet —
+/// the iOS Safari Share extension and the desktop Chrome extension. Shown once
+/// per device (UserDefaults-gated), the first time a signed-in, past-onboarding
+/// user re-enters the app after this update.
+struct WhatsNewModal: View {
+    /// Owner gates WHEN it's allowed to appear (authed + not onboarding).
+    let active: Bool
+
+    @State private var isVisible = false
+    @State private var showGetExtension = false
+
+    private let seenKey = "whatsnew_save_features_seen_v1"
+
+    var body: some View {
+        ZStack {
+            if isVisible {
+                Color.black.opacity(0.45)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture { dismiss() }
+                    .transition(.opacity)
+
+                card
+                    .transition(.scale(scale: 0.92, anchor: .center).combined(with: .opacity))
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea()
+        .animation(.spring(response: 0.42, dampingFraction: 0.82), value: isVisible)
+        .onAppear { maybeShow() }
+        .onChange(of: active) { _, _ in maybeShow() }
+        .sheet(isPresented: $showGetExtension) {
+            GetExtensionSheet()
+                .presentationDragIndicator(.visible)
+                .roundedSheetBackground()
+        }
+    }
+
+    private var card: some View {
+        VStack(spacing: LayoutMetrics.medium) {
+            Image(systemName: "bag.badge.plus")
+                .font(.system(size: 23, weight: .semibold))
+                .foregroundStyle(AppPalette.textStrong)
+                .frame(width: 56, height: 56)
+                .appCircle(shadowRadius: 0, shadowY: 0)
+
+            VStack(spacing: 6) {
+                Text("Save products as you shop")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(AppPalette.textStrong)
+                    .multilineTextAlignment(.center)
+                Text("Add anything you love straight to your closet — from your phone or your computer.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(AppPalette.textMuted)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            VStack(spacing: 14) {
+                infoRow(
+                    icon: "square.and.arrow.up",
+                    title: "On your phone",
+                    body: "In Safari, tap Share → Yafa to save any product to your wishlist."
+                )
+                infoRow(
+                    icon: "puzzlepiece.fill",
+                    title: "On your computer",
+                    body: "Add the Yafa Chrome extension to save while you browse."
+                )
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button {
+                markSeen()
+                withAnimation { isVisible = false }
+                showGetExtension = true
+            } label: {
+                Text("GET THE CHROME EXTENSION")
+                    .font(.system(size: 12, weight: .semibold))
+                    .tracking(1.5)
+                    .foregroundStyle(AppPalette.textPrimary)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 46)
+                    .appCapsule(shadowRadius: 0, shadowY: 0)
+            }
+            .buttonStyle(SolidPressButtonStyle())
+            .padding(.top, LayoutMetrics.xSmall)
+
+            Button(action: dismiss) {
+                Text("GOT IT")
+                    .font(.system(size: 12, weight: .semibold))
+                    .tracking(1.5)
+                    .foregroundStyle(AppPalette.textFaint)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 30)
+            }
+            .buttonStyle(SolidPressButtonStyle())
+        }
+        .padding(.horizontal, LayoutMetrics.large)
+        .padding(.vertical, LayoutMetrics.large)
+        .appCard(cornerRadius: 24, shadowRadius: 28, shadowY: 12)
+        .padding(.horizontal, LayoutMetrics.medium)
+    }
+
+    private func infoRow(icon: String, title: String, body: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(AppPalette.textStrong)
+                .frame(width: 30, height: 30)
+                .background(Circle().fill(AppPalette.cardFill))
+                .overlay(Circle().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppPalette.textStrong)
+                Text(body)
+                    .font(.system(size: 12))
+                    .foregroundStyle(AppPalette.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func maybeShow() {
+        guard active, !isVisible,
+              !UserDefaults.standard.bool(forKey: seenKey)
+        else { return }
+        Task { @MainActor in
+            // Brief delay so it doesn't collide with launch / onboarding hand-off.
+            try? await Task.sleep(for: .seconds(0.7))
+            guard active, !UserDefaults.standard.bool(forKey: seenKey) else { return }
+            markSeen()
+            withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) { isVisible = true }
+        }
+    }
+
+    private func dismiss() {
+        markSeen()
+        withAnimation { isVisible = false }
+    }
+
+    private func markSeen() {
+        UserDefaults.standard.set(true, forKey: seenKey)
     }
 }
