@@ -661,13 +661,17 @@ struct WardrobeView: View {
 
     private var filteredItems: [WardrobeDisplayItem] {
         let query = Self.nameKey(searchText)
+        // A search spans the WHOLE closet — it ignores the selected category /
+        // status filter so you find anything, not just within the current tab.
+        if !query.isEmpty {
+            return allItems.filter { item in
+                let haystack = Self.nameKey(item.name) + " " + (item.brand.map(Self.nameKey) ?? "")
+                return haystack.contains(query)
+            }
+        }
         return allItems.filter { item in
             if let categoryFilter, item.category != categoryFilter { return false }
             if let statusFilter, item.status != statusFilter { return false }
-            if !query.isEmpty {
-                let haystack = Self.nameKey(item.name) + " " + (item.brand.map(Self.nameKey) ?? "")
-                if !haystack.contains(query) { return false }
-            }
             return true
         }
     }
@@ -927,10 +931,11 @@ private struct ProductLightbox: View {
     /// Latches whether the in-progress drag began in full-screen mode, so a
     /// single card-mode drag can only expand (never also dismiss).
     @State private var dragStartFull: Bool?
-    /// Latches whether the drag began with the content pinned to the top. Only a
-    /// pull-down that STARTED at the top may move/close the sheet — a drag that
-    /// started mid-scroll just scrolls the content back, never dragging the sheet.
-    @State private var dragStartedAtTop = false
+    /// Translation captured the moment the content reaches the top mid-drag, so
+    /// the sheet only moves by the OVERSCROLL past the top — a continuous pull
+    /// scrolls to the top and then keeps going into a close, while a drag that
+    /// never reaches the top leaves the sheet put.
+    @State private var dragRefAtTop: CGFloat?
     /// Captured ONCE on appear so the layout is stable — reading window insets
     /// every render jittered the grow (scene ordering isn't deterministic).
     @State private var insetTop: CGFloat = 47
@@ -1062,27 +1067,33 @@ private struct ProductLightbox: View {
     private var sheetGesture: some Gesture {
         DragGesture(minimumDistance: 10, coordinateSpace: .local)
             .onChanged { v in
-                // Latch intent to the state at the START of the drag: full vs
-                // card (so a card drag only expands, never also dismisses) AND
-                // whether we began pinned to the top (so a mid-scroll drag never
-                // drags the sheet — it just scrolls back).
-                if dragStartFull == nil {
-                    dragStartFull = isFull
-                    dragStartedAtTop = atTop
-                }
+                // Latch the full-vs-card intent at the start (a card drag only
+                // ever expands, never also dismisses).
+                if dragStartFull == nil { dragStartFull = isFull }
                 let startedFull = dragStartFull ?? isFull
 
-                if !startedFull {
+                guard startedFull else {
                     if !isFull, abs(v.translation.height) > 10 { setExpanded(true) }
-                } else if dragStartedAtTop, atTop, v.translation.height > 0 {
-                    sheetDrag = v.translation.height * 0.7
+                    return
+                }
+                // Full mode: the sheet only follows the OVERSCROLL past the top.
+                // While there's still content to scroll (or dragging up), it stays
+                // put; once pinned to the top, capture the reference translation
+                // and move only by how much further you pull.
+                if atTop, v.translation.height > 0 {
+                    if dragRefAtTop == nil { dragRefAtTop = v.translation.height }
+                    let past = v.translation.height - (dragRefAtTop ?? 0)
+                    sheetDrag = max(0, past) * 0.7
+                } else {
+                    dragRefAtTop = nil
+                    if sheetDrag != 0 { sheetDrag = 0 }
                 }
             }
             .onEnded { v in
                 let startedFull = dragStartFull ?? isFull
-                let startedAtTop = dragStartedAtTop
+                let ref = dragRefAtTop
                 dragStartFull = nil
-                dragStartedAtTop = false
+                dragRefAtTop = nil
 
                 // A card-started drag only expands; never dismisses here.
                 guard startedFull else {
@@ -1091,11 +1102,13 @@ private struct ProductLightbox: View {
                     }
                     return
                 }
-                // Only a pull-down that began (and stayed) at the top dismisses.
-                if startedAtTop, atTop {
-                    let dy = v.translation.height
-                    let flick = v.predictedEndTranslation.height
-                    if dy > 120 || flick > 320 {
+                // Dismiss on a committed OVERSCROLL past the top (or a fast flick
+                // there) — measured from where the content ran out, so a continuous
+                // scroll that reaches the top and keeps going closes.
+                if atTop, let ref {
+                    let past = v.translation.height - ref
+                    let flickPast = v.predictedEndTranslation.height - ref
+                    if past > 120 || flickPast > 320 {
                         onClose()
                         return
                     }
@@ -1122,27 +1135,28 @@ private struct ProductLightbox: View {
     private var pinnedControls: some View {
         let topInset = (isFull ? insetTop : 0)
         return HStack(spacing: 0) {
+            // Same text-button styling as Close/Cancel + Done/Save across the
+            // app's other sheets (size 13, muted close, semibold primary).
             Button { onClose() } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 15, weight: .semibold))
+                Text("Close")
+                    .font(.system(size: 13))
                     .foregroundStyle(AppPalette.textMuted)
-                    .frame(width: 44, height: 44)
+                    .frame(height: 44)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             Spacer()
             Button { Task { await save() } } label: {
                 Text("Save")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(canSave ? AppPalette.textStrong : AppPalette.textFaint)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(canSave ? AppPalette.textPrimary : AppPalette.textFaint)
                     .frame(height: 44)
-                    .padding(.horizontal, 14)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .disabled(!canSave)
         }
-        .padding(.horizontal, LayoutMetrics.screenPadding - 14)
+        .padding(.horizontal, LayoutMetrics.screenPadding)
         .padding(.top, topInset + 2)
         .frame(maxWidth: .infinity, alignment: .top)
         .background(
