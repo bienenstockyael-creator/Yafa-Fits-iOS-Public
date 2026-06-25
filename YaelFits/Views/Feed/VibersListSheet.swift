@@ -155,53 +155,17 @@ struct VibesLeaderboardSheet: View {
     @State private var selectedUserId: IdentifiableUUID?
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                // Centered small all-caps tab labels, underline on the selected.
-                HStack(spacing: LayoutMetrics.small) {
-                    tab("THIS WEEK", value: .thisWeek)
-                    tab("ALL TIME", value: .allTime)
-                }
-                .frame(maxWidth: .infinity)
-                // Drives the underline slide for BOTH a tap and a page swipe.
-                .animation(.spring(response: 0.34, dampingFraction: 0.82), value: window)
-                .padding(.top, LayoutMetrics.small)
-                .padding(.bottom, LayoutMetrics.small)
-
-                // Two swipeable pages, in sync with the tabs above. The top
-                // fade is a SIBLING layer on top of the pages (not inside the
-                // ScrollView, where the TabView's clipping swallowed it) so it's
-                // reliably anchored just under the tabs and dissolves rows as
-                // they scroll up. No bottom fade — the list just clips at the
-                // device edge.
-                ZStack(alignment: .top) {
-                    TabView(selection: $window) {
-                        page(entries: weekEntries, loading: weekLoading)
-                            .tag(VibeWindow.thisWeek)
-                        page(entries: allTimeEntries, loading: allTimeLoading)
-                            .tag(VibeWindow.allTime)
-                    }
-                    .tabViewStyle(.page(indexDisplayMode: .never))
-
-                    LinearGradient(
-                        colors: [AppPalette.groupedBackground, AppPalette.groupedBackground.opacity(0)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .frame(height: 92)
-                    .allowsHitTesting(false)
-                }
-                // Bleed the paging area through the bottom safe area so the list
-                // runs to — and clips at — the physical bottom of the device,
-                // with no background strip above the home indicator.
-                .ignoresSafeArea(.container, edges: .bottom)
-            }
-            .background(AppPalette.groupedBackground.ignoresSafeArea())
-            .navigationTitle("Best Dressed")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarColorScheme(.light, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+        VStack(spacing: 0) {
+            // Custom header (no nav bar): centered title + the app-standard
+            // circular X on the left. A nav-bar toolbar item draws its OWN
+            // circular glass background on iOS 26, which doubled up with our
+            // `.appCircle()`; a plain header keeps a single circle like every
+            // other X in the app.
+            ZStack {
+                Text("Best Dressed")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(AppPalette.textStrong)
+                HStack {
                     Button {
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         dismiss()
@@ -211,13 +175,57 @@ struct VibesLeaderboardSheet: View {
                             .appCircle()
                     }
                     .buttonStyle(SolidPressButtonStyle())
+                    Spacer()
                 }
             }
-            .task { await loadAll() }
-            .fullScreenCover(item: $selectedUserId) { wrapper in
-                UserProfileView(userId: wrapper.id, onDismiss: { selectedUserId = nil })
-                    .environment(store)
+            .padding(.horizontal, LayoutMetrics.screenPadding)
+            .padding(.top, LayoutMetrics.medium)
+            .padding(.bottom, LayoutMetrics.xSmall)
+
+            // Centered small all-caps tab labels, underline on the selected.
+            HStack(spacing: LayoutMetrics.small) {
+                tab("THIS WEEK", value: .thisWeek)
+                tab("ALL TIME", value: .allTime)
             }
+            .frame(maxWidth: .infinity)
+            // Drives the underline slide for BOTH a tap and a page swipe.
+            .animation(.spring(response: 0.34, dampingFraction: 0.82), value: window)
+            .padding(.top, LayoutMetrics.small)
+            .padding(.bottom, LayoutMetrics.small)
+
+            // Two swipeable pages, in sync with the tabs above. The top
+            // fade is a SIBLING layer on top of the pages (not inside the
+            // ScrollView, where the TabView's clipping swallowed it) so it's
+            // reliably anchored just under the tabs and dissolves rows as
+            // they scroll up. No bottom fade — the list just clips at the
+            // device edge.
+            ZStack(alignment: .top) {
+                TabView(selection: $window) {
+                    page(entries: weekEntries, loading: weekLoading)
+                        .tag(VibeWindow.thisWeek)
+                    page(entries: allTimeEntries, loading: allTimeLoading)
+                        .tag(VibeWindow.allTime)
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+
+                LinearGradient(
+                    colors: [AppPalette.groupedBackground, AppPalette.groupedBackground.opacity(0)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 92)
+                .allowsHitTesting(false)
+            }
+            // Bleed the paging area through the bottom safe area so the list
+            // runs to — and clips at — the physical bottom of the device,
+            // with no background strip above the home indicator.
+            .ignoresSafeArea(.container, edges: .bottom)
+        }
+        .background(AppPalette.groupedBackground.ignoresSafeArea())
+        .task { await loadAll() }
+        .fullScreenCover(item: $selectedUserId) { wrapper in
+            UserProfileView(userId: wrapper.id, onDismiss: { selectedUserId = nil })
+                .environment(store)
         }
     }
 
