@@ -183,10 +183,6 @@ class AuthManager {
             }
         }
 
-        await MainActor.run {
-            self.session = session
-            self.currentNonce = nil
-        }
         // Ensure profile row exists, pre-populate name from Apple if provided.
         // Email is passed through so the auto-username fallback works even
         // when Apple sends no name (which is the case for every sign-in
@@ -199,6 +195,23 @@ class AuthManager {
             displayName: displayName.isEmpty ? nil : displayName,
             email: session.user.email
         )
+        // Apple sends the full name ONLY on the very first authorization, and
+        // `ensureProfile` no-ops when the new-user DB trigger already created
+        // the row — so the name it just handed us would be lost. Persist it
+        // explicitly here, BEFORE publishing the session, so onboarding can
+        // skip the name step using the name the Authentication Services
+        // framework already provided rather than asking for it again
+        // (App Store Guideline 4.0.0 — Sign in with Apple).
+        if !displayName.isEmpty {
+            try? await SocialService.updateDisplayName(
+                userId: session.user.id,
+                displayName: displayName
+            )
+        }
+        await MainActor.run {
+            self.session = session
+            self.currentNonce = nil
+        }
     }
 
     // MARK: - Sign Out

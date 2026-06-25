@@ -711,6 +711,13 @@ struct ProfileView: View {
             settingsRow("PRIVACY POLICY") {
                 if let url = URL(string: AppConfig.privacyPolicyURL) { openURL(url) }
             }
+            // Required Apple Weather attribution — outfits are tagged with the
+            // current weather via WeatherKit, so we surface the Apple Weather
+            // trademark and a link to the other-data-sources page (App Store
+            // Guideline 5.2.5 / WeatherKit attribution requirements).
+            settingsRow("WEATHER DATA BY \u{F8FF} WEATHER") {
+                if let url = URL(string: AppConfig.weatherAttributionURL) { openURL(url) }
+            }
         }
     }
 

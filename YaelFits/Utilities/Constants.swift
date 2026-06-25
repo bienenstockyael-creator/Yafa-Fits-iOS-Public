@@ -32,6 +32,9 @@ enum AppConfig {
     /// Connect.
     static let termsOfServiceURL = "https://yafafits.com/terms"
     static let privacyPolicyURL = "https://yafafits.com/privacy"
+    /// Apple Weather "other data sources" page. Required attribution link for
+    /// apps that use WeatherKit (we tag outfits with the current weather).
+    static let weatherAttributionURL = "https://weatherkit.apple.com/legal-attribution.html"
     static let remoteBaseURL = siteBaseURL.appendingPathComponent("outfits", isDirectory: true)
     static let outfitsDataURL = siteBaseURL.appendingPathComponent("data/outfits.json")
     static let publicFeedDataURL = siteBaseURL.appendingPathComponent("data/public-feed.json")
