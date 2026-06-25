@@ -210,10 +210,9 @@ struct WardrobeView: View {
                 .foregroundStyle(AppPalette.textStrong)
             HStack {
                 Button { if let onClose { onClose() } else { dismiss() } } label: {
-                    Text("Close")
-                        .font(.system(size: 17))
-                        .foregroundStyle(AppPalette.textMuted)
-                        .contentShape(Rectangle())
+                    AppIcon(glyph: .xmark, size: 14, color: AppPalette.iconPrimary)
+                        .frame(width: 36, height: 36)
+                        .appCircle()
                 }
                 .buttonStyle(.plain)
                 Spacer()
@@ -1045,10 +1044,10 @@ private struct ProductLightbox: View {
                 deleteButton
             }
             .padding(.horizontal, LayoutMetrics.screenPadding)
-            // Top: clear the island (full) + the pinned X/Save row. Bottom: clear
-            // the home indicator (full) — as SCROLLABLE padding so the last row
-            // reaches the very edge instead of clipping above it.
-            .padding(.top, (isFull ? insetTop : 0) + 40)
+            // Top: clear the island (full) + the floating X/Save pills. Bottom:
+            // clear the home indicator (full) — as SCROLLABLE padding so the last
+            // row reaches the very edge instead of clipping above it.
+            .padding(.top, (isFull ? insetTop : 0) + 52)
             .padding(.bottom, (isFull ? insetBottom : 0) + LayoutMetrics.large)
             // Tap anywhere on the page (but not on a field/control) to dismiss the
             // keyboard. Text fields consume their own taps, so they still focus.
@@ -1147,39 +1146,29 @@ private struct ProductLightbox: View {
     private var pinnedControls: some View {
         let topInset = (isFull ? insetTop : 0)
         return HStack(spacing: 0) {
-            // Match the iOS nav-bar button size used across the app's sheets:
-            // 17pt, muted regular Close + semibold primary Save.
+            // Float the same way as the app's other controls: an X circle button
+            // and a white pill (fill + thin stroke + shadow) for Save.
             Button { onClose() } label: {
-                Text("Close")
-                    .font(.system(size: 17))
-                    .foregroundStyle(AppPalette.textMuted)
-                    .frame(height: 44)
-                    .contentShape(Rectangle())
+                AppIcon(glyph: .xmark, size: 14, color: AppPalette.iconPrimary)
+                    .frame(width: 36, height: 36)
+                    .appCircle()
             }
             .buttonStyle(.plain)
             Spacer()
             Button { Task { await save() } } label: {
                 Text("Save")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(canSave ? AppPalette.textPrimary : AppPalette.textFaint)
-                    .frame(height: 44)
-                    .contentShape(Rectangle())
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(canSave ? AppPalette.textStrong : AppPalette.textFaint)
+                    .padding(.horizontal, 18)
+                    .frame(height: 36)
+                    .appCapsule()
             }
             .buttonStyle(.plain)
             .disabled(!canSave)
         }
         .padding(.horizontal, LayoutMetrics.screenPadding)
-        .padding(.top, topInset + 2)
+        .padding(.top, topInset + 6)
         .frame(maxWidth: .infinity, alignment: .top)
-        .background(
-            LinearGradient(
-                colors: [AppPalette.groupedBackground, AppPalette.groupedBackground.opacity(0)],
-                startPoint: .top, endPoint: .bottom
-            )
-            .frame(height: topInset + 64)
-            .frame(maxHeight: .infinity, alignment: .top)
-            .allowsHitTesting(false)
-        )
     }
 
     /// The product image at the top of the lightbox card.
