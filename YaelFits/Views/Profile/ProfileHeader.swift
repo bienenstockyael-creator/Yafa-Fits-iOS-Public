@@ -20,6 +20,7 @@ struct ProfileHeader: View {
     @State private var pendingCropImage: IdentifiableImage?
     @State private var followerIds: [UUID] = []
     @State private var showFollowers = false
+    @State private var showVibesLeaderboard = false
     @State private var vibesReceived: Int = 0
     /// Drives presentation of the photo picker. Replaces the
     /// previous "PhotosPicker wraps the avatar" pattern so the
@@ -227,6 +228,12 @@ struct ProfileHeader: View {
         }
         .sheet(isPresented: $showFollowers) {
             FollowListSheet(title: "Followers", userIds: followerIds)
+                .environment(store)
+                .presentationDragIndicator(.visible)
+                .roundedSheetBackground()
+        }
+        .sheet(isPresented: $showVibesLeaderboard) {
+            VibesLeaderboardSheet()
                 .environment(store)
                 .presentationDragIndicator(.visible)
                 .roundedSheetBackground()
@@ -548,16 +555,22 @@ struct ProfileHeader: View {
 
                 // Vibes stat gets the gradient flame icon so the
                 // static count visually matches the in-flight
-                // particle burst on the VibeButton.
-                HStack(spacing: 4) {
-                    GradientFlameIcon(size: 24, stroked: true)
-                    Text("\(vibesReceived)")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(AppPalette.textStrong)
-                    Text(vibesReceived == 1 ? "vibe" : "vibes")
-                        .font(.system(size: 14))
-                        .foregroundStyle(AppPalette.textMuted)
+                // particle burst on the VibeButton. Tap → leaderboard.
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    showVibesLeaderboard = true
+                } label: {
+                    HStack(spacing: 4) {
+                        GradientFlameIcon(size: 24, stroked: true)
+                        Text("\(vibesReceived)")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppPalette.textStrong)
+                        Text(vibesReceived == 1 ? "vibe" : "vibes")
+                            .font(.system(size: 14))
+                            .foregroundStyle(AppPalette.textMuted)
+                    }
                 }
+                .buttonStyle(SolidPressButtonStyle())
             }
         }
     }

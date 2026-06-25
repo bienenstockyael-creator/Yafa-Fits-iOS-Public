@@ -181,6 +181,64 @@ enum VibesService {
         let order = Dictionary(uniqueKeysWithValues: rows.enumerated().map { ($1.giver_id, $0) })
         return profiles.sorted { (order[$0.id] ?? .max) < (order[$1.id] ?? .max) }
     }
+
+    // MARK: - Leaderboard
+
+    /// Current ISO week in UTC, matching the `iso_week` column `give_vibe`
+    /// writes (`IYYY-"W"IW`, e.g. "2026-W25").
+    static func currentISOWeek() -> String {
+        var cal = Calendar(identifier: .iso8601)
+        cal.timeZone = TimeZone(identifier: "UTC") ?? cal.timeZone
+        let now = Date()
+        return String(
+            format: "%04d-W%02d",
+            cal.component(.yearForWeekOfYear, from: now),
+            cal.component(.weekOfYear, from: now)
+        )
+    }
+
+    /// Top users by vibes RECEIVED in the window, ranked desc. Aggregated
+    /// client-side from the vibes table — fine at this scale; move to a
+    /// server RPC if the table grows large.
+    static func leaderboard(window: VibeWindow, limit: Int = 100) async -> [VibeRankEntry] {
+        struct VibeRow: Decodable { let receiver_id: UUID }
+        do {
+            let rows: [VibeRow]
+            switch window {
+            case .thisWeek:
+                rows = try await supabase
+                    .from("vibes").select("receiver_id")
+                    .eq("iso_week", value: currentISOWeek())
+                    .execute().value
+            case .allTime:
+                rows = try await supabase
+                    .from("vibes").select("receiver_id")
+                    .execute().value
+            }
+            var counts: [UUID: Int] = [:]
+            for row in rows { counts[row.receiver_id, default: 0] += 1 }
+            let ranked = counts.sorted { $0.value > $1.value }.prefix(limit)
+            let ids = Set(ranked.map(\.key))
+            guard !ids.isEmpty else { return [] }
+            let profiles = try await SocialService.getProfiles(userIds: ids)
+            let byId = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id, $0) })
+            return ranked.compactMap { id, count in
+                byId[id].map { VibeRankEntry(profile: $0, count: count) }
+            }
+        } catch {
+            return []
+        }
+    }
+}
+
+/// Which leaderboard ranking to show.
+enum VibeWindow: Hashable { case thisWeek, allTime }
+
+/// One ranked leaderboard entry: a profile + how many vibes they received.
+struct VibeRankEntry: Identifiable {
+    let profile: Profile
+    let count: Int
+    var id: UUID { profile.id }
 }
 
 private enum VibesError: LocalizedError {

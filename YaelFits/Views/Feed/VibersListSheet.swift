@@ -136,3 +136,204 @@ struct VibersListSheet: View {
 private struct IdentifiableUUID: Identifiable {
     let id: UUID
 }
+
+// MARK: - Vibes leaderboard
+
+/// Full-height sheet ranking users by vibes RECEIVED — two swipeable pages
+/// (This week / All time) kept in sync with a segmented header. Opened from the
+/// Vibes stat on a profile.
+struct VibesLeaderboardSheet: View {
+    @Environment(OutfitStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var window: VibeWindow = .thisWeek
+    @State private var weekEntries: [VibeRankEntry] = []
+    @State private var allTimeEntries: [VibeRankEntry] = []
+    @State private var weekLoading = true
+    @State private var allTimeLoading = true
+    @State private var selectedUserId: IdentifiableUUID?
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                Picker("", selection: $window.animation(.easeInOut(duration: 0.2))) {
+                    Text("This week").tag(VibeWindow.thisWeek)
+                    Text("All time").tag(VibeWindow.allTime)
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, LayoutMetrics.screenPadding)
+                .padding(.top, LayoutMetrics.small)
+                .padding(.bottom, LayoutMetrics.xSmall)
+
+                // Two swipeable pages, in sync with the picker above.
+                TabView(selection: $window) {
+                    page(entries: weekEntries, loading: weekLoading)
+                        .tag(VibeWindow.thisWeek)
+                    page(entries: allTimeEntries, loading: allTimeLoading)
+                        .tag(VibeWindow.allTime)
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+            }
+            .background(AppPalette.groupedBackground)
+            .navigationTitle("Vibe leaderboard")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.light, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Close") { dismiss() }
+                        .font(.system(size: 13))
+                        .foregroundStyle(AppPalette.textMuted)
+                }
+            }
+            .task { await loadAll() }
+            .fullScreenCover(item: $selectedUserId) { wrapper in
+                UserProfileView(userId: wrapper.id, onDismiss: { selectedUserId = nil })
+                    .environment(store)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func page(entries: [VibeRankEntry], loading: Bool) -> some View {
+        if loading {
+            ProgressView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if entries.isEmpty {
+            VStack(spacing: LayoutMetrics.xSmall) {
+                GradientFlameIcon(size: 40, stroked: true)
+                Text("No vibes yet")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(AppPalette.textMuted)
+                Text("Once people start vibing fits, the ranking shows up here.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(AppPalette.textFaint)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, LayoutMetrics.xLarge)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            ScrollView {
+                LazyVStack(spacing: LayoutMetrics.xSmall) {
+                    ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+                        row(rank: index + 1, entry: entry)
+                    }
+                }
+                .padding(.horizontal, LayoutMetrics.screenPadding)
+                .padding(.vertical, LayoutMetrics.small)
+            }
+            .scrollIndicators(.hidden)
+        }
+    }
+
+    private func row(rank: Int, entry: VibeRankEntry) -> some View {
+        Button {
+            selectedUserId = IdentifiableUUID(id: entry.profile.id)
+        } label: {
+            HStack(spacing: LayoutMetrics.small) {
+                Text("\(rank)")
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .foregroundStyle(rank <= 3 ? AppPalette.textStrong : AppPalette.textMuted)
+                    .frame(width: 26, alignment: .center)
+
+                VibesLeaderboardBust(profile: entry.profile)
+
+                Spacer(minLength: 0)
+
+                HStack(spacing: 5) {
+                    GradientFlameIcon(size: 22, stroked: false)
+                    Text("\(entry.count)")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppPalette.textStrong)
+                }
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, LayoutMetrics.small)
+            .frame(maxWidth: .infinity)
+            .appCard(cornerRadius: 18, shadowRadius: 0, shadowY: 0)
+        }
+        .buttonStyle(SolidPressButtonStyle())
+    }
+
+    private func loadAll() async {
+        async let week = VibesService.leaderboard(window: .thisWeek)
+        async let all = VibesService.leaderboard(window: .allTime)
+        let loaded = await (week, all)
+        await MainActor.run {
+            weekEntries = loaded.0; weekLoading = false
+            allTimeEntries = loaded.1; allTimeLoading = false
+        }
+    }
+}
+
+/// Bust-style avatar for a leaderboard row: the bg-removed cut-out when the
+/// person has one, otherwise their normal photo framed into the same bust crop
+/// (filled + clipped so the head/shoulders read as a bust). The @handle rides
+/// on it as a highlighter blob, matching the bust profile-header style.
+private struct VibesLeaderboardBust: View {
+    let profile: Profile
+
+    private let bustWidth: CGFloat = 58
+    private let bustHeight: CGFloat = 62
+
+    var body: some View {
+        let accent = ProfileHeaderAccentColor.color(for: profile.headerAccentColor)
+        let handle = profile.username.map { "@\($0)" } ?? profile.handle
+        ZStack(alignment: .bottom) {
+            bustImage
+            HighlighterUsername(text: handle, color: accent, fontSize: 10)
+                .offset(y: 8)
+                .allowsHitTesting(false)
+        }
+        // Wider than the image so the @handle highlighter has room.
+        .frame(width: 104, height: bustHeight, alignment: .bottom)
+    }
+
+    @ViewBuilder
+    private var bustImage: some View {
+        if let cutout = profile.avatarCutoutUrl, let url = URL(string: cutout) {
+            // True transparent bust — fit so hair / shoulders aren't clipped.
+            AsyncImage(url: url) { phase in
+                if let image = phase.image {
+                    image.resizable().aspectRatio(contentMode: .fit)
+                } else {
+                    framedPhoto
+                }
+            }
+            .frame(width: bustWidth, height: bustHeight)
+        } else {
+            framedPhoto
+        }
+    }
+
+    // No cut-out → frame the regular photo into the bust crop.
+    private var framedPhoto: some View {
+        Group {
+            if let avatar = profile.avatarUrl, let url = URL(string: avatar) {
+                AsyncImage(url: url) { phase in
+                    if let image = phase.image {
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    } else {
+                        initialFill
+                    }
+                }
+            } else {
+                initialFill
+            }
+        }
+        .frame(width: bustWidth, height: bustHeight)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(AppPalette.cardBorder, lineWidth: 0.75)
+        )
+    }
+
+    private var initialFill: some View {
+        ZStack {
+            AppPalette.cardBorder.opacity(0.35)
+            Text(profile.initial)
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(AppPalette.textMuted)
+        }
+    }
+}
