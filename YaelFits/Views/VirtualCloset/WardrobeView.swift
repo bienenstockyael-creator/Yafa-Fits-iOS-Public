@@ -1657,7 +1657,7 @@ private final class SimultaneousGestureDelegate: NSObject, UIGestureRecognizerDe
 struct GetExtensionSheet: View {
     @Environment(\.dismiss) private var dismiss
 
-    @State private var didCopy = false
+    @State private var isPreparing = false
 
     /// Set to true once the extension is live on the Web Store.
     private let isLive = true
@@ -1704,31 +1704,35 @@ struct GetExtensionSheet: View {
                 // (AirDrop to their Mac / Messages / Copy) to get it onto their
                 // computer, rather than opening a store page they can't install
                 // from here.
-                // Copy (instant) instead of the share sheet, which has a
-                // system cold-start delay. Paste it on your computer — Universal
-                // Clipboard syncs it to a Mac, or paste into any message.
+                // Present the share sheet ourselves (not ShareLink) so the
+                // button can show a spinner while the system warms the activity
+                // sheet up — it has an unavoidable cold-start delay on first use.
                 Button {
-                    UIPasteboard.general.url = storeURL
+                    guard !isPreparing else { return }
+                    isPreparing = true
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    withAnimation(.easeInOut(duration: 0.2)) { didCopy = true }
-                    Task {
-                        try? await Task.sleep(for: .seconds(2))
-                        withAnimation(.easeInOut(duration: 0.2)) { didCopy = false }
-                    }
+                    presentShareSheet()
                 } label: {
-                    HStack(spacing: 7) {
-                        Image(systemName: didCopy ? "checkmark" : "link")
-                            .font(.system(size: 12, weight: .semibold))
-                        Text(didCopy ? "LINK COPIED" : "COPY EXTENSION LINK")
-                            .font(.system(size: 12, weight: .semibold))
-                            .tracking(1.5)
+                    Group {
+                        if isPreparing {
+                            ProgressView().tint(AppPalette.textMuted)
+                        } else {
+                            HStack(spacing: 7) {
+                                Image(systemName: "square.and.arrow.up")
+                                    .font(.system(size: 12, weight: .semibold))
+                                Text("SEND LINK TO YOUR COMPUTER")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .tracking(1.5)
+                            }
+                            .foregroundStyle(AppPalette.textPrimary)
+                        }
                     }
-                    .foregroundStyle(AppPalette.textPrimary)
                     .frame(maxWidth: .infinity)
                     .frame(height: 50)
                     .appCapsule(shadowRadius: 6, shadowY: 3)
                 }
                 .buttonStyle(SolidPressButtonStyle())
+                .disabled(isPreparing)
             } else {
                 HStack(spacing: 7) {
                     Image(systemName: "clock")
@@ -1749,6 +1753,28 @@ struct GetExtensionSheet: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AppPalette.groupedBackground.ignoresSafeArea())
         .preferredColorScheme(.light)
+    }
+
+    /// Presents the system share sheet directly so the button can show a
+    /// spinner until it finishes appearing (the `present` completion fires
+    /// after the presentation animation). Clears the spinner then.
+    private func presentShareSheet() {
+        guard let scene = UIApplication.shared.connectedScenes
+                .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
+              let root = scene.keyWindow?.rootViewController
+        else { isPreparing = false; return }
+
+        var top = root
+        while let presented = top.presentedViewController { top = presented }
+
+        let activityVC = UIActivityViewController(activityItems: [storeURL], applicationActivities: nil)
+        // iPad: anchor the popover near the bottom of the presenting view.
+        if let pop = activityVC.popoverPresentationController {
+            pop.sourceView = top.view
+            pop.sourceRect = CGRect(x: top.view.bounds.midX, y: top.view.bounds.maxY - 40, width: 0, height: 0)
+            pop.permittedArrowDirections = []
+        }
+        top.present(activityVC, animated: true) { isPreparing = false }
     }
 
     private func stepRow(_ n: String, _ text: String) -> some View {
