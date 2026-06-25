@@ -381,9 +381,9 @@ private struct VibesLeaderboardBust: View {
             AvatarGradients.gradient(for: profile.initial)
                 .mask(BustSilhouetteShape())
             Text(profile.initial)
-                .font(.system(size: dim * 0.20, weight: .semibold))
+                .font(.system(size: dim * 0.19, weight: .semibold))
                 .foregroundStyle(AppPalette.textStrong)
-                .position(x: dim / 2, y: dim * 0.26)
+                .position(x: dim / 2, y: dim * 0.25)
         }
         .frame(width: dim, height: dim)
     }
@@ -421,32 +421,55 @@ private struct VibesLeaderboardBust: View {
     }
 }
 
-/// Classic head-and-shoulders person silhouette: a head circle above a wide
-/// rounded "hill" of shoulders rising from the bottom, with a neck gap between
-/// them. Used to mask the no-photo gradient into a bust shape.
+/// A realistic head-and-shoulders bust silhouette: an oval head connected by a
+/// neck into shoulders that slope out (trapezius curve) and fill to the bottom
+/// of the frame — one continuous figure, not a circle floating over a hill.
+/// Used to mask the no-photo gradient into a bust shape.
 private struct BustSilhouetteShape: Shape {
     func path(in rect: CGRect) -> Path {
         var p = Path()
         let w = rect.width
         let h = rect.height
-        // Head — circle in the upper centre.
-        let headR = w * 0.20
+        let cx = rect.midX
+        let topY = rect.minY
+
+        // Head — a slightly tall oval in the upper centre.
+        let headRX = w * 0.165
+        let headRY = w * 0.195
+        let headCenterY = topY + h * 0.25
         p.addEllipse(in: CGRect(
-            x: rect.midX - headR,
-            y: rect.minY + h * 0.26 - headR,
-            width: headR * 2,
-            height: headR * 2
+            x: cx - headRX,
+            y: headCenterY - headRY,
+            width: headRX * 2,
+            height: headRY * 2
         ))
-        // Shoulders — a wide ellipse rising from below the frame; only its top
-        // arc shows, giving rounded shoulders that fill the bottom width.
-        let shoulderW = w * 0.80
-        let shoulderH = h * 1.05
-        p.addEllipse(in: CGRect(
-            x: rect.midX - shoulderW / 2,
-            y: rect.minY + h * 0.62,
-            width: shoulderW,
-            height: shoulderH
-        ))
+
+        // Neck + shoulders — one closed shape that tucks under the head and
+        // slopes out to rounded shoulders, filling to the bottom of the frame.
+        let neckHalf = w * 0.085
+        let neckTopY = topY + h * 0.40        // sits inside the head's lower oval
+        let shoulderX = w * 0.46
+        let shoulderTopY = topY + h * 0.95
+        let bottomY = rect.maxY
+
+        p.move(to: CGPoint(x: cx - neckHalf, y: neckTopY))
+        // Left trapezius → shoulder ball.
+        p.addCurve(
+            to: CGPoint(x: cx - shoulderX, y: shoulderTopY),
+            control1: CGPoint(x: cx - neckHalf, y: topY + h * 0.52),
+            control2: CGPoint(x: cx - w * 0.40, y: topY + h * 0.62)
+        )
+        p.addLine(to: CGPoint(x: cx - shoulderX, y: bottomY))
+        p.addLine(to: CGPoint(x: cx + shoulderX, y: bottomY))
+        p.addLine(to: CGPoint(x: cx + shoulderX, y: shoulderTopY))
+        // Right shoulder ball → trapezius back up to the neck.
+        p.addCurve(
+            to: CGPoint(x: cx + neckHalf, y: neckTopY),
+            control1: CGPoint(x: cx + w * 0.40, y: topY + h * 0.62),
+            control2: CGPoint(x: cx + neckHalf, y: topY + h * 0.52)
+        )
+        p.closeSubpath()
+
         return p
     }
 }
