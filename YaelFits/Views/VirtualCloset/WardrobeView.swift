@@ -964,17 +964,13 @@ private struct ProductLightbox: View {
 
     var body: some View {
         ZStack {
-            VStack(spacing: 0) {
-                grabber
-                topBar
-                scrollBody
+            ZStack(alignment: .top) {
+                // One continuous scroll (grabber, title, image, form) so nothing
+                // clips at a fixed header — content scrolls edge to edge.
+                scrollContent
+                // The ONLY pinned chrome — X and Save float above the scroll.
+                pinnedControls
             }
-            // Clear the dynamic island / home indicator. In full mode the inset
-            // lives INSIDE the background so the lavender fills behind the bars;
-            // in card mode the background hugs the content and the inset becomes
-            // an outer margin below.
-            .padding(.top, isFull ? insetTop : 0)
-            .padding(.bottom, isFull ? insetBottom : 0)
             .background(AppPalette.groupedBackground)
             // Card → square edge-to-edge as it goes full screen.
             .clipShape(RoundedRectangle(cornerRadius: isFull ? 0 : 28, style: .continuous))
@@ -1006,11 +1002,17 @@ private struct ProductLightbox: View {
         }
     }
 
-    /// Everything below the fixed header, in one scroll view. A zero-size probe
-    /// reports the content's offset so we know when it's pinned to the top.
-    private var scrollBody: some View {
+    /// The entire card as ONE scroll — grabber, title, image, form. Only X/Save
+    /// are pinned (see pinnedControls), so content never clips at a fixed header
+    /// and scrolls all the way to the bottom edge. A zero-size probe reports the
+    /// content offset so the gesture knows when it's pinned to the top.
+    private var scrollContent: some View {
         ScrollView {
             VStack(spacing: LayoutMetrics.large) {
+                grabber
+                Text("Edit item")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppPalette.textStrong)
                 heroImage
                 formCard
                 statusSection
@@ -1026,7 +1028,12 @@ private struct ProductLightbox: View {
                 }
                 deleteButton
             }
-            .padding(LayoutMetrics.screenPadding)
+            .padding(.horizontal, LayoutMetrics.screenPadding)
+            // Top: clear the island (full) + the pinned X/Save row. Bottom: clear
+            // the home indicator (full) — as SCROLLABLE padding so the last row
+            // reaches the very edge instead of clipping above it.
+            .padding(.top, (isFull ? insetTop : 0) + 40)
+            .padding(.bottom, (isFull ? insetBottom : 0) + LayoutMetrics.large)
             .background(
                 GeometryReader { proxy in
                     Color.clear.preference(
@@ -1101,8 +1108,11 @@ private struct ProductLightbox: View {
         }
     }
 
-    private var topBar: some View {
-        HStack(spacing: 0) {
+    /// The only pinned controls — X (left) and Save (right). A short fade behind
+    /// them lets scrolling content dissolve underneath instead of cutting hard.
+    private var pinnedControls: some View {
+        let topInset = (isFull ? insetTop : 0)
+        return HStack(spacing: 0) {
             Button { onClose() } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 15, weight: .semibold))
@@ -1111,10 +1121,6 @@ private struct ProductLightbox: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            Spacer()
-            Text("Edit item")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(AppPalette.textStrong)
             Spacer()
             Button { Task { await save() } } label: {
                 Text("Save")
@@ -1127,7 +1133,18 @@ private struct ProductLightbox: View {
             .buttonStyle(.plain)
             .disabled(!canSave)
         }
-        .padding(.top, 4)
+        .padding(.horizontal, LayoutMetrics.screenPadding - 14)
+        .padding(.top, topInset + 2)
+        .frame(maxWidth: .infinity, alignment: .top)
+        .background(
+            LinearGradient(
+                colors: [AppPalette.groupedBackground, AppPalette.groupedBackground.opacity(0)],
+                startPoint: .top, endPoint: .bottom
+            )
+            .frame(height: topInset + 64)
+            .frame(maxHeight: .infinity, alignment: .top)
+            .allowsHitTesting(false)
+        )
     }
 
     /// The product image at the top of the lightbox card.
