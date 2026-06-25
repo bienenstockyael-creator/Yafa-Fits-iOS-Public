@@ -176,8 +176,13 @@ struct VibesLeaderboardSheet: View {
                         .tag(VibeWindow.allTime)
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
+                // The paging container must itself bleed through the bottom
+                // safe area, otherwise it clips its pages at the home-indicator
+                // line and the inner ScrollView's ignoresSafeArea has nowhere
+                // to extend into — leaving a background strip at the bottom.
+                .ignoresSafeArea(.container, edges: .bottom)
             }
-            .background(AppPalette.groupedBackground)
+            .background(AppPalette.groupedBackground.ignoresSafeArea())
             .navigationTitle("Best Dressed")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.light, for: .navigationBar)
