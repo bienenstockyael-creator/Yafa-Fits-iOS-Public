@@ -156,13 +156,12 @@ struct VibesLeaderboardSheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Small all-caps tab labels — the app's section-label style.
-                HStack(spacing: LayoutMetrics.medium) {
+                // Centered small all-caps tab labels, underline on the selected.
+                HStack(spacing: LayoutMetrics.large) {
                     tab("THIS WEEK", value: .thisWeek)
                     tab("ALL TIME", value: .allTime)
-                    Spacer()
                 }
-                .padding(.horizontal, LayoutMetrics.screenPadding)
+                .frame(maxWidth: .infinity)
                 .padding(.top, LayoutMetrics.small)
                 .padding(.bottom, LayoutMetrics.small)
 
@@ -176,7 +175,7 @@ struct VibesLeaderboardSheet: View {
                 .tabViewStyle(.page(indexDisplayMode: .never))
             }
             .background(AppPalette.groupedBackground)
-            .navigationTitle("Vibe leaderboard")
+            .navigationTitle("Best Dressed")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.light, for: .navigationBar)
             .toolbar {
@@ -198,10 +197,15 @@ struct VibesLeaderboardSheet: View {
         Button {
             withAnimation(.easeInOut(duration: 0.25)) { window = value }
         } label: {
-            Text(title)
-                .font(.system(size: 11, weight: .semibold))
-                .tracking(1.4)
-                .foregroundStyle(window == value ? AppPalette.textStrong : AppPalette.textFaint)
+            VStack(spacing: 5) {
+                Text(title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .tracking(1.4)
+                    .foregroundStyle(window == value ? AppPalette.textStrong : AppPalette.textFaint)
+                Capsule()
+                    .fill(window == value ? AppPalette.textStrong : Color.clear)
+                    .frame(width: 14, height: 2)
+            }
         }
         .buttonStyle(SolidPressButtonStyle())
     }
@@ -231,8 +235,11 @@ struct VibesLeaderboardSheet: View {
                         row(rank: index + 1, entry: entry)
                     }
                 }
-                .padding(.horizontal, LayoutMetrics.screenPadding)
-                .padding(.vertical, LayoutMetrics.medium)
+                // Pull everything in from the edges, and clear the bottom so the
+                // last row never clips against the viewport / home indicator.
+                .padding(.horizontal, LayoutMetrics.xLarge)
+                .padding(.top, LayoutMetrics.medium)
+                .padding(.bottom, 80)
             }
             .scrollIndicators(.hidden)
         }
@@ -243,16 +250,16 @@ struct VibesLeaderboardSheet: View {
             selectedUserId = IdentifiableUUID(id: entry.profile.id)
         } label: {
             HStack(spacing: 0) {
-                // The big rank number, with the bust laid on top of its right
-                // edge (negative spacing = overlap; zIndex keeps the bust above).
-                HStack(spacing: -26) {
+                // The big Adieu rank number, with the bust laid on top of it
+                // (negative spacing = overlap; zIndex keeps the bust above).
+                HStack(spacing: -44) {
                     Text("\(rank)")
-                        .font(.system(size: 86, weight: .bold, design: .rounded))
+                        .font(.custom("GTFAdieuTRIAL-BlackSlanted", size: 92))
                         .foregroundStyle(AppPalette.textStrong)
                     VibesLeaderboardBust(profile: entry.profile, avatarSize: 86)
                         .zIndex(1)
                 }
-                Spacer(minLength: 8)
+                Spacer(minLength: 12)
                 HStack(spacing: 5) {
                     GradientFlameIcon(size: 22, stroked: false)
                     Text("\(entry.count)")
