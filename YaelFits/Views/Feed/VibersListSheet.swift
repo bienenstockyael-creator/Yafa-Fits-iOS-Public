@@ -188,7 +188,7 @@ struct VibesLeaderboardSheet: View {
                         startPoint: .top,
                         endPoint: .bottom
                     )
-                    .frame(height: 64)
+                    .frame(height: 92)
                     .allowsHitTesting(false)
                 }
                 // Bleed the paging area through the bottom safe area so the list
@@ -276,7 +276,7 @@ struct VibesLeaderboardSheet: View {
                 // at rest; small bottom inset so the list clips right at the
                 // device edge (no fade, no gap).
                 .padding(.horizontal, 40)
-                .padding(.top, 70)
+                .padding(.top, 94)
                 .padding(.bottom, 24)
             }
             .scrollIndicators(.hidden)
@@ -292,23 +292,32 @@ struct VibesLeaderboardSheet: View {
         Button {
             selectedUserId = IdentifiableUUID(id: entry.profile.id)
         } label: {
+            // Center the whole group and keep the rank+bust and the vibes pill
+            // close together, instead of pushing them to opposite edges.
             HStack(spacing: 0) {
-                // The big Adieu rank number, with the bust laid on top of it
-                // (negative spacing = overlap; zIndex keeps the bust above).
-                HStack(spacing: -80) {
-                    Text("\(rank)")
-                        .font(.custom("GTFAdieuTRIAL-BlackSlanted", size: 92))
-                        .foregroundStyle(AppPalette.textStrong)
-                    VibesLeaderboardBust(profile: entry.profile, avatarSize: 130)
-                        .zIndex(1)
+                Spacer(minLength: 0)
+                HStack(spacing: -12) {
+                    // The big Adieu rank number, with the bust laid on top of it
+                    // (negative spacing = overlap; zIndex keeps the bust above).
+                    HStack(spacing: -80) {
+                        Text("\(rank)")
+                            .font(.custom("GTFAdieuTRIAL-BlackSlanted", size: 92))
+                            .foregroundStyle(AppPalette.textStrong)
+                        VibesLeaderboardBust(profile: entry.profile, avatarSize: 130)
+                            .zIndex(1)
+                    }
+                    // Vibe count in a frosted-glass pill, matching the app's pills.
+                    HStack(spacing: 5) {
+                        GradientFlameIcon(size: 20, stroked: false)
+                        Text("\(entry.count)")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(AppPalette.textStrong)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .appCapsule(shadowRadius: 0, shadowY: 0)
                 }
-                Spacer(minLength: 12)
-                HStack(spacing: 5) {
-                    GradientFlameIcon(size: 22, stroked: false)
-                    Text("\(entry.count)")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(AppPalette.textStrong)
-                }
+                Spacer(minLength: 0)
             }
         }
         .buttonStyle(SolidPressButtonStyle())
