@@ -215,7 +215,7 @@ struct VibesLeaderboardSheet: View {
                     startPoint: .top,
                     endPoint: .bottom
                 )
-                .frame(height: 26)
+                .frame(height: 20)
                 .allowsHitTesting(false)
             }
             // Bleed the paging area through the bottom safe area so the list
@@ -286,7 +286,7 @@ struct VibesLeaderboardSheet: View {
                 // at rest; small bottom inset so the list clips right at the
                 // device edge (no fade, no gap).
                 .padding(.horizontal, 40)
-                .padding(.top, 40)
+                .padding(.top, 20)
                 .padding(.bottom, 24)
             }
             .scrollIndicators(.hidden)
