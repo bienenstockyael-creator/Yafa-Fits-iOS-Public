@@ -54,6 +54,9 @@ struct WardrobeView: View {
     @State private var cellFrames: [String: CGRect] = [:]
     @State private var tapAnchor: UnitPoint = .center
     @State private var showGetExtension = false
+    /// First-open explainer (how the closet fills up). Shown once, then never.
+    @State private var showClosetIntro = false
+    private let closetIntroSeenKey = "closet_intro_seen_v1"
     /// Live downward offset while swiping the closet page down to dismiss it
     /// (like a sheet). Drives the pull; release past a threshold closes it.
     @State private var closetDragOffset: CGFloat = 0
@@ -145,6 +148,16 @@ struct WardrobeView: View {
         // Follow the finger while swiping the closet down to dismiss.
         .offset(y: closetDragOffset)
         .task { await load() }
+        .onAppear {
+            // First-ever open: surface the explainer once the page has settled.
+            guard !UserDefaults.standard.bool(forKey: closetIntroSeenKey) else { return }
+            UserDefaults.standard.set(true, forKey: closetIntroSeenKey)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
+                withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
+                    showClosetIntro = true
+                }
+            }
+        }
         .onDisappear { pollTask?.cancel() }
         .sheet(isPresented: $showGetExtension) {
             GetExtensionSheet()
@@ -209,11 +222,69 @@ struct WardrobeView: View {
             // ProductLightbox insets its own content using the window safe area.
             .ignoresSafeArea()
         }
+        // First-open explainer, above everything and centered to the viewport.
+        .overlay {
+            if showClosetIntro {
+                ZStack {
+                    Color.black.opacity(0.45)
+                        .ignoresSafeArea()
+                        .contentShape(Rectangle())
+                        .onTapGesture { dismissClosetIntro() }
+                        .transition(.opacity)
+                    closetIntroCard
+                        .transition(.scale(scale: 0.92, anchor: .center).combined(with: .opacity))
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
         // Keep the closet sheet from swipe-dismissing while a lightbox is open.
         .interactiveDismissDisabled(selectedItem != nil)
         // Fixed light palette across the app — keep it light so the search
         // field text stays readable in dark mode.
         .preferredColorScheme(.light)
+    }
+
+    private func dismissClosetIntro() {
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+            showClosetIntro = false
+        }
+    }
+
+    /// First-open explainer card — matches the app's InfoExplainerModal style.
+    private var closetIntroCard: some View {
+        VStack(spacing: LayoutMetrics.medium) {
+            AppIcon(glyph: .tshirt, size: 34, color: AppPalette.iconPrimary, filled: false)
+                .padding(.top, LayoutMetrics.small)
+
+            VStack(spacing: LayoutMetrics.small) {
+                Text("Your closet")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(AppPalette.textStrong)
+
+                Text("Products you tag on your outfits land here automatically. You can also save wishlist items straight from Safari — tap Share, then Yafa.")
+                    .font(.system(size: 15))
+                    .foregroundStyle(AppPalette.textMuted)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Button { dismissClosetIntro() } label: {
+                Text("GOT IT")
+                    .font(.system(size: 12, weight: .semibold))
+                    .tracking(1.5)
+                    .foregroundStyle(AppPalette.textPrimary)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 44)
+                    .appCapsule(shadowRadius: 0, shadowY: 0)
+            }
+            .buttonStyle(SolidPressButtonStyle())
+            .padding(.top, LayoutMetrics.xSmall)
+        }
+        .padding(.horizontal, LayoutMetrics.large)
+        .padding(.vertical, LayoutMetrics.large)
+        .appCard(cornerRadius: 24, shadowRadius: 28, shadowY: 12)
+        .padding(.horizontal, LayoutMetrics.xLarge)
     }
 
     /// Custom page header replacing the nav bar. It lives inside a VStack that
