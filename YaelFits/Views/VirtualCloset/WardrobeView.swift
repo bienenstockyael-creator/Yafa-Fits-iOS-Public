@@ -1680,7 +1680,7 @@ struct GetExtensionSheet: View {
             .padding(.horizontal, LayoutMetrics.large)
 
             VStack(alignment: .leading, spacing: 14) {
-                stepRow("1", "Add the Yafa extension to Chrome")
+                stepRow("1", "On your computer, add the Yafa extension to Chrome")
                 stepRow("2", "Click the Yafa icon on any product page to save it")
                 stepRow("3", "Tap “Add to Yafa” to send it to your closet")
             }
@@ -1691,13 +1691,22 @@ struct GetExtensionSheet: View {
             Spacer()
 
             if isLive {
-                Button { openURL(storeURL) } label: {
-                    Text("Get it on Chrome")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 52)
-                        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(AppPalette.textStrong))
+                // Chrome extensions install on DESKTOP only, but the user is on
+                // their phone — so the primary action SHARES the listing link
+                // (AirDrop to their Mac / Messages / Copy) to get it onto their
+                // computer, rather than opening a store page they can't install
+                // from here.
+                ShareLink(item: storeURL) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 15, weight: .semibold))
+                        Text("Send the link to your computer")
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 52)
+                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(AppPalette.textStrong))
                 }
                 .buttonStyle(SolidPressButtonStyle())
             } else {
