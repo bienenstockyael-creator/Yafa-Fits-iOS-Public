@@ -423,31 +423,24 @@ private struct VibesLeaderboardBust: View {
         }
     }
 
-    /// Placeholder bust for users with no photo: the classical marble bust in
-    /// its original colors, so it sits in the row like everyone else's real
-    /// cut-out.
+    /// Placeholder bust for users with no photo: a classical bust assigned by
+    /// `PlaceholderBust` — best-guess gender from their name, then a stable
+    /// per-user pick from that pool — in its original marble colors, so it sits
+    /// in the row like everyone else's real cut-out.
     @ViewBuilder
     private var silhouetteBust: some View {
-        if let bust = Self.bustPlaceholder {
+        if let bust = PlaceholderBust.image(for: profile) {
             Image(uiImage: bust)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(width: frameWidth, height: avatarSize)
         } else {
-            // Asset missing → plain gradient block rather than nothing.
+            // No bust assets at all → plain gradient block rather than nothing.
             AvatarGradients.gradient(for: profile.initial)
                 .frame(width: avatarSize * 0.84, height: avatarSize)
                 .clipShape(RoundedRectangle(cornerRadius: avatarSize * 0.18, style: .continuous))
         }
     }
-
-    /// The shared marble-bust silhouette, decoded once from the bundle.
-    private static let bustPlaceholder: UIImage? = {
-        guard let url = Bundle.main.url(forResource: "bust-placeholder", withExtension: "webp"),
-              let data = try? Data(contentsOf: url)
-        else { return nil }
-        return UIImage(data: data)
-    }()
 
     // No cut-out → frame the regular photo into a portrait bust crop.
     private var framedPhoto: some View {
@@ -481,5 +474,181 @@ private struct VibesLeaderboardBust: View {
                 .foregroundStyle(AppPalette.textMuted)
         }
     }
+}
+
+// MARK: - No-photo bust placeholder pool
+
+/// Assigns a classical-sculpture bust to a user who has no photo.
+///
+/// Pools are auto-discovered from the bundle by filename prefix — drop
+/// `bust-m-<n>.webp` (men) and `bust-f-<n>.webp` (women) into Resources and
+/// they're picked up automatically, no code change. Gender is a best-guess from
+/// the user's name (display name, then username) via a common-first-name list;
+/// unknown names fall back to a stable pseudo-random gender. Within the chosen
+/// pool the bust is selected deterministically from the user's id, so the same
+/// user always gets the same bust across sessions and devices.
+enum PlaceholderBust {
+    enum Gender { case male, female, unknown }
+
+    static func image(for profile: Profile) -> UIImage? {
+        let chosen = pool(for: guessGender(profile))
+        if !chosen.isEmpty {
+            return chosen[stableIndex(seed: profile.id.uuidString, count: chosen.count)]
+        }
+        // No prefixed assets bundled yet → the legacy single bust, if present.
+        return legacy
+    }
+
+    // Pools, decoded once. `bust-m-*` = men, `bust-f-*` = women.
+    private static let male: [UIImage] = loadPool(prefix: "bust-m-")
+    private static let female: [UIImage] = loadPool(prefix: "bust-f-")
+    private static var combined: [UIImage] { male + female }
+
+    private static func pool(for gender: Gender) -> [UIImage] {
+        switch gender {
+        case .male:    return male.isEmpty ? female : male
+        case .female:  return female.isEmpty ? male : female
+        case .unknown: return combined
+        }
+    }
+
+    private static func loadPool(prefix: String) -> [UIImage] {
+        let urls = Bundle.main.urls(forResourcesWithExtension: "webp", subdirectory: nil) ?? []
+        return urls
+            .filter { $0.deletingPathExtension().lastPathComponent.hasPrefix(prefix) }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            .compactMap { try? Data(contentsOf: $0) }
+            .compactMap { UIImage(data: $0) }
+    }
+
+    /// Legacy single bust shipped before the gendered pools existed.
+    private static let legacy: UIImage? = {
+        guard let url = Bundle.main.url(forResource: "bust-placeholder", withExtension: "webp"),
+              let data = try? Data(contentsOf: url) else { return nil }
+        return UIImage(data: data)
+    }()
+
+    // MARK: Gender guess
+
+    private static func guessGender(_ profile: Profile) -> Gender {
+        for raw in [profile.displayName, profile.username].compactMap({ $0 }) {
+            if let g = gender(forName: raw) { return g }
+        }
+        // No name match → stable coin-flip so it's consistent per user but
+        // roughly balanced across the population.
+        return (fnv1a(profile.id.uuidString) & 1 == 0) ? .male : .female
+    }
+
+    /// Looks up the leading alphabetic token of a name in the lists.
+    private static func gender(forName raw: String) -> Gender? {
+        let token = raw.lowercased().split { !$0.isLetter }.first.map(String.init) ?? ""
+        guard token.count >= 2 else { return nil }
+        if maleNames.contains(token) { return .male }
+        if femaleNames.contains(token) { return .female }
+        return nil
+    }
+
+    // MARK: Stable hashing (FNV-1a — survives relaunches, unlike hashValue)
+
+    private static func fnv1a(_ s: String) -> UInt64 {
+        var h: UInt64 = 1469598103934665603
+        for b in s.utf8 { h = (h ^ UInt64(b)) &* 1099511628211 }
+        return h
+    }
+    private static func stableIndex(seed: String, count: Int) -> Int {
+        count <= 0 ? 0 : Int(fnv1a(seed) % UInt64(count))
+    }
+
+    // MARK: Name lists (lowercased first names; ambiguous unisex names omitted
+    // so they fall through to the stable coin-flip rather than guess wrong).
+
+    static let maleNames: Set<String> = [
+        "aaron","adam","adrian","ahmed","alan","albert","alejandro","alessandro","alexander",
+        "andreas","andrew","andy","anthony","antoine","antonio","arda","arjun","arnaud","arthur",
+        "arvid","asher","august","axel","aziz","bart","ben","benjamin","bernard","bilal","bjorn",
+        "blake","boris","brad","bradley","brandon","brendan","brett","brian","bruce","bruno","bryan",
+        "caleb","calvin","cameron","carl","carlos","cedric","cesar","chad","charles","chris",
+        "christian","christopher","claude","clement","cody","colin","connor","conor","craig","curtis",
+        "dale","damian","daniel","danny","dante","darren","dave","david","dean","declan","dennis",
+        "derek","diego","dimitri","dinesh","dmitri","dominic","donald","douglas","dries","dylan",
+        "eduardo","edward","edwin","elias","elliot","emil","emir","emmanuel","enzo","eric","erik",
+        "ernesto","esteban","ethan","eugene","evan","ezra","fabian","fabio","felix","ferdinand",
+        "fernando","filip","finn","florian","francesco","francis","francisco","frank","franklin",
+        "fred","frederick","gabriel","gael","gareth","gary","gavin","geoffrey","george","gerald",
+        "gerard","giovanni","glenn","gordon","graham","grant","greg","gregory","guillaume","gustav",
+        "hans","harald","harold","harry","harvey","hassan","hayden","hector","henrik","henry",
+        "herbert","hugo","hunter","ian","ibrahim","igor","ilya","imran","isaac","ismael","ivan",
+        "jack","jackson","jacob","jake","james","jan","jared","jason","javier","jay","jeff","jeffrey",
+        "jens","jeremy","jerome","jerry","jesse","jim","jimmy","joachim","joaquin","joel","johan",
+        "john","johnny","jon","jonas","jonathan","joonas","jorge","jose","joseph","josh","joshua",
+        "juan","jude","julian","julien","justin","kai","kamil","karan","karl","kasper","keith",
+        "kenneth","kevin","khalid","kieran","kjell","klaus","kris","kristian","kurt","kyle","lars",
+        "laurent","lawrence","leo","leon","leonard","leonardo","levi","lewis","liam","lionel","logan",
+        "lorenzo","louis","luca","lucas","luigi","luis","luka","lukas","luke","mads","magnus","malik",
+        "manuel","marc","marcel","marco","marcos","marcus","mario","mark","markus","marlon","martin",
+        "marvin","mason","mateo","mathias","mathieu","matt","matteo","matthew","matthias","mattias",
+        "maurice","mauricio","max","maxim","maximilian","mehmet","melvin","micah","michael","miguel",
+        "mikael","mike","mikko","milan","miles","milo","mitchell","mohamed","mohammed","moritz",
+        "murat","mustafa","nate","nathan","nathaniel","neil","nelson","nicholas","nick","nico",
+        "nicolas","niels","nigel","nikhil","niklas","nikola","nikolai","noah","noel","norman",
+        "oliver","olivier","omar","oscar","otto","owen","pablo","paolo","pascal","patrick","paul",
+        "pedro","peter","philip","philippe","pierre","piotr","pranav","preston","quentin","rafael",
+        "rahul","ralph","ramon","randy","raphael","rasmus","raymond","reece","remy","rene","ricardo",
+        "richard","rick","rishi","robert","roberto","rodrigo","roger","roland","roman","ronald",
+        "ronan","rory","ross","roy","ruben","russell","ryan","salman","samir","samuel","sander",
+        "santiago","scott","sean","sebastian","sergei","sergio","seth","shane","shaun","shawn",
+        "simon","soren","spencer","stanley","stefan","stephen","steve","steven","stuart","sven",
+        "ted","terence","terry","theo","theodore","thomas","tim","timo","timothy","tobias","toby",
+        "todd","tom","tomas","tomasz","tommy","tony","travis","trevor","tristan","tyler","umar",
+        "valentin","victor","vihaan","vincent","vladimir","wade","walter","warren","wayne","wesley",
+        "william","wilson","wolfgang","xander","xavier","yann","yannick","yusuf","zachary","zane",
+    ]
+
+    static let femaleNames: Set<String> = [
+        "abigail","ada","adele","adriana","agnes","aida","aimee","aisha","alana","alba","alexandra",
+        "alice","alicia","alina","alison","allison","alma","amanda","amber","amelia","amelie","amy",
+        "ana","anais","anastasia","angela","angelica","angelina","anika","anita","anja","ann","anna",
+        "annabel","anne","annette","annie","anouk","antonia","april","ariana","ashley","asia","astrid",
+        "aurora","ava","ayse","beatrice","beatriz","becky","belen","bella","bernadette","beth","bethany",
+        "bianca","birgit","bonnie","brenda","bridget","brittany","brooke","camila","camille","candice",
+        "cara","carla","carmen","carol","carolina","caroline","carrie","catalina","catherine","cecilia",
+        "celeste","celia","celine","charlotte","chelsea","cheryl","chiara","chloe","christina","christine",
+        "cindy","claire","clara","claudia","colette","connie","cora","courtney","cristina","crystal",
+        "daisy","daniela","daphne","darlene","dawn","debbie","deborah","delia","delphine","denise",
+        "diana","diane","dilara","dina","dolores","donna","dora","dorothy","ebru","edith","eileen",
+        "ela","elaine","eleanor","elena","eliana","elif","elin","elisa","elisabeth","eliza","elizabeth",
+        "ella","ellen","ellie","eloise","elsa","elvira","emilia","emily","emma","emmanuelle","erica",
+        "erika","erin","esther","eva","evelyn","fabienne","faith","fatima","fatma","felicia","fernanda",
+        "fiona","flora","florence","frances","francesca","freya","gabriela","gabrielle","gail","gemma",
+        "genevieve","georgia","gina","giulia","gloria","grace","greta","gwen","hailey","hana","hanna",
+        "hannah","harriet","hayley","hazel","heather","heidi","helen","helena","henrietta","hilda",
+        "holly","hope","ida","ines","ingrid","irene","iris","isabel","isabella","isabelle","ivana",
+        "jacqueline","jade","jana","jane","janet","janice","jasmine","jeanne","jenna","jennifer","jenny",
+        "jessica","jill","joan","joanna","joanne","jocelyn","johanna","josephine","joy","judith","judy",
+        "julia","juliana","julie","juliet","juliette","june","kaitlyn","kara","karen","karin","karina",
+        "kate","katherine","kathleen","kathryn","kathy","katie","katrina","katy","kayla","kelly","kelsey",
+        "kendra","kerstin","kimberly","kira","klara","kristen","kristin","kristina","lana","lara","laura",
+        "lauren","laurie","lea","leah","lena","leona","leonie","lila","lili","lilian","lillian","lily",
+        "linda","lindsey","lisa","liv","livia","lola","lorena","lorraine","lottie","louise","luana",
+        "lucia","lucie","lucy","luisa","luna","lydia","lynn","mabel","madeleine","madison","mae","maeve",
+        "magda","magdalena","maggie","maite","malin","manon","mara","margaret","margarita","margaux",
+        "margot","maria","mariam","mariana","marie","marielle","marina","marion","marisa","marissa",
+        "marlene","marta","martha","martina","mary","maryam","mathilde","maud","maureen","maya","megan",
+        "meghan","mei","melanie","melike","melinda","melisa","melissa","mercedes","meredith","mia",
+        "michaela","michele","michelle","mila","mildred","milena","mina","mira","miranda","miriam","molly",
+        "mona","monica","monika","muriel","nadia","nadine","nancy","naomi","natalia","natalie","natasha",
+        "nazli","nell","nessa","nia","nicole","nika","nina","noemi","nora","norah","nour","nova","nuria",
+        "odette","olga","olive","olivia","ophelia","paige","pamela","paola","patricia","paula","pauline",
+        "pearl","peggy","penelope","petra","phoebe","pia","polly","priya","rachel","ramona","raquel",
+        "rebecca","regina","renata","renee","rhea","rita","roberta","rochelle","romy","rosa","rosalie",
+        "rose","rosemary","roxana","ruby","ruth","sabine","sabrina","sadie","salma","samantha","sandra",
+        "sandy","sara","sarah","saskia","savannah","scarlett","selin","selina","selma","serena","sevda",
+        "shannon","sharon","sheila","shelby","shirley","sibel","silvia","sina","sofia","sofie","sonia",
+        "sonja","sophia","sophie","stacey","stella","stephanie","summer","susan","susanna","suzanne",
+        "sylvia","tamara","tania","tanya","tara","tatiana","teresa","tessa","thea","theresa","tina",
+        "tracy","ulla","ursula","valentina","valerie","vanessa","vera","veronica","vicky","victoria",
+        "viktoria","violet","virginia","vivian","viviana","wanda","wendy","whitney","willow","wilma",
+        "xenia","yara","yasmin","yelena","yvette","yvonne","zara","zoe","zoey","zuzanna",
+    ]
 }
 
