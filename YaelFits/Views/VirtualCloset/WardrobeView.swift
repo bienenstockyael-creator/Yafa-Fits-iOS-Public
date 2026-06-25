@@ -1126,7 +1126,8 @@ private struct ProductLightbox: View {
     }
 
     /// Unified scroll/drag behaviour:
-    ///   • card mode → any drag past a small threshold expands to full screen
+    ///   • card mode → drag UP expands to full; drag DOWN follows the finger and
+    ///     dismisses (it must NOT expand on a downward drag)
     ///   • full + pinned to top → pulling down rubber-bands; a committed pull or
     ///     fast flick dismisses, otherwise it springs back
     private var sheetGesture: some Gesture {
@@ -1134,19 +1135,21 @@ private struct ProductLightbox: View {
         // stutter) every small scroll movement.
         DragGesture(minimumDistance: 24, coordinateSpace: .local)
             .onChanged { v in
-                // Latch the full-vs-card intent at the start (a card drag only
-                // ever expands, never also dismisses).
+                // Latch the full-vs-card intent at the start.
                 if dragStartFull == nil { dragStartFull = isFull }
                 let startedFull = dragStartFull ?? isFull
 
                 guard startedFull else {
-                    if !isFull, abs(v.translation.height) > 10 { setExpanded(true) }
+                    // CARD mode: follow the finger DOWN toward dismiss; an UP drag
+                    // expands (decided on release, so direction is respected).
+                    if v.translation.height > 0 {
+                        sheetDrag = v.translation.height
+                    } else if sheetDrag != 0 {
+                        sheetDrag = 0
+                    }
                     return
                 }
-                // Full mode: the sheet only follows the OVERSCROLL past the top.
-                // While there's still content to scroll (or dragging up), it stays
-                // put; once pinned to the top, capture the reference translation
-                // and move only by how much further you pull.
+                // FULL mode: the sheet only follows the OVERSCROLL past the top.
                 if atTop, v.translation.height > 0 {
                     if dragRefAtTop == nil { dragRefAtTop = v.translation.height }
                     let past = v.translation.height - (dragRefAtTop ?? 0)
@@ -1164,19 +1167,25 @@ private struct ProductLightbox: View {
                 dragStartFull = nil
                 dragRefAtTop = nil
 
-                // A card-started drag only expands; never dismisses here.
-                guard startedFull else {
-                    if sheetDrag != 0 {
+                let dy = v.translation.height
+                let flick = v.predictedEndTranslation.height
+
+                if !startedFull {
+                    // CARD mode: up → expand, down → dismiss, else spring back.
+                    if dy < -55 || flick < -200 {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) { sheetDrag = 0 }
+                        setExpanded(true)
+                    } else if dy > 110 || flick > 350 {
+                        onClose()
+                    } else {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) { sheetDrag = 0 }
                     }
                     return
                 }
-                // Dismiss on a committed OVERSCROLL past the top (or a fast flick
-                // there) — measured from where the content ran out, so a continuous
-                // scroll that reaches the top and keeps going closes.
+                // FULL mode: dismiss on a committed OVERSCROLL past the top.
                 if atTop, let ref {
-                    let past = v.translation.height - ref
-                    let flickPast = v.predictedEndTranslation.height - ref
+                    let past = dy - ref
+                    let flickPast = flick - ref
                     if past > 120 || flickPast > 320 {
                         onClose()
                         return
