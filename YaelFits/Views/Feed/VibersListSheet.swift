@@ -225,6 +225,7 @@ struct VibesLeaderboardSheet: View {
         if loading {
             ProgressView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .transition(.opacity)
         } else if entries.isEmpty {
             VStack(spacing: LayoutMetrics.xSmall) {
                 GradientFlameIcon(size: 40, stroked: true)
@@ -238,6 +239,7 @@ struct VibesLeaderboardSheet: View {
                     .padding(.horizontal, LayoutMetrics.xLarge)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .transition(.opacity)
         } else {
             ScrollView {
                 LazyVStack(spacing: LayoutMetrics.small) {
@@ -291,6 +293,9 @@ struct VibesLeaderboardSheet: View {
             }
         }
         .buttonStyle(SolidPressButtonStyle())
+        // Elegant staggered entrance — each row eases up + fades in, cascading
+        // by rank, so the list assembles rather than snapping in.
+        .modifier(StaggeredAppear(index: rank - 1))
     }
 
     private func loadAll() async {
@@ -298,9 +303,32 @@ struct VibesLeaderboardSheet: View {
         async let all = VibesService.leaderboard(window: .allTime)
         let loaded = await (week, all)
         await MainActor.run {
-            weekEntries = loaded.0; weekLoading = false
-            allTimeEntries = loaded.1; allTimeLoading = false
+            // Crossfade the spinner out and the ranking in, rather than a snap.
+            withAnimation(.easeInOut(duration: 0.35)) {
+                weekEntries = loaded.0; weekLoading = false
+                allTimeEntries = loaded.1; allTimeLoading = false
+            }
         }
+    }
+}
+
+/// Eases a view up and fades it in on first appearance, with a per-index delay
+/// so a list cascades in. Delay is capped so rows that appear later via lazy
+/// scrolling don't wait an awkwardly long time.
+private struct StaggeredAppear: ViewModifier {
+    let index: Int
+    @State private var shown = false
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(shown ? 1 : 0)
+            .offset(y: shown ? 0 : 10)
+            .onAppear {
+                let delay = min(Double(index) * 0.06, 0.4)
+                withAnimation(.easeOut(duration: 0.45).delay(delay)) {
+                    shown = true
+                }
+            }
     }
 }
 
@@ -354,9 +382,11 @@ private struct VibesLeaderboardBust: View {
     private var bustImage: some View {
         if let cutout = cutoutURL, let url = URL(string: cutout) {
             // True transparent bust — fit so hair / shoulders aren't clipped.
-            AsyncImage(url: url) { phase in
+            // Transaction animation fades the cut-out in once it decodes.
+            AsyncImage(url: url, transaction: Transaction(animation: .easeInOut(duration: 0.35))) { phase in
                 if let image = phase.image {
                     image.resizable().aspectRatio(contentMode: .fit)
+                        .transition(.opacity)
                 } else {
                     framedPhoto
                 }
@@ -392,9 +422,10 @@ private struct VibesLeaderboardBust: View {
     private var framedPhoto: some View {
         Group {
             if let avatar = profile.avatarUrl, let url = URL(string: avatar) {
-                AsyncImage(url: url) { phase in
+                AsyncImage(url: url, transaction: Transaction(animation: .easeInOut(duration: 0.35))) { phase in
                     if let image = phase.image {
                         image.resizable().aspectRatio(contentMode: .fill)
+                            .transition(.opacity)
                     } else {
                         initialFill
                     }

@@ -28,6 +28,7 @@ struct UserProfileView: View {
     @State private var followerIds: [UUID] = []
     @State private var followingIds: [UUID] = []
     @State private var showFollowers = false
+    @State private var showVibesLeaderboard = false
     @State private var showFollowing = false
     @State private var vibesReceived: Int = 0
     @State private var reportTarget: ReportTarget?
@@ -232,6 +233,12 @@ struct UserProfileView: View {
         }
         .sheet(isPresented: $showFollowing) {
             FollowListSheet(title: "Following", userIds: followingIds.filter { !store.blockedUserIds.contains($0) })
+                .environment(store)
+                .presentationDragIndicator(.visible)
+                .roundedSheetBackground()
+        }
+        .sheet(isPresented: $showVibesLeaderboard) {
+            VibesLeaderboardSheet()
                 .environment(store)
                 .presentationDragIndicator(.visible)
                 .roundedSheetBackground()
@@ -489,16 +496,23 @@ struct UserProfileView: View {
                 // Vibes stat gets the gradient flame icon so the
                 // static count visually matches the in-flight
                 // particle burst (and the owner-side rendering
-                // in `ProfileHeader`).
-                HStack(spacing: 4) {
-                    GradientFlameIcon(size: 24, stroked: true)
-                    Text("\(vibesReceived)")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(AppPalette.textStrong)
-                    Text(vibesReceived == 1 ? "vibe" : "vibes")
-                        .font(.system(size: 14))
-                        .foregroundStyle(AppPalette.textMuted)
+                // in `ProfileHeader`). Tapping opens the global
+                // Best Dressed leaderboard, same as on your own profile.
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    showVibesLeaderboard = true
+                } label: {
+                    HStack(spacing: 4) {
+                        GradientFlameIcon(size: 24, stroked: true)
+                        Text("\(vibesReceived)")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppPalette.textStrong)
+                        Text(vibesReceived == 1 ? "vibe" : "vibes")
+                            .font(.system(size: 14))
+                            .foregroundStyle(AppPalette.textMuted)
+                    }
                 }
+                .buttonStyle(SolidPressButtonStyle())
             }
         }
     }
