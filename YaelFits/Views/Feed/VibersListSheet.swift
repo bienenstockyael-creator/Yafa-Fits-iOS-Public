@@ -423,20 +423,15 @@ private struct VibesLeaderboardBust: View {
         }
     }
 
-    /// Placeholder bust for users with no photo: the classical bust used purely
-    /// as a silhouette MASK, filled flat with their per-initial gradient (the
-    /// same gradient their round avatar uses). No marble detail inside — just a
-    /// clean gradient bust shape, so it sits in the row like everyone else's
-    /// real cut-out.
+    /// Placeholder bust for users with no photo: the classical marble bust in
+    /// its original colors, so it sits in the row like everyone else's real
+    /// cut-out.
     @ViewBuilder
     private var silhouetteBust: some View {
         if let bust = Self.bustPlaceholder {
-            AvatarGradients.gradient(for: profile.initial)
-                .mask {
-                    Image(uiImage: bust)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                }
+            Image(uiImage: bust)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
                 .frame(width: frameWidth, height: avatarSize)
         } else {
             // Asset missing → plain gradient block rather than nothing.
