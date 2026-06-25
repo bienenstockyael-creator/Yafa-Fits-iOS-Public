@@ -213,7 +213,7 @@ struct VibesLeaderboardSheet: View {
                     startPoint: .top,
                     endPoint: .bottom
                 )
-                .frame(height: 92)
+                .frame(height: 74)
                 .allowsHitTesting(false)
             }
             // Bleed the paging area through the bottom safe area so the list
@@ -284,7 +284,7 @@ struct VibesLeaderboardSheet: View {
                 // at rest; small bottom inset so the list clips right at the
                 // device edge (no fade, no gap).
                 .padding(.horizontal, 40)
-                .padding(.top, 94)
+                .padding(.top, 78)
                 .padding(.bottom, 24)
             }
             .scrollIndicators(.hidden)
@@ -304,26 +304,29 @@ struct VibesLeaderboardSheet: View {
             // close together, instead of pushing them to opposite edges.
             HStack(spacing: 0) {
                 Spacer(minLength: 0)
-                HStack(spacing: -2) {
+                HStack(spacing: -8) {
                     // The big Adieu rank number, with the bust laid on top of it
                     // (negative spacing = overlap; zIndex keeps the bust above).
-                    HStack(spacing: -54) {
+                    HStack(spacing: -62) {
                         Text("\(rank)")
-                            .font(.custom("GTFAdieuTRIAL-BlackSlanted", size: 92))
+                            .font(.custom("GTFAdieuTRIAL-BlackSlanted", size: 104))
                             .foregroundStyle(AppPalette.textStrong)
-                        VibesLeaderboardBust(profile: entry.profile, avatarSize: 130)
+                        VibesLeaderboardBust(profile: entry.profile, avatarSize: 144)
                             .zIndex(1)
                     }
-                    // Vibe count in a frosted-glass pill, matching the app's pills.
+                    // Vibe count in a frosted-glass pill, tilted the OPPOSITE way
+                    // from the username highlighter (which sits at -7°) so the two
+                    // read as a playful pair rather than parallel.
                     HStack(spacing: 5) {
-                        GradientFlameIcon(size: 20, stroked: false)
+                        GradientFlameIcon(size: 22, stroked: false)
                         Text("\(entry.count)")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.system(size: 17, weight: .semibold))
                             .foregroundStyle(AppPalette.textStrong)
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
+                    .padding(.horizontal, 13)
+                    .padding(.vertical, 8)
                     .appCapsule(shadowRadius: 0, shadowY: 0)
+                    .rotationEffect(.degrees(7))
                 }
                 Spacer(minLength: 0)
             }
