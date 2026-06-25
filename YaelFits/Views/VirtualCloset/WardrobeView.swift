@@ -927,6 +927,10 @@ private struct ProductLightbox: View {
     /// Latches whether the in-progress drag began in full-screen mode, so a
     /// single card-mode drag can only expand (never also dismiss).
     @State private var dragStartFull: Bool?
+    /// Latches whether the drag began with the content pinned to the top. Only a
+    /// pull-down that STARTED at the top may move/close the sheet — a drag that
+    /// started mid-scroll just scrolls the content back, never dragging the sheet.
+    @State private var dragStartedAtTop = false
     /// Captured ONCE on appear so the layout is stable — reading window insets
     /// every render jittered the grow (scene ordering isn't deterministic).
     @State private var insetTop: CGFloat = 47
@@ -965,7 +969,7 @@ private struct ProductLightbox: View {
     var body: some View {
         ZStack {
             ZStack(alignment: .top) {
-                // One continuous scroll (grabber, title, image, form) so nothing
+                // One continuous scroll (title, image, form) so nothing
                 // clips at a fixed header — content scrolls edge to edge.
                 scrollContent
                 // The ONLY pinned chrome — X and Save float above the scroll.
@@ -1002,14 +1006,13 @@ private struct ProductLightbox: View {
         }
     }
 
-    /// The entire card as ONE scroll — grabber, title, image, form. Only X/Save
+    /// The entire card as ONE scroll — title, image, form. Only X/Save
     /// are pinned (see pinnedControls), so content never clips at a fixed header
     /// and scrolls all the way to the bottom edge. A zero-size probe reports the
     /// content offset so the gesture knows when it's pinned to the top.
     private var scrollContent: some View {
         ScrollView {
             VStack(spacing: LayoutMetrics.large) {
-                grabber
                 Text("Edit item")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(AppPalette.textStrong)
@@ -1052,19 +1055,6 @@ private struct ProductLightbox: View {
         .onPreferenceChange(ScrollTopKey.self) { atTop = $0 >= -1 }
     }
 
-    /// Small drag affordance at the very top of the card. TAP to toggle full
-    /// screen (reliable path that bypasses the scroll-coordinated drag).
-    private var grabber: some View {
-        Capsule()
-            .fill(AppPalette.textFaint.opacity(0.55))
-            .frame(width: 36, height: 5)
-            .padding(.top, 8)
-            .padding(.bottom, 2)
-            .frame(maxWidth: .infinity)
-            .contentShape(Rectangle())
-            .onTapGesture { setExpanded(!isFull) }
-    }
-
     /// Unified scroll/drag behaviour:
     ///   • card mode → any drag past a small threshold expands to full screen
     ///   • full + pinned to top → pulling down rubber-bands; a committed pull or
@@ -1072,21 +1062,27 @@ private struct ProductLightbox: View {
     private var sheetGesture: some Gesture {
         DragGesture(minimumDistance: 10, coordinateSpace: .local)
             .onChanged { v in
-                // Latch the intent to the state at the START of the drag, so a
-                // card-mode drag only ever expands — it can't expand AND then
-                // dismiss in the same motion (the "flash full then close" bug).
+                // Latch intent to the state at the START of the drag: full vs
+                // card (so a card drag only expands, never also dismisses) AND
+                // whether we began pinned to the top (so a mid-scroll drag never
+                // drags the sheet — it just scrolls back).
+                if dragStartFull == nil {
+                    dragStartFull = isFull
+                    dragStartedAtTop = atTop
+                }
                 let startedFull = dragStartFull ?? isFull
-                if dragStartFull == nil { dragStartFull = isFull }
 
                 if !startedFull {
                     if !isFull, abs(v.translation.height) > 10 { setExpanded(true) }
-                } else if atTop, v.translation.height > 0 {
+                } else if dragStartedAtTop, atTop, v.translation.height > 0 {
                     sheetDrag = v.translation.height * 0.7
                 }
             }
             .onEnded { v in
                 let startedFull = dragStartFull ?? isFull
+                let startedAtTop = dragStartedAtTop
                 dragStartFull = nil
+                dragStartedAtTop = false
 
                 // A card-started drag only expands; never dismisses here.
                 guard startedFull else {
@@ -1095,7 +1091,8 @@ private struct ProductLightbox: View {
                     }
                     return
                 }
-                if atTop {
+                // Only a pull-down that began (and stayed) at the top dismisses.
+                if startedAtTop, atTop {
                     let dy = v.translation.height
                     let flick = v.predictedEndTranslation.height
                     if dy > 120 || flick > 320 {
