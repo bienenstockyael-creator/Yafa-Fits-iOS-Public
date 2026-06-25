@@ -213,7 +213,7 @@ struct VibesLeaderboardSheet: View {
                     startPoint: .top,
                     endPoint: .bottom
                 )
-                .frame(height: 74)
+                .frame(height: 26)
                 .allowsHitTesting(false)
             }
             // Bleed the paging area through the bottom safe area so the list
@@ -284,7 +284,7 @@ struct VibesLeaderboardSheet: View {
                 // at rest; small bottom inset so the list clips right at the
                 // device edge (no fade, no gap).
                 .padding(.horizontal, 40)
-                .padding(.top, 78)
+                .padding(.top, 28)
                 .padding(.bottom, 24)
             }
             .scrollIndicators(.hidden)
@@ -318,13 +318,13 @@ struct VibesLeaderboardSheet: View {
                     // from the username highlighter (which sits at -7°) so the two
                     // read as a playful pair rather than parallel.
                     HStack(spacing: 5) {
-                        GradientFlameIcon(size: 22, stroked: false)
+                        GradientFlameIcon(size: 20, stroked: false)
                         Text("\(entry.count)")
-                            .font(.system(size: 17, weight: .semibold))
+                            .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(AppPalette.textStrong)
                     }
-                    .padding(.horizontal, 13)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
                     .appCapsule(shadowRadius: 0, shadowY: 0)
                     .rotationEffect(.degrees(7))
                 }
