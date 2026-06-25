@@ -135,9 +135,14 @@ struct SocialService {
         return (rows?.isEmpty ?? true)
     }
 
+    /// Plain UPDATE keyed by id (the profile row always exists for an
+    /// established user — it's created by the signup trigger). NOT an upsert:
+    /// upsert is INSERT … ON CONFLICT, which Postgres evaluates against the
+    /// INSERT RLS policy too — and if the profiles table only grants UPDATE to
+    /// the owner (the common setup), the upsert silently fails and edits (e.g.
+    /// a new username) never reach the server, reverting on the next launch.
     static func updateProfile(_ profile: Profile) async throws {
-        struct ProfileUpsertFull: Encodable {
-            let id: String
+        struct ProfileUpdate: Encodable {
             let username: String?
             let display_name: String?
             let avatar_url: String?
@@ -145,13 +150,13 @@ struct SocialService {
         }
         try await supabase
             .from("profiles")
-            .upsert(ProfileUpsertFull(
-                id: profile.id.uuidString,
+            .update(ProfileUpdate(
                 username: profile.username,
                 display_name: profile.displayName,
                 avatar_url: profile.avatarUrl,
                 bio: profile.bio
-            ), onConflict: "id")
+            ))
+            .eq("id", value: profile.id.uuidString)
             .execute()
     }
 

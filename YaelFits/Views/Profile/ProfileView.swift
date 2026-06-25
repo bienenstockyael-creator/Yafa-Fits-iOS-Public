@@ -11,6 +11,9 @@ struct ProfileView: View {
     @State private var bio = ""
     @State private var isSaving = false
     @State private var showSaved = false
+    /// Surfaced when the profile write fails (e.g. a taken username) so the
+    /// save doesn't silently look successful while reverting on next launch.
+    @State private var saveError: String?
     /// Local input + state for the phone-management row. Phone
     /// has its own save flow (separate write to `phone_e164_hash`)
     /// because the main "Save" button doesn't touch hashes.
@@ -98,6 +101,13 @@ struct ProfileView: View {
                     formSection
                     phoneSection
                     saveButton
+                    if let saveError {
+                        Text(saveError)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.red)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity)
+                    }
                     statsSection
                     accountExtrasSection
                     signOutSection
@@ -795,6 +805,7 @@ struct ProfileView: View {
         isSaving = true
         showSaved = false
         phoneError = nil
+        saveError = nil
 
         Task {
             // 1. Save phone hash separately if there's a valid
@@ -828,7 +839,18 @@ struct ProfileView: View {
                 avatarUrl: store.currentProfile?.avatarUrl,
                 bio: bio.isEmpty ? nil : bio
             )
-            try? await SocialService.updateProfile(profile)
+            do {
+                try await SocialService.updateProfile(profile)
+            } catch {
+                // Don't cache / show "Saved" on a failed write — otherwise the
+                // local cache diverges from the server and the next launch's
+                // re-fetch silently reverts the change.
+                await MainActor.run {
+                    isSaving = false
+                    saveError = "Couldn’t save — that username may be taken."
+                }
+                return
+            }
             LocalCache.saveProfile(profile, userId: userId)
             await MainActor.run {
                 // Preserve the phone hash that was just written
