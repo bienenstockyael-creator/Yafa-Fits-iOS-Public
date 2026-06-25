@@ -156,16 +156,17 @@ struct VibesLeaderboardSheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                Picker("", selection: $window.animation(.easeInOut(duration: 0.2))) {
-                    Text("This week").tag(VibeWindow.thisWeek)
-                    Text("All time").tag(VibeWindow.allTime)
+                // Small all-caps tab labels — the app's section-label style.
+                HStack(spacing: LayoutMetrics.medium) {
+                    tab("THIS WEEK", value: .thisWeek)
+                    tab("ALL TIME", value: .allTime)
+                    Spacer()
                 }
-                .pickerStyle(.segmented)
                 .padding(.horizontal, LayoutMetrics.screenPadding)
                 .padding(.top, LayoutMetrics.small)
-                .padding(.bottom, LayoutMetrics.xSmall)
+                .padding(.bottom, LayoutMetrics.small)
 
-                // Two swipeable pages, in sync with the picker above.
+                // Two swipeable pages, in sync with the tabs above.
                 TabView(selection: $window) {
                     page(entries: weekEntries, loading: weekLoading)
                         .tag(VibeWindow.thisWeek)
@@ -193,6 +194,18 @@ struct VibesLeaderboardSheet: View {
         }
     }
 
+    private func tab(_ title: String, value: VibeWindow) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.25)) { window = value }
+        } label: {
+            Text(title)
+                .font(.system(size: 11, weight: .semibold))
+                .tracking(1.4)
+                .foregroundStyle(window == value ? AppPalette.textStrong : AppPalette.textFaint)
+        }
+        .buttonStyle(SolidPressButtonStyle())
+    }
+
     @ViewBuilder
     private func page(entries: [VibeRankEntry], loading: Bool) -> some View {
         if loading {
@@ -213,13 +226,13 @@ struct VibesLeaderboardSheet: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ScrollView {
-                LazyVStack(spacing: LayoutMetrics.xSmall) {
+                LazyVStack(spacing: LayoutMetrics.small) {
                     ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
                         row(rank: index + 1, entry: entry)
                     }
                 }
                 .padding(.horizontal, LayoutMetrics.screenPadding)
-                .padding(.vertical, LayoutMetrics.small)
+                .padding(.vertical, LayoutMetrics.medium)
             }
             .scrollIndicators(.hidden)
         }
@@ -229,27 +242,24 @@ struct VibesLeaderboardSheet: View {
         Button {
             selectedUserId = IdentifiableUUID(id: entry.profile.id)
         } label: {
-            HStack(spacing: LayoutMetrics.small) {
-                Text("\(rank)")
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                    .foregroundStyle(rank <= 3 ? AppPalette.textStrong : AppPalette.textMuted)
-                    .frame(width: 26, alignment: .center)
-
-                VibesLeaderboardBust(profile: entry.profile)
-
-                Spacer(minLength: 0)
-
+            HStack(spacing: 0) {
+                // The big rank number, with the bust laid on top of its right
+                // edge (negative spacing = overlap; zIndex keeps the bust above).
+                HStack(spacing: -26) {
+                    Text("\(rank)")
+                        .font(.system(size: 86, weight: .bold, design: .rounded))
+                        .foregroundStyle(AppPalette.textStrong)
+                    VibesLeaderboardBust(profile: entry.profile, avatarSize: 86)
+                        .zIndex(1)
+                }
+                Spacer(minLength: 8)
                 HStack(spacing: 5) {
                     GradientFlameIcon(size: 22, stroked: false)
                     Text("\(entry.count)")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(AppPalette.textStrong)
                 }
             }
-            .padding(.vertical, 8)
-            .padding(.horizontal, LayoutMetrics.small)
-            .frame(maxWidth: .infinity)
-            .appCard(cornerRadius: 18, shadowRadius: 0, shadowY: 0)
         }
         .buttonStyle(SolidPressButtonStyle())
     }
@@ -265,27 +275,35 @@ struct VibesLeaderboardSheet: View {
     }
 }
 
-/// Bust-style avatar for a leaderboard row: the bg-removed cut-out when the
-/// person has one, otherwise their normal photo framed into the same bust crop
-/// (filled + clipped so the head/shoulders read as a bust). The @handle rides
-/// on it as a highlighter blob, matching the bust profile-header style.
+/// Bust rendered to match the profile-header bust EXACTLY, just scaled to
+/// `avatarSize` — same proportions and the same -7° rotated highlighter handle
+/// (ratios mirror ProfileHeaderMetrics' live bust at avatarSize 132). Uses the
+/// bg-removed cut-out when the person has one; otherwise frames their photo.
 private struct VibesLeaderboardBust: View {
     let profile: Profile
+    var avatarSize: CGFloat = 86
 
-    private let bustWidth: CGFloat = 58
-    private let bustHeight: CGFloat = 62
+    private var s: CGFloat { avatarSize / 132 }            // liveAvatarSize
+    private var frameWidth: CGFloat { 180 * s }            // liveBustFrameWidth
+    private var extraHeight: CGFloat { 32 * s }            // liveBustExtraHeight
+    private var highlighterFont: CGFloat { 18 * s }        // liveHighlighterFontSize
+    private var highlighterOffset: CGFloat { avatarSize * 0.38 } // bustHighlighterOffsetRatio
 
     var body: some View {
         let accent = ProfileHeaderAccentColor.color(for: profile.headerAccentColor)
         let handle = profile.username.map { "@\($0)" } ?? profile.handle
-        ZStack(alignment: .bottom) {
+        ZStack {
             bustImage
-            HighlighterUsername(text: handle, color: accent, fontSize: 10)
-                .offset(y: 8)
-                .allowsHitTesting(false)
+            HighlighterUsername(
+                text: handle,
+                color: accent,
+                fontSize: highlighterFont,
+                rotation: -7
+            )
+            .offset(y: highlighterOffset)
+            .allowsHitTesting(false)
         }
-        // Wider than the image so the @handle highlighter has room.
-        .frame(width: 104, height: bustHeight, alignment: .bottom)
+        .frame(width: frameWidth, height: avatarSize + extraHeight)
     }
 
     @ViewBuilder
@@ -299,13 +317,13 @@ private struct VibesLeaderboardBust: View {
                     framedPhoto
                 }
             }
-            .frame(width: bustWidth, height: bustHeight)
+            .frame(width: frameWidth, height: avatarSize)
         } else {
             framedPhoto
         }
     }
 
-    // No cut-out → frame the regular photo into the bust crop.
+    // No cut-out → frame the regular photo into a portrait bust crop.
     private var framedPhoto: some View {
         Group {
             if let avatar = profile.avatarUrl, let url = URL(string: avatar) {
@@ -320,10 +338,10 @@ private struct VibesLeaderboardBust: View {
                 initialFill
             }
         }
-        .frame(width: bustWidth, height: bustHeight)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .frame(width: avatarSize * 0.84, height: avatarSize)
+        .clipShape(RoundedRectangle(cornerRadius: avatarSize * 0.18, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: avatarSize * 0.18, style: .continuous)
                 .strokeBorder(AppPalette.cardBorder, lineWidth: 0.75)
         )
     }
@@ -332,7 +350,7 @@ private struct VibesLeaderboardBust: View {
         ZStack {
             AppPalette.cardBorder.opacity(0.35)
             Text(profile.initial)
-                .font(.system(size: 22, weight: .semibold))
+                .font(.system(size: avatarSize * 0.32, weight: .semibold))
                 .foregroundStyle(AppPalette.textMuted)
         }
     }
