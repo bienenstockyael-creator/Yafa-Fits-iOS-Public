@@ -147,6 +147,7 @@ struct VibesLeaderboardSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var window: VibeWindow = .thisWeek
+    @Namespace private var tabUnderline
     @State private var weekEntries: [VibeRankEntry] = []
     @State private var allTimeEntries: [VibeRankEntry] = []
     @State private var weekLoading = true
@@ -162,6 +163,8 @@ struct VibesLeaderboardSheet: View {
                     tab("ALL TIME", value: .allTime)
                 }
                 .frame(maxWidth: .infinity)
+                // Drives the underline slide for BOTH a tap and a page swipe.
+                .animation(.spring(response: 0.34, dampingFraction: 0.82), value: window)
                 .padding(.top, LayoutMetrics.small)
                 .padding(.bottom, LayoutMetrics.small)
 
@@ -195,16 +198,24 @@ struct VibesLeaderboardSheet: View {
 
     private func tab(_ title: String, value: VibeWindow) -> some View {
         Button {
-            withAnimation(.easeInOut(duration: 0.25)) { window = value }
+            window = value
         } label: {
-            VStack(spacing: 5) {
+            VStack(spacing: 6) {
                 Text(title)
                     .font(.system(size: 11, weight: .semibold))
                     .tracking(1.4)
                     .foregroundStyle(window == value ? AppPalette.textStrong : AppPalette.textFaint)
-                Capsule()
-                    .fill(window == value ? AppPalette.textStrong : Color.clear)
-                    .frame(width: 14, height: 2)
+                // A single underline (full text width) that slides between the
+                // tabs via matched geometry. The clear capsule reserves height.
+                ZStack {
+                    Capsule().fill(Color.clear).frame(height: 2.5)
+                    if window == value {
+                        Capsule()
+                            .fill(AppPalette.textStrong)
+                            .frame(height: 2.5)
+                            .matchedGeometryEffect(id: "tab-underline", in: tabUnderline)
+                    }
+                }
             }
         }
         .buttonStyle(SolidPressButtonStyle())
@@ -237,7 +248,7 @@ struct VibesLeaderboardSheet: View {
                 }
                 // Pull everything in from the edges, and clear the bottom so the
                 // last row never clips against the viewport / home indicator.
-                .padding(.horizontal, LayoutMetrics.xLarge)
+                .padding(.horizontal, 40)
                 .padding(.top, LayoutMetrics.medium)
                 .padding(.bottom, 80)
             }
@@ -252,11 +263,11 @@ struct VibesLeaderboardSheet: View {
             HStack(spacing: 0) {
                 // The big Adieu rank number, with the bust laid on top of it
                 // (negative spacing = overlap; zIndex keeps the bust above).
-                HStack(spacing: -44) {
+                HStack(spacing: -60) {
                     Text("\(rank)")
                         .font(.custom("GTFAdieuTRIAL-BlackSlanted", size: 92))
                         .foregroundStyle(AppPalette.textStrong)
-                    VibesLeaderboardBust(profile: entry.profile, avatarSize: 86)
+                    VibesLeaderboardBust(profile: entry.profile, avatarSize: 130)
                         .zIndex(1)
                 }
                 Spacer(minLength: 12)
@@ -311,7 +322,9 @@ private struct VibesLeaderboardBust: View {
                 text: handle,
                 color: accent,
                 fontSize: highlighterFont,
-                rotation: -7
+                horizontalPadding: 3,
+                rotation: -7,
+                cornerRadius: 4
             )
             .offset(y: highlighterOffset)
             .allowsHitTesting(false)
