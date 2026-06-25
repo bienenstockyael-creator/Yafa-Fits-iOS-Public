@@ -1656,7 +1656,8 @@ private final class SimultaneousGestureDelegate: NSObject, UIGestureRecognizerDe
 /// once the listing is published.
 struct GetExtensionSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.openURL) private var openURL
+
+    @State private var didCopy = false
 
     /// Set to true once the extension is live on the Web Store.
     private let isLive = true
@@ -1703,13 +1704,22 @@ struct GetExtensionSheet: View {
                 // (AirDrop to their Mac / Messages / Copy) to get it onto their
                 // computer, rather than opening a store page they can't install
                 // from here.
-                // Explicit preview so ShareLink doesn't stall fetching the
-                // store page's metadata before the share sheet can open.
-                ShareLink(item: storeURL, preview: SharePreview("Yafa for Chrome")) {
+                // Copy (instant) instead of the share sheet, which has a
+                // system cold-start delay. Paste it on your computer — Universal
+                // Clipboard syncs it to a Mac, or paste into any message.
+                Button {
+                    UIPasteboard.general.url = storeURL
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    withAnimation(.easeInOut(duration: 0.2)) { didCopy = true }
+                    Task {
+                        try? await Task.sleep(for: .seconds(2))
+                        withAnimation(.easeInOut(duration: 0.2)) { didCopy = false }
+                    }
+                } label: {
                     HStack(spacing: 7) {
-                        Image(systemName: "square.and.arrow.up")
+                        Image(systemName: didCopy ? "checkmark" : "link")
                             .font(.system(size: 12, weight: .semibold))
-                        Text("SEND LINK TO YOUR COMPUTER")
+                        Text(didCopy ? "LINK COPIED" : "COPY EXTENSION LINK")
                             .font(.system(size: 12, weight: .semibold))
                             .tracking(1.5)
                     }
