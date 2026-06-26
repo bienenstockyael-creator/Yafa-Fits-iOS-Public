@@ -280,22 +280,17 @@ struct ProfileShareSheet: View {
         return UIImage(data: data)
     }()
 
-    /// Light-gray label with a tilt-reactive "shine": a bright highlight that
-    /// slides across the glyphs as the phone moves — driven by the same
-    /// `HoloMotionTracker` as the holo card — so the text catches light like the
-    /// shiny patch on frosted paper. At rest the highlight rests near center.
-    private struct ShinyLabel: View {
-        let text: String
-        let font: Font
-        let tracking: CGFloat
+    /// Tilt-reactive "shine": light-gray base + a bright highlight that slides
+    /// across the content's shape as the phone moves (driven by the same
+    /// `HoloMotionTracker` as the holo card), like light catching frosted paper.
+    private struct TiltShine: ViewModifier {
         var base: Color = Color(white: 0.66)
 
-        var body: some View {
+        func body(content: Content) -> some View {
             TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { _ in
-                // Highlight position sweeps across the text with device roll.
                 let roll = HoloMotionTracker.shared.roll
                 let c = min(max(0.5 + roll * 0.55, 0.06), 0.94)
-                label
+                content
                     .foregroundStyle(base)
                     .overlay {
                         LinearGradient(
@@ -308,13 +303,9 @@ struct ProfileShareSheet: View {
                             endPoint: .trailing
                         )
                         .blendMode(.plusLighter)
-                        .mask(label)
+                        .mask(content)
                     }
             }
-        }
-
-        private var label: some View {
-            Text(text).font(font).tracking(tracking)
         }
     }
 
@@ -534,12 +525,26 @@ struct ProfileShareSheet: View {
                         }
                     }
 
-                ShinyLabel(
-                    text: "add me on yafa!",
-                    font: Font.custom("Inter28pt-SemiBold", size: 26 * scale),
-                    tracking: -1.13 * scale
-                )
-                .offset(y: -cardHeight * 0.42)
+                // "add me on" — small, Adieu Black, top-left.
+                Text("add me on")
+                    .font(.custom("GTFAdieuTRIAL-BlackSlanted", size: 30 * scale))
+                    .modifier(TiltShine())
+                    .frame(width: cardWidth, alignment: .leading)
+                    .padding(.leading, 18 * scale)
+                    .offset(y: -cardHeight * 0.42)
+                    .allowsHitTesting(false)
+
+                // Big vertical YAFA wordmark down the LEFT edge (Adieu Black) —
+                // like PUMA on a vintage trading card.
+                VStack(spacing: -cardHeight * 0.04) {
+                    ForEach(Array("YAFA".enumerated()), id: \.offset) { _, ch in
+                        Text(String(ch))
+                            .font(.custom("GTFAdieuTRIAL-BlackSlanted", size: cardHeight * 0.22))
+                    }
+                }
+                .modifier(TiltShine())
+                .padding(.leading, 12 * scale)
+                .frame(width: cardWidth, height: cardHeight, alignment: .leading)
                 .allowsHitTesting(false)
 
                 // Bottom @handle label — for the outfit and silhouette
