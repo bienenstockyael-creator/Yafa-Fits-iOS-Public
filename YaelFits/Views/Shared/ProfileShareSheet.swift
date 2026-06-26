@@ -158,20 +158,29 @@ struct ProfileShareSheet: View {
                 .aspectRatio(contentMode: .fit)
                 .frame(height: height)
                 .transition(.opacity)
+        } else if let cutoutURL = remoteURL(store.currentProfile?.avatarCutoutUrl) {
+            // Remote bust cut-out beats the circle avatar — the share card
+            // always heroes the bust whenever a photo exists, regardless of the
+            // user's header style. (Previously the in-memory circle avatar was
+            // checked first, so a cut-out that only existed as a saved URL got
+            // skipped — the rounded-avatar regression.)
+            AsyncImage(url: cutoutURL) { phase in
+                if let image = phase.image {
+                    image.resizable().aspectRatio(contentMode: .fit).frame(height: height)
+                } else if let avatar = store.currentAvatarImage {
+                    // Cut-out still downloading → show the circle avatar meanwhile.
+                    Image(uiImage: avatar).resizable().aspectRatio(contentMode: .fill)
+                        .frame(width: height, height: height).clipShape(Circle())
+                } else {
+                    silhouette(height: height)
+                }
+            }
         } else if let avatar = store.currentAvatarImage {
             Image(uiImage: avatar)
                 .resizable()
                 .aspectRatio(contentMode: .fill)
                 .frame(width: height, height: height)
                 .clipShape(Circle())
-        } else if let cutoutURL = remoteURL(store.currentProfile?.avatarCutoutUrl) {
-            AsyncImage(url: cutoutURL) { phase in
-                if let image = phase.image {
-                    image.resizable().aspectRatio(contentMode: .fit).frame(height: height)
-                } else {
-                    silhouette(height: height)
-                }
-            }
         } else if let avatarURL = remoteURL(store.currentProfile?.avatarUrl) {
             AsyncImage(url: avatarURL) { phase in
                 if let image = phase.image {
