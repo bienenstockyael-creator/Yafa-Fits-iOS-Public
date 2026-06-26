@@ -280,8 +280,8 @@ struct ProfileShareSheet: View {
         return UIImage(data: data)
     }()
 
-    /// "add me on yafa" wordmark SHAPE (white on transparent), loaded once. Used
-    /// as a mask for the live chrome fill behind the outfit.
+    /// Baked chrome "add me on yafa" wordmark (beveled tube + environment
+    /// reflection), loaded once. Sits behind the outfit on the card.
     private static let chromeWordmark: UIImage? = {
         guard let url = Bundle.main.url(forResource: "share-chrome-wordmark", withExtension: "webp"),
               let data = try? Data(contentsOf: url)
@@ -289,54 +289,35 @@ struct ProfileShareSheet: View {
         return UIImage(data: data)
     }()
 
-    /// Live chrome fill for the wordmark: a metallic gradient masked to the
-    /// design shape that SHIFTS and SKEWS with device tilt (and a moving glint),
-    /// so it reflects light as the phone moves — driven by the same
-    /// `HoloMotionTracker` as the holo card, instead of a static baked texture.
+    /// The baked chrome wordmark with a live travelling glint on top, so the
+    /// chrome also catches the light as the phone tilts (driven by the same
+    /// `HoloMotionTracker` as the holo card).
     private struct ChromeWordmark: View {
-        let shape: UIImage
+        let image: UIImage
 
-        // Symmetric metallic ramp (dark ends) so it slides cleanly under tilt.
-        private let stops: [Gradient.Stop] = [
-            .init(color: Color(red: 0.18, green: 0.22, blue: 0.32), location: 0.00),
-            .init(color: Color(red: 0.72, green: 0.78, blue: 0.88), location: 0.22),
-            .init(color: Color(red: 0.97, green: 0.98, blue: 1.00), location: 0.42),
-            .init(color: .white,                                    location: 0.50),
-            .init(color: Color(red: 0.40, green: 0.47, blue: 0.58), location: 0.60),
-            .init(color: Color(red: 0.20, green: 0.25, blue: 0.36), location: 0.80),
-            .init(color: Color(red: 0.18, green: 0.22, blue: 0.32), location: 1.00),
-        ]
+        private var art: some View {
+            Image(uiImage: image).resizable().aspectRatio(contentMode: .fit)
+        }
 
         var body: some View {
             TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { _ in
                 let roll = CGFloat(HoloMotionTracker.shared.roll)
                 let pitch = CGFloat(HoloMotionTracker.shared.pitch)
-                let glint = min(max(0.5 + roll * 0.45, 0.0), 1.0)
-                LinearGradient(
-                    stops: stops,
-                    // Horizon slides with pitch, the whole ramp skews with roll —
-                    // the chrome "reflects" the room as the phone moves.
-                    startPoint: UnitPoint(x: 0.5 - roll * 0.32, y: -0.45 + pitch * 0.55),
-                    endPoint:   UnitPoint(x: 0.5 + roll * 0.32, y:  1.45 + pitch * 0.55)
-                )
-                .overlay {
-                    // A travelling specular glint for extra "catching the light".
-                    LinearGradient(
-                        stops: [
-                            .init(color: .white.opacity(0.0), location: max(0, glint - 0.16)),
-                            .init(color: .white.opacity(0.75), location: glint),
-                            .init(color: .white.opacity(0.0), location: min(1, glint + 0.16)),
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                    .blendMode(.plusLighter)
-                }
-                .mask {
-                    Image(uiImage: shape)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                }
+                let g = min(max(0.5 + roll * 0.5 + pitch * 0.2, 0.0), 1.0)
+                art
+                    .overlay {
+                        LinearGradient(
+                            stops: [
+                                .init(color: .white.opacity(0.0), location: max(0, g - 0.13)),
+                                .init(color: .white.opacity(0.6), location: g),
+                                .init(color: .white.opacity(0.0), location: min(1, g + 0.13)),
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                        .blendMode(.plusLighter)
+                        .mask(art)
+                    }
             }
         }
     }
@@ -559,8 +540,8 @@ struct ProfileShareSheet: View {
 
                 // Live chrome "add me on yafa" wordmark, behind the outfit
                 // (replaces the old plain top label). Reflects with device tilt.
-                if let shape = Self.chromeWordmark {
-                    ChromeWordmark(shape: shape)
+                if let chrome = Self.chromeWordmark {
+                    ChromeWordmark(image: chrome)
                         .frame(height: cardHeight * 0.9)
                         .allowsHitTesting(false)
                 }
