@@ -271,6 +271,44 @@ struct ProfileShareSheet: View {
         return UIImage(data: data)
     }()
 
+    /// Light-gray label with a tilt-reactive "shine": a bright highlight that
+    /// slides across the glyphs as the phone moves — driven by the same
+    /// `HoloMotionTracker` as the holo card — so the text catches light like the
+    /// shiny patch on frosted paper. At rest the highlight rests near center.
+    private struct ShinyLabel: View {
+        let text: String
+        let font: Font
+        let tracking: CGFloat
+        var base: Color = Color(white: 0.66)
+
+        var body: some View {
+            TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { _ in
+                // Highlight position sweeps across the text with device roll.
+                let roll = HoloMotionTracker.shared.roll
+                let c = min(max(0.5 + roll * 0.55, 0.06), 0.94)
+                label
+                    .foregroundStyle(base)
+                    .overlay {
+                        LinearGradient(
+                            stops: [
+                                .init(color: .white.opacity(0.0), location: 0),
+                                .init(color: .white.opacity(0.9), location: c),
+                                .init(color: .white.opacity(0.0), location: 1),
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                        .blendMode(.plusLighter)
+                        .mask(label)
+                    }
+            }
+        }
+
+        private var label: some View {
+            Text(text).font(font).tracking(tracking)
+        }
+    }
+
     private var shareURL: URL? {
         guard let username = store.currentProfile?.username, !username.isEmpty
         else { return nil }
@@ -487,12 +525,13 @@ struct ProfileShareSheet: View {
                         }
                     }
 
-                Text("add me on Yafa!")
-                    .font(labelFont)
-                    .tracking(-1.13 * scale)
-                    .foregroundStyle(.black)
-                    .offset(y: -cardHeight * 0.42)
-                    .allowsHitTesting(false)
+                ShinyLabel(
+                    text: "add me on yafa!",
+                    font: Font.custom("Inter28pt-SemiBold", size: 26 * scale),
+                    tracking: -1.13 * scale
+                )
+                .offset(y: -cardHeight * 0.42)
+                .allowsHitTesting(false)
 
                 // Bottom @handle label — for the outfit and silhouette
                 // cards. The photo-bust card instead overlaps the
