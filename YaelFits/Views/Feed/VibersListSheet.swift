@@ -298,6 +298,14 @@ struct VibesLeaderboardSheet: View {
         }
     }
 
+    /// A small, varied tilt per rank so the vibe pills don't all lean the same
+    /// way (mostly counter to the username highlighter's -7°, with a few the
+    /// other way for scatter).
+    private func pillTilt(for rank: Int) -> Double {
+        let tilts: [Double] = [7, 12, 4, 9, -4, 6, 11, 3]
+        return tilts[max(0, rank - 1) % tilts.count]
+    }
+
     private func row(rank: Int, entry: VibeRankEntry) -> some View {
         Button {
             selectedUserId = IdentifiableUUID(id: entry.profile.id)
@@ -331,7 +339,9 @@ struct VibesLeaderboardSheet: View {
                     // Soft light-blue glow under the pill, echoing the vibe
                     // droplet — same treatment as the weather pills.
                     .shadow(color: Color(red: 0.58, green: 0.81, blue: 1.0).opacity(0.5), radius: 13, y: 2)
-                    .rotationEffect(.degrees(7))
+                    // Each pill tilts a touch differently so they read as
+                    // scattered stickers, not a uniform set.
+                    .rotationEffect(.degrees(pillTilt(for: rank)))
                 }
                 Spacer(minLength: 0)
             }
