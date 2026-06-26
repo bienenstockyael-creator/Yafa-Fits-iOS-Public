@@ -271,6 +271,15 @@ struct ProfileShareSheet: View {
         return UIImage(data: data)
     }()
 
+    /// The Yafa brand mark (`logo.png`, the figure lineup), loaded once. Sits in
+    /// the bottom-right corner of every share card.
+    private static let logoImage: UIImage? = {
+        guard let url = Bundle.main.url(forResource: "logo", withExtension: "png"),
+              let data = try? Data(contentsOf: url)
+        else { return nil }
+        return UIImage(data: data)
+    }()
+
     private var shareURL: URL? {
         guard let username = store.currentProfile?.username, !username.isEmpty
         else { return nil }
@@ -474,6 +483,18 @@ struct ProfileShareSheet: View {
                     .frame(width: cardWidth, height: cardHeight)
                     .holoOverlay(active: true, cornerRadius: 24 * scale)
                     .shadow(color: .black.opacity(0.14), radius: 16, y: 10)
+                    // Yafa brand mark, bottom-right of every card.
+                    .overlay(alignment: .bottomTrailing) {
+                        if let logo = Self.logoImage {
+                            Image(uiImage: logo)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: cardWidth * 0.22)
+                                .padding(.trailing, 16 * scale)
+                                .padding(.bottom, 14 * scale)
+                                .allowsHitTesting(false)
+                        }
+                    }
 
                 Text("add me on Yafa!")
                     .font(labelFont)
