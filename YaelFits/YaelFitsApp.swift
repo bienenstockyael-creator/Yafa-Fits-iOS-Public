@@ -325,7 +325,7 @@ struct WhatsNewModal: View {
                     .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(AppPalette.textStrong)
                     .multilineTextAlignment(.center)
-                Text("Add anything you love straight to your closet — from your phone or your computer.")
+                Text("Add anything you love straight to your closet from your phone or your computer.")
                     .font(.system(size: 15))
                     .foregroundStyle(AppPalette.textMuted)
                     .multilineTextAlignment(.center)
@@ -348,9 +348,13 @@ struct WhatsNewModal: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.top, 2)
 
-            // Primary CTA matches the app convention (single GOT IT capsule).
-            Button(action: dismiss) {
-                Text("GOT IT")
+            // Primary CTA — get the Chrome extension (the #1 action).
+            Button {
+                markSeen()
+                withAnimation { isVisible = false }
+                showGetExtension = true
+            } label: {
+                Text("GET THE CHROME EXTENSION")
                     .font(.system(size: 12, weight: .semibold))
                     .tracking(1.5)
                     .foregroundStyle(AppPalette.textPrimary)
@@ -361,13 +365,9 @@ struct WhatsNewModal: View {
             .buttonStyle(SolidPressButtonStyle())
             .padding(.top, LayoutMetrics.xSmall)
 
-            // Quiet secondary link to the desktop setup sheet.
-            Button {
-                markSeen()
-                withAnimation { isVisible = false }
-                showGetExtension = true
-            } label: {
-                Text("Set up the Chrome extension")
+            // Quiet dismiss.
+            Button(action: dismiss) {
+                Text("Got it")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(AppPalette.textMuted)
             }
@@ -382,11 +382,9 @@ struct WhatsNewModal: View {
     private func infoRow(icon: String, title: String, body: String) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(AppPalette.textStrong)
-                .frame(width: 30, height: 30)
-                .background(Circle().fill(AppPalette.cardFill))
-                .overlay(Circle().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
+                .frame(width: 26, height: 26)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.system(size: 13, weight: .semibold))
