@@ -280,6 +280,15 @@ struct ProfileShareSheet: View {
         return UIImage(data: data)
     }()
 
+    /// Chrome "add me on yafa" wordmark, loaded once. Sits behind the outfit on
+    /// the card (replaces the plain top label).
+    private static let chromeWordmark: UIImage? = {
+        guard let url = Bundle.main.url(forResource: "share-chrome-wordmark", withExtension: "webp"),
+              let data = try? Data(contentsOf: url)
+        else { return nil }
+        return UIImage(data: data)
+    }()
+
     private var shareURL: URL? {
         guard let username = store.currentProfile?.username, !username.isEmpty
         else { return nil }
@@ -496,12 +505,15 @@ struct ProfileShareSheet: View {
                         }
                     }
 
-                Text("add me on Yafa!")
-                    .font(labelFont)
-                    .tracking(-1.13 * scale)
-                    .foregroundStyle(.black)
-                    .offset(y: -cardHeight * 0.42)
-                    .allowsHitTesting(false)
+                // Chrome "add me on yafa" wordmark, behind the outfit (replaces
+                // the old plain top label).
+                if let chrome = Self.chromeWordmark {
+                    Image(uiImage: chrome)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(height: cardHeight * 0.9)
+                        .allowsHitTesting(false)
+                }
 
                 // Bottom @handle label — for the outfit and silhouette
                 // cards. The photo-bust card instead overlaps the
