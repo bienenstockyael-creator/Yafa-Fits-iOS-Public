@@ -46,6 +46,7 @@ struct EmptyFollowingView: View {
     // approaches them, then the button + top avatars follow.
 
     var body: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             LazyVStack(spacing: 0) {
                 // UIKit-backed scroll tracker — the comment at the
@@ -71,6 +72,7 @@ struct EmptyFollowingView: View {
                     }
                 }
                 .frame(width: 0, height: 0)
+                .id("efvTop")
 
                 PinnedHero(
                     scrollState: heroScrollState,
@@ -93,6 +95,13 @@ struct EmptyFollowingView: View {
             // wait out the hero's entry-animation window.
             await loadCommunityIfNeeded(viewMountedAt: Date())
         }
+        // Globe (Friends) tab re-tap → snap to top + refresh, matching the
+        // friends feed so the two surfaces behave the same.
+        .onChange(of: store.feedScrollToTopTrigger) { _, _ in
+            withAnimation { proxy.scrollTo("efvTop", anchor: .top) }
+            Task { await refreshCommunity() }
+        }
+        } // ScrollViewReader
     }
 
     // MARK: - Community section
@@ -158,6 +167,15 @@ struct EmptyFollowingView: View {
         // pre-warm, killed disco-ball 3× ramp) are doing most of
         // the work keeping the springs smooth.)
         _ = mountTime  // retained on the signature for future use
+        let posts = await ContentSource.getPublicFeed()
+        await MainActor.run { communityPosts = posts }
+        await loadCounts(for: posts.map(\.outfitId))
+        await loadVibes(for: posts.map(\.outfitId))
+    }
+
+    /// Force-reloads the community feed (globe re-tap refresh) — the same fetch
+    /// as `loadCommunityIfNeeded` but without the once-per-mount guard.
+    private func refreshCommunity() async {
         let posts = await ContentSource.getPublicFeed()
         await MainActor.run { communityPosts = posts }
         await loadCounts(for: posts.map(\.outfitId))
