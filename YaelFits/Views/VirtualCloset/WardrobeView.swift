@@ -1685,7 +1685,7 @@ struct GetExtensionSheet: View {
 
             VStack(alignment: .leading, spacing: 14) {
                 stepRow("1", "On your computer, add the Yafa extension to Chrome")
-                stepRow("2", "Click the Yafa icon on any product page to save it")
+                stepRow("2", "Click the plus icon on any product page to save the item")
                 stepRow("3", "Tap “Add to Yafa” to send it to your closet")
             }
             .padding(LayoutMetrics.large)
