@@ -302,7 +302,7 @@ struct VibesLeaderboardSheet: View {
     /// even ranks the other) for a clean back-and-forth pattern, while the
     /// magnitude varies so they're never the exact same angle.
     private func pillTilt(for rank: Int) -> Double {
-        let magnitudes: [Double] = [9, 6, 11, 5, 8, 7, 10, 4]
+        let magnitudes: [Double] = [6, 4, 8, 3, 6, 5, 7, 3]
         let mag = magnitudes[max(0, rank - 1) % magnitudes.count]
         return rank % 2 == 1 ? mag : -mag
     }
