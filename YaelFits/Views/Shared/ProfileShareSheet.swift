@@ -271,70 +271,6 @@ struct ProfileShareSheet: View {
         return UIImage(data: data)
     }()
 
-    /// The Yafa brand mark (`logo.png`, the figure lineup), loaded once. Sits in
-    /// the bottom-right corner of every share card.
-    private static let logoImage: UIImage? = {
-        guard let url = Bundle.main.url(forResource: "logo", withExtension: "png"),
-              let data = try? Data(contentsOf: url)
-        else { return nil }
-        return UIImage(data: data)
-    }()
-
-    /// Tilt-reactive "shine": light-gray base + a bright highlight that slides
-    /// across the content's shape as the phone moves (driven by the same
-    /// `HoloMotionTracker` as the holo card), like light catching frosted paper.
-    private struct TiltShine: ViewModifier {
-        var base: Color = Color(white: 0.66)
-
-        func body(content: Content) -> some View {
-            TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { _ in
-                let roll = HoloMotionTracker.shared.roll
-                let pitch = HoloMotionTracker.shared.pitch
-                let cx = min(max(0.5 + roll * 0.45, 0.0), 1.0)
-                let cy = min(max(0.5 - pitch * 0.45, 0.0), 1.0)
-                content
-                    .foregroundStyle(base)
-                    .overlay {
-                        // Soft elliptical glow that drifts in 2D with tilt — reads
-                        // like light pooling on the surface, not a hard band.
-                        EllipticalGradient(
-                            stops: [
-                                .init(color: .white.opacity(0.55), location: 0.0),
-                                .init(color: .white.opacity(0.16), location: 0.5),
-                                .init(color: .white.opacity(0.0), location: 1.0),
-                            ],
-                            center: UnitPoint(x: cx, y: cy),
-                            startRadiusFraction: 0,
-                            endRadiusFraction: 0.9
-                        )
-                        .blendMode(.plusLighter)
-                        .mask(content)
-                    }
-            }
-        }
-    }
-
-    /// Text/stack with a very thin white outline behind the tilt-shine fill.
-    private struct ShinyStroked<Content: View>: View {
-        var strokeWidth: CGFloat = 0.8
-        var base: Color = Color(white: 0.66)
-        @ViewBuilder var content: () -> Content
-
-        var body: some View {
-            ZStack {
-                // Thin white outline — 8 offset white copies behind the fill.
-                ForEach(0..<8, id: \.self) { i in
-                    let a = Double(i) / 8.0 * 2.0 * Double.pi
-                    content()
-                        .foregroundStyle(.white)
-                        .offset(x: strokeWidth * CGFloat(cos(a)),
-                                y: strokeWidth * CGFloat(sin(a)))
-                }
-                content().modifier(TiltShine(base: base))
-            }
-        }
-    }
-
     private var shareURL: URL? {
         guard let username = store.currentProfile?.username, !username.isEmpty
         else { return nil }
@@ -538,45 +474,13 @@ struct ProfileShareSheet: View {
                     .frame(width: cardWidth, height: cardHeight)
                     .holoOverlay(active: true, cornerRadius: 24 * scale)
                     .shadow(color: .black.opacity(0.14), radius: 16, y: 10)
-                    // Yafa brand mark, bottom-left of every card.
-                    .overlay(alignment: .bottomLeading) {
-                        if let logo = Self.logoImage {
-                            Image(uiImage: logo)
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: cardWidth * 0.22)
-                                .padding(.leading, 16 * scale)
-                                .padding(.bottom, 14 * scale)
-                                .allowsHitTesting(false)
-                        }
-                    }
 
-                // "add me on" — small, Adieu Black, top-left.
-                ShinyStroked(strokeWidth: 0.8 * scale) {
-                    Text("add me on")
-                        .font(.custom("GTFAdieuTRIAL-BlackSlanted", size: 30 * scale))
-                }
-                .frame(width: cardWidth, alignment: .leading)
-                .padding(.leading, 18 * scale)
-                .offset(y: -cardHeight * 0.42)
-                .allowsHitTesting(false)
-
-                // Big vertical "yafa" wordmark down the RIGHT edge (Adieu Black) —
-                // like PUMA on a vintage trading card.
-                ShinyStroked(strokeWidth: 1.0 * scale, base: Color(white: 0.85)) {
-                    // Each letter gets an equal-height slot so the vertical gaps
-                    // are identical regardless of descenders/ascenders.
-                    VStack(spacing: 0) {
-                        ForEach(Array("yafa".enumerated()), id: \.offset) { _, ch in
-                            Text(String(ch))
-                                .font(.custom("GTFAdieuTRIAL-BlackSlanted", size: cardHeight * 0.26))
-                                .frame(height: cardHeight * 0.18)
-                        }
-                    }
-                }
-                .padding(.trailing, 12 * scale)
-                .frame(width: cardWidth, height: cardHeight, alignment: .trailing)
-                .allowsHitTesting(false)
+                Text("add me on Yafa!")
+                    .font(labelFont)
+                    .tracking(-1.13 * scale)
+                    .foregroundStyle(.black)
+                    .offset(y: -cardHeight * 0.42)
+                    .allowsHitTesting(false)
 
                 // Bottom @handle label — for the outfit and silhouette
                 // cards. The photo-bust card instead overlaps the
