@@ -317,6 +317,7 @@ struct ProfileShareSheet: View {
     /// Text/stack with a very thin white outline behind the tilt-shine fill.
     private struct ShinyStroked<Content: View>: View {
         var strokeWidth: CGFloat = 0.8
+        var base: Color = Color(white: 0.66)
         @ViewBuilder var content: () -> Content
 
         var body: some View {
@@ -329,7 +330,7 @@ struct ProfileShareSheet: View {
                         .offset(x: strokeWidth * CGFloat(cos(a)),
                                 y: strokeWidth * CGFloat(sin(a)))
                 }
-                content().modifier(TiltShine())
+                content().modifier(TiltShine(base: base))
             }
         }
     }
@@ -562,11 +563,14 @@ struct ProfileShareSheet: View {
 
                 // Big vertical "yafa" wordmark down the RIGHT edge (Adieu Black) —
                 // like PUMA on a vintage trading card.
-                ShinyStroked(strokeWidth: 1.0 * scale) {
-                    VStack(spacing: -cardHeight * 0.04) {
+                ShinyStroked(strokeWidth: 1.0 * scale, base: Color(white: 0.85)) {
+                    // Each letter gets an equal-height slot so the vertical gaps
+                    // are identical regardless of descenders/ascenders.
+                    VStack(spacing: 0) {
                         ForEach(Array("yafa".enumerated()), id: \.offset) { _, ch in
                             Text(String(ch))
-                                .font(.custom("GTFAdieuTRIAL-BlackSlanted", size: cardHeight * 0.22))
+                                .font(.custom("GTFAdieuTRIAL-BlackSlanted", size: cardHeight * 0.26))
+                                .frame(height: cardHeight * 0.18)
                         }
                     }
                 }
