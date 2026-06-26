@@ -298,12 +298,13 @@ struct VibesLeaderboardSheet: View {
         }
     }
 
-    /// A small, varied tilt per rank so the vibe pills don't all lean the same
-    /// way (mostly counter to the username highlighter's -7°, with a few the
-    /// other way for scatter).
+    /// Pill tilt per rank: the direction ALTERNATES (odd ranks lean one way,
+    /// even ranks the other) for a clean back-and-forth pattern, while the
+    /// magnitude varies so they're never the exact same angle.
     private func pillTilt(for rank: Int) -> Double {
-        let tilts: [Double] = [7, 12, 4, 9, -4, 6, 11, 3]
-        return tilts[max(0, rank - 1) % tilts.count]
+        let magnitudes: [Double] = [9, 6, 11, 5, 8, 7, 10, 4]
+        let mag = magnitudes[max(0, rank - 1) % magnitudes.count]
+        return rank % 2 == 1 ? mag : -mag
     }
 
     private func row(rank: Int, entry: VibeRankEntry) -> some View {
