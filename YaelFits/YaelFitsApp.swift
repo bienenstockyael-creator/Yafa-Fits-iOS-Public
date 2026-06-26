@@ -398,14 +398,8 @@ struct WhatsNewModal: View {
         }
     }
 
-    /// DEBUG ignores the "seen" flag so the popup shows on every launch (easy to
-    /// test without reinstalling); release respects once-per-device.
     private var alreadySeen: Bool {
-        #if DEBUG
-        false
-        #else
         UserDefaults.standard.bool(forKey: seenKey)
-        #endif
     }
 
     private func maybeShow() {
