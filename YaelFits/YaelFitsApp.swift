@@ -400,14 +400,22 @@ struct WhatsNewModal: View {
         }
     }
 
+    /// DEBUG ignores the "seen" flag so the popup shows on every launch (easy to
+    /// test without reinstalling); release respects once-per-device.
+    private var alreadySeen: Bool {
+        #if DEBUG
+        false
+        #else
+        UserDefaults.standard.bool(forKey: seenKey)
+        #endif
+    }
+
     private func maybeShow() {
-        guard active, !isVisible,
-              !UserDefaults.standard.bool(forKey: seenKey)
-        else { return }
+        guard active, !isVisible, !alreadySeen else { return }
         Task { @MainActor in
             // Brief delay so it doesn't collide with launch / onboarding hand-off.
             try? await Task.sleep(for: .seconds(0.7))
-            guard active, !UserDefaults.standard.bool(forKey: seenKey) else { return }
+            guard active, !isVisible, !alreadySeen else { return }
             markSeen()
             withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) { isVisible = true }
         }
