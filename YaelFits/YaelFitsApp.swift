@@ -314,21 +314,22 @@ struct WhatsNewModal: View {
 
     private var card: some View {
         VStack(spacing: LayoutMetrics.medium) {
+            // Raw header icon (matches the app's other modals — no circle).
             Image(systemName: "bag.badge.plus")
-                .font(.system(size: 23, weight: .semibold))
+                .font(.system(size: 32, weight: .semibold))
                 .foregroundStyle(AppPalette.textStrong)
-                .frame(width: 56, height: 56)
-                .appCircle(shadowRadius: 0, shadowY: 0)
+                .padding(.top, LayoutMetrics.small)
 
-            VStack(spacing: 6) {
+            VStack(spacing: LayoutMetrics.small) {
                 Text("Save products as you shop")
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(AppPalette.textStrong)
                     .multilineTextAlignment(.center)
                 Text("Add anything you love straight to your closet — from your phone or your computer.")
-                    .font(.system(size: 14))
+                    .font(.system(size: 15))
                     .foregroundStyle(AppPalette.textMuted)
                     .multilineTextAlignment(.center)
+                    .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -345,30 +346,30 @@ struct WhatsNewModal: View {
                 )
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 2)
 
-            Button {
-                markSeen()
-                withAnimation { isVisible = false }
-                showGetExtension = true
-            } label: {
-                Text("GET THE CHROME EXTENSION")
+            // Primary CTA matches the app convention (single GOT IT capsule).
+            Button(action: dismiss) {
+                Text("GOT IT")
                     .font(.system(size: 12, weight: .semibold))
                     .tracking(1.5)
                     .foregroundStyle(AppPalette.textPrimary)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 46)
+                    .frame(height: 44)
                     .appCapsule(shadowRadius: 0, shadowY: 0)
             }
             .buttonStyle(SolidPressButtonStyle())
             .padding(.top, LayoutMetrics.xSmall)
 
-            Button(action: dismiss) {
-                Text("GOT IT")
-                    .font(.system(size: 12, weight: .semibold))
-                    .tracking(1.5)
-                    .foregroundStyle(AppPalette.textFaint)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 30)
+            // Quiet secondary link to the desktop setup sheet.
+            Button {
+                markSeen()
+                withAnimation { isVisible = false }
+                showGetExtension = true
+            } label: {
+                Text("Set up the Chrome extension")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(AppPalette.textMuted)
             }
             .buttonStyle(SolidPressButtonStyle())
         }
