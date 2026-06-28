@@ -16,6 +16,7 @@ enum ShareCardTemplate: Int, CaseIterable, Identifiable, Hashable {
     case electricLive = 6
     case ootdLive     = 7
     case colorama     = 8
+    case worldCup     = 9
     // Two-layer PNG templates
     case layered2 = 3
     case layered3 = 4
@@ -28,6 +29,7 @@ enum ShareCardTemplate: Int, CaseIterable, Identifiable, Hashable {
         case .electricLive: return "Electric"
         case .ootdLive:     return "Editorial"
         case .colorama:     return "Colorama"
+        case .worldCup:     return "World Cup"
         case .layered2:     return "Fits"
         case .layered3:     return "Stats"
         }
@@ -36,7 +38,7 @@ enum ShareCardTemplate: Int, CaseIterable, Identifiable, Hashable {
     /// Dynamic code-based templates — render date layers in SwiftUI.
     var isDynamic: Bool {
         self == .monoLive || self == .electricLive
-            || self == .ootdLive || self == .colorama
+            || self == .ootdLive || self == .colorama || self == .worldCup
     }
 
     /// Whether this dynamic template uses a back PNG instead of a solid color.
@@ -210,6 +212,38 @@ enum ShareCardTemplate: Int, CaseIterable, Identifiable, Hashable {
                     backgroundColor: Color(red: 0x6B / 255.0, green: 0x8E / 255.0, blue: 0x5C / 255.0),
                     gradientTop: Color(red: 0xEA / 255.0, green: 0xF5 / 255.0, blue: 0xFC / 255.0)
                 ),
+            ]
+        case .worldCup:
+            // Country-inspired combos: tint = picker dot, backgroundColor =
+            // the card field, textColor = the "26" logo colour.
+            func rgb(_ r: Double, _ g: Double, _ b: Double) -> Color {
+                Color(red: r / 255, green: g / 255, blue: b / 255)
+            }
+            let brazilBg = rgb(0, 151, 57),  brazilLogo = rgb(255, 223, 0)
+            let argBg = rgb(116, 172, 223)
+            let franceBg = rgb(0, 35, 149)
+            let englandBg = rgb(244, 244, 239), englandLogo = rgb(206, 17, 36)
+            let gerBg = rgb(20, 20, 20),       gerLogo = rgb(255, 206, 0)
+            let spainBg = rgb(170, 21, 27),    spainLogo = rgb(241, 191, 0)
+            let nethBg = rgb(243, 108, 33)
+            let italyBg = rgb(0, 102, 179)
+            let canadaBg = rgb(213, 43, 30)
+            let mexicoBg = rgb(0, 104, 71)
+            let bwBg = rgb(245, 245, 242), bwLogo = rgb(18, 18, 18)
+            let rbBg = rgb(18, 18, 18),    rbLogo = rgb(216, 28, 36)
+            return [
+                TemplateColorVariant(id: 0, tint: brazilLogo, textColor: brazilLogo, backgroundColor: brazilBg),
+                TemplateColorVariant(id: 1, tint: argBg, textColor: .white, backgroundColor: argBg),
+                TemplateColorVariant(id: 2, tint: franceBg, textColor: .white, backgroundColor: franceBg),
+                TemplateColorVariant(id: 3, tint: englandLogo, textColor: englandLogo, backgroundColor: englandBg),
+                TemplateColorVariant(id: 4, tint: gerLogo, textColor: gerLogo, backgroundColor: gerBg),
+                TemplateColorVariant(id: 5, tint: spainBg, textColor: spainLogo, backgroundColor: spainBg),
+                TemplateColorVariant(id: 6, tint: nethBg, textColor: .white, backgroundColor: nethBg),
+                TemplateColorVariant(id: 7, tint: italyBg, textColor: .white, backgroundColor: italyBg),
+                TemplateColorVariant(id: 8, tint: canadaBg, textColor: .white, backgroundColor: canadaBg),
+                TemplateColorVariant(id: 9, tint: mexicoBg, textColor: .white, backgroundColor: mexicoBg),
+                TemplateColorVariant(id: 10, tint: bwLogo, textColor: bwLogo, backgroundColor: bwBg),
+                TemplateColorVariant(id: 11, tint: rbLogo, textColor: rbLogo, backgroundColor: rbBg),
             ]
         case .layered2, .layered3:
             return []
@@ -627,6 +661,28 @@ struct ShareCardComposer: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .overlay(coloramaBigNumber(forcedTime: forcedTime))
+            } else if template == .worldCup {
+                // World Cup special edition — a bold country colour field with
+                // the "26" mark as a full-height backdrop behind the outfit.
+                // The variant supplies the field + "26" colour.
+                let v = colorVariant(for: .worldCup)
+                let bg = v?.backgroundColor ?? Color(red: 0, green: 0.592, blue: 0.224)
+                let logoColor = v?.textColor ?? .white
+                GeometryReader { geo in
+                    ZStack {
+                        bg
+                        if let logo = UIImage(named: "wc-logo") {
+                            Image(uiImage: logo)
+                                .renderingMode(.template)
+                                .resizable()
+                                .scaledToFit()
+                                .foregroundStyle(logoColor)
+                                .frame(height: geo.size.height * 0.92)
+                                .opacity(0.92)
+                        }
+                    }
+                    .frame(width: geo.size.width, height: geo.size.height)
+                }
             } else if template.isDynamic {
                 // mono uses the variant tint as the full-card fill; for
                 // mono uses tint as bg; electric reads bg + text from
@@ -1426,14 +1482,19 @@ struct ShareCardComposer: View {
 
     private func cardFrontLayer(for template: ShareCardTemplate) -> some View {
         ZStack {
-            if template.isDynamic && template != .ootdLive && template != .colorama {
+            if template.isDynamic && template != .ootdLive && template != .colorama
+                && template != .worldCup {
                 // colorama renders day/weekday with the gradient effect
                 // in its back layer (coloramaBigNumber), so we skip the
-                // plain-text front layer for that template.
+                // plain-text front layer for that template. World Cup shows
+                // no date — the logo is the hero.
                 dynamicDateFrontLayer
             }
             if template == .ootdLive {
                 ootdDynamicFrontLayer
+            }
+            if template == .worldCup {
+                worldCupFrontLayer
             }
             if template.frontLayerIsFrosted,
                let frontName = template.frontImageName,
@@ -1446,6 +1507,61 @@ struct ShareCardComposer: View {
                     .resizable()
                     .scaledToFill()
             }
+        }
+    }
+
+    /// MADE ON YAFA mark for the World Cup card — figure-lineup logo with the
+    /// label above it, bottom-right. TWO-TONE so it's always visible: rendered
+    /// in the "26" colour over the field, and flipped to the FIELD colour
+    /// exactly where it overlaps the "26" (a field-coloured copy masked to the
+    /// "26" shape). So the mark reads against both the field and the logo.
+    private var worldCupFrontLayer: some View {
+        let v = colorVariant(for: .worldCup)
+        let logoColor = v?.textColor ?? .white
+        let fieldColor = v?.backgroundColor ?? Color(red: 0, green: 0.592, blue: 0.224)
+        return GeometryReader { geo in
+            ZStack {
+                worldCupMark(color: logoColor, geo: geo)
+                worldCupMark(color: fieldColor, geo: geo)
+                    .mask {
+                        // The "26" placed identically to the back layer, so the
+                        // field-coloured copy shows only where the 26 covers it.
+                        if let logo26 = UIImage(named: "wc-logo") {
+                            Image(uiImage: logo26)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(height: geo.size.height * 0.92)
+                                .frame(width: geo.size.width, height: geo.size.height)
+                        }
+                    }
+            }
+        }
+    }
+
+    /// The MADE ON YAFA mark (figure-lineup logo + label) in a single colour,
+    /// positioned bottom-right. Rendered twice by `worldCupFrontLayer`.
+    private func worldCupMark(color: Color, geo: GeometryProxy) -> some View {
+        let logoW = geo.size.width * 0.12
+        let logoX = geo.size.width - logoW / 2 - 20
+        let logoY = geo.size.height - logoW * 0.30 - 20
+        return ZStack {
+            if let logo = UIImage(named: "logo") {
+                Image(uiImage: logo)
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .foregroundStyle(color)
+                    .frame(width: logoW)
+                    .position(x: logoX, y: logoY)
+            }
+            Text("MADE ON YAFA")
+                .font(.custom("Inter28pt-MediumItalic", size: 100))
+                .tracking(1)
+                .lineLimit(1)
+                .minimumScaleFactor(0.01)
+                .frame(width: logoW)
+                .foregroundStyle(color)
+                .position(x: logoX, y: logoY - logoW * 0.30)
         }
     }
 

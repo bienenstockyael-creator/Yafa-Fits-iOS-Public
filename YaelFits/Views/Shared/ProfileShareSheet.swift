@@ -23,6 +23,10 @@ struct ProfileShareSheet: View {
 
     @State private var selectedIndex = 0
     @State private var cardVisible = false
+    /// Baked chrome normal map, loaded on appear and released when the sheet is
+    /// dismissed (this @State deallocates with the view) — rather than a
+    /// process-lifetime static cache, so it holds zero memory while closed.
+    @State private var chromeNormalMap: UIImage?
     /// URL being handed to the system share sheet. Set at tap
     /// time (not view-build time) so the selected outfit is
     /// guaranteed to be the one captured in the link.
@@ -280,45 +284,83 @@ struct ProfileShareSheet: View {
         return UIImage(data: data)
     }()
 
-    /// Baked chrome "add me on yafa" wordmark (beveled tube + environment
-    /// reflection), loaded once. Sits behind the outfit on the card.
-    private static let chromeWordmark: UIImage? = {
-        guard let url = Bundle.main.url(forResource: "share-chrome-wordmark", withExtension: "webp"),
+    /// Loads the baked NORMAL MAP of the "add me on yafa" wordmark (rgb =
+    /// surface normal, a = coverage). The Chrome.metal shader reflects a live
+    /// chrome environment off it; the image itself is just geometry. Called off
+    /// the main thread on appear so the ~1.3MB decode never hitches sheet open.
+    private static func loadChromeNormalMap() -> UIImage? {
+        guard let url = Bundle.main.url(forResource: "share-chrome-normal", withExtension: "png"),
               let data = try? Data(contentsOf: url)
         else { return nil }
         return UIImage(data: data)
-    }()
+    }
 
-    /// The baked chrome wordmark with a live travelling glint on top, so the
-    /// chrome also catches the light as the phone tilts (driven by the same
-    /// `HoloMotionTracker` as the holo card).
+    /// Live chrome wordmark: the baked normal map driven through Chrome.metal,
+    /// which reflects a procedural chrome environment (sky / sharp horizon /
+    /// ground + moving hot spot) and SHIFTS that reflection with device tilt
+    /// (same `HoloMotionTracker` as the holo card). That live, tilt-driven
+    /// reflection is what makes it read as real chrome rather than a flat
+    /// sticker — a static baked image cannot.
     private struct ChromeWordmark: View {
         let image: UIImage
-
-        private var art: some View {
-            Image(uiImage: image).resizable().aspectRatio(contentMode: .fit)
-        }
+        @State private var start = Date()
 
         var body: some View {
-            TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { _ in
-                let roll = CGFloat(HoloMotionTracker.shared.roll)
-                let pitch = CGFloat(HoloMotionTracker.shared.pitch)
-                let g = min(max(0.5 + roll * 0.5 + pitch * 0.2, 0.0), 1.0)
-                art
-                    .overlay {
-                        LinearGradient(
-                            stops: [
-                                .init(color: .white.opacity(0.0), location: max(0, g - 0.13)),
-                                .init(color: .white.opacity(0.6), location: g),
-                                .init(color: .white.opacity(0.0), location: min(1, g + 0.13)),
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+            TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { tl in
+                let t = Float(tl.date.timeIntervalSince(start))
+                let roll = Float(HoloMotionTracker.shared.roll)
+                let pitch = Float(HoloMotionTracker.shared.pitch)
+                Image(uiImage: image)
+                    .interpolation(.high)
+                    .antialiased(true)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .colorEffect(
+                        ShaderLibrary.chromeReflect(
+                            .float(roll),
+                            .float(pitch),
+                            .float(t)
                         )
-                        .blendMode(.plusLighter)
-                        .mask(art)
-                    }
+                    )
             }
+            // Drive CoreMotion while the card is visible (ref-counted singleton).
+            .onAppear { HoloMotionTracker.shared.start() }
+            .onDisappear { HoloMotionTracker.shared.stop() }
+        }
+    }
+
+    /// Username chip for the card's top-right corner. Matches `WeatherPill`'s
+    /// visible look (cardFill + cardBorder) and type, with a soft glow.
+    private struct UsernamePill: View {
+        let username: String
+        let scale: CGFloat
+
+        var body: some View {
+            // Type as before — WeatherPill weight/colour (semibold, secondary).
+            Text("@\(username)")
+                .font(.system(size: 12 * scale, weight: .semibold))
+                .foregroundStyle(AppPalette.textSecondary)
+                .padding(.horizontal, 11 * scale)
+                .padding(.vertical, 7 * scale)
+                // SOLID fill (no UIVisualEffectView and no SwiftUI material) —
+                // both sample the backdrop and render transparent for a frame
+                // during the card's 3D entry, causing the flash. The blur was
+                // never visible anyway (cardFill covers it), so a plain
+                // cardFill capsule looks the same as the weather pill and can't
+                // flash.
+                .background(Capsule().fill(AppPalette.cardFill))
+                .overlay(Capsule().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
+                // Light-blue glow under the pill — gentle bloom.
+                .shadow(
+                    color: Color(red: 0.58, green: 0.81, blue: 1.0).opacity(0.55),
+                    radius: 9 * scale,
+                    y: 2 * scale
+                )
+                .shadow(
+                    color: Color(red: 0.58, green: 0.81, blue: 1.0).opacity(0.35),
+                    radius: 16 * scale,
+                    y: 3 * scale
+                )
         }
     }
 
@@ -378,6 +420,16 @@ struct ProfileShareSheet: View {
             if shareableOutfits.isEmpty && hasUnpublishedFits {
                 presentPublishHint(afterDelay: 0.45)
             }
+        }
+        // Decode the chrome normal map off the main thread, then fade the
+        // wordmark in. Held only for the life of this sheet (the @State frees
+        // it on dismiss), so it costs zero memory while the sheet is closed.
+        .task {
+            guard chromeNormalMap == nil else { return }
+            let img = await Task.detached(priority: .userInitiated) {
+                Self.loadChromeNormalMap()
+            }.value
+            withAnimation(.easeOut(duration: 0.25)) { chromeNormalMap = img }
         }
         .task {
             // Auto-generate the bust for the empty-state card if the
@@ -523,41 +575,33 @@ struct ProfileShareSheet: View {
                 RoundedRectangle(cornerRadius: 24 * scale, style: .continuous)
                     .fill(cardGray)
                     .frame(width: cardWidth, height: cardHeight)
-                    .holoOverlay(active: true, cornerRadius: 24 * scale)
                     .shadow(color: .black.opacity(0.14), radius: 16, y: 10)
-                    // Yafa brand mark, bottom-right of every card.
-                    .overlay(alignment: .bottomTrailing) {
-                        if let logo = Self.logoImage {
-                            Image(uiImage: logo)
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: cardWidth * 0.22)
-                                .padding(.trailing, 16 * scale)
-                                .padding(.bottom, 14 * scale)
-                                .allowsHitTesting(false)
-                        }
+                    // Yafa brand mark, bottom-LEFT — the shared MADE ON YAFA
+                    // mark reused from the export/share cards.
+                    .overlay(alignment: .bottomLeading) {
+                        MadeOnYafaMark(width: cardWidth * 0.20, color: .white)
+                            .padding(.leading, 16 * scale)
+                            .padding(.bottom, 14 * scale)
+                            .allowsHitTesting(false)
                     }
 
                 // Live chrome "add me on yafa" wordmark, behind the outfit
                 // (replaces the old plain top label). Reflects with device tilt.
-                if let chrome = Self.chromeWordmark {
+                // Loaded async on appear (see .task) and freed on dismiss.
+                if let chrome = chromeNormalMap {
                     ChromeWordmark(image: chrome)
                         .frame(height: cardHeight * 0.9)
                         .allowsHitTesting(false)
+                        .transition(.opacity)
                 }
 
-                // Bottom @handle label — for the outfit and silhouette
-                // cards. The photo-bust card instead overlaps the
-                // handle on the photo's bottom edge (below), so it's
-                // skipped here in that case.
-                if !(outfits.isEmpty && hasProfilePhoto) {
-                    Text("@\(store.currentProfile?.username ?? "")")
-                        .font(labelFont)
-                        .tracking(-1.13 * scale)
-                        .foregroundStyle(.black)
-                        .offset(y: cardHeight * 0.42)
-                        .allowsHitTesting(false)
-                }
+                // Holographic shimmer ABOVE the chrome wordmark — a clear
+                // card-sized layer carrying the holo shader, so the iridescence
+                // rides over the chrome text (not just the bare card).
+                Color.clear
+                    .frame(width: cardWidth, height: cardHeight)
+                    .holoOverlay(active: true, cornerRadius: 24 * scale)
+                    .allowsHitTesting(false)
 
                 if outfits.isEmpty {
                     if hasProfilePhoto {
@@ -610,6 +654,24 @@ struct ProfileShareSheet: View {
                         }
                     }
                     .frame(width: geo.size.width, height: cardHeight)
+                }
+
+                // Username pill, top-right of the card — weather-pill style
+                // (frosted capsule + soft glow). On top so it stays crisp
+                // over the chrome + holo. Photo-bust cards carry the handle
+                // in their highlighter blob instead, so skip the pill there.
+                if !(outfits.isEmpty && hasProfilePhoto) {
+                    Color.clear
+                        .frame(width: cardWidth, height: cardHeight)
+                        .overlay(alignment: .topTrailing) {
+                            UsernamePill(
+                                username: store.currentProfile?.username ?? "",
+                                scale: scale
+                            )
+                            .padding(.trailing, 14 * scale)
+                            .padding(.top, 14 * scale)
+                        }
+                        .allowsHitTesting(false)
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)

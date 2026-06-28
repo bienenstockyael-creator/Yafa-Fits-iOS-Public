@@ -350,3 +350,39 @@ extension UIImage {
         return UIImage(cgImage: cropped, scale: scale, orientation: imageOrientation)
     }
 }
+
+/// The "MADE ON YAFA" brand mark used across the share / export cards — the
+/// figure-lineup logo (`logo.png`) with the MADE ON YAFA label stretched to
+/// the same width directly above it. Matches the ShareCardComposer mark: a
+/// large base font + `minimumScaleFactor` makes the label fill `width`.
+struct MadeOnYafaMark: View {
+    var width: CGFloat
+    var color: Color = .white
+
+    private static let logo: UIImage? = {
+        guard let url = Bundle.main.url(forResource: "logo", withExtension: "png"),
+              let data = try? Data(contentsOf: url)
+        else { return nil }
+        return UIImage(data: data)
+    }()
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Text("MADE ON YAFA")
+                .font(.custom("Inter28pt-MediumItalic", size: 100))
+                .tracking(1)
+                .lineLimit(1)
+                .minimumScaleFactor(0.01)
+                .frame(width: width)
+                .foregroundStyle(color)
+            if let logo = Self.logo {
+                Image(uiImage: logo)
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: width)
+                    .foregroundStyle(color)
+            }
+        }
+    }
+}
