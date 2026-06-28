@@ -1,0 +1,3 @@
+# Generated bake outputs (these live in the app / web repos, not here)
+*.png
+__pycache__/
