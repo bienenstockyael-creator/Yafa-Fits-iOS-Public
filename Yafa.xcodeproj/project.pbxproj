@@ -159,6 +159,7 @@
 		B010E0010001000000000B01 /* OpenAIDressAvatarService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B010E0020001000000000B01 /* OpenAIDressAvatarService.swift */; };
 		B010F0010001000000000A01 /* HoloMotionTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = F010F0010001000000000A01 /* HoloMotionTracker.swift */; };
 		B010F0010002000000000A02 /* Holo.metal in Sources */ = {isa = PBXBuildFile; fileRef = F010F0010002000000000A02 /* Holo.metal */; };
+		B010F0010002000000000C03 /* Chrome.metal in Sources */ = {isa = PBXBuildFile; fileRef = F010F0010002000000000C03 /* Chrome.metal */; };
 		B010F0010003000000000A03 /* HoloCardModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = F010F0010003000000000A03 /* HoloCardModifier.swift */; };
 		B05800000000000000000001 /* bust-m-1.webp in Resources */ = {isa = PBXBuildFile; fileRef = B05700000000000000000001 /* bust-m-1.webp */; };
 		B05800000000000000000002 /* bust-m-2.webp in Resources */ = {isa = PBXBuildFile; fileRef = B05700000000000000000002 /* bust-m-2.webp */; };
@@ -172,10 +173,10 @@
 		B0580000000000000000000A /* bust-f-2.webp in Resources */ = {isa = PBXBuildFile; fileRef = B0570000000000000000000A /* bust-f-2.webp */; };
 		B0580000000000000000000B /* bust-f-3.webp in Resources */ = {isa = PBXBuildFile; fileRef = B0570000000000000000000B /* bust-f-3.webp */; };
 		B0580000000000000000000C /* bust-f-4.webp in Resources */ = {isa = PBXBuildFile; fileRef = B0570000000000000000000C /* bust-f-4.webp */; };
+		B05A00000000000000000001 /* share-chrome-normal.png in Resources */ = {isa = PBXBuildFile; fileRef = B05900000000000000000001 /* share-chrome-normal.png */; };
 		B0DCE549ACD950AF52F16FD0 /* DressAvatarSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5896B8C8BF7E8A341C74D09E /* DressAvatarSheetView.swift */; };
 		B18E3607CB764CEC45F54677 /* LocalOutfitStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE7400C8E76CC739BA9271FE /* LocalOutfitStore.swift */; };
 		B2AFB7640AE011959778E08F /* placeholder-1.webp in Resources */ = {isa = PBXBuildFile; fileRef = 3FC4F82EC6FC767F44CE9A4B /* placeholder-1.webp */; };
-		B05A00000000000000000001 /* share-chrome-wordmark.webp in Resources */ = {isa = PBXBuildFile; fileRef = B05900000000000000000001 /* share-chrome-wordmark.webp */; };
 		B3990FC6A6666816801E6B85 /* LikersSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1669A9739DE94A4D2C6EB670 /* LikersSheet.swift */; };
 		B43A596C9FF4A02AC393AAC1 /* RemixStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 870B827D251E84029B685BB1 /* RemixStorage.swift */; };
 		B5E8DA33C230E63AB681245C /* AvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F15640B030569340C148E2F4 /* AvatarView.swift */; };
@@ -346,7 +347,6 @@
 		3E32233E0690243C6794FBE2 /* PublishSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublishSheet.swift; sourceTree = "<group>"; };
 		3E528CCFAA1423FAE69CD013 /* UploadMaskingBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadMaskingBackend.swift; sourceTree = "<group>"; };
 		3FC4F82EC6FC767F44CE9A4B /* placeholder-1.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "placeholder-1.webp"; sourceTree = "<group>"; };
-		B05900000000000000000001 /* share-chrome-wordmark.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "share-chrome-wordmark.webp"; sourceTree = "<group>"; };
 		422DD784B7345E185A3C2C41 /* placeholder-3.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "placeholder-3.webp"; sourceTree = "<group>"; };
 		425FD6DB8C41635F1DC15775 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogger.swift; sourceTree = "<group>"; };
 		43F71A1221DDF5DC78BA4C36 /* PipelineJob.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PipelineJob.swift; sourceTree = "<group>"; };
@@ -430,6 +430,7 @@
 		B0570000000000000000000A /* bust-f-2.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "bust-f-2.webp"; sourceTree = "<group>"; };
 		B0570000000000000000000B /* bust-f-3.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "bust-f-3.webp"; sourceTree = "<group>"; };
 		B0570000000000000000000C /* bust-f-4.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "bust-f-4.webp"; sourceTree = "<group>"; };
+		B05900000000000000000001 /* share-chrome-normal.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "share-chrome-normal.png"; sourceTree = "<group>"; };
 		B1C2D3E4F5A6B7C8D9E0F1A2 /* ProfileHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileHeader.swift; sourceTree = "<group>"; };
 		B69FF6A4ADDD0BAD4FC7F2E4 /* outfit-12.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "outfit-12.webp"; sourceTree = "<group>"; };
 		B807A90E1DD2A35EDCE8EB7A /* StateScopingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateScopingTests.swift; sourceTree = "<group>"; };
@@ -464,6 +465,7 @@
 		EF568E0C17C6FF782B784F3C /* AuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthManager.swift; sourceTree = "<group>"; };
 		F010F0010001000000000A01 /* HoloMotionTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoloMotionTracker.swift; sourceTree = "<group>"; };
 		F010F0010002000000000A02 /* Holo.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = Holo.metal; sourceTree = "<group>"; };
+		F010F0010002000000000C03 /* Chrome.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = Chrome.metal; sourceTree = "<group>"; };
 		F010F0010003000000000A03 /* HoloCardModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoloCardModifier.swift; sourceTree = "<group>"; };
 		F15640B030569340C148E2F4 /* AvatarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarView.swift; sourceTree = "<group>"; };
 		F5A6B7C8D9E0F1A2B3C4D5E6 /* CarouselHeroSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarouselHeroSupport.swift; sourceTree = "<group>"; };
@@ -564,7 +566,7 @@
 				6AF76DDBEC17ACF0DEB5C2B2 /* outfits.json */,
 				4DB2F741FB63C26764629E7F /* overcast.json */,
 				3FC4F82EC6FC767F44CE9A4B /* placeholder-1.webp */,
-				B05900000000000000000001 /* share-chrome-wordmark.webp */,
+				B05900000000000000000001 /* share-chrome-normal.png */,
 				B05700000000000000000001 /* bust-m-1.webp */,
 				B05700000000000000000002 /* bust-m-2.webp */,
 				B05700000000000000000003 /* bust-m-3.webp */,
@@ -657,6 +659,7 @@
 			children = (
 				83E5A43B5B040C02FD0A0D92 /* Colorama.metal */,
 				F010F0010002000000000A02 /* Holo.metal */,
+				F010F0010002000000000C03 /* Chrome.metal */,
 			);
 			path = Shaders;
 			sourceTree = "<group>";
@@ -1089,7 +1092,7 @@
 				EDCE9F834080E234A3B809C5 /* outfits.json in Resources */,
 				9CB31FFFBB1BA5EF0D91DB03 /* overcast.json in Resources */,
 				B2AFB7640AE011959778E08F /* placeholder-1.webp in Resources */,
-				B05A00000000000000000001 /* share-chrome-wordmark.webp in Resources */,
+				B05A00000000000000000001 /* share-chrome-normal.png in Resources */,
 				B05800000000000000000001 /* bust-m-1.webp in Resources */,
 				B05800000000000000000002 /* bust-m-2.webp in Resources */,
 				B05800000000000000000003 /* bust-m-3.webp in Resources */,
@@ -1181,6 +1184,7 @@
 				17E7BA37588835D6831F3AD3 /* GenerationJobRecord.swift in Sources */,
 				4B718F5E1C8680BCBDD7C08F /* GenerationJobService.swift in Sources */,
 				B010F0010002000000000A02 /* Holo.metal in Sources */,
+				B010F0010002000000000C03 /* Chrome.metal in Sources */,
 				B010F0010003000000000A03 /* HoloCardModifier.swift in Sources */,
 				B010F0010001000000000A01 /* HoloMotionTracker.swift in Sources */,
 				4E2CF0F613B1C84D33EEF685 /* ImageEnhancementService.swift in Sources */,
@@ -1316,7 +1320,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = YaelFits/YaelFits.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 50;
+				CURRENT_PROJECT_VERSION = 54;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = YaelFits/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1439,7 +1443,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = YaelFits/YaelFits.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 50;
+				CURRENT_PROJECT_VERSION = 54;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = YaelFits/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1521,7 +1525,7 @@
 				CODE_SIGN_ENTITLEMENTS = YafaShare/YafaShare.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 54;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -1561,7 +1565,7 @@
 				CODE_SIGN_ENTITLEMENTS = YafaShare/YafaShare.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 54;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;

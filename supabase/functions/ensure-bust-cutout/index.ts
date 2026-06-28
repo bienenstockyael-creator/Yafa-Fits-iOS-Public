@@ -91,6 +91,24 @@ serve(async (req) => {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
+  // SECURITY: only generate a cut-out for the CALLER themselves, or for a user
+  // who is actually on the vibes leaderboard (has received >= 1 vibe). Without
+  // this, any signed-in user could pass an arbitrary user_id and make us run
+  // paid FAL background-removal on a stranger's avatar + write to their profile
+  // (cost-amplification + unsolicited profile mutation). Cut-outs stay free and
+  // auto-generating for everyone shown on the leaderboard — this only blocks
+  // off-leaderboard targets.
+  if (targetId !== user.id) {
+    const { count: vibeCount, error: vibeErr } = await admin
+      .from("vibes")
+      .select("receiver_id", { count: "exact", head: true })
+      .eq("receiver_id", targetId);
+    if (vibeErr) return json(500, { error: "vibe_check_failed" });
+    if (!vibeCount || vibeCount < 1) {
+      return json(403, { error: "not_on_leaderboard" });
+    }
+  }
+
   try {
     // Idempotent: already has a cut-out → return it, no regeneration.
     const { data: profile, error: pErr } = await admin

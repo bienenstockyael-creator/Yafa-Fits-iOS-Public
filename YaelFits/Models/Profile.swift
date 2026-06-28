@@ -52,6 +52,10 @@ struct Profile: Codable, Identifiable, Hashable, Sendable {
     /// in the migration that added this column so they don't get
     /// re-prompted.
     var isOnboarded: Bool?
+    /// Whether the user has redeemed a valid one-time access code (or was
+    /// grandfathered in). Gated users are held at the access-code gate before
+    /// reaching the app. Server-only writable (the redeem RPC sets it).
+    var hasAccess: Bool?
 
     enum CodingKeys: String, CodingKey {
         case id, username, bio
@@ -65,6 +69,7 @@ struct Profile: Codable, Identifiable, Hashable, Sendable {
         case headerAccentColor = "header_accent_color"
         case avatarCutoutUrl = "avatar_cutout_url"
         case isOnboarded = "is_onboarded"
+        case hasAccess = "has_access"
     }
 
     /// Used in places where the display name should be primary

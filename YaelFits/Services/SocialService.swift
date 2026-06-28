@@ -43,6 +43,16 @@ struct SocialService {
             .value
     }
 
+    /// Redeems a one-time access code for the signed-in user. Returns the
+    /// server status: "ok" (access granted), "already_used", or "invalid".
+    static func redeemAccessCode(_ code: String) async throws -> String {
+        struct Params: Encodable { let p_code: String }
+        return try await supabase
+            .rpc("redeem_access_code", params: Params(p_code: code))
+            .execute()
+            .value
+    }
+
     static func getProfiles(userIds: Set<UUID>) async throws -> [Profile] {
         guard !userIds.isEmpty else { return [] }
         return try await supabase

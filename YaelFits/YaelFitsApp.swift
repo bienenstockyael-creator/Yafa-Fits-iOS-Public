@@ -11,6 +11,10 @@ struct YaelFitsApp: App {
     @State private var vibesEffectHost = VibesEffectHost()
     @State private var vibesIncomingManager = VibesIncomingManager()
     @State private var showOnboarding = false
+    // Held true when the signed-in user hasn't redeemed an access code (and
+    // wasn't grandfathered). The access-code gate renders on top of everything
+    // until they redeem, then the normal onboarding/app flow shows beneath it.
+    @State private var showAccessGate = false
     // The user id we've finished resolving onboarding status for.
     // The gating cover below stays up until this matches the current
     // session, so RootView never flashes before we know whether to
@@ -92,7 +96,13 @@ struct YaelFitsApp: App {
                                 let needsSetup = profile.map {
                                     $0.isOnboarded == false || ($0.username ?? "").isEmpty
                                 } ?? false
+                                // Access gate: hold gated users (no redeemed
+                                // code, not grandfathered) at the code screen.
+                                // Fail OPEN on an unresolved profile so a fetch
+                                // hiccup never locks out a legit user.
+                                let gated = profile.map { $0.hasAccess == false } ?? false
                                 await MainActor.run {
+                                    showAccessGate = gated
                                     showOnboarding = needsSetup
                                     resolvedForUserId = userId
                                 }
@@ -112,6 +122,27 @@ struct YaelFitsApp: App {
                                 Task { await outfitStore.loadSocialData(userId: userId) }
                             }
                             .environment(outfitStore)
+                            .transition(.opacity)
+                        }
+
+                        // Access-code gate — rendered ABOVE onboarding so it
+                        // covers the whole app until the user redeems a valid
+                        // one-time code. Grandfathered/redeemed users never see
+                        // it (resolved as `has_access == true`). On success we
+                        // flip the flag and the layer below (onboarding or the
+                        // app) shows through.
+                        if showAccessGate {
+                            AccessCodeGate(
+                                onRedeemed: {
+                                    outfitStore.currentProfile?.hasAccess = true
+                                    withAnimation(.easeInOut(duration: 0.3)) {
+                                        showAccessGate = false
+                                    }
+                                },
+                                onSignOut: {
+                                    Task { try? await authManager.signOut() }
+                                }
+                            )
                             .transition(.opacity)
                         }
 
@@ -420,5 +451,148 @@ struct WhatsNewModal: View {
 
     private func markSeen() {
         UserDefaults.standard.set(true, forKey: seenKey)
+    }
+}
+
+// MARK: - Access-code gate
+
+/// Full-screen gate shown to signed-in users who haven't redeemed a one-time
+/// access code (and weren't grandfathered). Lets the user enter a code or sign
+/// out. On a successful redeem it calls `onRedeemed`; the parent flips the
+/// `has_access` flag and dismisses this layer.
+private struct AccessCodeGate: View {
+    let onRedeemed: () -> Void
+    let onSignOut: () -> Void
+
+    @State private var code = ""
+    @State private var isRedeeming = false
+    @State private var errorMessage: String?
+    @FocusState private var fieldFocused: Bool
+
+    private var trimmed: String {
+        code.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var body: some View {
+        ZStack {
+            AppPalette.pageBackground.ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+
+                VStack(spacing: 14) {
+                    MadeOnYafaMark(width: 120, color: AppPalette.textStrong)
+                        .padding(.bottom, 6)
+
+                    Text("You're on the list — almost")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundStyle(AppPalette.textStrong)
+                        .multilineTextAlignment(.center)
+
+                    Text("Yafa is invite-only for now. Enter your access code to get in.")
+                        .font(.system(size: 14))
+                        .foregroundStyle(AppPalette.textMuted)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 8)
+                }
+                .padding(.bottom, 28)
+
+                VStack(spacing: 12) {
+                    TextField("Access code", text: $code)
+                        .textInputAutocapitalization(.characters)
+                        .autocorrectionDisabled(true)
+                        .font(.system(size: 17, weight: .semibold, design: .monospaced))
+                        .multilineTextAlignment(.center)
+                        .focused($fieldFocused)
+                        .submitLabel(.go)
+                        .onSubmit { Task { await redeem() } }
+                        .onChange(of: code) { _, _ in errorMessage = nil }
+                        .padding(.vertical, 14)
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(AppPalette.groupedBackground)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .strokeBorder(
+                                    errorMessage != nil
+                                        ? Color.red.opacity(0.5)
+                                        : AppPalette.cardBorder,
+                                    lineWidth: 1
+                                )
+                        )
+
+                    if let errorMessage {
+                        Text(errorMessage)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(.red)
+                            .transition(.opacity)
+                    }
+
+                    Button {
+                        Task { await redeem() }
+                    } label: {
+                        ZStack {
+                            if isRedeeming {
+                                ProgressView()
+                                    .tint(.white)
+                            } else {
+                                Text("Redeem")
+                                    .font(.system(size: 17, weight: .semibold))
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 15)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(AppPalette.textStrong)
+                        )
+                        .foregroundStyle(.white)
+                    }
+                    .disabled(isRedeeming || trimmed.isEmpty)
+                    .opacity(trimmed.isEmpty ? 0.5 : 1)
+                }
+                .padding(.horizontal, 32)
+
+                Spacer(minLength: 0)
+
+                Button("Sign out", action: onSignOut)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(AppPalette.textMuted)
+                    .padding(.bottom, 24)
+            }
+        }
+        .onAppear {
+            // Small delay so the keyboard doesn't fight the layer transition.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                fieldFocused = true
+            }
+        }
+    }
+
+    @MainActor
+    private func redeem() async {
+        let value = trimmed
+        guard !value.isEmpty, !isRedeeming else { return }
+        fieldFocused = false
+        isRedeeming = true
+        errorMessage = nil
+        defer { isRedeeming = false }
+
+        do {
+            let status = try await SocialService.redeemAccessCode(value)
+            switch status {
+            case "ok":
+                onRedeemed()
+            case "already_used":
+                withAnimation { errorMessage = "That code has already been used." }
+            default: // "invalid"
+                withAnimation { errorMessage = "That code isn't valid. Check it and try again." }
+            }
+        } catch {
+            withAnimation { errorMessage = "Couldn't reach Yafa. Try again." }
+        }
     }
 }
