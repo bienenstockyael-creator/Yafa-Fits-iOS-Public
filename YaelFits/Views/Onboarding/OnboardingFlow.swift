@@ -87,12 +87,21 @@ struct OnboardingFlow: View {
 
         /// Required steps have no "Skip" button — the user must
         /// fill the field to proceed. Optional steps get Skip.
+        /// Name is OPTIONAL so it's never *required* after Sign in with Apple
+        /// (Guideline 4.0.0); only the username is mandatory.
         var isSkippable: Bool {
             switch self {
-            case .name, .username: return false
-            case .photo, .phone:   return true
+            case .username:             return false
+            case .name, .photo, .phone: return true
             }
         }
+    }
+
+    /// First step shown. Sign in with Apple users skip the name step entirely
+    /// (Apple provides the name; the app must not ask for it). Email signups
+    /// still start on the name step.
+    private var firstStep: Step {
+        auth.isAppleUser ? .username : .name
     }
 
     var body: some View {
@@ -212,7 +221,7 @@ struct OnboardingFlow: View {
     /// with it.
     private var header: some View {
         HStack {
-            if currentStep != .name {
+            if currentStep != firstStep {
                 Button { goBack() } label: {
                     AppIcon(glyph: .chevronLeft, size: 14, color: AppPalette.iconPrimary)
                         .frame(width: 36, height: 36)
@@ -622,7 +631,8 @@ struct OnboardingFlow: View {
         switch currentStep {
         case .photo: return pendingAvatarImage != nil
         case .phone: return !phone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        case .name, .username: return false
+        case .name:  return !displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .username: return false
         }
     }
 
@@ -640,14 +650,13 @@ struct OnboardingFlow: View {
     /// input) and CONTINUE/FINISH (with input), and both advance.
     private var canAdvance: Bool {
         switch currentStep {
-        case .name:
-            return !displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .username:
             return sanitizeUsername(username).count >= 3 && (usernameAvailable ?? false)
-        case .photo, .phone:
+        case .name, .photo, .phone:
             // Always allowed — Skip and Continue both lead to
             // advancing; the difference is just whether we
-            // persist the in-flight field.
+            // persist the in-flight field. (Name is optional now so it's
+            // never required after Sign in with Apple.)
             return true
         }
     }
@@ -680,7 +689,8 @@ struct OnboardingFlow: View {
     }
 
     private func goBack() {
-        guard let previous = Step(rawValue: currentStep.rawValue - 1) else { return }
+        guard let previous = Step(rawValue: currentStep.rawValue - 1),
+              previous.rawValue >= firstStep.rawValue else { return }
         navDirection = .back
         withAnimation(stepAnimation) {
             currentStep = previous
@@ -802,11 +812,16 @@ struct OnboardingFlow: View {
         // swallowed to keep the user moving) or the profile object
         // was still nil. Avatar/header were written in the photo
         // step (keyed by id, so unaffected) and aren't re-sent here.
+        let cleanedUsername = sanitizeUsername(username)
         let trimmedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedName.isEmpty {
             try? await SocialService.updateDisplayName(userId: userId, displayName: trimmedName)
+        } else if cleanedUsername.count >= 3 {
+            // No name entered (skipped, or Sign in with Apple didn't supply one
+            // on a repeat sign-in) → default the display name to the handle,
+            // not the email-derived value the signup trigger writes.
+            try? await SocialService.updateDisplayName(userId: userId, displayName: cleanedUsername)
         }
-        let cleanedUsername = sanitizeUsername(username)
         if cleanedUsername.count >= 3 {
             try? await SocialService.updateUsername(userId: userId, username: cleanedUsername)
         }
@@ -906,7 +921,10 @@ struct OnboardingFlow: View {
     /// through the optional steps again (their prior photo upload,
     /// if any, is untouched — Skip doesn't clear it).
     private func resumeAtFirstIncompleteStep() {
-        if displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        // Sign in with Apple users never land on the name step — Apple provides
+        // the name (when available) and the app must not require it.
+        if !auth.isAppleUser,
+           displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             currentStep = .name
         } else if username.isEmpty {
             currentStep = .username

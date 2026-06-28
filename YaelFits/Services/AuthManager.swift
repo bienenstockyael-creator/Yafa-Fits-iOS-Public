@@ -16,6 +16,22 @@ class AuthManager {
 
     var userEmail: String? { session?.user.email }
 
+    /// Whether the signed-in user authenticated with Sign in with Apple. Apple
+    /// supplies the name via the Authentication Services framework, and ONLY on
+    /// the very first authorization per Apple ID — so the app must never REQUIRE
+    /// a SIWA user to type their name afterward (App Store Guideline 4.0.0).
+    /// Onboarding uses this to skip the name step for these users.
+    var isAppleUser: Bool {
+        if let ids = session?.user.identities,
+           ids.contains(where: { $0.provider == "apple" }) {
+            return true
+        }
+        if case .string("apple")? = session?.user.appMetadata["provider"] {
+            return true
+        }
+        return false
+    }
+
     func initialize() async {
         do {
             session = try await supabase.auth.session
