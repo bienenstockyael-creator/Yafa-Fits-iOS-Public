@@ -533,10 +533,13 @@ struct SocialService {
 
     static func searchProfiles(query: String) async throws -> [Profile] {
         if query.isEmpty {
-            // Return all users when no query (for suggestions)
+            // Return all users when no query (for suggestions). Only
+            // onboarded users — incomplete/gated rows have no username and
+            // would render as "User" (RLS also enforces this server-side).
             return try await supabase
                 .from("profiles")
                 .select()
+                .eq("is_onboarded", value: true)
                 .limit(50)
                 .execute()
                 .value
@@ -544,6 +547,7 @@ struct SocialService {
         return try await supabase
             .from("profiles")
             .select()
+            .eq("is_onboarded", value: true)
             .or("username.ilike.%\(query)%,display_name.ilike.%\(query)%")
             .limit(30)
             .execute()
@@ -567,6 +571,7 @@ struct SocialService {
         let profiles: [Profile] = try await supabase
             .from("profiles")
             .select()
+            .eq("is_onboarded", value: true)
             .limit(200)
             .execute()
             .value
