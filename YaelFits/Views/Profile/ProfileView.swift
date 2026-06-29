@@ -41,6 +41,10 @@ struct ProfileView: View {
     @State private var showFavoritesSheet = false
     @State private var showLinkExtension = false
     @State private var showGetExtension = false
+    /// Drives the 3D-credit paywall sheet. Opened by tapping the 3D
+    /// credit chip so users can buy credits proactively, not only
+    /// when a generation hits the wall.
+    @State private var showCreditPaywall = false
     /// Vibes + 3D credit balances surfaced under the stats row.
     /// Refreshed in `.task` alongside follower/following counts.
     @State private var vibesReceived: Int = 0
@@ -525,7 +529,7 @@ struct ProfileView: View {
 
                 Button {
                     Analytics.log("profile_3d_credit_chip_tapped")
-                    vibesHost.showInfoModal(.gen3D)
+                    showCreditPaywall = true
                 } label: {
                     creditChip(
                         // Sized to 24 so this chip's row height
@@ -539,6 +543,22 @@ struct ProfileView: View {
                 .buttonStyle(SolidPressButtonStyle())
             }
             .padding(.top, LayoutMetrics.xSmall)
+        }
+        .sheet(isPresented: $showCreditPaywall) {
+            CreditPaywallHost(
+                currentBalance: freeCredits3D,
+                onPurchaseComplete: {
+                    // Re-read the balance into the shared store so the
+                    // chip reflects the bought credits immediately.
+                    if let userId = store.userId,
+                       let balance = try? await CreditService.shared.balance(userId: userId) {
+                        await MainActor.run { store.currentCreditBalance = balance }
+                    }
+                },
+                onDismiss: { showCreditPaywall = false }
+            )
+            .presentationDragIndicator(.visible)
+            .roundedSheetBackground()
         }
         .sheet(isPresented: $showFollowers) {
             FollowListSheet(title: "Followers", userIds: followerIds)
