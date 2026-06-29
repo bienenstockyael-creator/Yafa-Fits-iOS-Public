@@ -514,49 +514,41 @@ private struct AccessCodeGate: View {
                         }
                     }
 
-                    // Floating caps label above a centered inline prompt —
-                    // same composition as an onboarding step.
-                    ZStack {
-                        VStack(spacing: LayoutMetrics.small) {
-                            TextField(
-                                "",
-                                text: $code,
-                                prompt: Text("Enter your access code")
-                                    .foregroundColor(AppPalette.textMuted.opacity(0.55))
-                            )
-                            .font(.system(size: 24, weight: .semibold))
-                            .foregroundStyle(AppPalette.textStrong)
-                            .multilineTextAlignment(.center)
-                            .autocorrectionDisabled()
-                            .textInputAutocapitalization(.characters)
-                            .submitLabel(.go)
-                            .focused($fieldFocused)
-                            .onSubmit { Task { await redeem() } }
-                            .onChange(of: code) { _, _ in errorMessage = nil }
-                            .padding(.horizontal, LayoutMetrics.large)
+                    // Centered inline prompt — same composition as an
+                    // onboarding step's text entry.
+                    VStack(spacing: LayoutMetrics.small) {
+                        TextField(
+                            "",
+                            text: $code,
+                            prompt: Text("Enter your access code")
+                                .foregroundColor(AppPalette.textMuted.opacity(0.55))
+                        )
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(AppPalette.textStrong)
+                        .multilineTextAlignment(.center)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.characters)
+                        .submitLabel(.go)
+                        .focused($fieldFocused)
+                        .onSubmit { Task { await redeem() } }
+                        .onChange(of: code) { _, _ in errorMessage = nil }
+                        .padding(.horizontal, LayoutMetrics.large)
 
-                            // Hint line — reserved height keeps the layout
-                            // stable as the message swaps (mirrors the
-                            // username-availability hint in onboarding).
-                            Group {
-                                if let errorMessage {
-                                    Text(errorMessage)
-                                        .font(.system(size: 11))
-                                        .foregroundStyle(.red.opacity(0.8))
-                                } else {
-                                    Text("Yafa is invite-only for now.")
-                                        .font(.system(size: 11))
-                                        .foregroundStyle(AppPalette.textMuted)
-                                }
+                        // Hint line — reserved height keeps the layout
+                        // stable as the message swaps (mirrors the
+                        // username-availability hint in onboarding).
+                        Group {
+                            if let errorMessage {
+                                Text(errorMessage)
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.red.opacity(0.8))
+                            } else {
+                                Text("Yafa is invite-only for now.")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(AppPalette.textMuted)
                             }
-                            .frame(height: 16)
                         }
-
-                        Text("INVITE ONLY")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
-                            .tracking(2)
-                            .foregroundStyle(AppPalette.textFaint)
-                            .offset(y: -64)
+                        .frame(height: 16)
                     }
                 }
 
