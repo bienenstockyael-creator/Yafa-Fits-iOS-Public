@@ -127,6 +127,15 @@ struct CreditPaywall: View {
             Text("\(currentBalance) \(currentBalance == 1 ? "credit" : "credits") left this month")
                 .font(.system(size: 11))
                 .foregroundStyle(AppPalette.textFaint)
+
+            // How the free credits work — sets expectations so the
+            // paywall doesn't read as the only way to get fits.
+            Text("You get 6 free 3D fits a month, plus 1 for every 5 vibes you receive. Want more now? Grab credits below.")
+                .font(.system(size: 11))
+                .foregroundStyle(AppPalette.textFaint)
+                .multilineTextAlignment(.center)
+                .padding(.top, 2)
+                .padding(.horizontal, 20)
         }
         .frame(maxWidth: .infinity)
     }
