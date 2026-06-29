@@ -86,19 +86,84 @@ $func$;
 
 grant execute on function public.reserve_3d_credit(uuid) to authenticated;
 
--- 2. Reset the inflated beta default (999) to your real monthly free
---    allowance. *** ADJUST 3 to whatever your launch free grant is. ***
+-- 2. Revert the free monthly grant from the beta's 6 back to 3
+--    (undoes 20260610100000_free_credits_beta_bump_to_six.sql). Three
+--    places, all must match: the new-signup default, the monthly refresh
+--    add amount, and the "rolling window clears" threshold.
+
+-- 2a. New signups start with 3.
 alter table public.profiles
   alter column gen_credits_free_balance set default 3;
 
--- 3. (OPTIONAL — product decision) Bring existing users' inflated 999
---    beta balances down to a sane cap. Leave commented to grandfather
---    beta testers; uncomment to reset everyone to the launch cap.
--- update public.profiles
---   set gen_credits_free_balance = least(gen_credits_free_balance, 6)
---   where gen_credits_free_balance > 6;
+-- 2b. Monthly refresh adds 3 (was +6 in beta). Carries over (never expires).
+create or replace function public.refresh_free_credits_if_due(p_user_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $func$
+begin
+  update public.profiles
+  set
+    gen_credits_free_balance = gen_credits_free_balance + 3,
+    gen_credits_reset_at = null
+  where id = p_user_id
+    and gen_credits_reset_at is not null
+    and now() > gen_credits_reset_at;
+end;
+$func$;
 
--- 4. RECOMMENDED: also cap free-credit carryover so inactive users can't
---    bank unlimited free generations (refresh_free_credits_if_due adds 6
---    per window with no upper bound). Edit that function to:
---    gen_credits_free_balance = least(gen_credits_free_balance + 6, 12)
+-- 2c. Release-clears-clock threshold back to 3 (was 6 in beta), so the
+--     30-day rolling window cancels at the right "full balance" state.
+create or replace function public.release_3d_credit(p_job_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $func$
+declare
+  v_user_id uuid;
+  v_source text;
+begin
+  select user_id, credit_source
+  into v_user_id, v_source
+  from public.generation_jobs
+  where id = p_job_id;
+
+  if v_user_id is null then
+    raise exception 'generation_jobs row % not found', p_job_id;
+  end if;
+  if v_user_id <> auth.uid() then
+    raise exception 'not allowed';
+  end if;
+  if v_source is null then
+    return;
+  end if;
+
+  if v_source = 'free' then
+    update public.profiles
+    set gen_credits_free_balance = gen_credits_free_balance + 1
+    where id = v_user_id;
+    update public.profiles
+    set gen_credits_reset_at = null
+    where id = v_user_id
+      and gen_credits_free_balance >= 3;
+  elsif v_source = 'paid' then
+    update public.profiles
+    set gen_credits_paid_balance = gen_credits_paid_balance + 1
+    where id = v_user_id;
+  end if;
+  -- 'pro' source: no balance change.
+
+  update public.generation_jobs
+  set credit_source = null
+  where id = p_job_id;
+end;
+$func$;
+
+-- 3. Reset the inflated beta balances (999) down to the launch grant (3).
+--    Paid balances live in a separate column (gen_credits_paid_balance) and
+--    are untouched, so anyone who bought credits keeps every one of them.
+update public.profiles
+  set gen_credits_free_balance = 3
+  where gen_credits_free_balance > 3;

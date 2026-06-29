@@ -130,7 +130,7 @@ struct CreditPaywall: View {
 
             // How the free credits work — sets expectations so the
             // paywall doesn't read as the only way to get fits.
-            Text("You get 6 free 3D fits a month, plus 1 for every 5 vibes you receive. Want more now? Grab credits below.")
+            Text("You get 3 free 3D fits a month, plus 1 for every 5 vibes you receive. Want more now? Grab credits below.")
                 .font(.system(size: 11))
                 .foregroundStyle(AppPalette.textFaint)
                 .multilineTextAlignment(.center)
