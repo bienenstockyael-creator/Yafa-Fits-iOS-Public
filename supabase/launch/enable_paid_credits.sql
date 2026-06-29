@@ -91,9 +91,13 @@ grant execute on function public.reserve_3d_credit(uuid) to authenticated;
 --    places, all must match: the new-signup default, the monthly refresh
 --    add amount, and the "rolling window clears" threshold.
 
--- 2a. New signups start with 3.
+-- 2a. New signups start with a 6-credit WELCOME grant (first-run delight) —
+--     even though the ongoing monthly refresh is only 3 (set in 2b). The
+--     column DEFAULT is the brand-new-user starting balance; existing users
+--     are brought down to 3 in step 3. So: new users get 6 to start, then
+--     +3/month thereafter; existing users start the paid era at 3.
 alter table public.profiles
-  alter column gen_credits_free_balance set default 3;
+  alter column gen_credits_free_balance set default 6;
 
 -- 2b. Monthly refresh adds 3 (was +6 in beta). Carries over (never expires).
 create or replace function public.refresh_free_credits_if_due(p_user_id uuid)
