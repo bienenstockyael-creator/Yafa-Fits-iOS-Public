@@ -460,6 +460,11 @@ struct WhatsNewModal: View {
 /// access code (and weren't grandfathered). Lets the user enter a code or sign
 /// out. On a successful redeem it calls `onRedeemed`; the parent flips the
 /// `has_access` flag and dismisses this layer.
+///
+/// Visual language matches the onboarding flow + welcome screen: grouped
+/// background, the plain Yafa logo up top (same treatment as `AuthView`), a
+/// large centered inline prompt for the code, and the same capsule primary
+/// button used for Continue/Skip in `OnboardingFlow`.
 private struct AccessCodeGate: View {
     let onRedeemed: () -> Void
     let onSignOut: () -> Void
@@ -473,97 +478,123 @@ private struct AccessCodeGate: View {
         code.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private var canRedeem: Bool { !trimmed.isEmpty }
+
+    /// Plain figure mark (logo.png) — same asset + treatment the welcome
+    /// screen uses. NOT the "MADE ON YAFA" wordmark.
+    private static let logo: UIImage? = {
+        guard let url = Bundle.main.url(forResource: "logo", withExtension: "png"),
+              let data = try? Data(contentsOf: url)
+        else { return nil }
+        return UIImage(data: data)
+    }()
+
     var body: some View {
         ZStack {
-            AppPalette.pageBackground.ignoresSafeArea()
+            AppPalette.groupedBackground.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 Spacer(minLength: 0)
 
-                VStack(spacing: 14) {
-                    MadeOnYafaMark(width: 120, color: AppPalette.textStrong)
-                        .padding(.bottom, 6)
-
-                    Text("You're on the list — almost")
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundStyle(AppPalette.textStrong)
-                        .multilineTextAlignment(.center)
-
-                    Text("Yafa is invite-only for now. Enter your access code to get in.")
-                        .font(.system(size: 14))
-                        .foregroundStyle(AppPalette.textMuted)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 8)
-                }
-                .padding(.bottom, 28)
-
-                VStack(spacing: 12) {
-                    TextField("Access code", text: $code)
-                        .textInputAutocapitalization(.characters)
-                        .autocorrectionDisabled(true)
-                        .font(.system(size: 17, weight: .semibold, design: .monospaced))
-                        .multilineTextAlignment(.center)
-                        .focused($fieldFocused)
-                        .submitLabel(.go)
-                        .onSubmit { Task { await redeem() } }
-                        .onChange(of: code) { _, _ in errorMessage = nil }
-                        .padding(.vertical, 14)
-                        .frame(maxWidth: .infinity)
-                        .background(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(AppPalette.groupedBackground)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .strokeBorder(
-                                    errorMessage != nil
-                                        ? Color.red.opacity(0.5)
-                                        : AppPalette.cardBorder,
-                                    lineWidth: 1
-                                )
-                        )
-
-                    if let errorMessage {
-                        Text(errorMessage)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(.red)
-                            .transition(.opacity)
-                    }
-
-                    Button {
-                        Task { await redeem() }
-                    } label: {
-                        ZStack {
-                            if isRedeeming {
-                                ProgressView()
-                                    .tint(.white)
-                            } else {
-                                Text("Redeem")
-                                    .font(.system(size: 17, weight: .semibold))
-                            }
+                VStack(spacing: LayoutMetrics.large) {
+                    // Brand logo — welcome/auth-screen treatment.
+                    Group {
+                        if let logo = Self.logo {
+                            Image(uiImage: logo)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(height: 48)
+                                .colorMultiply(.black)
+                                .opacity(0.82)
+                        } else {
+                            Text("YAFA")
+                                .font(.system(size: 20, weight: .bold, design: .monospaced))
+                                .tracking(3)
+                                .foregroundStyle(AppPalette.textPrimary.opacity(0.82))
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 15)
-                        .background(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(AppPalette.textStrong)
-                        )
-                        .foregroundStyle(.white)
                     }
-                    .disabled(isRedeeming || trimmed.isEmpty)
-                    .opacity(trimmed.isEmpty ? 0.5 : 1)
+
+                    // Floating caps label above a centered inline prompt —
+                    // same composition as an onboarding step.
+                    ZStack {
+                        VStack(spacing: LayoutMetrics.small) {
+                            TextField(
+                                "",
+                                text: $code,
+                                prompt: Text("Enter your access code")
+                                    .foregroundColor(AppPalette.textMuted.opacity(0.55))
+                            )
+                            .font(.system(size: 24, weight: .semibold))
+                            .foregroundStyle(AppPalette.textStrong)
+                            .multilineTextAlignment(.center)
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.characters)
+                            .submitLabel(.go)
+                            .focused($fieldFocused)
+                            .onSubmit { Task { await redeem() } }
+                            .onChange(of: code) { _, _ in errorMessage = nil }
+                            .padding(.horizontal, LayoutMetrics.large)
+
+                            // Hint line — reserved height keeps the layout
+                            // stable as the message swaps (mirrors the
+                            // username-availability hint in onboarding).
+                            Group {
+                                if let errorMessage {
+                                    Text(errorMessage)
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(.red.opacity(0.8))
+                                } else {
+                                    Text("Yafa is invite-only for now.")
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(AppPalette.textMuted)
+                                }
+                            }
+                            .frame(height: 16)
+                        }
+
+                        Text("INVITE ONLY")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .tracking(2)
+                            .foregroundStyle(AppPalette.textFaint)
+                            .offset(y: -64)
+                    }
                 }
-                .padding(.horizontal, 32)
 
                 Spacer(minLength: 0)
 
+                // Primary button — identical to the onboarding Continue/Skip.
+                Button {
+                    Task { await redeem() }
+                } label: {
+                    Group {
+                        if isRedeeming {
+                            ProgressView().tint(AppPalette.textMuted)
+                        } else {
+                            Text("REDEEM")
+                                .font(.system(size: 12, weight: .semibold))
+                                .tracking(1.5)
+                                .foregroundStyle(canRedeem ? AppPalette.textPrimary : AppPalette.textFaint)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 44)
+                    .appCapsule(
+                        shadowRadius: canRedeem ? 6 : 0,
+                        shadowY: canRedeem ? 3 : 0
+                    )
+                }
+                .buttonStyle(SolidPressButtonStyle())
+                .disabled(!canRedeem || isRedeeming)
+                .padding(.horizontal, LayoutMetrics.screenPadding)
+
                 Button("Sign out", action: onSignOut)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 13))
                     .foregroundStyle(AppPalette.textMuted)
-                    .padding(.bottom, 24)
+                    .padding(.top, LayoutMetrics.medium)
+                    .padding(.bottom, LayoutMetrics.xLarge)
             }
         }
+        .dynamicTypeSize(.large ... .accessibility1)
         .onAppear {
             // Small delay so the keyboard doesn't fight the layer transition.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
