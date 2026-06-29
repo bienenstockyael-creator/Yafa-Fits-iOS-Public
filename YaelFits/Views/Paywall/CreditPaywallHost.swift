@@ -39,7 +39,7 @@ struct CreditPaywallHost: View {
     ///   * `paywall_tapped_buy` — user tapped Buy on a bundle
     ///                            (properties: bundle_id, credits)
     ///   * `paywall_dismissed`  — closed without tapping Buy
-    static let paidCreditsEnabled = false
+    static let paidCreditsEnabled = true
 
     /// Current 3D credit balance to display in the chip. Owner
     /// supplies it because this view doesn't own the user's

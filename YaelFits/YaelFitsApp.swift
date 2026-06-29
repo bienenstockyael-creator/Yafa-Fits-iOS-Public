@@ -596,3 +596,7 @@ private struct AccessCodeGate: View {
         }
     }
 }
+
+#Preview("Access code gate") {
+    AccessCodeGate(onRedeemed: {}, onSignOut: {})
+}
