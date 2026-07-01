@@ -427,112 +427,108 @@ struct DiaryNoteView: View {
 struct DiaryNoteEditOverlay: View {
     let initialText: String
     let initialStyle: DiaryNoteStyle
-    let onSave: (String, DiaryNoteStyle) -> Void
+    let initialX: Double
+    let initialY: Double
+    let initialScale: Double
+    /// Global frame of the fit the note sits on — makes positioning WYSIWYG.
+    let slideFrame: CGRect
+    let onSave: (String, DiaryNoteStyle, Double, Double, Double) -> Void
     let onCancel: () -> Void
 
     @State private var text: String
     @State private var style: DiaryNoteStyle
+    @State private var pos: CGPoint       // normalized 0..1 within slideFrame
+    @State private var scale: CGFloat
+    @State private var dragStart: CGPoint?
+    @State private var pinchStart: CGFloat?
     @State private var keyboardHeight: CGFloat = 0
     @FocusState private var focused: Bool
 
     init(
         initialText: String,
         initialStyle: DiaryNoteStyle,
-        onSave: @escaping (String, DiaryNoteStyle) -> Void,
+        initialX: Double,
+        initialY: Double,
+        initialScale: Double,
+        slideFrame: CGRect,
+        onSave: @escaping (String, DiaryNoteStyle, Double, Double, Double) -> Void,
         onCancel: @escaping () -> Void
     ) {
         self.initialText = initialText
         self.initialStyle = initialStyle
+        self.initialX = initialX
+        self.initialY = initialY
+        self.initialScale = initialScale
+        self.slideFrame = slideFrame
         self.onSave = onSave
         self.onCancel = onCancel
         _text = State(initialValue: initialText)
         _style = State(initialValue: initialStyle)
+        _pos = State(initialValue: CGPoint(x: initialX, y: initialY))
+        _scale = State(initialValue: CGFloat(initialScale))
+    }
+
+    private func commit() {
+        onSave(text, style, Double(pos.x), Double(pos.y), Double(scale))
     }
 
     var body: some View {
-        ZStack {
-            // Dim everything behind; the fit shows through, dimmed. A tap
-            // on the empty area commits (like IG's "tap anywhere = done").
-            Color.black.opacity(0.6)
-                .ignoresSafeArea()
-                .contentShape(Rectangle())
-                .onTapGesture { onSave(text, style) }
+        GeometryReader { geo in
+            // The fit's global frame, expressed in this overlay's local space.
+            let originG = geo.frame(in: .global).origin
+            let f = CGRect(x: slideFrame.minX - originG.x,
+                           y: slideFrame.minY - originG.y,
+                           width: slideFrame.width, height: slideFrame.height)
+            let placed = CGPoint(x: f.minX + pos.x * f.width,
+                                 y: f.minY + pos.y * f.height)
+            let typing = CGPoint(x: geo.size.width / 2,
+                                 y: max(150, (geo.size.height - keyboardHeight) / 2))
 
-            VStack(spacing: 0) {
-                HStack {
-                    Button("Cancel", action: onCancel)
-                        .font(.system(size: 15))
-                        .foregroundStyle(.white.opacity(0.7))
-                    Spacer()
-                    Text("NOTE")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .tracking(2)
-                        .foregroundStyle(.white.opacity(0.5))
-                    Spacer()
-                    Button("Done") { onSave(text, style) }
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.white)
-                }
-                .padding(.horizontal, LayoutMetrics.screenPadding)
-                .padding(.vertical, LayoutMetrics.small)
+            ZStack {
+                // Dim. Tap: typing → positioning; positioning → commit.
+                Color.black.opacity(0.55)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture { if focused { focused = false } else { commit() } }
 
-                Spacer(minLength: 0)
+                // WYSIWYG note. Draggable + pinchable when not typing; snaps to
+                // a keyboard-safe center while the keyboard is up.
+                noteElement(fitFrame: f)
+                    .position(focused ? typing : placed)
+                    .animation(.easeOut(duration: 0.2), value: focused)
 
-                // WYSIWYG field — centered in the space above the keyboard.
-                ZStack {
-                    if text.isEmpty {
-                        Text("Write about this fit…")
-                            .font(style.font(size: 22))
-                            .foregroundStyle(.white.opacity(0.35))
-                            .allowsHitTesting(false)
+                // Chrome — Cancel / Done, a hint, and the font chips.
+                VStack(spacing: 0) {
+                    HStack {
+                        Button("Cancel", action: onCancel)
+                            .font(.system(size: 15))
+                            .foregroundStyle(.white.opacity(0.7))
+                        Spacer()
+                        Button("Done") { commit() }
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.white)
                     }
-                    TextField("", text: $text, axis: .vertical)
-                        .font(style.font(size: 22))
-                        .tracking(style.tracking)
-                        .foregroundStyle(style == .highlighter ? Color(red: 0.11, green: 0.12, blue: 0.15) : .white)
-                        .multilineTextAlignment(.center)
-                        .textInputAutocapitalization(style.isUppercased ? .characters : .sentences)
-                        .focused($focused)
-                        .padding(.horizontal, style == .highlighter ? 8 : 0)
-                        .padding(.vertical, style == .highlighter ? 4 : 0)
-                        .background {
-                            if style == .highlighter {
-                                RoundedRectangle(cornerRadius: 5, style: .continuous).fill(.white)
-                            }
-                        }
-                        .shadow(color: style == .highlighter ? .clear : .black.opacity(0.3), radius: 3, y: 1)
-                }
-                .padding(.horizontal, LayoutMetrics.xLarge)
+                    .padding(.horizontal, LayoutMetrics.screenPadding)
+                    .padding(.vertical, LayoutMetrics.small)
 
-                Spacer(minLength: 0)
+                    Spacer(minLength: 0)
 
-                // Style chips — each shows "Aa" in its own face. Sit just
-                // above the keyboard (the VStack is padded up by its height).
-                HStack(spacing: 10) {
-                    ForEach(DiaryNoteStyle.allCases) { s in
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.15)) { style = s }
-                        } label: {
-                            Text(s == .yafaMono ? "AA" : "Aa")
-                                .font(s.font(size: 17))
-                                .foregroundStyle(s == style ? .black : .white)
-                                .frame(width: 46, height: 38)
-                                .background {
-                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                        .fill(s == style ? Color.white : Color.white.opacity(0.14))
-                                }
-                        }
-                        .accessibilityLabel(s.accessibilityName)
-                        .accessibilityAddTraits(s == style ? .isSelected : [])
+                    if !focused && !text.isEmpty {
+                        Text("drag to move · pinch to resize · tap to edit")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.white.opacity(0.55))
+                            .padding(.bottom, 10)
                     }
+                    fontChips
+                        .padding(.bottom, 14)
                 }
-                .padding(.bottom, 14)
+                .padding(.bottom, keyboardHeight)
+                .animation(.easeOut(duration: 0.22), value: keyboardHeight)
             }
-            .padding(.bottom, keyboardHeight)
-            .animation(.easeOut(duration: 0.22), value: keyboardHeight)
         }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { note in
-            if let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
+        .ignoresSafeArea(.keyboard)
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { n in
+            if let frame = n.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
                 keyboardHeight = frame.height
             }
         }
@@ -541,6 +537,80 @@ struct DiaryNoteEditOverlay: View {
         }
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { focused = true }
+        }
+    }
+
+    private func noteElement(fitFrame f: CGRect) -> some View {
+        ZStack {
+            if text.isEmpty {
+                Text("Write about this fit…")
+                    .font(style.font(size: 22))
+                    .foregroundStyle(.white.opacity(0.35))
+                    .allowsHitTesting(false)
+            }
+            TextField("", text: $text, axis: .vertical)
+                .font(style.font(size: 22))
+                .tracking(style.tracking)
+                .foregroundStyle(style == .highlighter ? Color(red: 0.11, green: 0.12, blue: 0.15) : .white)
+                .multilineTextAlignment(.center)
+                .textInputAutocapitalization(style.isUppercased ? .characters : .sentences)
+                .focused($focused)
+                .padding(.horizontal, style == .highlighter ? 8 : 0)
+                .padding(.vertical, style == .highlighter ? 4 : 0)
+                .background {
+                    if style == .highlighter {
+                        RoundedRectangle(cornerRadius: 5, style: .continuous).fill(.white)
+                    }
+                }
+                .shadow(color: style == .highlighter ? .clear : .black.opacity(0.3), radius: 3, y: 1)
+        }
+        .frame(maxWidth: max(120, f.width * 0.88))
+        .fixedSize(horizontal: false, vertical: true)
+        .scaleEffect(focused ? 1 : scale)
+        .onTapGesture { if !focused { focused = true } }
+        .gesture(
+            DragGesture(minimumDistance: 5)
+                .onChanged { v in
+                    guard !focused, f.width > 0 else { return }
+                    let start = dragStart ?? pos
+                    dragStart = start
+                    pos = CGPoint(
+                        x: min(1, max(0, start.x + v.translation.width / f.width)),
+                        y: min(1, max(0, start.y + v.translation.height / f.height))
+                    )
+                }
+                .onEnded { _ in dragStart = nil }
+        )
+        .simultaneousGesture(
+            MagnificationGesture()
+                .onChanged { m in
+                    guard !focused else { return }
+                    let start = pinchStart ?? scale
+                    pinchStart = start
+                    scale = min(3, max(0.4, start * m))
+                }
+                .onEnded { _ in pinchStart = nil }
+        )
+    }
+
+    private var fontChips: some View {
+        HStack(spacing: 10) {
+            ForEach(DiaryNoteStyle.allCases) { s in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) { style = s }
+                } label: {
+                    Text(s == .yafaMono ? "AA" : "Aa")
+                        .font(s.font(size: 17))
+                        .foregroundStyle(s == style ? .black : .white)
+                        .frame(width: 46, height: 38)
+                        .background {
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(s == style ? Color.white : Color.white.opacity(0.14))
+                        }
+                }
+                .accessibilityLabel(s.accessibilityName)
+                .accessibilityAddTraits(s == style ? .isSelected : [])
+            }
         }
     }
 }

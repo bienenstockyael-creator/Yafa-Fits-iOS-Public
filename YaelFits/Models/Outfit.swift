@@ -130,6 +130,13 @@ struct Outfit: Codable, Identifiable, Hashable, Sendable {
     /// share card (opt-in via the Publish sheet toggle). Nil/false =
     /// private to the owner. Only meaningful when `diaryNote` is set.
     var noteShared: Bool? = nil
+    /// Normalized note position within the fit frame — 0…1 on each axis
+    /// (0.5,0.5 = center). Resolution-independent so it maps to any
+    /// render size. Nil defaults to a lower-center placement.
+    var noteX: Double?
+    var noteY: Double?
+    /// Note text scale (pinch-to-zoom). Nil defaults to 1.0.
+    var noteScale: Double?
 
     var normalizedFrameExt: String {
         let ext = (frameExt ?? "webp").trimmingCharacters(in: .whitespaces).lowercased()

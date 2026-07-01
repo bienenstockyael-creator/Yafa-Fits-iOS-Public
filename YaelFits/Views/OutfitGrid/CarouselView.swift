@@ -125,6 +125,9 @@ struct CarouselView: View {
     /// Outfit whose diary note is being written/edited. nil at rest;
     /// set by a long-press (or the ghost affordance) on the fit.
     @State private var outfitToEditNote: Outfit?
+    /// Global frame of the current fit slide (captured from the hero
+    /// preference). The note editor anchors to it so positioning is WYSIWYG.
+    @State private var currentSlideFrame: CGRect = .zero
     /// Mirrors the chevron press inside the card and the new Info
     /// button outside it. Tracking it as a single source of truth
     /// keeps the spring animation consistent regardless of which
@@ -429,12 +432,17 @@ struct CarouselView: View {
                 DiaryNoteEditOverlay(
                     initialText: editing.diaryNote ?? "",
                     initialStyle: DiaryNoteStyle.from(editing.noteStyle),
-                    onSave: { text, style in
+                    initialX: editing.noteX ?? 0.5,
+                    initialY: editing.noteY ?? 0.82,
+                    initialScale: editing.noteScale ?? 1,
+                    slideFrame: currentSlideFrame,
+                    onSave: { text, style, x, y, scale in
                         store.updateOutfitDiaryNote(
                             outfitId: editing.id,
                             note: text,
                             style: style,
-                            shared: editing.noteShared ?? false
+                            shared: editing.noteShared ?? false,
+                            x: x, y: y, scale: scale
                         )
                         withAnimation(.easeOut(duration: 0.2)) { outfitToEditNote = nil }
                     },
@@ -955,6 +963,7 @@ struct CarouselView: View {
         }
         .onPreferenceChange(CarouselHeroTargetFramePreferenceKey.self) { frame in
             onHeroTargetFrameChange(frame)
+            if !frame.isNull, frame.width > 0 { currentSlideFrame = frame }
         }
     }
 
@@ -1024,11 +1033,10 @@ struct CarouselView: View {
             }
         }
         .frame(width: slideWidth, height: slideHeight)
-        .overlay(alignment: .bottom) {
+        .overlay {
             if isCurrent && outfitToEditNote == nil {
                 diaryNoteOverlay(for: outfit)
                     .opacity(slideOpacity)
-                    .padding(.bottom, 16)
             }
         }
         // Long-press the fit → enter note mode (add or edit). Simultaneous
@@ -1061,35 +1069,47 @@ struct CarouselView: View {
     private func diaryNoteOverlay(for outfit: Outfit) -> some View {
         if let note = outfit.diaryNote, !note.isEmpty {
             if !viewOnly || outfit.noteShared == true {
-                // Display only — long-press the fit itself to edit.
-                DiaryNoteView(
-                    text: note,
-                    style: DiaryNoteStyle.from(outfit.noteStyle),
-                    color: .white,
-                    size: 19
-                )
-                .padding(.horizontal, 28)
+                // Display only (long-press the fit to edit), positioned at the
+                // owner's chosen spot + scale within the slide frame.
+                GeometryReader { geo in
+                    DiaryNoteView(
+                        text: note,
+                        style: DiaryNoteStyle.from(outfit.noteStyle),
+                        color: .white,
+                        size: 19
+                    )
+                    .frame(maxWidth: max(120, geo.size.width * 0.88))
+                    .scaleEffect(CGFloat(outfit.noteScale ?? 1))
+                    .position(
+                        x: (outfit.noteX ?? 0.5) * geo.size.width,
+                        y: (outfit.noteY ?? 0.82) * geo.size.height
+                    )
+                }
                 .allowsHitTesting(false)
             }
         } else if !viewOnly {
-            // Empty state: a standard app pill (matches WeatherPill).
-            Button {
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                outfitToEditNote = outfit
-            } label: {
-                HStack(spacing: LayoutMetrics.xxSmall) {
-                    Image(systemName: "pencil.line")
-                        .font(.system(size: 12, weight: .semibold))
-                    Text("add a note")
-                        .font(.system(size: 12, weight: .semibold))
+            // Empty state: a standard app pill (matches WeatherPill), bottom.
+            VStack {
+                Spacer()
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    outfitToEditNote = outfit
+                } label: {
+                    HStack(spacing: LayoutMetrics.xxSmall) {
+                        Image(systemName: "pencil.line")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text("add a note")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundStyle(AppPalette.textSecondary)
+                    .padding(.horizontal, LayoutMetrics.xSmall)
+                    .padding(.vertical, 7)
+                    .appCapsule(shadowRadius: 0, shadowY: 0)
+                    .shadow(color: AppPalette.uploadGlow.opacity(0.3), radius: 12, y: 0)
                 }
-                .foregroundStyle(AppPalette.textSecondary)
-                .padding(.horizontal, LayoutMetrics.xSmall)
-                .padding(.vertical, 7)
-                .appCapsule(shadowRadius: 0, shadowY: 0)
-                .shadow(color: AppPalette.uploadGlow.opacity(0.3), radius: 12, y: 0)
+                .buttonStyle(SolidPressButtonStyle())
+                .padding(.bottom, 16)
             }
-            .buttonStyle(SolidPressButtonStyle())
         }
     }
 
