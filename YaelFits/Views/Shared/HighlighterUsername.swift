@@ -460,7 +460,10 @@ struct DiaryNoteEditOverlay: View {
     @GestureState private var gestureRotate: Angle = .zero
     @State private var noteSize: CGSize = .zero
     @State private var keyboardHeight: CGFloat = 0
-    @FocusState private var focused: Bool
+    /// Two clean modes (IG-style): text mode (keyboard up, editing) vs sticker
+    /// mode (a plain Text you drag/pinch/rotate — no field, so it's smooth).
+    @State private var editing = true
+    @FocusState private var fieldFocus: Bool
 
     // Safe-zone insets (fractions of the fit frame) that keep the note off
     // the carousel UI: side arrows, top chrome, bottom action row. Tune if
@@ -534,23 +537,23 @@ struct DiaryNoteEditOverlay: View {
                                  y: max(150, (geo.size.height - keyboardHeight) / 2))
 
             ZStack {
-                // Dim. Tap: typing → positioning; positioning → commit.
+                // Dim. Tap while typing → sticker mode (drop keyboard); tap
+                // while positioning → commit.
                 Color.black.opacity(0.55)
                     .ignoresSafeArea()
                     .contentShape(Rectangle())
-                    .onTapGesture { if focused { focused = false } else { commit() } }
+                    .onTapGesture {
+                        if editing { fieldFocus = false } else { commit() }
+                    }
 
-                // WYSIWYG note. Draggable + pinchable when not typing; snaps to
-                // a keyboard-safe center while the keyboard is up.
+                // The note: text mode = centered field above the keyboard;
+                // sticker mode = draggable/pinchable/rotatable Text.
                 noteElement(fitFrame: f)
-                    // Committed position; the live drag rides on top via
-                    // .offset so it follows the finger 1:1 (no jitter). Only
-                    // the focus snap animates.
-                    .position(focused ? typing : placed)
-                    .offset(focused ? .zero : gestureDrag)
-                    .animation(.easeOut(duration: 0.2), value: focused)
+                    .position(editing ? typing : placed)
+                    .offset(editing ? .zero : gestureDrag)
+                    .animation(.easeOut(duration: 0.22), value: editing)
 
-                // Chrome — Cancel / Done, a hint, and the font chips.
+                // Chrome — Cancel / Done, a hint, and the color + font rows.
                 VStack(spacing: 0) {
                     HStack {
                         Button("Cancel", action: onCancel)
@@ -566,8 +569,8 @@ struct DiaryNoteEditOverlay: View {
 
                     Spacer(minLength: 0)
 
-                    if !focused && !text.isEmpty {
-                        Text("drag to move · pinch to resize · tap to edit")
+                    if !editing && !text.isEmpty {
+                        Text("drag · pinch · rotate · tap to edit")
                             .font(.system(size: 11))
                             .foregroundStyle(.white.opacity(0.55))
                             .padding(.bottom, 10)
@@ -590,37 +593,57 @@ struct DiaryNoteEditOverlay: View {
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
             keyboardHeight = 0
         }
-        .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { focused = true }
+        .onChange(of: fieldFocus) { _, isFocused in
+            // Keyboard dismissed (Done / swipe) → drop to sticker mode.
+            if !isFocused { editing = false }
         }
     }
 
+    @ViewBuilder
     private func noteElement(fitFrame f: CGRect) -> some View {
-        ZStack {
-            // Display text — shown while positioning (plain Text = no clipping,
-            // no gesture competition so the drag follows the finger 1:1).
-            DiaryNoteView(text: text.isEmpty ? "Write about this fit…" : text,
-                          style: style, color: ink, size: 22)
-                .opacity(focused ? 0 : (text.isEmpty ? 0.4 : 1))
-
-            // TextField — ALWAYS in the tree (so @FocusState can focus it and
-            // the keyboard appears); only visible + hit-testable while focused.
-            TextField("", text: $text, axis: .vertical)
-                .font(style.font(size: 22))
-                .tracking(style.tracking)
-                .foregroundStyle(style == .highlighter ? Color(red: 0.11, green: 0.12, blue: 0.15) : ink)
-                .multilineTextAlignment(.center)
-                .textInputAutocapitalization(style.isUppercased ? .characters : .sentences)
-                .focused($focused)
-                .padding(.horizontal, style == .highlighter ? 8 : 0)
-                .padding(.vertical, style == .highlighter ? 4 : 0)
-                .background {
-                    if style == .highlighter {
-                        RoundedRectangle(cornerRadius: 5, style: .continuous).fill(ink)
+        Group {
+            if editing {
+                // Text mode — the field mounts HERE and focuses itself on
+                // appear (reliable for every entry point, incl. long-press,
+                // where the finger may still be down for a moment).
+                ZStack {
+                    if text.isEmpty {
+                        Text("Write about this fit…")
+                            .font(style.font(size: 22))
+                            .foregroundStyle(.white.opacity(0.35))
+                            .allowsHitTesting(false)
+                    }
+                    TextField("", text: $text, axis: .vertical)
+                        .font(style.font(size: 22))
+                        .tracking(style.tracking)
+                        .foregroundStyle(style == .highlighter ? Color(red: 0.11, green: 0.12, blue: 0.15) : ink)
+                        .multilineTextAlignment(.center)
+                        .textInputAutocapitalization(style.isUppercased ? .characters : .sentences)
+                        .focused($fieldFocus)
+                        .padding(.horizontal, style == .highlighter ? 8 : 0)
+                        .padding(.vertical, style == .highlighter ? 4 : 0)
+                        .background {
+                            if style == .highlighter {
+                                RoundedRectangle(cornerRadius: 5, style: .continuous).fill(ink)
+                            }
+                        }
+                }
+                .onAppear {
+                    // Retry so a long-press finger has time to lift (iOS drops
+                    // becomeFirstResponder while a touch is still down).
+                    for d in [0.35, 0.7] {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + d) {
+                            if editing && !fieldFocus { fieldFocus = true }
+                        }
                     }
                 }
-                .opacity(focused ? 1 : 0)
-                .allowsHitTesting(focused)
+            } else {
+                // Sticker mode — a plain rendered Text (no field), so drag /
+                // pinch / rotate are perfectly smooth and never flicker.
+                DiaryNoteView(text: text.isEmpty ? "Tap to write…" : text,
+                              style: style, color: ink, size: 22)
+                    .opacity(text.isEmpty ? 0.5 : 1)
+            }
         }
         .frame(maxWidth: max(120, f.width * 0.88))
         .fixedSize(horizontal: false, vertical: true)
@@ -630,13 +653,11 @@ struct DiaryNoteEditOverlay: View {
             }
         }
         .onPreferenceChange(DiaryNoteSizeKey.self) { noteSize = $0 }
-        // Live transforms during a gesture (auto-reset via @GestureState);
-        // committed values in between.
-        .scaleEffect(focused ? 1 : scale * gestureMagnify)
-        .rotationEffect(focused ? .zero : rotation + gestureRotate)
+        .scaleEffect(editing ? 1 : scale * gestureMagnify)
+        .rotationEffect(editing ? .zero : rotation + gestureRotate)
         .contentShape(Rectangle())
-        .onTapGesture { if !focused { focused = true } }
-        .gesture(manipulation(f), including: focused ? .subviews : .all)
+        .onTapGesture { if !editing { editing = true } }
+        .gesture(manipulation(f), including: editing ? .subviews : .all)
     }
 
     /// Combined drag + pinch + rotate. Uses @GestureState so the note follows
