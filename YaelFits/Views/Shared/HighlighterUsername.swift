@@ -521,6 +521,16 @@ struct DiaryNoteEditOverlay: View {
         onSave(text, style, Double(pos.x), Double(pos.y), Double(scale), rotation.radians, colorIndex)
     }
 
+    /// Focus the field immediately (no perceptible delay for a tap entry), then
+    /// retry once for the long-press case where the finger is still down and
+    /// iOS drops the first becomeFirstResponder.
+    private func focusField() {
+        fieldFocus = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            if editing && !fieldFocus { fieldFocus = true }
+        }
+    }
+
     /// Clamps a normalized position so the note's (scaled) bounding box stays
     /// inside the safe zone — off the side arrows, top chrome, and bottom
     /// buttons. A note bigger than the safe zone snaps to center.
@@ -555,7 +565,7 @@ struct DiaryNoteEditOverlay: View {
                     .ignoresSafeArea()
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        if editing { fieldFocus = false } else { commit() }
+                        if editing { editing = false } else { commit() }
                     }
 
                 // The note: text mode = centered field above the keyboard;
@@ -606,9 +616,10 @@ struct DiaryNoteEditOverlay: View {
                 keyboardHeight = max(keyboardHeight, frame.height)
             }
         }
-        .onChange(of: fieldFocus) { _, isFocused in
-            // Keyboard dismissed (Done / swipe) → drop to sticker mode.
-            if !isFocused { editing = false }
+        // `editing` is the source of truth; focus follows it. Font/color taps
+        // never change `editing`, so they can't drop you out of edit mode.
+        .onChange(of: editing) { _, isEditing in
+            if isEditing { focusField() } else { fieldFocus = false }
         }
     }
 
@@ -641,15 +652,7 @@ struct DiaryNoteEditOverlay: View {
                             }
                         }
                 }
-                .onAppear {
-                    // Retry so a long-press finger has time to lift (iOS drops
-                    // becomeFirstResponder while a touch is still down).
-                    for d in [0.35, 0.7] {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + d) {
-                            if editing && !fieldFocus { fieldFocus = true }
-                        }
-                    }
-                }
+                .onAppear { focusField() }
             } else {
                 // Sticker mode — a plain rendered Text (no field), so drag /
                 // pinch / rotate are perfectly smooth and never flicker.
@@ -671,6 +674,7 @@ struct DiaryNoteEditOverlay: View {
         .scaleEffect(editing ? 1 : scale * gestureMagnify)
         .rotationEffect(editing ? .zero : rotation + gestureRotate)
         .contentShape(Rectangle())
+        .onTapGesture { if !editing { editing = true } }   // tap sticker → edit
         .gesture(manipulation(f), including: editing ? .subviews : .all)
     }
 
@@ -678,15 +682,9 @@ struct DiaryNoteEditOverlay: View {
     /// the finger 1:1 with no accumulator jitter; commits (and clamps to the
     /// safe zone) only on release.
     private func manipulation(_ f: CGRect) -> some Gesture {
-        DragGesture(minimumDistance: 0)
+        DragGesture(minimumDistance: 8)
             .updating($gestureDrag) { value, state, _ in state = value.translation }
             .onEnded { value in
-                // Near-zero movement = a tap → enter text mode (one gesture
-                // handles both, so a drag can never accidentally toggle edit).
-                if hypot(value.translation.width, value.translation.height) < 6 {
-                    editing = true
-                    return
-                }
                 guard f.width > 0 else { return }
                 let raw = CGPoint(x: pos.x + value.translation.width / f.width,
                                   y: pos.y + value.translation.height / f.height)
@@ -710,7 +708,7 @@ struct DiaryNoteEditOverlay: View {
     private var colorRow: some View {
         HStack(spacing: 16) {
             ForEach(Array(DiaryInk.palette.enumerated()), id: \.offset) { i, c in
-                Button { colorIndex = i } label: {
+                Button { colorIndex = i; fieldFocus = true } label: {
                     Circle()
                         .fill(c)
                         .frame(width: 24, height: 24)
@@ -727,6 +725,7 @@ struct DiaryNoteEditOverlay: View {
             ForEach(DiaryNoteStyle.allCases) { s in
                 Button {
                     withAnimation(.easeInOut(duration: 0.15)) { style = s }
+                    fieldFocus = true
                 } label: {
                     Text(s == .yafaMono ? "AA" : "Aa")
                         .font(s.font(size: 17))
