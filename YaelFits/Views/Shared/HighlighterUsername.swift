@@ -441,9 +441,10 @@ struct DiaryNoteEditOverlay: View {
     let initialY: Double
     let initialScale: Double
     let initialRotation: Double
+    let initialColorIndex: Int
     /// Global frame of the fit the note sits on — makes positioning WYSIWYG.
     let slideFrame: CGRect
-    let onSave: (String, DiaryNoteStyle, Double, Double, Double, Double) -> Void
+    let onSave: (String, DiaryNoteStyle, Double, Double, Double, Double, Int) -> Void
     let onCancel: () -> Void
 
     @State private var text: String
@@ -451,6 +452,7 @@ struct DiaryNoteEditOverlay: View {
     @State private var pos: CGPoint       // normalized 0..1 within slideFrame
     @State private var scale: CGFloat
     @State private var rotation: Angle
+    @State private var colorIndex: Int
     @State private var dragStart: CGPoint?
     @State private var pinchStart: CGFloat?
     @State private var rotationStart: Angle?
@@ -472,8 +474,9 @@ struct DiaryNoteEditOverlay: View {
         initialY: Double,
         initialScale: Double,
         initialRotation: Double,
+        initialColorIndex: Int,
         slideFrame: CGRect,
-        onSave: @escaping (String, DiaryNoteStyle, Double, Double, Double, Double) -> Void,
+        onSave: @escaping (String, DiaryNoteStyle, Double, Double, Double, Double, Int) -> Void,
         onCancel: @escaping () -> Void
     ) {
         self.initialText = initialText
@@ -482,6 +485,7 @@ struct DiaryNoteEditOverlay: View {
         self.initialY = initialY
         self.initialScale = initialScale
         self.initialRotation = initialRotation
+        self.initialColorIndex = initialColorIndex
         self.slideFrame = slideFrame
         self.onSave = onSave
         self.onCancel = onCancel
@@ -490,10 +494,15 @@ struct DiaryNoteEditOverlay: View {
         _pos = State(initialValue: CGPoint(x: initialX, y: initialY))
         _scale = State(initialValue: CGFloat(initialScale))
         _rotation = State(initialValue: .radians(initialRotation))
+        _colorIndex = State(initialValue: initialColorIndex)
+    }
+
+    private var ink: Color {
+        DiaryInk.palette.indices.contains(colorIndex) ? DiaryInk.palette[colorIndex] : .white
     }
 
     private func commit() {
-        onSave(text, style, Double(pos.x), Double(pos.y), Double(scale), rotation.radians)
+        onSave(text, style, Double(pos.x), Double(pos.y), Double(scale), rotation.radians, colorIndex)
     }
 
     /// Clamps a normalized position so the note's (scaled) bounding box stays
@@ -559,6 +568,8 @@ struct DiaryNoteEditOverlay: View {
                             .foregroundStyle(.white.opacity(0.55))
                             .padding(.bottom, 10)
                     }
+                    colorRow
+                        .padding(.bottom, 12)
                     fontChips
                         .padding(.bottom, 14)
                 }
@@ -581,40 +592,31 @@ struct DiaryNoteEditOverlay: View {
     }
 
     private func noteElement(fitFrame f: CGRect) -> some View {
-        Group {
-            if focused {
-                // Editable text field — only while the keyboard is up.
-                ZStack {
-                    if text.isEmpty {
-                        Text("Write about this fit…")
-                            .font(style.font(size: 22))
-                            .foregroundStyle(.white.opacity(0.35))
-                            .allowsHitTesting(false)
+        ZStack {
+            // Display text — shown while positioning (plain Text = no clipping,
+            // no gesture competition so the drag follows the finger 1:1).
+            DiaryNoteView(text: text.isEmpty ? "Write about this fit…" : text,
+                          style: style, color: ink, size: 22)
+                .opacity(focused ? 0 : (text.isEmpty ? 0.4 : 1))
+
+            // TextField — ALWAYS in the tree (so @FocusState can focus it and
+            // the keyboard appears); only visible + hit-testable while focused.
+            TextField("", text: $text, axis: .vertical)
+                .font(style.font(size: 22))
+                .tracking(style.tracking)
+                .foregroundStyle(style == .highlighter ? Color(red: 0.11, green: 0.12, blue: 0.15) : ink)
+                .multilineTextAlignment(.center)
+                .textInputAutocapitalization(style.isUppercased ? .characters : .sentences)
+                .focused($focused)
+                .padding(.horizontal, style == .highlighter ? 8 : 0)
+                .padding(.vertical, style == .highlighter ? 4 : 0)
+                .background {
+                    if style == .highlighter {
+                        RoundedRectangle(cornerRadius: 5, style: .continuous).fill(ink)
                     }
-                    TextField("", text: $text, axis: .vertical)
-                        .font(style.font(size: 22))
-                        .tracking(style.tracking)
-                        .foregroundStyle(style == .highlighter ? Color(red: 0.11, green: 0.12, blue: 0.15) : .white)
-                        .multilineTextAlignment(.center)
-                        .textInputAutocapitalization(style.isUppercased ? .characters : .sentences)
-                        .focused($focused)
-                        .padding(.horizontal, style == .highlighter ? 8 : 0)
-                        .padding(.vertical, style == .highlighter ? 4 : 0)
-                        .background {
-                            if style == .highlighter {
-                                RoundedRectangle(cornerRadius: 5, style: .continuous).fill(.white)
-                            }
-                        }
-                        .shadow(color: style == .highlighter ? .clear : .black.opacity(0.3), radius: 3, y: 1)
                 }
-            } else {
-                // Plain Text while positioning: no TextField gesture
-                // competition (so drag follows the finger 1:1) and no
-                // input-field clipping.
-                DiaryNoteView(text: text.isEmpty ? "Write about this fit…" : text,
-                              style: style, color: .white, size: 22)
-                    .opacity(text.isEmpty ? 0.4 : 1)
-            }
+                .opacity(focused ? 1 : 0)
+                .allowsHitTesting(focused)
         }
         .frame(maxWidth: max(120, f.width * 0.88))
         .fixedSize(horizontal: false, vertical: true)
@@ -663,6 +665,21 @@ struct DiaryNoteEditOverlay: View {
                 }
                 .onEnded { _ in rotationStart = nil }
         )
+    }
+
+    private var colorRow: some View {
+        HStack(spacing: 16) {
+            ForEach(Array(DiaryInk.palette.enumerated()), id: \.offset) { i, c in
+                Button { colorIndex = i } label: {
+                    Circle()
+                        .fill(c)
+                        .frame(width: 24, height: 24)
+                        .overlay(Circle().strokeBorder(.black.opacity(0.15), lineWidth: 0.5))
+                        .overlay(Circle().strokeBorder(.white, lineWidth: i == colorIndex ? 2 : 0).padding(-3))
+                }
+                .accessibilityLabel("Ink color \(i + 1)")
+            }
+        }
     }
 
     private var fontChips: some View {

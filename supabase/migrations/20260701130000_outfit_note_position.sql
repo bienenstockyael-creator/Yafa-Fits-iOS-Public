@@ -5,4 +5,5 @@ alter table public.outfits
   add column if not exists note_x double precision,
   add column if not exists note_y double precision,
   add column if not exists note_scale double precision,
-  add column if not exists note_rotation double precision;
+  add column if not exists note_rotation double precision,
+  add column if not exists note_color integer;

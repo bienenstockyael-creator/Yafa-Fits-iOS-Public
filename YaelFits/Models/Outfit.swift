@@ -139,6 +139,8 @@ struct Outfit: Codable, Identifiable, Hashable, Sendable {
     var noteScale: Double?
     /// Note rotation in radians (rotate gesture). Nil defaults to 0.
     var noteRotation: Double?
+    /// Ink color index into `DiaryInk.palette`. Nil defaults to 0 (white).
+    var noteColorIndex: Int?
 
     var normalizedFrameExt: String {
         let ext = (frameExt ?? "webp").trimmingCharacters(in: .whitespaces).lowercased()

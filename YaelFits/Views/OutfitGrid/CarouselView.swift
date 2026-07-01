@@ -441,14 +441,15 @@ struct CarouselView: View {
                     initialY: editing.noteY ?? 0.82,
                     initialScale: editing.noteScale ?? 1,
                     initialRotation: editing.noteRotation ?? 0,
+                    initialColorIndex: editing.noteColorIndex ?? 0,
                     slideFrame: currentSlideFrame,
-                    onSave: { text, style, x, y, scale, rotation in
+                    onSave: { text, style, x, y, scale, rotation, colorIndex in
                         store.updateOutfitDiaryNote(
                             outfitId: editing.id,
                             note: text,
                             style: style,
                             shared: editing.noteShared ?? false,
-                            x: x, y: y, scale: scale, rotation: rotation
+                            x: x, y: y, scale: scale, rotation: rotation, colorIndex: colorIndex
                         )
                         withAnimation(.easeOut(duration: 0.2)) { outfitToEditNote = nil }
                     },
@@ -1081,7 +1082,8 @@ struct CarouselView: View {
                     DiaryNoteView(
                         text: note,
                         style: DiaryNoteStyle.from(outfit.noteStyle),
-                        color: .white,
+                        color: DiaryInk.palette.indices.contains(outfit.noteColorIndex ?? 0)
+                            ? DiaryInk.palette[outfit.noteColorIndex ?? 0] : .white,
                         size: 19
                     )
                     .frame(maxWidth: max(120, geo.size.width * 0.88))

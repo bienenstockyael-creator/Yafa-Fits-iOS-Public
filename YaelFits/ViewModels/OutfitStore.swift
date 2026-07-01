@@ -669,18 +669,20 @@ class OutfitStore {
         x: Double? = nil,
         y: Double? = nil,
         scale: Double? = nil,
-        rotation: Double? = nil
+        rotation: Double? = nil,
+        colorIndex: Int? = nil
     ) {
         guard let index = outfits.firstIndex(where: { $0.id == outfitId }) else { return }
         let trimmed = note?.trimmingCharacters(in: .whitespacesAndNewlines)
         let finalNote = (trimmed?.isEmpty ?? true) ? nil : trimmed
         let finalShared = finalNote == nil ? false : shared
-        // Preserve existing position/scale/rotation when not explicitly
-        // provided (e.g. the Publish-sheet share toggle only changes `shared`).
+        // Preserve existing transform/color when not explicitly provided
+        // (e.g. the Publish-sheet share toggle only changes `shared`).
         let finalX = x ?? outfits[index].noteX
         let finalY = y ?? outfits[index].noteY
         let finalScale = scale ?? outfits[index].noteScale
         let finalRotation = rotation ?? outfits[index].noteRotation
+        let finalColor = colorIndex ?? outfits[index].noteColorIndex
         outfits[index].diaryNote = finalNote
         outfits[index].noteStyle = style.rawValue
         outfits[index].noteShared = finalShared
@@ -688,6 +690,7 @@ class OutfitStore {
         outfits[index].noteY = finalY
         outfits[index].noteScale = finalScale
         outfits[index].noteRotation = finalRotation
+        outfits[index].noteColorIndex = finalColor
         persistCache()
         Task {
             try? await OutfitService.updateOutfitDiaryNote(
@@ -698,7 +701,8 @@ class OutfitStore {
                 x: finalX,
                 y: finalY,
                 scale: finalScale,
-                rotation: finalRotation
+                rotation: finalRotation,
+                colorIndex: finalColor
             )
         }
     }
