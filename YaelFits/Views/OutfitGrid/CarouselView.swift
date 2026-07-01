@@ -1081,21 +1081,25 @@ struct CarouselView: View {
                 // Display only (long-press the fit to edit), positioned at the
                 // owner's chosen spot + scale within the slide frame.
                 GeometryReader { geo in
-                    DiaryNoteView(
-                        text: note,
-                        style: DiaryNoteStyle.from(outfit.noteStyle),
-                        color: DiaryInk.palette.indices.contains(outfit.noteColorIndex ?? 0)
-                            ? DiaryInk.palette[outfit.noteColorIndex ?? 0] : .white,
-                        size: 22   // match the editor base size for WYSIWYG
-                    )
-                    .frame(maxWidth: max(120, geo.size.width * 0.88))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .scaleEffect(CGFloat(outfit.noteScale ?? 1))
-                    .rotationEffect(.radians(outfit.noteRotation ?? 0))
-                    .position(
-                        x: (outfit.noteX ?? 0.5) * geo.size.width,
-                        y: (outfit.noteY ?? 0.82) * geo.size.height
-                    )
+                    // Only render once the frame is measured, so the note never
+                    // flashes at (0,0) then jumps to its spot on appear.
+                    if geo.size.width > 1 {
+                        DiaryNoteView(
+                            text: note,
+                            style: DiaryNoteStyle.from(outfit.noteStyle),
+                            color: DiaryInk.palette.indices.contains(outfit.noteColorIndex ?? 0)
+                                ? DiaryInk.palette[outfit.noteColorIndex ?? 0] : .white,
+                            size: 22   // match the editor base size for WYSIWYG
+                        )
+                        .frame(maxWidth: max(120, geo.size.width * 0.88))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .scaleEffect(CGFloat(outfit.noteScale ?? 1))
+                        .rotationEffect(.radians(outfit.noteRotation ?? 0))
+                        .position(
+                            x: (outfit.noteX ?? 0.5) * geo.size.width,
+                            y: (outfit.noteY ?? 0.82) * geo.size.height
+                        )
+                    }
                 }
                 .allowsHitTesting(false)
             }
