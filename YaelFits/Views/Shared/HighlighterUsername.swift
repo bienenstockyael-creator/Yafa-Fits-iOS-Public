@@ -459,7 +459,9 @@ struct DiaryNoteEditOverlay: View {
     @GestureState private var gestureMagnify: CGFloat = 1.0
     @GestureState private var gestureRotate: Angle = .zero
     @State private var noteSize: CGSize = .zero
-    @State private var keyboardHeight: CGFloat = 0
+    // Baseline so the control rows start above the keyboard with no first-show
+    // jump; only ever GROWS (never shrinks), so the layout never drifts down.
+    @State private var keyboardHeight: CGFloat = 300
     /// Two clean modes (IG-style): text mode (keyboard up, editing) vs sticker
     /// mode (a plain Text you drag/pinch/rotate — no field, so it's smooth).
     @State private var editing = true
@@ -539,8 +541,9 @@ struct DiaryNoteEditOverlay: View {
                            width: slideFrame.width, height: slideFrame.height)
             let placed = CGPoint(x: f.minX + pos.x * f.width,
                                  y: f.minY + pos.y * f.height)
-            let typing = CGPoint(x: geo.size.width / 2,
-                                 y: max(150, (geo.size.height - keyboardHeight) / 2))
+            // Fixed upper-center — does NOT track the keyboard, so the note
+            // stays put whether the keyboard is up or down (no drift).
+            let typing = CGPoint(x: geo.size.width / 2, y: geo.size.height * 0.34)
 
             ZStack {
                 // Dim. Tap while typing → sticker mode (drop keyboard); tap
@@ -569,7 +572,7 @@ struct DiaryNoteEditOverlay: View {
                             .font(.system(size: 15))
                             .foregroundStyle(.white.opacity(0.7))
                         Spacer()
-                        Button("Done") { commit() }
+                        Button("Done") { fieldFocus = false; commit() }
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(.white)
                     }
@@ -590,17 +593,15 @@ struct DiaryNoteEditOverlay: View {
                         .padding(.bottom, 14)
                 }
                 .padding(.bottom, keyboardHeight)
-                .animation(.easeOut(duration: 0.22), value: keyboardHeight)
             }
         }
         .ignoresSafeArea(.keyboard)
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { n in
             if let frame = n.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
-                keyboardHeight = frame.height
+                // Grow to the real height, never shrink — the control rows stay
+                // at a stable spot whether the keyboard is up or down.
+                keyboardHeight = max(keyboardHeight, frame.height)
             }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
-            keyboardHeight = 0
         }
         .onChange(of: fieldFocus) { _, isFocused in
             // Keyboard dismissed (Done / swipe) → drop to sticker mode.

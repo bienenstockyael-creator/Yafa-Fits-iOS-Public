@@ -457,7 +457,9 @@ struct CarouselView: View {
                         withAnimation(.easeOut(duration: 0.2)) { outfitToEditNote = nil }
                     }
                 )
-                .transition(.opacity)
+                // Belt-and-suspenders: stop any carousel animation from
+                // cascading into the note editor while manipulating.
+                .transaction { $0.animation = nil }
             }
         }
         .overlay { unpublishConfirmOverlay }
@@ -1084,7 +1086,7 @@ struct CarouselView: View {
                         style: DiaryNoteStyle.from(outfit.noteStyle),
                         color: DiaryInk.palette.indices.contains(outfit.noteColorIndex ?? 0)
                             ? DiaryInk.palette[outfit.noteColorIndex ?? 0] : .white,
-                        size: 19
+                        size: 22   // match the editor base size for WYSIWYG
                     )
                     .frame(maxWidth: max(120, geo.size.width * 0.88))
                     .fixedSize(horizontal: false, vertical: true)
