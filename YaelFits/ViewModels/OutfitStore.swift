@@ -668,23 +668,26 @@ class OutfitStore {
         shared: Bool,
         x: Double? = nil,
         y: Double? = nil,
-        scale: Double? = nil
+        scale: Double? = nil,
+        rotation: Double? = nil
     ) {
         guard let index = outfits.firstIndex(where: { $0.id == outfitId }) else { return }
         let trimmed = note?.trimmingCharacters(in: .whitespacesAndNewlines)
         let finalNote = (trimmed?.isEmpty ?? true) ? nil : trimmed
         let finalShared = finalNote == nil ? false : shared
-        // Preserve existing position/scale when not explicitly provided
-        // (e.g. the Publish-sheet share toggle only changes `shared`).
+        // Preserve existing position/scale/rotation when not explicitly
+        // provided (e.g. the Publish-sheet share toggle only changes `shared`).
         let finalX = x ?? outfits[index].noteX
         let finalY = y ?? outfits[index].noteY
         let finalScale = scale ?? outfits[index].noteScale
+        let finalRotation = rotation ?? outfits[index].noteRotation
         outfits[index].diaryNote = finalNote
         outfits[index].noteStyle = style.rawValue
         outfits[index].noteShared = finalShared
         outfits[index].noteX = finalX
         outfits[index].noteY = finalY
         outfits[index].noteScale = finalScale
+        outfits[index].noteRotation = finalRotation
         persistCache()
         Task {
             try? await OutfitService.updateOutfitDiaryNote(
@@ -694,7 +697,8 @@ class OutfitStore {
                 shared: finalShared,
                 x: finalX,
                 y: finalY,
-                scale: finalScale
+                scale: finalScale,
+                rotation: finalRotation
             )
         }
     }

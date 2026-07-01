@@ -102,7 +102,8 @@ struct OutfitService {
         shared: Bool,
         x: Double?,
         y: Double?,
-        scale: Double?
+        scale: Double?,
+        rotation: Double?
     ) async throws {
         struct NoteUpdate: Encodable {
             let diary_note: String?
@@ -111,12 +112,13 @@ struct OutfitService {
             let note_x: Double?
             let note_y: Double?
             let note_scale: Double?
+            let note_rotation: Double?
         }
         try await supabase
             .from("outfits")
             .update(NoteUpdate(
                 diary_note: note, note_style: style, note_shared: shared,
-                note_x: x, note_y: y, note_scale: scale
+                note_x: x, note_y: y, note_scale: scale, note_rotation: rotation
             ))
             .eq("id", value: outfitId)
             .execute()

@@ -137,6 +137,8 @@ struct Outfit: Codable, Identifiable, Hashable, Sendable {
     var noteY: Double?
     /// Note text scale (pinch-to-zoom). Nil defaults to 1.0.
     var noteScale: Double?
+    /// Note rotation in radians (rotate gesture). Nil defaults to 0.
+    var noteRotation: Double?
 
     var normalizedFrameExt: String {
         let ext = (frameExt ?? "webp").trimmingCharacters(in: .whitespaces).lowercased()

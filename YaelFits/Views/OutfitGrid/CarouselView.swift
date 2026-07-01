@@ -435,14 +435,15 @@ struct CarouselView: View {
                     initialX: editing.noteX ?? 0.5,
                     initialY: editing.noteY ?? 0.82,
                     initialScale: editing.noteScale ?? 1,
+                    initialRotation: editing.noteRotation ?? 0,
                     slideFrame: currentSlideFrame,
-                    onSave: { text, style, x, y, scale in
+                    onSave: { text, style, x, y, scale, rotation in
                         store.updateOutfitDiaryNote(
                             outfitId: editing.id,
                             note: text,
                             style: style,
                             shared: editing.noteShared ?? false,
-                            x: x, y: y, scale: scale
+                            x: x, y: y, scale: scale, rotation: rotation
                         )
                         withAnimation(.easeOut(duration: 0.2)) { outfitToEditNote = nil }
                     },
@@ -1079,7 +1080,9 @@ struct CarouselView: View {
                         size: 19
                     )
                     .frame(maxWidth: max(120, geo.size.width * 0.88))
+                    .fixedSize(horizontal: false, vertical: true)
                     .scaleEffect(CGFloat(outfit.noteScale ?? 1))
+                    .rotationEffect(.radians(outfit.noteRotation ?? 0))
                     .position(
                         x: (outfit.noteX ?? 0.5) * geo.size.width,
                         y: (outfit.noteY ?? 0.82) * geo.size.height
