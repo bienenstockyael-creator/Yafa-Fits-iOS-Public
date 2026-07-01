@@ -506,6 +506,12 @@ struct DiaryNoteEditOverlay: View {
         DiaryInk.palette.indices.contains(colorIndex) ? DiaryInk.palette[colorIndex] : .white
     }
 
+    /// True while any manipulation gesture is live. Used to strip inherited
+    /// animations off the note so it tracks the finger instead of easing.
+    private var isGesturing: Bool {
+        gestureDrag != .zero || gestureMagnify != 1.0 || gestureRotate != .zero
+    }
+
     private func commit() {
         onSave(text, style, Double(pos.x), Double(pos.y), Double(scale), rotation.radians, colorIndex)
     }
@@ -549,9 +555,12 @@ struct DiaryNoteEditOverlay: View {
                 // The note: text mode = centered field above the keyboard;
                 // sticker mode = draggable/pinchable/rotatable Text.
                 noteElement(fitFrame: f)
+                    .compositingGroup()   // flatten text+shadow → one smooth layer
                     .position(editing ? typing : placed)
                     .offset(editing ? .zero : gestureDrag)
-                    .animation(.easeOut(duration: 0.22), value: editing)
+                    // CRITICAL: strip any inherited animation while manipulating
+                    // so the note tracks the finger 1:1 (no eased lag / shimmer).
+                    .transaction { t in if isGesturing { t.animation = nil } }
 
                 // Chrome — Cancel / Done, a hint, and the color + font rows.
                 VStack(spacing: 0) {
@@ -656,7 +665,6 @@ struct DiaryNoteEditOverlay: View {
         .scaleEffect(editing ? 1 : scale * gestureMagnify)
         .rotationEffect(editing ? .zero : rotation + gestureRotate)
         .contentShape(Rectangle())
-        .onTapGesture { if !editing { editing = true } }
         .gesture(manipulation(f), including: editing ? .subviews : .all)
     }
 
@@ -664,9 +672,15 @@ struct DiaryNoteEditOverlay: View {
     /// the finger 1:1 with no accumulator jitter; commits (and clamps to the
     /// safe zone) only on release.
     private func manipulation(_ f: CGRect) -> some Gesture {
-        DragGesture(minimumDistance: 2)
+        DragGesture(minimumDistance: 0)
             .updating($gestureDrag) { value, state, _ in state = value.translation }
             .onEnded { value in
+                // Near-zero movement = a tap → enter text mode (one gesture
+                // handles both, so a drag can never accidentally toggle edit).
+                if hypot(value.translation.width, value.translation.height) < 6 {
+                    editing = true
+                    return
+                }
                 guard f.width > 0 else { return }
                 let raw = CGPoint(x: pos.x + value.translation.width / f.width,
                                   y: pos.y + value.translation.height / f.height)
