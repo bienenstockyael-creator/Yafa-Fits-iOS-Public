@@ -395,6 +395,9 @@ struct DiaryNoteView: View {
     /// Ink color (text color; marker fill for highlighter).
     var color: Color = .white
     var size: CGFloat = 20
+    /// Drop the legibility shadow (used in the editor, where re-rendering the
+    /// shadow every gesture frame caused a shimmer).
+    var showShadow: Bool = true
 
     var body: some View {
         let display = style.isUppercased ? text.uppercased() : text
@@ -412,7 +415,7 @@ struct DiaryNoteView: View {
                 }
             }
             // Soft shadow keeps light ink legible over a busy photo.
-            .shadow(color: style == .highlighter ? .clear : .black.opacity(0.22), radius: 2.5, y: 1)
+            .shadow(color: (showShadow && style != .highlighter) ? .black.opacity(0.22) : .clear, radius: 2.5, y: 1)
     }
 }
 
@@ -556,14 +559,11 @@ struct DiaryNoteEditOverlay: View {
                     }
 
                 // The note: text mode = centered field above the keyboard;
-                // sticker mode = draggable/pinchable/rotatable Text.
+                // sticker mode = draggable/pinchable/rotatable Text. (Animation
+                // is killed at the call site so it tracks the finger 1:1.)
                 noteElement(fitFrame: f)
-                    .compositingGroup()   // flatten text+shadow → one smooth layer
                     .position(editing ? typing : placed)
                     .offset(editing ? .zero : gestureDrag)
-                    // CRITICAL: strip any inherited animation while manipulating
-                    // so the note tracks the finger 1:1 (no eased lag / shimmer).
-                    .transaction { t in if isGesturing { t.animation = nil } }
 
                 // Chrome — Cancel / Done, a hint, and the color + font rows.
                 VStack(spacing: 0) {
@@ -581,18 +581,21 @@ struct DiaryNoteEditOverlay: View {
 
                     Spacer(minLength: 0)
 
-                    if !editing && !text.isEmpty {
+                    // Font + color rows ONLY in edit mode (keyboard up). In
+                    // positioning mode it's just the sticker — nothing else.
+                    if editing {
+                        colorRow
+                            .padding(.bottom, 12)
+                        fontChips
+                            .padding(.bottom, 14)
+                    } else if !text.isEmpty {
                         Text("drag · pinch · rotate · tap to edit")
                             .font(.system(size: 11))
                             .foregroundStyle(.white.opacity(0.55))
-                            .padding(.bottom, 10)
+                            .padding(.bottom, 26)
                     }
-                    colorRow
-                        .padding(.bottom, 12)
-                    fontChips
-                        .padding(.bottom, 14)
                 }
-                .padding(.bottom, keyboardHeight)
+                .padding(.bottom, editing ? keyboardHeight : 0)
             }
         }
         .ignoresSafeArea(.keyboard)
@@ -651,7 +654,7 @@ struct DiaryNoteEditOverlay: View {
                 // Sticker mode — a plain rendered Text (no field), so drag /
                 // pinch / rotate are perfectly smooth and never flicker.
                 DiaryNoteView(text: text.isEmpty ? "Tap to write…" : text,
-                              style: style, color: ink, size: 22)
+                              style: style, color: ink, size: 22, showShadow: false)
                     .opacity(text.isEmpty ? 0.5 : 1)
             }
         }
