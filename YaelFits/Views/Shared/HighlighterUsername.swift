@@ -419,7 +419,12 @@ struct DiaryNoteView: View {
 /// Modal editor for a fit's diary note. WYSIWYG on a dark canvas (like
 /// IG story text): type, pick one of the tasteful styles + an ink color.
 /// Empty text on save = delete the note.
-struct DiaryNoteEditor: View {
+/// In-place note editor — NOT a sheet. Renders as a full-screen layer
+/// that DIMS the carousel behind it (the fit stays visible, dimmed) and
+/// floats the editing chrome on top, like Instagram story text: type in
+/// the middle, pick a style at the bottom, Cancel/Done at the top. Tap
+/// the dimmed area to commit.
+struct DiaryNoteEditOverlay: View {
     let initialText: String
     let initialStyle: DiaryNoteStyle
     let onSave: (String, DiaryNoteStyle) -> Void
@@ -443,57 +448,65 @@ struct DiaryNoteEditor: View {
         _style = State(initialValue: initialStyle)
     }
 
-    private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
-
     var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Button("Cancel", action: onCancel)
-                    .font(.system(size: 15))
-                    .foregroundStyle(.white.opacity(0.7))
-                Spacer()
-                Text("NOTE")
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    .tracking(2)
-                    .foregroundStyle(.white.opacity(0.5))
-                Spacer()
-                Button("Done") { onSave(text, style) }
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.white)
-            }
-            .padding(.horizontal, LayoutMetrics.screenPadding)
-            .padding(.vertical, LayoutMetrics.small)
+        ZStack {
+            // Dim everything behind; the fit shows through, dimmed. A tap
+            // on the empty area commits (like IG's "tap anywhere = done").
+            Color.black.opacity(0.6)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture { onSave(text, style) }
 
-            Spacer(minLength: 0)
-
-            ZStack {
-                if text.isEmpty {
-                    Text("Write about this fit…")
-                        .font(style.font(size: 22))
-                        .foregroundStyle(.white.opacity(0.35))
-                        .allowsHitTesting(false)
+            VStack(spacing: 0) {
+                HStack {
+                    Button("Cancel", action: onCancel)
+                        .font(.system(size: 15))
+                        .foregroundStyle(.white.opacity(0.7))
+                    Spacer()
+                    Text("NOTE")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .tracking(2)
+                        .foregroundStyle(.white.opacity(0.5))
+                    Spacer()
+                    Button("Done") { onSave(text, style) }
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
                 }
-                TextField("", text: $text, axis: .vertical)
-                    .font(style.font(size: 22))
-                    .tracking(style.tracking)
-                    .foregroundStyle(style == .highlighter ? Color(red: 0.11, green: 0.12, blue: 0.15) : .white)
-                    .multilineTextAlignment(.center)
-                    .textInputAutocapitalization(style.isUppercased ? .characters : .sentences)
-                    .focused($focused)
-                    .padding(.horizontal, style == .highlighter ? 8 : 0)
-                    .padding(.vertical, style == .highlighter ? 4 : 0)
-                    .background {
-                        if style == .highlighter {
-                            RoundedRectangle(cornerRadius: 5, style: .continuous).fill(.white)
-                        }
+                .padding(.horizontal, LayoutMetrics.screenPadding)
+                .padding(.vertical, LayoutMetrics.small)
+
+                Spacer().frame(height: 52)
+
+                // WYSIWYG field over the dimmed fit. Kept in the upper
+                // third so it (and the chips) clear the keyboard.
+                ZStack {
+                    if text.isEmpty {
+                        Text("Write about this fit…")
+                            .font(style.font(size: 22))
+                            .foregroundStyle(.white.opacity(0.35))
+                            .allowsHitTesting(false)
                     }
-            }
-            .padding(.horizontal, LayoutMetrics.xLarge)
+                    TextField("", text: $text, axis: .vertical)
+                        .font(style.font(size: 22))
+                        .tracking(style.tracking)
+                        .foregroundStyle(style == .highlighter ? Color(red: 0.11, green: 0.12, blue: 0.15) : .white)
+                        .multilineTextAlignment(.center)
+                        .textInputAutocapitalization(style.isUppercased ? .characters : .sentences)
+                        .focused($focused)
+                        .padding(.horizontal, style == .highlighter ? 8 : 0)
+                        .padding(.vertical, style == .highlighter ? 4 : 0)
+                        .background {
+                            if style == .highlighter {
+                                RoundedRectangle(cornerRadius: 5, style: .continuous).fill(.white)
+                            }
+                        }
+                        .shadow(color: style == .highlighter ? .clear : .black.opacity(0.3), radius: 3, y: 1)
+                }
+                .padding(.horizontal, LayoutMetrics.xLarge)
 
-            Spacer(minLength: 0)
+                Spacer().frame(height: 24)
 
-            VStack(spacing: LayoutMetrics.medium) {
-                // Styles — each chip shows "Aa" in its own face
+                // Style chips — each shows "Aa" in its own face.
                 HStack(spacing: 10) {
                     ForEach(DiaryNoteStyle.allCases) { s in
                         Button {
@@ -505,17 +518,17 @@ struct DiaryNoteEditor: View {
                                 .frame(width: 46, height: 38)
                                 .background {
                                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                        .fill(s == style ? Color.white : Color.white.opacity(0.12))
+                                        .fill(s == style ? Color.white : Color.white.opacity(0.14))
                                 }
                         }
                         .accessibilityLabel(s.accessibilityName)
                         .accessibilityAddTraits(s == style ? .isSelected : [])
                     }
                 }
+
+                Spacer(minLength: 0)
             }
-            .padding(.bottom, LayoutMetrics.large)
         }
-        .background(Color(red: 0.06, green: 0.06, blue: 0.08).ignoresSafeArea())
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { focused = true }
         }

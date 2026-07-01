@@ -424,22 +424,26 @@ struct CarouselView: View {
             }
             .environment(store)
         }
-        .sheet(item: $outfitToEditNote) { outfit in
-            DiaryNoteEditor(
-                initialText: outfit.diaryNote ?? "",
-                initialStyle: DiaryNoteStyle.from(outfit.noteStyle),
-                onSave: { text, style in
-                    store.updateOutfitDiaryNote(
-                        outfitId: outfit.id,
-                        note: text,
-                        style: style,
-                        shared: outfit.noteShared ?? false
-                    )
-                    outfitToEditNote = nil
-                },
-                onCancel: { outfitToEditNote = nil }
-            )
-            .presentationDetents([.medium, .large])
+        .overlay {
+            if let editing = outfitToEditNote {
+                DiaryNoteEditOverlay(
+                    initialText: editing.diaryNote ?? "",
+                    initialStyle: DiaryNoteStyle.from(editing.noteStyle),
+                    onSave: { text, style in
+                        store.updateOutfitDiaryNote(
+                            outfitId: editing.id,
+                            note: text,
+                            style: style,
+                            shared: editing.noteShared ?? false
+                        )
+                        withAnimation(.easeOut(duration: 0.2)) { outfitToEditNote = nil }
+                    },
+                    onCancel: {
+                        withAnimation(.easeOut(duration: 0.2)) { outfitToEditNote = nil }
+                    }
+                )
+                .transition(.opacity)
+            }
         }
         .overlay { unpublishConfirmOverlay }
         .sheet(isPresented: $showComments) {
@@ -1027,6 +1031,16 @@ struct CarouselView: View {
                     .padding(.bottom, 16)
             }
         }
+        // Long-press the fit → enter note mode (add or edit). Simultaneous
+        // so it coexists with the rotate scrub: a moving finger cancels the
+        // press and drives rotation instead; a still hold opens the editor.
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.35).onEnded { _ in
+                guard isCurrent, !viewOnly else { return }
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                outfitToEditNote = outfit
+            }
+        )
         .scaleEffect(scale, anchor: .bottom)
         .allowsHitTesting(showsChrome && isCurrent)
         .background {
@@ -1047,6 +1061,7 @@ struct CarouselView: View {
     private func diaryNoteOverlay(for outfit: Outfit) -> some View {
         if let note = outfit.diaryNote, !note.isEmpty {
             if !viewOnly || outfit.noteShared == true {
+                // Display only — long-press the fit itself to edit.
                 DiaryNoteView(
                     text: note,
                     style: DiaryNoteStyle.from(outfit.noteStyle),
@@ -1054,29 +1069,27 @@ struct CarouselView: View {
                     size: 19
                 )
                 .padding(.horizontal, 28)
-                .contentShape(Rectangle())
-                .onLongPressGesture(minimumDuration: 0.3) {
-                    guard !viewOnly else { return }
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    outfitToEditNote = outfit
-                }
+                .allowsHitTesting(false)
             }
         } else if !viewOnly {
+            // Empty state: a standard app pill (matches WeatherPill).
             Button {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 outfitToEditNote = outfit
             } label: {
-                HStack(spacing: 5) {
+                HStack(spacing: LayoutMetrics.xxSmall) {
                     Image(systemName: "pencil.line")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                     Text("add a note")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: 12, weight: .semibold))
                 }
-                .foregroundStyle(.white.opacity(0.75))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(Capsule().fill(.black.opacity(0.25)))
+                .foregroundStyle(AppPalette.textSecondary)
+                .padding(.horizontal, LayoutMetrics.xSmall)
+                .padding(.vertical, 7)
+                .appCapsule(shadowRadius: 0, shadowY: 0)
+                .shadow(color: AppPalette.uploadGlow.opacity(0.3), radius: 12, y: 0)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SolidPressButtonStyle())
         }
     }
 
