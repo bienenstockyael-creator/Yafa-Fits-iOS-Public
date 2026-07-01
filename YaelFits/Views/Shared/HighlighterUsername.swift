@@ -419,6 +419,16 @@ struct DiaryNoteView: View {
 /// Modal editor for a fit's diary note. WYSIWYG on a dark canvas (like
 /// IG story text): type, pick one of the tasteful styles + an ink color.
 /// Empty text on save = delete the note.
+/// Reports the diary note's rendered (unscaled) size so the editor can
+/// keep its bounding box inside the safe zone as you drag/pinch.
+private struct DiaryNoteSizeKey: PreferenceKey {
+    static let defaultValue: CGSize = .zero
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+        let n = nextValue()
+        if n != .zero { value = n }
+    }
+}
+
 /// In-place note editor — NOT a sheet. Renders as a full-screen layer
 /// that DIMS the carousel behind it (the fit stays visible, dimmed) and
 /// floats the editing chrome on top, like Instagram story text: type in
@@ -441,8 +451,16 @@ struct DiaryNoteEditOverlay: View {
     @State private var scale: CGFloat
     @State private var dragStart: CGPoint?
     @State private var pinchStart: CGFloat?
+    @State private var noteSize: CGSize = .zero
     @State private var keyboardHeight: CGFloat = 0
     @FocusState private var focused: Bool
+
+    // Safe-zone insets (fractions of the fit frame) that keep the note off
+    // the carousel UI: side arrows, top chrome, bottom action row. Tune if
+    // the note still overlaps a control on-device.
+    private let safeSideInset: CGFloat = 0.06
+    private let safeTopInset: CGFloat = 0.07
+    private let safeBottomInset: CGFloat = 0.06
 
     init(
         initialText: String,
@@ -470,6 +488,20 @@ struct DiaryNoteEditOverlay: View {
 
     private func commit() {
         onSave(text, style, Double(pos.x), Double(pos.y), Double(scale))
+    }
+
+    /// Clamps a normalized position so the note's (scaled) bounding box stays
+    /// inside the safe zone — off the side arrows, top chrome, and bottom
+    /// buttons. A note bigger than the safe zone snaps to center.
+    private func clampedPos(_ raw: CGPoint, in f: CGRect) -> CGPoint {
+        guard f.width > 0, f.height > 0 else { return raw }
+        let halfWN = ((noteSize.width * scale) / 2) / f.width
+        let halfHN = ((noteSize.height * scale) / 2) / f.height
+        let minX = halfWN + safeSideInset, maxX = 1 - halfWN - safeSideInset
+        let minY = halfHN + safeTopInset, maxY = 1 - halfHN - safeBottomInset
+        let x = minX <= maxX ? min(maxX, max(minX, raw.x)) : 0.5
+        let y = minY <= maxY ? min(maxY, max(minY, raw.y)) : 0.5
+        return CGPoint(x: x, y: y)
     }
 
     var body: some View {
@@ -566,6 +598,12 @@ struct DiaryNoteEditOverlay: View {
         }
         .frame(maxWidth: max(120, f.width * 0.88))
         .fixedSize(horizontal: false, vertical: true)
+        .background {
+            GeometryReader { g in
+                Color.clear.preference(key: DiaryNoteSizeKey.self, value: g.size)
+            }
+        }
+        .onPreferenceChange(DiaryNoteSizeKey.self) { noteSize = $0 }
         .scaleEffect(focused ? 1 : scale)
         .onTapGesture { if !focused { focused = true } }
         .gesture(
@@ -574,10 +612,11 @@ struct DiaryNoteEditOverlay: View {
                     guard !focused, f.width > 0 else { return }
                     let start = dragStart ?? pos
                     dragStart = start
-                    pos = CGPoint(
-                        x: min(1, max(0, start.x + v.translation.width / f.width)),
-                        y: min(1, max(0, start.y + v.translation.height / f.height))
+                    let raw = CGPoint(
+                        x: start.x + v.translation.width / f.width,
+                        y: start.y + v.translation.height / f.height
                     )
+                    pos = clampedPos(raw, in: f)
                 }
                 .onEnded { _ in dragStart = nil }
         )
@@ -588,6 +627,7 @@ struct DiaryNoteEditOverlay: View {
                     let start = pinchStart ?? scale
                     pinchStart = start
                     scale = min(3, max(0.4, start * m))
+                    pos = clampedPos(pos, in: f)   // re-clamp: the note grew
                 }
                 .onEnded { _ in pinchStart = nil }
         )
