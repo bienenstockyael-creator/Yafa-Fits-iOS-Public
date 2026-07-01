@@ -453,9 +453,11 @@ struct DiaryNoteEditOverlay: View {
     @State private var scale: CGFloat
     @State private var rotation: Angle
     @State private var colorIndex: Int
-    @State private var dragStart: CGPoint?
-    @State private var pinchStart: CGFloat?
-    @State private var rotationStart: Angle?
+    // Live gesture values (auto-reset when the gesture ends). Committed into
+    // pos/scale/rotation in .onEnded — same pattern as AvatarCropView.
+    @GestureState private var gestureDrag: CGSize = .zero
+    @GestureState private var gestureMagnify: CGFloat = 1.0
+    @GestureState private var gestureRotate: Angle = .zero
     @State private var noteSize: CGSize = .zero
     @State private var keyboardHeight: CGFloat = 0
     @FocusState private var focused: Bool
@@ -541,10 +543,12 @@ struct DiaryNoteEditOverlay: View {
                 // WYSIWYG note. Draggable + pinchable when not typing; snaps to
                 // a keyboard-safe center while the keyboard is up.
                 noteElement(fitFrame: f)
-                    // Instant position while dragging (no implicit animation
-                    // to lag the finger); only the focus snap eases.
+                    // Committed position; the live drag rides on top via
+                    // .offset so it follows the finger 1:1 (no jitter). Only
+                    // the focus snap animates.
                     .position(focused ? typing : placed)
-                    .animation(dragStart == nil ? .easeOut(duration: 0.2) : nil, value: placed)
+                    .offset(focused ? .zero : gestureDrag)
+                    .animation(.easeOut(duration: 0.2), value: focused)
 
                 // Chrome — Cancel / Done, a hint, and the font chips.
                 VStack(spacing: 0) {
@@ -626,45 +630,40 @@ struct DiaryNoteEditOverlay: View {
             }
         }
         .onPreferenceChange(DiaryNoteSizeKey.self) { noteSize = $0 }
-        .scaleEffect(focused ? 1 : scale)
-        .rotationEffect(focused ? .zero : rotation)
+        // Live transforms during a gesture (auto-reset via @GestureState);
+        // committed values in between.
+        .scaleEffect(focused ? 1 : scale * gestureMagnify)
+        .rotationEffect(focused ? .zero : rotation + gestureRotate)
         .contentShape(Rectangle())
         .onTapGesture { if !focused { focused = true } }
-        .gesture(
-            DragGesture(minimumDistance: 4)
-                .onChanged { v in
-                    guard !focused, f.width > 0 else { return }
-                    let start = dragStart ?? pos
-                    dragStart = start
-                    let raw = CGPoint(
-                        x: start.x + v.translation.width / f.width,
-                        y: start.y + v.translation.height / f.height
-                    )
-                    pos = clampedPos(raw, in: f)
-                }
-                .onEnded { _ in dragStart = nil }
-        )
-        .simultaneousGesture(
-            MagnificationGesture()
-                .onChanged { m in
-                    guard !focused else { return }
-                    let start = pinchStart ?? scale
-                    pinchStart = start
-                    scale = min(3, max(0.4, start * m))
-                    pos = clampedPos(pos, in: f)
-                }
-                .onEnded { _ in pinchStart = nil }
-        )
-        .simultaneousGesture(
-            RotationGesture()
-                .onChanged { angle in
-                    guard !focused else { return }
-                    let start = rotationStart ?? rotation
-                    rotationStart = start
-                    rotation = start + angle
-                }
-                .onEnded { _ in rotationStart = nil }
-        )
+        .gesture(manipulation(f), including: focused ? .subviews : .all)
+    }
+
+    /// Combined drag + pinch + rotate. Uses @GestureState so the note follows
+    /// the finger 1:1 with no accumulator jitter; commits (and clamps to the
+    /// safe zone) only on release.
+    private func manipulation(_ f: CGRect) -> some Gesture {
+        DragGesture(minimumDistance: 2)
+            .updating($gestureDrag) { value, state, _ in state = value.translation }
+            .onEnded { value in
+                guard f.width > 0 else { return }
+                let raw = CGPoint(x: pos.x + value.translation.width / f.width,
+                                  y: pos.y + value.translation.height / f.height)
+                pos = clampedPos(raw, in: f)
+            }
+            .simultaneously(with:
+                MagnifyGesture()
+                    .updating($gestureMagnify) { value, state, _ in state = value.magnification }
+                    .onEnded { value in
+                        scale = min(3, max(0.4, scale * value.magnification))
+                        pos = clampedPos(pos, in: f)
+                    }
+            )
+            .simultaneously(with:
+                RotateGesture()
+                    .updating($gestureRotate) { value, state, _ in state = value.rotation }
+                    .onEnded { value in rotation += value.rotation }
+            )
     }
 
     private var colorRow: some View {
