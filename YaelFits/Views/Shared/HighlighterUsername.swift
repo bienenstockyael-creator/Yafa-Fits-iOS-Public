@@ -432,6 +432,7 @@ struct DiaryNoteEditOverlay: View {
 
     @State private var text: String
     @State private var style: DiaryNoteStyle
+    @State private var keyboardHeight: CGFloat = 0
     @FocusState private var focused: Bool
 
     init(
@@ -475,10 +476,9 @@ struct DiaryNoteEditOverlay: View {
                 .padding(.horizontal, LayoutMetrics.screenPadding)
                 .padding(.vertical, LayoutMetrics.small)
 
-                Spacer().frame(height: 52)
+                Spacer(minLength: 0)
 
-                // WYSIWYG field over the dimmed fit. Kept in the upper
-                // third so it (and the chips) clear the keyboard.
+                // WYSIWYG field — centered in the space above the keyboard.
                 ZStack {
                     if text.isEmpty {
                         Text("Write about this fit…")
@@ -504,9 +504,10 @@ struct DiaryNoteEditOverlay: View {
                 }
                 .padding(.horizontal, LayoutMetrics.xLarge)
 
-                Spacer().frame(height: 24)
+                Spacer(minLength: 0)
 
-                // Style chips — each shows "Aa" in its own face.
+                // Style chips — each shows "Aa" in its own face. Sit just
+                // above the keyboard (the VStack is padded up by its height).
                 HStack(spacing: 10) {
                     ForEach(DiaryNoteStyle.allCases) { s in
                         Button {
@@ -525,9 +526,18 @@ struct DiaryNoteEditOverlay: View {
                         .accessibilityAddTraits(s == style ? .isSelected : [])
                     }
                 }
-
-                Spacer(minLength: 0)
+                .padding(.bottom, 14)
             }
+            .padding(.bottom, keyboardHeight)
+            .animation(.easeOut(duration: 0.22), value: keyboardHeight)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { note in
+            if let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
+                keyboardHeight = frame.height
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            keyboardHeight = 0
         }
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { focused = true }

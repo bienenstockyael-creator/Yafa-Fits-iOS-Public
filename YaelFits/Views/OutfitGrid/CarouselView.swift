@@ -190,7 +190,7 @@ struct CarouselView: View {
                                let weather = outfit.weather,
                                !weather.condition.isEmpty {
                                 WeatherPill(weather: weather, useFahrenheit: store.useFahrenheit)
-                                    .opacity(showsChrome ? 1 : 0)
+                                    .opacity(showsChrome && outfitToEditNote == nil ? 1 : 0)
                                     .allowsHitTesting(showsChrome)
                             }
                         }
@@ -213,7 +213,7 @@ struct CarouselView: View {
                         // editable input pair via `isEditing`).
                         if let outfit = currentOutfit {
                             dateLocationLabel(for: outfit)
-                                .opacity(showsChrome ? 1 : 0)
+                                .opacity(showsChrome && outfitToEditNote == nil ? 1 : 0)
                                 .allowsHitTesting(isEditing)
                         }
 
@@ -298,7 +298,7 @@ struct CarouselView: View {
                             }
                             .offset(y: targetY - viewportCenterY)
                         }
-                        .opacity(showsChrome ? 1 : 0)
+                        .opacity(showsChrome && outfitToEditNote == nil ? 1 : 0)
                         .allowsHitTesting(showsChrome)
                     }
 
@@ -325,7 +325,7 @@ struct CarouselView: View {
                                 }
                             )
                             .padding(.bottom, Self.actionRowBottomInset)
-                            .opacity(showsChrome ? 1 : 0)
+                            .opacity(showsChrome && outfitToEditNote == nil ? 1 : 0)
                             .allowsHitTesting(showsChrome)
                     }
 
@@ -342,7 +342,7 @@ struct CarouselView: View {
                             // hidden while the card is open). The card
                             // sits flush atop those circles.
                             .padding(.bottom, Self.cardBottomInset)
-                            .opacity(showsChrome ? 1 : 0)
+                            .opacity(showsChrome && outfitToEditNote == nil ? 1 : 0)
                             .allowsHitTesting(showsChrome)
                     }
                 }
@@ -1025,7 +1025,7 @@ struct CarouselView: View {
         }
         .frame(width: slideWidth, height: slideHeight)
         .overlay(alignment: .bottom) {
-            if isCurrent {
+            if isCurrent && outfitToEditNote == nil {
                 diaryNoteOverlay(for: outfit)
                     .opacity(slideOpacity)
                     .padding(.bottom, 16)
