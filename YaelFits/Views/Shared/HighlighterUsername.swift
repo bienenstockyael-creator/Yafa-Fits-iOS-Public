@@ -665,7 +665,9 @@ struct DiaryNoteEditOverlay: View {
                 Color.clear.preference(key: DiaryNoteSizeKey.self, value: g.size)
             }
         }
-        .onPreferenceChange(DiaryNoteSizeKey.self) { noteSize = $0 }
+        // Only update the measured size when NOT mid-gesture, so a preference
+        // change can't trigger a re-render (and flicker) during a drag.
+        .onPreferenceChange(DiaryNoteSizeKey.self) { if !isGesturing { noteSize = $0 } }
         .scaleEffect(editing ? 1 : scale * gestureMagnify)
         .rotationEffect(editing ? .zero : rotation + gestureRotate)
         .contentShape(Rectangle())
