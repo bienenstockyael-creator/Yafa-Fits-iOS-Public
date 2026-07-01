@@ -119,6 +119,17 @@ struct Outfit: Codable, Identifiable, Hashable, Sendable {
     /// not synced from the server. Drives shareability — only public
     /// outfits can be featured on the web profile card.
     var isPublic: Bool? = nil
+    /// Personal "diary" note the owner writes on this fit in the
+    /// carousel detail view (a little annotation / journal entry).
+    /// Optional. Rendered in the style named by `noteStyle`.
+    var diaryNote: String?
+    /// Which font/style the diary note renders in — a
+    /// `DiaryNoteStyle` rawValue. Nil defaults to handwritten.
+    var noteStyle: String?
+    /// When true, the note is shown to viewers + eligible for the
+    /// share card (opt-in via the Publish sheet toggle). Nil/false =
+    /// private to the owner. Only meaningful when `diaryNote` is set.
+    var noteShared: Bool? = nil
 
     var normalizedFrameExt: String {
         let ext = (frameExt ?? "webp").trimmingCharacters(in: .whitespaces).lowercased()

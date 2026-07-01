@@ -658,6 +658,33 @@ class OutfitStore {
         persistCache()
     }
 
+    /// Writes the owner's diary note (text + style + share flag) both
+    /// locally (optimistic, cached) and to the server. Clearing the
+    /// text also forces `shared` off — an empty note can't be shared.
+    func updateOutfitDiaryNote(
+        outfitId: String,
+        note: String?,
+        style: DiaryNoteStyle,
+        shared: Bool
+    ) {
+        guard let index = outfits.firstIndex(where: { $0.id == outfitId }) else { return }
+        let trimmed = note?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let finalNote = (trimmed?.isEmpty ?? true) ? nil : trimmed
+        let finalShared = finalNote == nil ? false : shared
+        outfits[index].diaryNote = finalNote
+        outfits[index].noteStyle = style.rawValue
+        outfits[index].noteShared = finalShared
+        persistCache()
+        Task {
+            try? await OutfitService.updateOutfitDiaryNote(
+                outfitId: outfitId,
+                note: finalNote,
+                style: style.rawValue,
+                shared: finalShared
+            )
+        }
+    }
+
     func removeProduct(_ product: Product, fromOutfitId outfitId: String) {
         guard let index = outfits.firstIndex(where: { $0.id == outfitId }) else { return }
         outfits[index].products?.removeAll { $0.id == product.id }

@@ -95,6 +95,24 @@ struct OutfitService {
             .execute()
     }
 
+    static func updateOutfitDiaryNote(
+        outfitId: String,
+        note: String?,
+        style: String?,
+        shared: Bool
+    ) async throws {
+        struct NoteUpdate: Encodable {
+            let diary_note: String?
+            let note_style: String?
+            let note_shared: Bool
+        }
+        try await supabase
+            .from("outfits")
+            .update(NoteUpdate(diary_note: note, note_style: style, note_shared: shared))
+            .eq("id", value: outfitId)
+            .execute()
+    }
+
     static func setPublished(_ isPublic: Bool, outfitId: String) async throws {
         struct PublishUpdate: Encodable {
             let is_public: Bool

@@ -122,6 +122,9 @@ struct CarouselView: View {
     /// Unpublishing is destructive (pulls the fit from the feed) so it
     /// gets a confirm step, unlike publishing which has its own sheet.
     @State private var outfitToUnpublish: Outfit?
+    /// Outfit whose diary note is being written/edited. nil at rest;
+    /// set by a long-press (or the ghost affordance) on the fit.
+    @State private var outfitToEditNote: Outfit?
     /// Mirrors the chevron press inside the card and the new Info
     /// button outside it. Tracking it as a single source of truth
     /// keeps the spring animation consistent regardless of which
@@ -420,6 +423,23 @@ struct CarouselView: View {
                 publishedOverride[outfit.id] = true
             }
             .environment(store)
+        }
+        .sheet(item: $outfitToEditNote) { outfit in
+            DiaryNoteEditor(
+                initialText: outfit.diaryNote ?? "",
+                initialStyle: DiaryNoteStyle.from(outfit.noteStyle),
+                onSave: { text, style in
+                    store.updateOutfitDiaryNote(
+                        outfitId: outfit.id,
+                        note: text,
+                        style: style,
+                        shared: outfit.noteShared ?? false
+                    )
+                    outfitToEditNote = nil
+                },
+                onCancel: { outfitToEditNote = nil }
+            )
+            .presentationDetents([.medium, .large])
         }
         .overlay { unpublishConfirmOverlay }
         .sheet(isPresented: $showComments) {
@@ -1000,6 +1020,13 @@ struct CarouselView: View {
             }
         }
         .frame(width: slideWidth, height: slideHeight)
+        .overlay(alignment: .bottom) {
+            if isCurrent {
+                diaryNoteOverlay(for: outfit)
+                    .opacity(slideOpacity)
+                    .padding(.bottom, 16)
+            }
+        }
         .scaleEffect(scale, anchor: .bottom)
         .allowsHitTesting(showsChrome && isCurrent)
         .background {
@@ -1009,6 +1036,47 @@ struct CarouselView: View {
                     value: isCurrent ? proxy.frame(in: .global) : .null
                 )
             }
+        }
+    }
+
+    /// The diary note (or the owner's "add a note" affordance) anchored
+    /// at the bottom of the fit. Long-press the note to edit; the ghost
+    /// affordance (empty state, owner only) taps straight in. Shown to
+    /// viewers only when the owner has shared the note.
+    @ViewBuilder
+    private func diaryNoteOverlay(for outfit: Outfit) -> some View {
+        if let note = outfit.diaryNote, !note.isEmpty {
+            if !viewOnly || outfit.noteShared == true {
+                DiaryNoteView(
+                    text: note,
+                    style: DiaryNoteStyle.from(outfit.noteStyle),
+                    color: .white,
+                    size: 19
+                )
+                .padding(.horizontal, 28)
+                .contentShape(Rectangle())
+                .onLongPressGesture(minimumDuration: 0.3) {
+                    guard !viewOnly else { return }
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    outfitToEditNote = outfit
+                }
+            }
+        } else if !viewOnly {
+            Button {
+                outfitToEditNote = outfit
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "pencil.line")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text("add a note")
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .foregroundStyle(.white.opacity(0.75))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(.black.opacity(0.25)))
+            }
+            .buttonStyle(.plain)
         }
     }
 

@@ -25,10 +25,15 @@ struct PublishSheet: View {
 
     // Shop links available to all users — products only appear on feed if linked
 
+    /// Opt-in to showing the fit's diary note publicly. Only meaningful
+    /// when the outfit has a note; the toggle row hides otherwise.
+    @State private var shareNote = false
+
     init(outfit: Outfit, onPublished: @escaping (String?, [Product]) -> Void) {
         self.outfit = outfit
         self.onPublished = onPublished
         _caption = State(initialValue: outfit.caption ?? "")
+        _shareNote = State(initialValue: outfit.noteShared ?? false)
         _taggedProducts = State(initialValue: (outfit.products ?? []).map {
             ProductWithShopLink(product: $0, shopURL: $0.shopLink ?? "")
         })
@@ -40,6 +45,7 @@ struct PublishSheet: View {
                 VStack(spacing: LayoutMetrics.medium) {
                     captionSection
                     productsSection
+                    diaryShareSection
                     feedNote
                 }
                 .padding(.horizontal, LayoutMetrics.screenPadding)
@@ -105,6 +111,39 @@ struct PublishSheet: View {
             }
             .padding(LayoutMetrics.xSmall)
             .appCard(cornerRadius: LayoutMetrics.cardCornerRadius)
+        }
+    }
+
+    // MARK: - Diary note share toggle
+
+    @ViewBuilder
+    private var diaryShareSection: some View {
+        if let note = outfit.diaryNote, !note.isEmpty {
+            VStack(alignment: .leading, spacing: LayoutMetrics.xxSmall) {
+                label("DIARY NOTE")
+                Toggle(isOn: $shareNote) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Share your diary note")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(AppPalette.textPrimary)
+                        Text("Show your note on this fit for others + on the share card.")
+                            .font(.system(size: 12))
+                            .foregroundStyle(AppPalette.textMuted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .tint(AppPalette.uploadGlow)
+                .onChange(of: shareNote) { _, newValue in
+                    store.updateOutfitDiaryNote(
+                        outfitId: outfit.id,
+                        note: outfit.diaryNote,
+                        style: DiaryNoteStyle.from(outfit.noteStyle),
+                        shared: newValue
+                    )
+                }
+                .padding(LayoutMetrics.small)
+                .appCard(cornerRadius: LayoutMetrics.cardCornerRadius)
+            }
         }
     }
 

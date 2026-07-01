@@ -326,3 +326,198 @@ struct HighlighterBlobShape: Shape {
         return p
     }
 }
+
+// MARK: - Diary note (fit annotation)
+
+/// The minimal set of text styles a user can pick for a diary note on a
+/// fit — mirrors the "few tasteful choices" of Instagram story text.
+/// Handwritten + typewriter map to iOS system faces (no bundled asset);
+/// yafaMono is the app's all-caps monospace label look; clean is the
+/// app's standard text font; highlighter reuses the bust marker style.
+enum DiaryNoteStyle: String, CaseIterable, Sendable, Identifiable {
+    case handwritten
+    case typewriter
+    case highlighter
+    case yafaMono
+    case clean
+
+    var id: String { rawValue }
+
+    /// Tolerant decode — unknown/nil rawValue falls back to handwritten.
+    static func from(_ raw: String?) -> DiaryNoteStyle {
+        guard let raw, let s = DiaryNoteStyle(rawValue: raw) else { return .handwritten }
+        return s
+    }
+
+    var accessibilityName: String {
+        switch self {
+        case .handwritten: return "Handwritten"
+        case .typewriter:  return "Typewriter"
+        case .highlighter: return "Highlighter"
+        case .yafaMono:    return "Yafa mono"
+        case .clean:       return "Clean"
+        }
+    }
+
+    /// Uppercase the text (the Yafa caps-mono look).
+    var isUppercased: Bool { self == .yafaMono }
+    var tracking: CGFloat { self == .yafaMono ? 1.5 : 0 }
+
+    func font(size: CGFloat) -> Font {
+        switch self {
+        case .handwritten: return .custom("Noteworthy-Bold", size: size)
+        case .typewriter:  return .custom("AmericanTypewriter", size: size)
+        case .highlighter: return .system(size: size, weight: .semibold)
+        case .yafaMono:    return .system(size: size, weight: .bold, design: .monospaced)
+        case .clean:       return .system(size: size, weight: .medium)
+        }
+    }
+}
+
+/// Palette of light "inks" for a diary note — chosen to read well over
+/// an outfit photo (and over the dark editor). For `highlighter` the
+/// color is the marker fill (text stays dark).
+enum DiaryInk {
+    static let palette: [Color] = [
+        .white,
+        Color(red: 1.0, green: 0.78, blue: 0.85),   // pink
+        Color(red: 0.62, green: 0.80, blue: 1.0),   // blue
+        Color(red: 1.0, green: 0.86, blue: 0.45),   // yellow
+        Color(red: 0.68, green: 0.95, blue: 0.82),  // mint
+    ]
+}
+
+/// Renders a diary note in its chosen style. Used on the fit in the
+/// carousel (owner + shared viewers) and, later, on the share card.
+struct DiaryNoteView: View {
+    let text: String
+    let style: DiaryNoteStyle
+    /// Ink color (text color; marker fill for highlighter).
+    var color: Color = .white
+    var size: CGFloat = 20
+
+    var body: some View {
+        let display = style.isUppercased ? text.uppercased() : text
+        Text(display)
+            .font(style.font(size: size))
+            .tracking(style.tracking)
+            .foregroundStyle(style == .highlighter ? Color(red: 0.11, green: 0.12, blue: 0.15) : color)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, style == .highlighter ? 7 : 0)
+            .padding(.vertical, style == .highlighter ? 3 : 0)
+            .background {
+                if style == .highlighter {
+                    RoundedRectangle(cornerRadius: 4, style: .continuous).fill(color)
+                }
+            }
+            // Soft shadow keeps light ink legible over a busy photo.
+            .shadow(color: style == .highlighter ? .clear : .black.opacity(0.22), radius: 2.5, y: 1)
+    }
+}
+
+/// Modal editor for a fit's diary note. WYSIWYG on a dark canvas (like
+/// IG story text): type, pick one of the tasteful styles + an ink color.
+/// Empty text on save = delete the note.
+struct DiaryNoteEditor: View {
+    let initialText: String
+    let initialStyle: DiaryNoteStyle
+    let onSave: (String, DiaryNoteStyle) -> Void
+    let onCancel: () -> Void
+
+    @State private var text: String
+    @State private var style: DiaryNoteStyle
+    @FocusState private var focused: Bool
+
+    init(
+        initialText: String,
+        initialStyle: DiaryNoteStyle,
+        onSave: @escaping (String, DiaryNoteStyle) -> Void,
+        onCancel: @escaping () -> Void
+    ) {
+        self.initialText = initialText
+        self.initialStyle = initialStyle
+        self.onSave = onSave
+        self.onCancel = onCancel
+        _text = State(initialValue: initialText)
+        _style = State(initialValue: initialStyle)
+    }
+
+    private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button("Cancel", action: onCancel)
+                    .font(.system(size: 15))
+                    .foregroundStyle(.white.opacity(0.7))
+                Spacer()
+                Text("NOTE")
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .tracking(2)
+                    .foregroundStyle(.white.opacity(0.5))
+                Spacer()
+                Button("Done") { onSave(text, style) }
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+            }
+            .padding(.horizontal, LayoutMetrics.screenPadding)
+            .padding(.vertical, LayoutMetrics.small)
+
+            Spacer(minLength: 0)
+
+            ZStack {
+                if text.isEmpty {
+                    Text("Write about this fit…")
+                        .font(style.font(size: 22))
+                        .foregroundStyle(.white.opacity(0.35))
+                        .allowsHitTesting(false)
+                }
+                TextField("", text: $text, axis: .vertical)
+                    .font(style.font(size: 22))
+                    .tracking(style.tracking)
+                    .foregroundStyle(style == .highlighter ? Color(red: 0.11, green: 0.12, blue: 0.15) : .white)
+                    .multilineTextAlignment(.center)
+                    .textInputAutocapitalization(style.isUppercased ? .characters : .sentences)
+                    .focused($focused)
+                    .padding(.horizontal, style == .highlighter ? 8 : 0)
+                    .padding(.vertical, style == .highlighter ? 4 : 0)
+                    .background {
+                        if style == .highlighter {
+                            RoundedRectangle(cornerRadius: 5, style: .continuous).fill(.white)
+                        }
+                    }
+            }
+            .padding(.horizontal, LayoutMetrics.xLarge)
+
+            Spacer(minLength: 0)
+
+            VStack(spacing: LayoutMetrics.medium) {
+                // Styles — each chip shows "Aa" in its own face
+                HStack(spacing: 10) {
+                    ForEach(DiaryNoteStyle.allCases) { s in
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.15)) { style = s }
+                        } label: {
+                            Text(s == .yafaMono ? "AA" : "Aa")
+                                .font(s.font(size: 17))
+                                .foregroundStyle(s == style ? .black : .white)
+                                .frame(width: 46, height: 38)
+                                .background {
+                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                        .fill(s == style ? Color.white : Color.white.opacity(0.12))
+                                }
+                        }
+                        .accessibilityLabel(s.accessibilityName)
+                        .accessibilityAddTraits(s == style ? .isSelected : [])
+                    }
+                }
+            }
+            .padding(.bottom, LayoutMetrics.large)
+        }
+        .background(Color(red: 0.06, green: 0.06, blue: 0.08).ignoresSafeArea())
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { focused = true }
+        }
+    }
+}
