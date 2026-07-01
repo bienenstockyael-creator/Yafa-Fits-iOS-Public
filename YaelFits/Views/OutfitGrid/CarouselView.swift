@@ -375,7 +375,12 @@ struct CarouselView: View {
                     // can hide the X dismiss + temp toggle while
                     // the card is editing (it grows taller and the
                     // keyboard pushes it over that strip).
-                    store.isCarouselCardEditing = newValue
+                    store.isCarouselCardEditing = newValue || (outfitToEditNote != nil)
+                }
+                .onChange(of: outfitToEditNote) { _, newValue in
+                    // Note mode is a full takeover — hide RootView's X +
+                    // temp toggle too (same flag the card editing uses).
+                    store.isCarouselCardEditing = (newValue != nil) || editCoordinator.isEditing
                 }
                 .onPreferenceChange(ActionRowHeightKey.self) { newHeight in
                     // Action row is conditionally mounted (hidden
