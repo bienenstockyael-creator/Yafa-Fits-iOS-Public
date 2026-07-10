@@ -842,20 +842,34 @@ struct RootView: View {
             // keyboard can push it over this strip, so we hide the
             // X and temp toggle then. The resting expanded card
             // sits below them — they stay visible.
-            if store.isCarouselOpen {
-                carouselDismissButton
-                    .opacity(store.isCarouselCardEditing ? 0 : 1)
-                    .allowsHitTesting(!store.isCarouselCardEditing)
-            } else {
-                logoView
+            Group {
+                if store.isCarouselOpen {
+                    carouselDismissButton
+                        .opacity(store.isCarouselCardEditing ? 0 : 1)
+                        .allowsHitTesting(!store.isCarouselCardEditing)
+                        .transition(Self.topBarSwap)
+                } else {
+                    logoView
+                        .transition(Self.topBarSwap)
+                }
             }
+            // Sequential swap (out fast, in after a beat) so the X and
+            // the logo never render on top of each other — same
+            // treatment as the settings↔toggle pin swap below.
+            .animation(.easeInOut(duration: 0.12), value: store.isCarouselOpen)
             Spacer()
             HStack(spacing: 8) {
                 if store.currentView == .list || store.currentView == .calendar {
                     if store.isCarouselOpen {
+                        // Sequential swap so the °F/°C toggle and the
+                        // share/settings buttons never overlap during
+                        // carousel open/close (they did — the pinned-
+                        // toggle swap got this treatment, this branch
+                        // didn't).
                         tempToggle
                             .opacity(store.isCarouselCardEditing ? 0 : 1)
                             .allowsHitTesting(!store.isCarouselCardEditing)
+                            .transition(Self.topBarSwap)
                     } else if store.currentView == .calendar {
                         // On calendar, the grid/calendar toggle takes
                         // the spot that settings + share occupy on
@@ -876,29 +890,32 @@ struct RootView: View {
                             switchView(to: .calendar)
                         }
                         .padding(.trailing, 8)
-                        .transition(.asymmetric(
-                            insertion: .opacity.animation(.easeIn(duration: 0.1).delay(0.1)),
-                            removal: .opacity.animation(.easeOut(duration: 0.08))
-                        ))
+                        .transition(Self.topBarSwap)
                     } else {
                         Group {
                             shareProfileButton
                             settingsButton
                         }
-                        .transition(.asymmetric(
-                            insertion: .opacity.animation(.easeIn(duration: 0.1).delay(0.1)),
-                            removal: .opacity.animation(.easeOut(duration: 0.08))
-                        ))
+                        .transition(Self.topBarSwap)
                     }
                 }
             }
             .animation(.easeInOut(duration: 0.12), value: store.archiveTogglePinned)
+            .animation(.easeInOut(duration: 0.12), value: store.isCarouselOpen)
         }
         .padding(.horizontal, LayoutMetrics.screenPadding)
         .padding(.top, 8)
         .padding(.bottom, LayoutMetrics.xSmall)
         .contentShape(Rectangle())
     }
+
+    /// Sequential top-bar swap: outgoing fades fast, incoming fades in
+    /// after a beat — the two controls trading a slot never render on
+    /// top of each other.
+    private static let topBarSwap: AnyTransition = .asymmetric(
+        insertion: .opacity.animation(.easeIn(duration: 0.1).delay(0.1)),
+        removal: .opacity.animation(.easeOut(duration: 0.08))
+    )
 
     /// Gear icon on the top-right of the profile-home view. Opens the
     /// existing `ProfileView` in a sheet so theme toggles, follow

@@ -914,7 +914,12 @@ struct FeedPostCard: View {
             outfit: outfit,
             height: 292,
             draggable: isRotatable,
-            preloadFullSequenceOnAppear: isRotatable
+            // Same rule as the archive/calendar grids: never preload
+            // the full 242-frame sequence per feed row — each queues
+            // hundreds of serialized decodes on the FrameLoader actor
+            // and starves every other image load in the app. Scrubbing
+            // lazy-loads frames on demand.
+            preloadFullSequenceOnAppear: false
         )
         .frame(maxWidth: .infinity)
         // Shared diary note, rendered at the owner's placement scaled down

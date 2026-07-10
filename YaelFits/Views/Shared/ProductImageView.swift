@@ -47,6 +47,46 @@ struct ProductImageView: View {
     }
 }
 
+/// Square, fill-cropped product thumbnail with the "Preview" placeholder —
+/// shared by the calendar detail sheet (72pt) and the carousel detail card
+/// (100pt). These were two hand-rolled copies that had to be edited in
+/// lockstep (proven when the caching change touched both).
+struct ProductThumbnail: View {
+    let product: Product
+    var side: CGFloat = 72
+    var cornerRadius: CGFloat = 14
+
+    var body: some View {
+        Group {
+            if let imageURL = product.resolvedImageURL {
+                CachedRemoteImage(
+                    url: imageURL,
+                    maxPixelSize: 640,
+                    contentMode: .fill,
+                    failure: AnyView(placeholder)
+                ) {
+                    ProgressView().tint(AppPalette.textMuted)
+                }
+            } else {
+                placeholder
+            }
+        }
+        .frame(width: side, height: side)
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    }
+
+    private var placeholder: some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(Color.white.opacity(0.22))
+            .overlay {
+                Text("Preview")
+                    .font(.system(size: 8, weight: .semibold))
+                    .tracking(0.6)
+                    .foregroundStyle(AppPalette.textMuted.opacity(0.9))
+            }
+    }
+}
+
 struct EmptyProductCard: View {
     var size: CGFloat = 64
     var cornerRadius: CGFloat = 14

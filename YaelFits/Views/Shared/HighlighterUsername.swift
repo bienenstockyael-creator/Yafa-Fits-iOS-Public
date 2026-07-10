@@ -606,6 +606,10 @@ struct DiaryNoteEditOverlay: View {
     /// a near-stationary two-finger pinch must never be mistaken for a tap
     /// (that mistake was flipping the editor into typing mode mid-pinch).
     @State private var gestureDidTransform = false
+    /// True while a pinch that STARTED in typing mode is driving the note
+    /// (the IG-style organic handoff). Keeps the root handoff gesture from
+    /// double-driving transforms that the positioning surface already owns.
+    @State private var handoffActive = false
     // Baseline so the control rows start above the keyboard with no first-show
     // jump; only ever GROWS (never shrinks), so the layout never drifts down.
     // 336 ≈ modern-iPhone keyboard height, so the first-show settle is tiny.
@@ -874,6 +878,14 @@ struct DiaryNoteEditOverlay: View {
                 .animation(.easeOut(duration: 0.22), value: keyboardHeight)
                 .animation(.easeOut(duration: 0.22), value: editing)
             }
+            // IG-style organic mode handoff: while TYPING, starting a
+            // two-finger pinch/rotate drops straight into positioning
+            // mode and keeps scaling the note through the SAME gesture
+            // — no tap-out first. Lives on the root canvas because it
+            // must survive the mode flip: a gesture on the typing
+            // layer would unmount (and cancel) the moment editing
+            // flips, forcing a lift-and-repinch.
+            .simultaneousGesture(typingPinchHandoff)
             // The screen-pinning: a fixed screen-sized canvas whose center is
             // re-anchored to the physical screen center every frame. When the
             // hosting view breathes with the keyboard, originG changes and the
@@ -992,6 +1004,43 @@ struct DiaryNoteEditOverlay: View {
         // gestures to the note itself made the grab target a few dozen points
         // wide (and pinches needed BOTH fingers on it), which is what made
         // manipulation feel like it "only sometimes works".
+    }
+
+    /// IG-style organic handoff out of typing mode. Active only while
+    /// `editing`: once a two-finger transform becomes meaningful (a resting
+    /// two-finger touch is NOT a mode switch — same discipline as the
+    /// positioning surface's tap discrimination), it flips to positioning
+    /// mode and keeps driving the note's live scale/rotation itself, since
+    /// the positioning surface mounts too late to see these touches. In
+    /// positioning mode fresh pinches are ignored here (`handoffActive`
+    /// never arms) — the manipulation surface owns them.
+    private var typingPinchHandoff: some Gesture {
+        SimultaneousGesture(MagnifyGesture(), RotateGesture())
+            .onChanged { value in
+                let mag = value.first?.magnification ?? 1
+                let rot = value.second?.rotation ?? .zero
+                if !handoffActive {
+                    guard editing, !noteTextIsEmpty,
+                          abs(mag - 1) > 0.06 || abs(rot.radians) > 0.06
+                    else { return }
+                    handoffActive = true
+                    gestureDidTransform = true
+                    withAnimation(.easeOut(duration: 0.22)) { editing = false }
+                }
+                liveMagnify = mag
+                liveRotate = rot
+            }
+            .onEnded { _ in
+                guard handoffActive else { return }
+                handoffActive = false
+                gestureDidTransform = false
+                // Fold the exact displayed (clamped) values — same math as
+                // the positioning surface — so nothing snaps on release.
+                scale = displayScale
+                liveMagnify = 1.0
+                rotation += liveRotate
+                liveRotate = .zero
+            }
     }
 
     /// Unified full-screen manipulation (IG-style). One gesture owns every

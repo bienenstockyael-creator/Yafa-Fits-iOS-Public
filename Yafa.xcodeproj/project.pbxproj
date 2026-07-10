@@ -59,6 +59,9 @@
 		202605302200000B000001 /* VibesWaveShader.metal in Sources */ = {isa = PBXBuildFile; fileRef = 202605302200000A000001 /* VibesWaveShader.metal */; };
 		202605302300000B000001 /* VibesWaveModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605302300000A000001 /* VibesWaveModifier.swift */; };
 		202605302500000B000001 /* WindowSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605302500000A000001 /* WindowSnapshot.swift */; };
+		202607090000000B000003 /* FlowLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202607090000000A000003 /* FlowLayout.swift */; };
+		202607090000000B000002 /* TouchCountReporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202607090000000A000002 /* TouchCountReporter.swift */; };
+		202607090000000B000001 /* GridPinchZoom.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202607090000000A000001 /* GridPinchZoom.swift */; };
 		202605302600000B000001 /* VibeHapticPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605302600000A000001 /* VibeHapticPlayer.swift */; };
 		202605302700000B000001 /* VibesFirstUseModal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605302700000A000001 /* VibesFirstUseModal.swift */; };
 		202605302800000B000001 /* InfoExplainerModal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605302800000A000001 /* InfoExplainerModal.swift */; };
@@ -137,6 +140,7 @@
 		8D03DF06C6620F85AEB47EE2 /* star-anim-1.json in Resources */ = {isa = PBXBuildFile; fileRef = CB5585020776BB338F29E786 /* star-anim-1.json */; };
 		8E2CDB32D67E1D2148CB2192 /* AvatarOnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BA298132FF0C968C9EEBA8F /* AvatarOnboardingView.swift */; };
 		8F72948DEEE2D44825BE68A6 /* CalendarMonthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E5E7B65087075120E526293 /* CalendarMonthView.swift */; };
+		202607090000000B000004 /* CalendarDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202607090000000A000004 /* CalendarDetailSheet.swift */; };
 		9261D38B7469308E9C7E73CF /* UserProfileSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A852FB7BE96B45E54412928 /* UserProfileSheet.swift */; };
 		95EF7EC58BE07E1FE67F5B36 /* outfit-17.webp in Resources */ = {isa = PBXBuildFile; fileRef = D56400D7484A8621D3DF3680 /* outfit-17.webp */; };
 		9888C4BA0D929500F50C28D9 /* outfit-5.webp in Resources */ = {isa = PBXBuildFile; fileRef = 81F441EFEB69610857652828 /* outfit-5.webp */; };
@@ -309,6 +313,9 @@
 		202605302200000A000001 /* VibesWaveShader.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = VibesWaveShader.metal; sourceTree = "<group>"; };
 		202605302300000A000001 /* VibesWaveModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibesWaveModifier.swift; sourceTree = "<group>"; };
 		202605302500000A000001 /* WindowSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowSnapshot.swift; sourceTree = "<group>"; };
+		202607090000000A000003 /* FlowLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowLayout.swift; sourceTree = "<group>"; };
+		202607090000000A000002 /* TouchCountReporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchCountReporter.swift; sourceTree = "<group>"; };
+		202607090000000A000001 /* GridPinchZoom.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GridPinchZoom.swift; sourceTree = "<group>"; };
 		202605302600000A000001 /* VibeHapticPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeHapticPlayer.swift; sourceTree = "<group>"; };
 		202605302700000A000001 /* VibesFirstUseModal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibesFirstUseModal.swift; sourceTree = "<group>"; };
 		202605302800000A000001 /* InfoExplainerModal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InfoExplainerModal.swift; sourceTree = "<group>"; };
@@ -393,6 +400,7 @@
 		89B3091DEE0ED4BD08D99CA8 /* ImageMaskingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageMaskingService.swift; sourceTree = "<group>"; };
 		8BBAC0B0ACE295E42CFA0EEE /* App.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = App.xcconfig; sourceTree = "<group>"; };
 		8E5E7B65087075120E526293 /* CalendarMonthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarMonthView.swift; sourceTree = "<group>"; };
+		202607090000000A000004 /* CalendarDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarDetailSheet.swift; sourceTree = "<group>"; };
 		8E93326E60084B89CA340A41 /* cloudy.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = cloudy.json; sourceTree = "<group>"; };
 		8EBE6BC6F81A484544954195 /* OutfitCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutfitCardView.swift; sourceTree = "<group>"; };
 		905C6AFB58485F178201A276 /* Info 2.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Info 2.plist"; sourceTree = "<group>"; };
@@ -601,6 +609,7 @@
 			isa = PBXGroup;
 			children = (
 				8E5E7B65087075120E526293 /* CalendarMonthView.swift */,
+				202607090000000A000004 /* CalendarDetailSheet.swift */,
 			);
 			path = Calendar;
 			sourceTree = "<group>";
@@ -690,6 +699,9 @@
 				202605302800000A000001 /* InfoExplainerModal.swift */,
 				202605302300000A000001 /* VibesWaveModifier.swift */,
 				202605302500000A000001 /* WindowSnapshot.swift */,
+				202607090000000A000003 /* FlowLayout.swift */,
+				202607090000000A000002 /* TouchCountReporter.swift */,
+				202607090000000A000001 /* GridPinchZoom.swift */,
 				76CA1FE605DB487E84160210 /* ViewMotion.swift */,
 				95B6E39D004DC56E44D4C822 /* WeatherPill.swift */,
 				20260527000000001B0BBBBB /* CameraCaptureView.swift */,
@@ -1157,6 +1169,7 @@
 				6B7CADEB4A53057C3A60C9BD /* AvatarService.swift in Sources */,
 				B5E8DA33C230E63AB681245C /* AvatarView.swift in Sources */,
 				8F72948DEEE2D44825BE68A6 /* CalendarMonthView.swift in Sources */,
+				202607090000000B000004 /* CalendarDetailSheet.swift in Sources */,
 				EDEF93D554B05F4556CBEF39 /* CarouselView.swift in Sources */,
 				2026052500000000001AAAAA /* CarouselDetailCard.swift in Sources */,
 				2026052500000000060CCCCC /* GenerationPlaceholderCard.swift in Sources */,
@@ -1264,6 +1277,9 @@
 				202605302200000B000001 /* VibesWaveShader.metal in Sources */,
 				202605302300000B000001 /* VibesWaveModifier.swift in Sources */,
 				202605302500000B000001 /* WindowSnapshot.swift in Sources */,
+				202607090000000B000003 /* FlowLayout.swift in Sources */,
+				202607090000000B000002 /* TouchCountReporter.swift in Sources */,
+				202607090000000B000001 /* GridPinchZoom.swift in Sources */,
 				202605302600000B000001 /* VibeHapticPlayer.swift in Sources */,
 				202605302700000B000001 /* VibesFirstUseModal.swift in Sources */,
 				202605302800000B000001 /* InfoExplainerModal.swift in Sources */,

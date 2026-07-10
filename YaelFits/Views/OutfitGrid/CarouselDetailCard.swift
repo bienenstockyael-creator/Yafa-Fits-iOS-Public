@@ -330,7 +330,7 @@ struct CarouselDetailCard: View {
                 ForEach(outfit.products ?? [], id: \.id) { product in
                     ZStack(alignment: .topTrailing) {
                         VStack(spacing: 6) {
-                            archiveProductImage(product)
+                            ProductThumbnail(product: product, side: 100, cornerRadius: 18)
                             Text(product.displayName)
                                 .font(.system(size: 11, weight: .medium))
                                 .foregroundStyle(AppPalette.textMuted)
@@ -502,7 +502,7 @@ struct CarouselDetailCard: View {
                 selectedLinkedProduct = product
             } label: {
                 VStack(spacing: 8) {
-                    archiveProductImage(product)
+                    ProductThumbnail(product: product, side: 100, cornerRadius: 18)
 
                     // Force two lines worth of height so single-line
                     // names don't collapse the row — keeps the BUY
@@ -540,35 +540,7 @@ struct CarouselDetailCard: View {
         }
     }
 
-    private func archiveProductImage(_ product: Product) -> some View {
-        Group {
-            if let imageURL = product.resolvedImageURL {
-                CachedRemoteImage(
-                    url: imageURL,
-                    maxPixelSize: 640,
-                    contentMode: .fill,
-                    failure: AnyView(placeholderProductImage)
-                ) {
-                    ProgressView().tint(AppPalette.textMuted)
-                }
-            } else {
-                placeholderProductImage
-            }
-        }
-        .frame(width: 100, height: 100)
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-    }
 
-    private var placeholderProductImage: some View {
-        RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .fill(Color.white.opacity(0.22))
-            .overlay {
-                Text("Preview")
-                    .font(.system(size: 9, weight: .semibold))
-                    .tracking(0.6)
-                    .foregroundStyle(AppPalette.textMuted.opacity(0.9))
-            }
-    }
 
     private var likeButton: some View {
         let isLiked = store.likedIds.contains(outfit.id)

@@ -84,16 +84,12 @@ struct OutfitGridView: View {
     private let carouselChromeFadeOutDuration: Double = 0.1
     private let initialVisibleCount = 9
     // MARK: Pinch zoom (mirrors the closet grid + calendar)
+    // Mechanics live in the shared `gridPinchZoom` modifier
+    // (GridPinchZoom.swift); the archive adds the continuum's final
+    // stop — pinching past the biggest cells opens the carousel.
 
-    @State private var pinchScale: CGFloat = 1
-    @State private var pinchAnchor: UnitPoint = .center
-    @State private var isPinching = false
-    @State private var pinchStartColumns: Int?
+    @State private var pinch = GridPinchZoomState()
     @State private var twoFingersDown = false
-    /// Latched when a pinch pushes past the biggest cells into the
-    /// carousel — the zoom continuum's final stop. One trigger per
-    /// pinch.
-    @State private var didPinchIntoCarousel = false
     private static let minColumns = 2
     private static let maxColumns = 4
 
@@ -199,6 +195,18 @@ struct OutfitGridView: View {
                     // Two fingers down = pinch, never a scroll (same
                     // setup as the closet grid + calendar).
                     .scrollDisabled(isScrubbing || showCarousel || twoFingersDown)
+                    // Chrome cover, fading in WITH scroll: the profile
+                    // header's stats/°F-°C toggle and the "outfits"
+                    // section title scroll under the fixed top bar
+                    // fully crisp (overlapping the status bar, logo,
+                    // and share/settings buttons). Unlike the
+                    // calendar's always-on cover, this one must be
+                    // invisible at rest — the profile header
+                    // legitimately owns the top of the page — so its
+                    // opacity tracks the scroll offset.
+                    .overlay(alignment: .top) {
+                        archiveChromeCover
+                    }
                     .background(
                         TouchCountReporter { count in
                             // Window-level recognizer: ignore touches
@@ -362,6 +370,27 @@ struct OutfitGridView: View {
     /// Fixed pattern: [1, 3, 2, 2, 1, 3, 3, 2, 1] — looks random but is stable
     private static let placeholderPattern = [1, 3, 2, 2, 1, 3, 3, 2, 1]
 
+    /// Chrome cover, fading in WITH scroll: the profile header's stats /
+    /// °F-°C toggle and the "outfits" section title scroll under the fixed
+    /// top bar fully crisp otherwise (overlapping the status bar, logo,
+    /// and share/settings buttons). Unlike the calendar's always-on
+    /// cover, this one must be invisible at rest — the profile header
+    /// legitimately owns the top of the page — so opacity tracks the
+    /// scroll offset.
+    private var archiveChromeCover: some View {
+        let stops: [Gradient.Stop] = [
+            Gradient.Stop(color: AppPalette.pageBackground, location: 0),
+            Gradient.Stop(color: AppPalette.pageBackground, location: 0.6),
+            Gradient.Stop(color: AppPalette.pageBackground.opacity(0), location: 1),
+        ]
+        let progress: CGFloat = (lastObservedScrollOffset - 60) / 100
+        return LinearGradient(stops: stops, startPoint: .top, endPoint: .bottom)
+            .frame(height: 120)
+            .ignoresSafeArea(edges: .top)
+            .allowsHitTesting(false)
+            .opacity(Double(min(CGFloat(1), max(CGFloat(0), progress))))
+    }
+
     /// "outfits" label on the left, grid/calendar toggle on the right.
     /// Sits between the profile header and the grid. The HStack's
     /// own global minY is bubbled up via `ArchiveToggleMinYKey` so
@@ -401,7 +430,7 @@ struct OutfitGridView: View {
                     job: job,
                     phase: store.generationQueue.phase(for: job),
                     onTap: {
-                        guard !isPinching else { return }
+                        guard !pinch.isPinching else { return }
                         onExpandGenerationJob(job)
                     },
                     height: cardHeight
@@ -411,80 +440,30 @@ struct OutfitGridView: View {
                 gridItem(outfit: outfit, index: index)
             }
         }
-        // Zoom from the pinch focal point, not the content center.
-        .scaleEffect(pinchScale, anchor: pinchAnchor)
-        // Whole surface hit-testable so a pinch finger landing in a
-        // gap between cards still counts toward the magnify (mirrors
-        // the calendar).
-        .contentShape(Rectangle())
-        // SIMULTANEOUS, not high-priority: gesture priority can't
-        // preempt the parent ScrollView's pan (it only orders gestures
-        // within this subtree), so a high-priority magnify had to race
-        // the scroll and usually lost. Simultaneous co-recognizes;
-        // scrollDisabled(twoFingersDown) freezes the scroll a beat
-        // later, so the pinch always engages. (Mirrors the calendar.)
-        .simultaneousGesture(zoomGesture)
-    }
-
-    /// Pinch out → fewer/bigger cards; pinch in → more/smaller.
-    /// Identical mechanics to the closet grid and the calendar — plus
-    /// the continuum's final stop: pushing PAST the biggest cells
-    /// (2 columns) zooms straight into the carousel on the outfit
-    /// you're zooming toward.
-    private var zoomGesture: some Gesture {
-        MagnifyGesture()
-            .onChanged { value in
-                isPinching = true
-                pinchAnchor = value.startAnchor
-                if pinchStartColumns == nil { pinchStartColumns = columnCount }
-                let start = Double(pinchStartColumns ?? columnCount)
-                let raw = start / Double(value.magnification)
-
-                // Zooming in past the 2-column cells arms the
-                // carousel hand-off (the continuum's final stop) —
-                // fired on RELEASE, so the open never fights the live
-                // gesture. One haptic marks crossing the threshold.
-                let arming = raw < 1.45
-                if arming != didPinchIntoCarousel {
-                    didPinchIntoCarousel = arming
-                    if arming {
-                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                    }
-                }
-
-                let lo = Double(Self.minColumns), hi = Double(Self.maxColumns)
-                let effective: Double
-                if raw < lo { effective = lo - (lo - raw) * 0.28 }
-                else if raw > hi { effective = hi + (raw - hi) * 0.28 }
-                else { effective = raw }
-                let whole = min(Self.maxColumns, max(Self.minColumns, Int(raw.rounded())))
-                if whole != columnCount {
-                    store.archiveColumnCount = whole
-                    UISelectionFeedbackGenerator().selectionChanged()
-                }
-                pinchScale = CGFloat(Double(columnCount) / effective)
-            }
-            .onEnded { _ in
-                pinchStartColumns = nil
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.62)) { pinchScale = 1 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-                    isPinching = false
-                }
-                // Pinched past the biggest cells → open the carousel
-                // on the centered outfit, now that the fingers are up.
-                if didPinchIntoCarousel {
-                    didPinchIntoCarousel = false
-                    if let id = store.centeredListOutfitId ?? store.sortedOutfits.first?.id,
-                       let index = store.sortedOutfits.firstIndex(where: { $0.id == id }) {
-                        presentCarousel(
-                            for: store.sortedOutfits[index],
-                            at: index,
-                            frameIndex: store.listOutfitFrameIndices[id] ?? 0,
-                            image: nil
-                        )
-                    }
+        // Shared pinch-zoom engine (see GridPinchZoom.swift) plus the
+        // archive's final stop: zooming in past the 2-column cells
+        // (raw < 1.45) opens the carousel on the centered outfit —
+        // fired on RELEASE so the open never fights the live gesture.
+        .gridPinchZoom(
+            $pinch,
+            minColumns: Self.minColumns,
+            maxColumns: Self.maxColumns,
+            columnCount: columnCount,
+            setColumnCount: { store.archiveColumnCount = $0 },
+            zoomPastMinThreshold: 1.45,
+            onEnded: { pinchedIntoCarousel in
+                guard pinchedIntoCarousel else { return }
+                if let id = store.centeredListOutfitId ?? store.sortedOutfits.first?.id,
+                   let index = store.sortedOutfits.firstIndex(where: { $0.id == id }) {
+                    presentCarousel(
+                        for: store.sortedOutfits[index],
+                        at: index,
+                        frameIndex: store.listOutfitFrameIndices[id] ?? 0,
+                        image: nil
+                    )
                 }
             }
+        )
     }
 
     private var generationPlaceholderJobs: [PipelineJob] {
@@ -557,7 +536,7 @@ struct OutfitGridView: View {
             onTap: { frameIndex, image in
                 // A finger-lift at the end of a pinch must not read
                 // as a tap.
-                guard !isPinching else { return }
+                guard !pinch.isPinching else { return }
                 let impact = UIImpactFeedbackGenerator(style: .medium)
                 impact.impactOccurred()
                 presentCarousel(for: outfit, at: index, frameIndex: frameIndex, image: image)
