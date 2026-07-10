@@ -365,9 +365,10 @@ enum DiaryNoteStyle: String, CaseIterable, Sendable, Identifiable {
 
     func font(size: CGFloat) -> Font {
         switch self {
-        // Bradley Hand — iOS's nicest built-in casual handwriting
-        // (Noteworthy read like lined-notebook print).
-        case .handwritten: return .custom("BradleyHandITCTT-Bold", size: size)
+        // Snell Roundhand — elegant flowing cursive, editorial rather
+        // than casual. (Bradley Hand read too "school note"; Noteworthy
+        // before it read like lined-notebook print.)
+        case .handwritten: return .custom("SnellRoundhand-Bold", size: size)
         case .typewriter:  return .custom("AmericanTypewriter", size: size)
         case .highlighter: return .system(size: size, weight: .semibold)
         case .yafaMono:    return .system(size: size, weight: .bold, design: .monospaced)
@@ -379,7 +380,7 @@ enum DiaryNoteStyle: String, CaseIterable, Sendable, Identifiable {
     func uiFont(size: CGFloat) -> UIFont {
         switch self {
         case .handwritten:
-            return UIFont(name: "BradleyHandITCTT-Bold", size: size)
+            return UIFont(name: "SnellRoundhand-Bold", size: size)
                 ?? .systemFont(ofSize: size, weight: .bold)
         case .typewriter:
             return UIFont(name: "AmericanTypewriter", size: size)
@@ -426,27 +427,122 @@ struct DiaryNoteView: View {
     /// Drop the legibility shadow (used in the editor, where re-rendering the
     /// shadow every gesture frame caused a shimmer).
     var showShadow: Bool = true
+    /// Max overall width the note may occupy — the highlighter blob
+    /// wraps its text so blob + side padding fit inside this. Callers
+    /// pass the same value they constrain the note's frame to.
+    var wrapWidth: CGFloat = 300
 
     var body: some View {
         let display = style.isUppercased ? text.uppercased() : text
-        Text(display)
-            .font(style.font(size: size))
-            .tracking(style.tracking)
-            .foregroundStyle(
-                style == .highlighter
-                    ? (DiaryInk.isDark(color) ? .white : Color(red: 0.11, green: 0.12, blue: 0.15))
-                    : color)
-            .multilineTextAlignment(.center)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, style == .highlighter ? 7 : 0)
-            .padding(.vertical, style == .highlighter ? 3 : 0)
-            .background {
-                if style == .highlighter {
-                    RoundedRectangle(cornerRadius: 4, style: .continuous).fill(color)
+        Group {
+            if style == .highlighter {
+                // IG-style: the ink hugs each rendered line's width
+                // instead of boxing the whole block in one rectangle.
+                NoteHighlighterText(
+                    text: display,
+                    ink: color,
+                    fontSize: size,
+                    textWrapWidth: max(40, wrapWidth - 2 * NoteHighlighterText.sidePadding)
+                )
+            } else {
+                Text(display)
+                    .font(style.font(size: size))
+                    .tracking(style.tracking)
+                    .foregroundStyle(color)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    // Soft shadow keeps light ink legible over a busy photo.
+                    .shadow(color: showShadow ? .black.opacity(0.22) : .clear, radius: 2.5, y: 1)
+            }
+        }
+    }
+}
+
+/// Instagram-style highlighter for the diary note: the ink hugs each
+/// RENDERED line's width — explicit newlines and word-wrap alike —
+/// drawn as ONE unified rounded path (`HighlighterBlobShape`, the same
+/// shape behind the bust header's username). Line breaks come from
+/// TextKit with the same font / zero fragment padding / wrap width as
+/// the note's UITextView and per-line Texts, so blob rows and rendered
+/// lines agree exactly.
+struct NoteHighlighterText: View {
+    let text: String
+    let ink: Color
+    let fontSize: CGFloat
+    /// Width the TEXT wraps at (the blob adds `sidePadding` per side).
+    let textWrapWidth: CGFloat
+    /// false = draw only the blob — the editor overlays a live
+    /// UITextView that renders the glyphs itself.
+    var drawsText: Bool = true
+
+    static let sidePadding: CGFloat = 10
+
+    var body: some View {
+        let font = DiaryNoteStyle.highlighter.uiFont(size: fontSize)
+        let lines = Self.renderedLines(text: text, font: font, maxWidth: max(40, textWrapWidth))
+        let lineHeight = font.lineHeight
+        let attrs: [NSAttributedString.Key: Any] = [.font: font]
+        let widths = lines.map { line in
+            (line as NSString).size(withAttributes: attrs).width + 2 * Self.sidePadding
+        }
+        let textColor: Color = DiaryInk.isDark(ink)
+            ? .white
+            : Color(red: 0.11, green: 0.12, blue: 0.15)
+
+        ZStack {
+            HighlighterBlobShape(
+                lineWidths: widths,
+                lineHeight: lineHeight,
+                cornerRadius: 7
+            )
+            .fill(ink)
+
+            if drawsText {
+                VStack(spacing: 0) {
+                    ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                        Text(line.isEmpty ? " " : line)
+                            .font(.system(size: fontSize, weight: .semibold))
+                            .foregroundStyle(textColor)
+                            .lineLimit(1)
+                            .fixedSize()
+                            .frame(height: lineHeight)
+                    }
                 }
             }
-            // Soft shadow keeps light ink legible over a busy photo.
-            .shadow(color: (showShadow && style != .highlighter) ? .black.opacity(0.22) : .clear, radius: 2.5, y: 1)
+        }
+        .frame(
+            width: max(widths.max() ?? 0, 1),
+            height: max(lineHeight * CGFloat(lines.count), 1)
+        )
+    }
+
+    /// The note's rendered lines at `maxWidth` — TextKit line-fragment
+    /// enumeration so wrapping matches UITextView exactly (same font,
+    /// zero `lineFragmentPadding`). Trailing whitespace is trimmed per
+    /// line so a wrapped word's invisible space doesn't widen its row.
+    static func renderedLines(text: String, font: UIFont, maxWidth: CGFloat) -> [String] {
+        guard !text.isEmpty else { return [] }
+        let storage = NSTextStorage(string: text, attributes: [.font: font])
+        let container = NSTextContainer(
+            size: CGSize(width: maxWidth, height: .greatestFiniteMagnitude))
+        container.lineFragmentPadding = 0
+        let manager = NSLayoutManager()
+        manager.addTextContainer(container)
+        storage.addLayoutManager(manager)
+
+        var lines: [String] = []
+        var glyphIndex = 0
+        let ns = storage.string as NSString
+        while glyphIndex < manager.numberOfGlyphs {
+            var glyphRange = NSRange()
+            manager.lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: &glyphRange)
+            let charRange = manager.characterRange(forGlyphRange: glyphRange, actualGlyphRange: nil)
+            lines.append(
+                ns.substring(with: charRange)
+                    .trimmingCharacters(in: .whitespacesAndNewlines))
+            glyphIndex = NSMaxRange(glyphRange)
+        }
+        return lines
     }
 }
 
@@ -957,11 +1053,22 @@ struct DiaryNoteEditOverlay: View {
                         .padding(.horizontal, style == .highlighter ? 10 : 0)
                         .padding(.vertical, style == .highlighter ? 5 : 0)
                         .background {
-                            // Highlighter pill only once there's content —
+                            // Highlighter blob only once there's content —
                             // an empty box floating behind the cursor read
                             // as a glitch when previewing font styles.
+                            // Per-line hugging (IG-style): blob only, the
+                            // live UITextView above draws the glyphs. Its
+                            // wrap width matches the mirror Text's
+                            // (container max minus the 10pt side padding)
+                            // so blob rows and typed lines break alike.
                             if style == .highlighter, !text.isEmpty {
-                                RoundedRectangle(cornerRadius: 6, style: .continuous).fill(ink)
+                                NoteHighlighterText(
+                                    text: text,
+                                    ink: ink,
+                                    fontSize: 22,
+                                    textWrapWidth: max(120, f.width * 0.88) - 20,
+                                    drawsText: false
+                                )
                             }
                         }
                 }
@@ -982,7 +1089,8 @@ struct DiaryNoteEditOverlay: View {
                         .drawingGroup()
                 } else {
                     DiaryNoteView(text: text,
-                                  style: style, color: ink, size: 22, showShadow: false)
+                                  style: style, color: ink, size: 22, showShadow: false,
+                                  wrapWidth: max(120, f.width * 0.88))
                         .drawingGroup()
                 }
             }

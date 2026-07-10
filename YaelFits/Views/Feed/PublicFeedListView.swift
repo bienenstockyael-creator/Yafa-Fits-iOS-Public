@@ -934,7 +934,8 @@ struct FeedPostCard: View {
                             style: DiaryNoteStyle.from(outfit.noteStyle),
                             color: DiaryInk.palette.indices.contains(outfit.noteColorIndex ?? 0)
                                 ? DiaryInk.palette[outfit.noteColorIndex ?? 0] : .white,
-                            size: 14   // 22pt editor base × card/slide height ratio
+                            size: 14,   // 22pt editor base × card/slide height ratio
+                            wrapWidth: geo.size.width * 0.7
                         )
                         .frame(maxWidth: geo.size.width * 0.7)
                         .fixedSize(horizontal: false, vertical: true)

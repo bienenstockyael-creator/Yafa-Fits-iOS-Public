@@ -1179,7 +1179,8 @@ struct CarouselView: View {
                             style: DiaryNoteStyle.from(outfit.noteStyle),
                             color: DiaryInk.palette.indices.contains(outfit.noteColorIndex ?? 0)
                                 ? DiaryInk.palette[outfit.noteColorIndex ?? 0] : .white,
-                            size: 22   // match the editor base size for WYSIWYG
+                            size: 22,   // match the editor base size for WYSIWYG
+                            wrapWidth: max(120, geo.size.width * 0.88)
                         )
                         .frame(maxWidth: max(120, geo.size.width * 0.88))
                         .fixedSize(horizontal: false, vertical: true)
