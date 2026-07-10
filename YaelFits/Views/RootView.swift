@@ -115,6 +115,11 @@ struct RootView: View {
     /// @State so rapid taps cancel the in-flight task cleanly.
     @State private var transitionTask: Task<Void, Never>?
 
+    /// Top-bar trailing slot state machine — see `topBar`. Content
+    /// only changes while hidden, so two controls can never overlap.
+    @State private var displayedTopBarTrailing: TopBarTrailing = .shareSettings
+    @State private var topBarTrailingVisible = true
+
     var body: some View {
         @Bindable var store = store
 
@@ -858,55 +863,75 @@ struct RootView: View {
             // treatment as the settings↔toggle pin swap below.
             .animation(.easeInOut(duration: 0.12), value: store.isCarouselOpen)
             Spacer()
+            // STRUCTURAL no-overlap swap: exactly ONE trailing control
+            // exists at any moment. Transition-based crossfades kept
+            // producing visible overlap (interrupted transitions leave
+            // ghosts); here the content is a state machine that only
+            // changes WHILE HIDDEN — fade out (0.08s), swap, fade in
+            // (0.1s). Overlap is impossible by construction.
             HStack(spacing: 8) {
-                if store.currentView == .list || store.currentView == .calendar {
-                    if store.isCarouselOpen {
-                        // Sequential swap so the °F/°C toggle and the
-                        // share/settings buttons never overlap during
-                        // carousel open/close (they did — the pinned-
-                        // toggle swap got this treatment, this branch
-                        // didn't).
-                        tempToggle
-                            .opacity(store.isCarouselCardEditing ? 0 : 1)
-                            .allowsHitTesting(!store.isCarouselCardEditing)
-                            .transition(Self.topBarSwap)
-                    } else if store.currentView == .calendar {
-                        // On calendar, the grid/calendar toggle takes
-                        // the spot that settings + share occupy on
-                        // grid view. The profile header isn't shown
-                        // here so the toggle has no in-page home.
-                        ViewModeTogglePill(isCalendarActive: true) {
-                            switchView(to: .list)
-                        }
-                        .padding(.trailing, 8)
-                    } else if store.archiveTogglePinned {
-                        // The in-page section toggle has scrolled up
-                        // to the top-bar level — swap share + settings
-                        // for the toggle so it appears to pin in
-                        // place. SEQUENTIAL swap (out fast, in after a
-                        // beat) so the two never render on top of each
-                        // other.
-                        ViewModeTogglePill(isCalendarActive: false) {
-                            switchView(to: .calendar)
-                        }
-                        .padding(.trailing, 8)
-                        .transition(Self.topBarSwap)
-                    } else {
-                        Group {
-                            shareProfileButton
-                            settingsButton
-                        }
-                        .transition(Self.topBarSwap)
+                switch displayedTopBarTrailing {
+                case .tempToggle:
+                    tempToggle
+                        .opacity(store.isCarouselCardEditing ? 0 : 1)
+                        .allowsHitTesting(!store.isCarouselCardEditing)
+                case .calendarToggle:
+                    // On calendar, the grid/calendar toggle takes the
+                    // spot that settings + share occupy on grid view.
+                    ViewModeTogglePill(isCalendarActive: true) {
+                        switchView(to: .list)
                     }
+                    .padding(.trailing, 8)
+                case .pinnedToggle:
+                    // The in-page section toggle has scrolled up to
+                    // the top-bar level — appears to pin in place.
+                    ViewModeTogglePill(isCalendarActive: false) {
+                        switchView(to: .calendar)
+                    }
+                    .padding(.trailing, 8)
+                case .shareSettings:
+                    shareProfileButton
+                    settingsButton
+                case .none:
+                    EmptyView()
                 }
             }
-            .animation(.easeInOut(duration: 0.12), value: store.archiveTogglePinned)
-            .animation(.easeInOut(duration: 0.12), value: store.isCarouselOpen)
+            .opacity(topBarTrailingVisible ? 1 : 0)
+            .onChange(of: desiredTopBarTrailing) { _, _ in
+                sequenceTopBarTrailingSwap()
+            }
+            .onAppear { displayedTopBarTrailing = desiredTopBarTrailing }
         }
         .padding(.horizontal, LayoutMetrics.screenPadding)
         .padding(.top, 8)
         .padding(.bottom, LayoutMetrics.xSmall)
         .contentShape(Rectangle())
+    }
+
+    private enum TopBarTrailing: Equatable {
+        case tempToggle, calendarToggle, pinnedToggle, shareSettings, none
+    }
+
+    /// What the trailing slot SHOULD show, derived from app state.
+    private var desiredTopBarTrailing: TopBarTrailing {
+        guard store.currentView == .list || store.currentView == .calendar else { return .none }
+        if store.isCarouselOpen { return .tempToggle }
+        if store.currentView == .calendar { return .calendarToggle }
+        if store.archiveTogglePinned { return .pinnedToggle }
+        return .shareSettings
+    }
+
+    /// Two-phase swap: hide → (0.09s) → adopt the LATEST desired
+    /// content → show. Re-entrant flaps just re-run the sequence; the
+    /// closure always reads the freshest desired value, so rapid
+    /// pin/unpin at the scroll threshold can flicker but never stack
+    /// two controls.
+    private func sequenceTopBarTrailingSwap() {
+        withAnimation(.easeOut(duration: 0.08)) { topBarTrailingVisible = false }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.09) {
+            displayedTopBarTrailing = desiredTopBarTrailing
+            withAnimation(.easeIn(duration: 0.1)) { topBarTrailingVisible = true }
+        }
     }
 
     /// Sequential top-bar swap: outgoing fades fast, incoming fades in

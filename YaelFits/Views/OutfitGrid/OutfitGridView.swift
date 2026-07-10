@@ -331,6 +331,27 @@ struct OutfitGridView: View {
                 pinch.isPinching = false
                 pinch.scale = 1
             }
+            #if DEBUG
+            // TEMP freeze forensics — archive twin of the calendar
+            // chip. `car` stuck at 1 with no carousel visible = the
+            // dismiss-task orphan the watchdog now covers. Strip once
+            // the freeze saga closes.
+            .overlay(alignment: .bottom) {
+                if store.currentView == .list {
+                    Text("car=\(showCarousel ? 1 : 0)"
+                        + " scrub=\(isScrubbing ? 1 : 0)"
+                        + " 2f=\(twoFingersDown ? 1 : 0)"
+                        + " pin=\(pinch.isPinching ? 1 : 0)"
+                        + " w=\(TouchCountGestureRecognizer.totalTouchesBegan)")
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(.white)
+                        .padding(5)
+                        .background(Color.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 5))
+                        .padding(.bottom, 118)
+                        .allowsHitTesting(false)
+                }
+            }
+            #endif
             .onChange(of: store.carouselDismissTrigger) { _, _ in
                 // Fired by the global X button in the top bar when
                 // the carousel is open. Only acts if we're the host
@@ -840,6 +861,33 @@ struct OutfitGridView: View {
     private func dismissCarousel(using reader: ScrollViewProxy) {
         carouselTransitionTask?.cancel()
         store.isCarouselOpen = false
+
+        // Teardown watchdog: the dismiss task below has cancellation
+        // early-exits — if it's cancelled WITHOUT a successor (scroll-
+        // dismiss racing the X, an edit-triggered re-render), it can
+        // die leaving `showCarousel == true`: the grid stays hit-
+        // disabled + scroll-locked with no carousel on screen
+        // ("outfits don't drag anymore / frozen after closing").
+        // `isCarouselOpen` went false synchronously above, so if the
+        // flags still disagree after 1.5s the flow is definitively
+        // stuck — apply terminal cleanup, no animation.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            guard showCarousel, !store.isCarouselOpen else { return }
+            showCarousel = false
+            heroTransition = nil
+            heroOpacity = 1
+            revealGridOutfitIdDuringHero = nil
+            carouselBackdropVisible = false
+            carouselChromeVisible = false
+            showCurrentCarouselLiveSlide = false
+            showCarouselEntryOverlay = false
+            carouselEntryFrame = nil
+            carouselEntryImage = nil
+            carouselTargetFrame = .null
+            activeCarouselFrameIndex = 0
+            activeCarouselDisplayedFrame = nil
+            store.selectedOutfitId = nil
+        }
 
         guard
             showCarousel,
