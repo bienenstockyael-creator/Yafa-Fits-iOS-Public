@@ -320,7 +320,7 @@ struct VibesLeaderboardSheet: View {
                     // (negative spacing = overlap; zIndex keeps the bust above).
                     HStack(spacing: -62) {
                         Text("\(rank)")
-                            .font(.custom("GTFAdieuTRIAL-BlackSlanted", size: 104))
+                            .font(.custom("Adieu-BlackSlanted", size: 104))
                             .foregroundStyle(AppPalette.textStrong)
                         VibesLeaderboardBust(profile: entry.profile, avatarSize: 144)
                             .zIndex(1)

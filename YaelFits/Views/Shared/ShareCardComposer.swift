@@ -857,7 +857,7 @@ struct ShareCardComposer: View {
 
     /// All calibrated layout constants for colorama. Every value here
     /// was tuned against the in-app `mar 15` reference at the iPhone-15
-    /// 345-pt card width using `GTFAdieuTRIAL-BlackSlanted` at
+    /// 345-pt card width using `Adieu-BlackSlanted` at
     /// fontSize=320/kern=-8. Changing the font, fontSize, kern, or the
     /// in-app baseline will require re-tuning every value below.
     private enum ColoramaLayout {
@@ -1090,13 +1090,13 @@ struct ShareCardComposer: View {
             guard coloramaTextMonth != monthAbbrev else { return }
             let bitmap = textToImage(
                 monthAbbrev,
-                fontName: "GTFAdieuTRIAL-BlackSlanted", fontSize: 320,
+                fontName: "Adieu-BlackSlanted", fontSize: 320,
                 kern: -8.0, color: .white
             )
             coloramaTextImage = bitmap
             coloramaMonthStroke = textToImage(
                 monthAbbrev,
-                fontName: "GTFAdieuTRIAL-BlackSlanted", fontSize: 320,
+                fontName: "Adieu-BlackSlanted", fontSize: 320,
                 kern: -8.0, color: .white,
                 strokeWidthPercent: 0.625
             )
@@ -1109,12 +1109,12 @@ struct ShareCardComposer: View {
             guard coloramaDayString != dayString else { return }
             coloramaDayImage = textToImage(
                 dayString,
-                fontName: "GTFAdieuTRIAL-BlackSlanted", fontSize: 110,
+                fontName: "Adieu-BlackSlanted", fontSize: 110,
                 kern: -2.75, color: .white
             )
             coloramaDayStroke = textToImage(
                 dayString,
-                fontName: "GTFAdieuTRIAL-BlackSlanted", fontSize: 110,
+                fontName: "Adieu-BlackSlanted", fontSize: 110,
                 kern: -2.75, color: .white,
                 strokeWidthPercent: 0.625
             )

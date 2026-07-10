@@ -83,7 +83,7 @@
 		24CE8DD298136439F5078DFA /* PlayfairDisplay-Italic.otf in Resources */ = {isa = PBXBuildFile; fileRef = 60A31063DA222A97AF101191 /* PlayfairDisplay-Italic.otf */; };
 		202607100000000B000001 /* Caveat-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 202607100000000A000001 /* Caveat-Variable.ttf */; };
 		25CD0A57BA9A4449422B812F /* FrameSequenceViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8D5A078D13851433A0CF2C8 /* FrameSequenceViewModel.swift */; };
-		27BFFC0250801E7BA95DB9E9 /* GTFAdieuTRIAL-BlackSlanted.otf in Resources */ = {isa = PBXBuildFile; fileRef = FA749595F4514A6C52C3341B /* GTFAdieuTRIAL-BlackSlanted.otf */; };
+		27BFFC0250801E7BA95DB9E9 /* Adieu-BlackSlanted.otf in Resources */ = {isa = PBXBuildFile; fileRef = FA749595F4514A6C52C3341B /* Adieu-BlackSlanted.otf */; };
 		28ADD037813ECB12F2DF59A4 /* UploadMaskingBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E528CCFAA1423FAE69CD013 /* UploadMaskingBackend.swift */; };
 		2BEF362D032320EF0D571E6D /* FalProductThumbnailService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB548904A22AE6870200BA7C /* FalProductThumbnailService.swift */; };
 		2D2D5CDC0109E475A983E075 /* melike-profile.png in Resources */ = {isa = PBXBuildFile; fileRef = 8456128B0E6C520224F3D108 /* melike-profile.png */; };
@@ -482,7 +482,7 @@
 		F6B8C9D105280144E32EBE34 /* windy.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = windy.json; sourceTree = "<group>"; };
 		F6BCC4406A27B6BF439BBA9D /* Outfit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Outfit.swift; sourceTree = "<group>"; };
 		F6F605079F2D6968468CCE00 /* FalAvatarStandardizationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FalAvatarStandardizationService.swift; sourceTree = "<group>"; };
-		FA749595F4514A6C52C3341B /* GTFAdieuTRIAL-BlackSlanted.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "GTFAdieuTRIAL-BlackSlanted.otf"; sourceTree = "<group>"; };
+		FA749595F4514A6C52C3341B /* Adieu-BlackSlanted.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Adieu-BlackSlanted.otf"; sourceTree = "<group>"; };
 		FACE0000000000000000F001 /* WardrobeItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WardrobeItem.swift; sourceTree = "<group>"; };
 		FACE0000000000000000F002 /* WardrobeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WardrobeService.swift; sourceTree = "<group>"; };
 		FACE0000000000000000F003 /* WardrobeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WardrobeView.swift; sourceTree = "<group>"; };
@@ -749,7 +749,7 @@
 		550DFF5484E734B86BE01B2E /* Fonts */ = {
 			isa = PBXGroup;
 			children = (
-				FA749595F4514A6C52C3341B /* GTFAdieuTRIAL-BlackSlanted.otf */,
+				FA749595F4514A6C52C3341B /* Adieu-BlackSlanted.otf */,
 				A97A1CA096A532AA1FA2219C /* Inter_28pt-MediumItalic.ttf */,
 				E4ADA0A6F7861DEAEA0781FD /* Inter_28pt-SemiBold.ttf */,
 				60A31063DA222A97AF101191 /* PlayfairDisplay-Italic.otf */,
@@ -1066,7 +1066,7 @@
 			files = (
 				35714868A98E53BFDA27435D /* Assets.xcassets in Resources */,
 				20260620000000990B000001 /* PrivacyInfo.xcprivacy in Resources */,
-				27BFFC0250801E7BA95DB9E9 /* GTFAdieuTRIAL-BlackSlanted.otf in Resources */,
+				27BFFC0250801E7BA95DB9E9 /* Adieu-BlackSlanted.otf in Resources */,
 				C5F3F858AB1066F53128D573 /* Info 2.plist in Resources */,
 				C1A6E15569C3B065D846BA27 /* Inter_28pt-MediumItalic.ttf in Resources */,
 				74C11A63C84CEF82BD4D37F3 /* Inter_28pt-SemiBold.ttf in Resources */,
