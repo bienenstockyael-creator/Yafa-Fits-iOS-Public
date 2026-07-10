@@ -210,7 +210,9 @@ struct CalendarMonthView: View {
                     Text("sel=\(store.selectedOutfitId == nil ? 0 : 1)"
                         + " scrub=\(isScrubbing ? 1 : 0)"
                         + " 2f=\(twoFingersDown ? 1 : 0)"
-                        + " pin=\(pinch.isPinching ? 1 : 0)")
+                        + " pin=\(pinch.isPinching ? 1 : 0)"
+                        + " pg=\(dbgPageTaps)"
+                        + " w=\(TouchCountGestureRecognizer.totalTouchesBegan)")
                         .font(.system(size: 10, weight: .semibold, design: .monospaced))
                         .foregroundStyle(.white)
                         .padding(5)
@@ -484,6 +486,10 @@ struct CalendarMonthView: View {
     /// Direction of the last page action — drives which edge the
     /// incoming/outgoing outfit nudges toward.
     @State private var dayPageForward = true
+    #if DEBUG
+    /// TEMP freeze forensics — pill taps that fired pageDay.
+    @State private var dbgPageTaps = 0
+    #endif
 
     /// Nudge+fade rather than a full edge slide: the day cell isn't
     /// clipped (clipping would carve the archive↔calendar morph as it
@@ -491,10 +497,24 @@ struct CalendarMonthView: View {
     /// neighboring cells.
     private var dayPageTransition: AnyTransition {
         .asymmetric(
-            insertion: .offset(x: dayPageForward ? 44 : -44).combined(with: .opacity),
+            insertion: .offset(x: dayPageForward ? 44 : -44).combined(with: .opacity)
+                .animation(Self.dayPageAnimation),
+            // FAST removal: the outgoing cell is a ghost with the
+            // OUTGOING outfit's identity — if a rapid re-page brings
+            // that outfit back while the ghost is still animating out,
+            // SwiftUI sees two views with the same identity and
+            // zombifies the new one (dead +N pill / dead cell after a
+            // few quick taps). A 0.15s exit shrinks that window ~4x;
+            // the rapid-page gate in pageDay closes the rest.
             removal: .offset(x: dayPageForward ? -44 : 44).combined(with: .opacity)
+                .animation(.easeOut(duration: 0.15))
         )
     }
+
+    /// Last page time per date — rapid re-pages swap WITHOUT the
+    /// transition (see dayPageTransition: identity collision).
+    /// Reference type on purpose: per-tap writes must not re-render.
+    private let dayPageTimes = DayPageClock()
 
     /// The outfit a day cell currently shows: the user's page choice
     /// (or the transition's anchor override) if it still exists on
@@ -534,12 +554,31 @@ struct CalendarMonthView: View {
               let current = displayedOutfit(for: day),
               let index = day.outfits.firstIndex(where: { $0.id == current.id })
         else { return }
+        #if DEBUG
+        dbgPageTaps += 1
+        #endif
         let count = day.outfits.count
         let next = (index + (forward ? 1 : -1) + count) % count
         dayPageForward = forward
         UISelectionFeedbackGenerator().selectionChanged()
-        withAnimation(Self.dayPageAnimation) {
-            store.calendarDayDisplayedOutfitIds[day.dateKey] = day.outfits[next].id
+
+        // Rapid paging (another tap within the exit animation's
+        // lifetime) swaps INSTANTLY: an animated remount re-reaching
+        // an outfit id while its ghost is mid-removal duplicates the
+        // identity and zombifies the fresh cell.
+        let now = Date()
+        let animate = dayPageTimes.value[day.dateKey].map { now.timeIntervalSince($0) > 0.6 } ?? true
+        dayPageTimes.value[day.dateKey] = now
+        if animate {
+            withAnimation(Self.dayPageAnimation) {
+                store.calendarDayDisplayedOutfitIds[day.dateKey] = day.outfits[next].id
+            }
+        } else {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                store.calendarDayDisplayedOutfitIds[day.dateKey] = day.outfits[next].id
+            }
         }
     }
 
@@ -725,4 +764,11 @@ private struct CalendarDay: Identifiable {
     var numberLabel: String {
         date.formatted(.dateTime.day())
     }
+}
+
+
+/// Reference-type per-date page clock — mutations don't touch SwiftUI
+/// state, so recording a tap time can't trigger a re-render.
+final class DayPageClock {
+    var value: [String: Date] = [:]
 }
