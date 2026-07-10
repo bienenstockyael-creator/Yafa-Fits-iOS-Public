@@ -159,6 +159,7 @@ struct CalendarMonthView: View {
                     guard store.currentView == .calendar || count == 0 else { return }
                     let down = count >= 2
                     if down != twoFingersDown { twoFingersDown = down }
+                    if count == 0 { scheduleGestureLatchSelfHeal() }
                 }
             )
             .onPreferenceChange(CalendarOutfitFramePreferenceKey.self) { frames in
@@ -471,6 +472,27 @@ struct CalendarMonthView: View {
             return match
         }
         return day.outfits.first
+    }
+
+    /// Self-heal for latched gesture state. SwiftUI can DROP a
+    /// gesture's `.onEnded` when it's interrupted mid-flight — the
+    /// pinch then leaves `isPinching` true forever, and every cell
+    /// tap and scrub is guarded by it ("worked a few times, then
+    /// taps/rotation stopped"). Zero fingers on the glass means no
+    /// gesture can possibly be live, so clear the latches after a
+    /// beat (the legit end path keeps its own 0.18s linger).
+    private func scheduleGestureLatchSelfHeal() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+            guard TouchCountGestureRecognizer.liveTouchCount == 0 else { return }
+            if pinch.isPinching || pinch.scale != 1 || pinch.startColumns != nil {
+                pinch.startColumns = nil
+                pinch.isPinching = false
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.62)) {
+                    pinch.scale = 1
+                }
+            }
+            if isScrubbing { isScrubbing = false }
+        }
     }
 
     private func pageDay(_ day: CalendarDay, forward: Bool) {

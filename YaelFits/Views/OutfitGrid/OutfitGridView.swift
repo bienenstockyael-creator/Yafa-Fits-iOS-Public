@@ -217,6 +217,7 @@ struct OutfitGridView: View {
                             guard store.currentView == .list || count == 0 else { return }
                             let down = count >= 2
                             if down != twoFingersDown { twoFingersDown = down }
+                            if count == 0 { scheduleGestureLatchSelfHeal() }
                         }
                     )
                     .allowsHitTesting(!showCarousel)
@@ -939,6 +940,25 @@ struct OutfitGridView: View {
     /// right below it) is at the top of the visible area. Falls back
     /// to `200` (a reasonable default for the typical layout) until
     /// the first height measurement lands.
+    /// Self-heal for latched gesture state — mirrors the calendar.
+    /// SwiftUI can DROP a gesture's `.onEnded` mid-interruption; the
+    /// pinch then leaves `isPinching` true forever and every card tap
+    /// is guarded by it. Zero fingers on the glass = no live gesture,
+    /// so clear the latches after a beat.
+    private func scheduleGestureLatchSelfHeal() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+            guard TouchCountGestureRecognizer.liveTouchCount == 0 else { return }
+            if pinch.isPinching || pinch.scale != 1 || pinch.startColumns != nil {
+                pinch.startColumns = nil
+                pinch.isPinching = false
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.62)) {
+                    pinch.scale = 1
+                }
+            }
+            if isScrubbing { isScrubbing = false }
+        }
+    }
+
     private func handleScrollOffset(_ offsetY: CGFloat) {
         // Notify the host (RootView) that the user is actively
         // scrolling — used to auto-dismiss an open card / picker

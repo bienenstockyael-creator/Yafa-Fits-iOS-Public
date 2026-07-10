@@ -507,9 +507,9 @@ struct NoteHighlighterText: View {
         let lines = Self.renderedLines(text: text, font: font, maxWidth: max(40, textWrapWidth))
         let lineHeight = font.lineHeight
         let attrs: [NSAttributedString.Key: Any] = [.font: font]
-        let widths = lines.map { line in
+        let widths = Self.snappingNearEqualWidths(lines.map { line in
             (line as NSString).size(withAttributes: attrs).width + 2 * Self.sidePadding
-        }
+        })
         let textColor: Color = DiaryInk.isDark(ink)
             ? .white
             : Color(red: 0.11, green: 0.12, blue: 0.15)
@@ -539,6 +539,29 @@ struct NoteHighlighterText: View {
             width: max(widths.max() ?? 0, 1),
             height: max(lineHeight * CGFloat(lines.count), 1)
         )
+    }
+
+    /// IG-style width snapping: adjacent lines whose widths differ by
+    /// less than this snap to the SAME width. A small step between two
+    /// rows forces a pair of tiny fillets whose S-jog reads as a
+    /// "chipped" corner — a flush edge reads clean.
+    private static let widthSnapTolerance: CGFloat = 20
+
+    static func snappingNearEqualWidths(_ widths: [CGFloat]) -> [CGFloat] {
+        guard widths.count > 1 else { return widths }
+        var w = widths
+        var changed = true
+        while changed {
+            changed = false
+            for i in 0..<(w.count - 1) {
+                if w[i] != w[i + 1], abs(w[i] - w[i + 1]) < widthSnapTolerance {
+                    let unified = max(w[i], w[i + 1])
+                    if w[i] != unified { w[i] = unified; changed = true }
+                    if w[i + 1] != unified { w[i + 1] = unified; changed = true }
+                }
+            }
+        }
+        return w
     }
 
     /// The note's rendered lines at `maxWidth` — TextKit line-fragment
@@ -1070,6 +1093,15 @@ struct DiaryNoteEditOverlay: View {
                     Text(text.isEmpty ? " " : text)
                         .font(style.font(size: 22))
                         .multilineTextAlignment(.center)
+                        // EXPLICIT wrap width on the mirror itself.
+                        // Relying on the inherited proposal (Group
+                        // frame → ZStack → padding) wrapped correctly
+                        // MOST of the time but intermittently laid the
+                        // mirror out single-line (field ran off both
+                        // screen edges while the blob wrapped) — pin
+                        // the width here so no upstream layout pass
+                        // can un-constrain it.
+                        .frame(width: max(100, noteWrapBudget - 20))
                         .opacity(0)
                         .overlay {
                             NoteInputField(
