@@ -155,9 +155,13 @@ struct CalendarDetailSheet: View {
 
                 VStack(spacing: 0) {
                     header
-                    heroStage(stageHeight: stageHeight)
-                        .scaleEffect(heroFactor, anchor: .top)
-                        .frame(height: stageHeight * heroFactor)
+                    // NATIVE height, not a scaleEffect: scaling the
+                    // stage visually while framing it shorter centered
+                    // the un-scaled layout box in the frame, shoving
+                    // the weather pill + outfit up OUT of the card at
+                    // small factors. Passing the reduced height in
+                    // lays everything out inside it correctly.
+                    heroStage(stageHeight: stageHeight * heroFactor)
                         .scaleEffect(keyboardHeight > 0 ? 0.78 : 1.0, anchor: .top)
                         .padding(.bottom, keyboardHeight > 0 ? -66 : 0)
                         .animation(.spring(response: 0.4, dampingFraction: 0.78), value: isExpanded)
@@ -456,52 +460,45 @@ struct CalendarDetailSheet: View {
     }
 
     private var calEditableProductRow: some View {
+        // Mirrors the carousel card's editable product row 1:1 —
+        // single product-entry path (the + opens Quick Add; manual
+        // entry lives INSIDE that sheet as "Add manually"), an
+        // "Add a product" hint until the first product exists, and
+        // 100pt product chips.
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
                 Button {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    showAddProduct = true
-                } label: {
-                    AppIcon(glyph: .plusCircle, size: 14, color: AppPalette.iconPrimary)
-                        .frame(width: 36, height: 36)
-                        .appCircle(shadowRadius: 0, shadowY: 0)
-                }
-                .buttonStyle(SolidPressButtonStyle())
-
-                Button {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     Task { await openAutoDetect() }
                 } label: {
-                    HStack(spacing: 6) {
+                    Group {
                         if isLoadingAutoDetect {
                             ProgressView().controlSize(.small).tint(AppPalette.iconPrimary)
                         } else {
-                            Image(systemName: "sparkles")
-                                .font(.system(size: 13))
-                                .foregroundStyle(AppPalette.iconPrimary)
+                            AppIcon(glyph: .plusCircle, size: 16, color: AppPalette.iconPrimary)
                         }
-                        Text("Quick Add")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(AppPalette.textPrimary)
                     }
-                    .padding(.horizontal, 12)
-                    .frame(height: 36)
-                    .appCapsule(shadowRadius: 0, shadowY: 0)
-                    // AI-action accent: soft purple halo (matches carousel).
-                    .shadow(color: AppPalette.aiAccent.opacity(0.18), radius: 8, y: 0)
+                    .frame(width: 48, height: 48)
+                    .appCircle(shadowRadius: 0, shadowY: 0)
                 }
                 .buttonStyle(SolidPressButtonStyle())
                 .disabled(isLoadingAutoDetect)
 
+                if (outfit.products ?? []).isEmpty {
+                    Text("Add a product")
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(AppPalette.textFaint)
+                }
+
                 ForEach(outfit.products ?? [], id: \.id) { product in
                     ZStack(alignment: .topTrailing) {
-                        VStack(spacing: 4) {
-                            ProductThumbnail(product: product)
+                        VStack(spacing: 6) {
+                            ProductThumbnail(product: product, side: 100, cornerRadius: 18)
                             Text(product.displayName)
-                                .font(.system(size: 9, weight: .medium))
+                                .font(.system(size: 11, weight: .medium))
                                 .foregroundStyle(AppPalette.textMuted)
                                 .lineLimit(1)
-                                .frame(width: 64)
+                                .frame(width: 100)
                         }
                         Button {
                             store.removeProduct(product, fromOutfitId: outfit.id)
@@ -747,11 +744,15 @@ struct CalendarDetailSheet: View {
     }
 
     private var emptyProductRow: some View {
+        // Same behavior as the carousel card: tapping the empty
+        // placeholder jumps straight into Quick Add (AutoDetect) —
+        // one tap to tag a product; manual entry lives inside that
+        // sheet as "Add manually".
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            showAddProduct = true
+            Task { await openAutoDetect() }
         } label: {
-            HStack { EmptyProductCard() }
+            HStack { EmptyProductCard(size: 88, cornerRadius: 16, iconSize: 22) }
                 .frame(maxWidth: .infinity, alignment: .center)
         }
         .buttonStyle(SolidPressButtonStyle())

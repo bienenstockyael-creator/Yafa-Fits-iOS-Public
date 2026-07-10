@@ -610,12 +610,16 @@ struct CarouselDetailCard: View {
                     .frame(height: 48)
                     .background(Capsule(style: .continuous).fill(Color.black))
             } else {
-                // Edit: passive circular icon button — same chrome
-                // as the other card affordances, just a pencil
-                // glyph instead of a text label.
-                AppIcon(glyph: .pencil, size: 16, color: AppPalette.textPrimary)
-                    .frame(width: 48, height: 48)
-                    .appCircle(shadowRadius: 0, shadowY: 0)
+                // Edit: the SAME "EDIT" capsule as the calendar detail
+                // card, so the two edit entry points read as one
+                // control (was an anonymous pencil icon).
+                Text("EDIT")
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .tracking(1.5)
+                    .foregroundStyle(AppPalette.textFaint)
+                    .padding(.horizontal, 12)
+                    .frame(height: 36)
+                    .appCapsule(shadowRadius: 0, shadowY: 0)
             }
         }
         .buttonStyle(SolidPressButtonStyle())
