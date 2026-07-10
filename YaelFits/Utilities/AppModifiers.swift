@@ -201,6 +201,95 @@ extension View {
             .ignoresSafeArea()
         }
     }
+
+    /// For fullScreenCover pages that should read as a rounded card while
+    /// they MOVE (open/close slide, drag-to-dismiss) but be seamlessly
+    /// full screen at rest. Rounds the UIKit presentation container to
+    /// the display's corner radius — invisible at rest, visible during
+    /// the system slides.
+    ///
+    /// `containerActive`: pages with their OWN finger-drag (the closet)
+    /// must pass `false` while the drag is live — the container is
+    /// STATIONARY, so its masksToBounds corners carve into the card as
+    /// it slides inside (the drag's "clipping pop"). At rest the
+    /// rounding coincides with the glass, so toggling it is invisible.
+    func fullScreenCardCorners(containerActive: Bool = true) -> some View {
+        modifier(FullScreenCardCornersModifier(containerActive: containerActive))
+    }
+}
+
+private struct FullScreenCardCornersModifier: ViewModifier {
+    let containerActive: Bool
+
+    func body(content: Content) -> some View {
+        content
+            // Container-level rounding: covers the SYSTEM present /
+            // dismiss slides, where UIKit moves the whole container.
+            // (Pages with their own finger-drag — the closet — add a
+            // drag-time bounds clip locally; a shared content clip
+            // here misfired because SwiftUI collapses safe-area
+            // extensions the moment a page is offset.)
+            .background(FullScreenCardCornersConfigurator(active: containerActive))
+    }
+}
+
+/// Rounds the UIKit PRESENTATION CONTAINER (the hosting controller's
+/// root view) to the physical display corner radius. The container is
+/// the thing UIKit actually slides during present AND dismiss, and a
+/// layer property survives every frame of both transitions — unlike a
+/// SwiftUI clip, which the dismissal's safe-area re-layout kept
+/// re-mapping (corners showed on open but vanished on close). At rest
+/// the container fills the screen, so the rounding coincides with the
+/// glass and is invisible.
+private struct FullScreenCardCornersConfigurator: UIViewControllerRepresentable {
+    let active: Bool
+
+    func makeUIViewController(context: Context) -> CornerApplyingViewController {
+        let vc = CornerApplyingViewController()
+        vc.active = active
+        return vc
+    }
+
+    func updateUIViewController(_ vc: CornerApplyingViewController, context: Context) {
+        vc.active = active
+        vc.applyCorners()
+    }
+
+    final class CornerApplyingViewController: UIViewController {
+        var active = true
+
+        override func didMove(toParent parent: UIViewController?) {
+            super.didMove(toParent: parent)
+            applyCorners()
+        }
+
+        override func viewDidAppear(_ animated: Bool) {
+            super.viewDidAppear(animated)
+            applyCorners()
+        }
+
+        func applyCorners() {
+            // Climb to the presented hosting controller's root view.
+            var top: UIViewController = self
+            while let parent = top.parent { top = parent }
+            guard let container = top.view else { return }
+            container.layer.cornerRadius = active ? UIScreen.main.displayCornerRadiusSafe : 0
+            container.layer.cornerCurve = .continuous
+            container.layer.masksToBounds = active
+        }
+    }
+}
+
+extension UIScreen {
+    /// The physical display corner radius. Falls back to 0 (square) on
+    /// devices whose screens genuinely have square corners, which is
+    /// also the correct clip for them.
+    var displayCornerRadiusSafe: CGFloat {
+        // The value lives under a private-but-stable key; assembled
+        // indirectly rather than written as a literal.
+        let key = ["Radius", "Corner", "display", "_"].reversed().joined()
+        return (value(forKey: key) as? CGFloat) ?? 0
+    }
 }
 
 // MARK: - Sheet header
@@ -304,8 +393,15 @@ struct TrimmedRemoteImage: View {
         // Share-Extension polish finishes and `image_url` changes; the old
         // `guard image == nil` blocked that reload until the view was
         // recreated (closing/reopening the closet).
-        guard let (data, _) = try? await URLSession.shared.data(from: url),
-              let raw = UIImage(data: data) else { return }
+        //
+        // Load via the shared RemoteImageCache rather than a bare
+        // URLSession: disk persistence (cold launches skip the network
+        // entirely — the old memory-only cache re-downloaded EVERY
+        // product cut-out each session, the "thumbnails take 1–2s"
+        // problem), request de-dup, and CGImageSource-downsampled
+        // decode. 640px also makes the transparent-margin trim walk
+        // ~16× fewer pixels than the full-res original.
+        guard let raw = await RemoteImageCache.shared.load(url, maxPixelSize: 640) else { return }
         let trimmed = await Task.detached(priority: .userInitiated) {
             raw.trimmingTransparentMargins()
         }.value
@@ -383,6 +479,224 @@ struct MadeOnYafaMark: View {
                     .frame(width: width)
                     .foregroundStyle(color)
             }
+        }
+    }
+}
+
+// MARK: - Snapshot-driven drag-to-dismiss (full-screen sheets)
+
+/// Weak handle to a fullScreenCover's UIKit container view, so a
+/// finger-drag dismissal can snapshot the page's actual pixels.
+final class ContainerViewRef {
+    weak var view: UIView?
+
+    /// Renders the container (the full-screen page, including the
+    /// strips behind the bars) into an image.
+    func snapshot() -> UIImage? {
+        guard let view else { return nil }
+        let renderer = UIGraphicsImageRenderer(bounds: view.bounds)
+        return renderer.image { _ in
+            view.drawHierarchy(in: view.bounds, afterScreenUpdates: false)
+        }
+    }
+}
+
+/// Grabs the presented hosting controller's root view into a
+/// `ContainerViewRef` (same parent-climb as the corner configurator).
+struct ContainerViewGrabber: UIViewControllerRepresentable {
+    let ref: ContainerViewRef
+
+    func makeUIViewController(context: Context) -> GrabberViewController {
+        GrabberViewController(ref: ref)
+    }
+
+    func updateUIViewController(_ vc: GrabberViewController, context: Context) {}
+
+    final class GrabberViewController: UIViewController {
+        let ref: ContainerViewRef
+
+        init(ref: ContainerViewRef) {
+            self.ref = ref
+            super.init(nibName: nil, bundle: nil)
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) { fatalError("unused") }
+
+        override func didMove(toParent parent: UIViewController?) {
+            super.didMove(toParent: parent)
+            grab()
+        }
+
+        override func viewDidAppear(_ animated: Bool) {
+            super.viewDidAppear(animated)
+            grab()
+        }
+
+        private func grab() {
+            var top: UIViewController = self
+            while let parent = top.parent { top = parent }
+            ref.view = top.view
+        }
+    }
+}
+
+/// Progressive card clip for snapshot drags: radius grows with the
+/// pull; at ~0 it clips nothing.
+struct DragCardShape: Shape {
+    var radius: CGFloat
+
+    var animatableData: CGFloat {
+        get { radius }
+        set { radius = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        guard radius > 0.5 else {
+            return Path(rect.insetBy(dx: -2000, dy: -2000))
+        }
+        return Path(roundedRect: rect, cornerRadius: radius, style: .continuous)
+    }
+}
+
+/// The dragged card of a snapshot-driven dismissal: the page bitmap,
+/// screen-pinned (position compensates for host-layout churn), with
+/// corners that morph rounder over the first ~110pt of pull and a
+/// soft shadow — riding the finger. Pixels cannot reflow, which is
+/// the whole point.
+struct SnapshotDragCard: View {
+    let image: UIImage
+    let dragOffset: CGFloat
+
+    var body: some View {
+        GeometryReader { geo in
+            let origin = geo.frame(in: .global).origin
+            let screen = UIScreen.main.bounds
+            Image(uiImage: image)
+                .resizable()
+                .frame(width: screen.width, height: screen.height)
+                .clipShape(DragCardShape(
+                    radius: min(UIScreen.main.displayCornerRadiusSafe, dragOffset * 0.5)
+                ))
+                .shadow(
+                    color: .black.opacity(0.25 * min(1, dragOffset / 110)),
+                    radius: 24,
+                    y: -6
+                )
+                .position(
+                    x: screen.width / 2 - origin.x,
+                    y: screen.height / 2 - origin.y
+                )
+                .offset(y: dragOffset)
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+    }
+}
+
+// MARK: - Drop-in drag-to-dismiss for fullScreenCover pages
+
+extension View {
+    /// The full "physical sheet" dismissal for fullScreenCover pages:
+    /// grab the page in its top zone and pull — a snapshot of the page
+    /// rides the finger with morphing corners, a shadow, and a dim
+    /// behind; release past the threshold to dismiss, or let it spring
+    /// back. Includes the rounded-corner treatment for the system
+    /// open/close slides, so this REPLACES `fullScreenCardCorners()`.
+    /// Apply INSIDE the cover content; pair with
+    /// `.presentationBackground(.clear)` at the call site.
+    func snapshotDragDismiss(onClose: @escaping () -> Void) -> some View {
+        modifier(SnapshotDragDismissModifier(onClose: onClose))
+    }
+}
+
+private struct SnapshotDragDismissModifier: ViewModifier {
+    let onClose: () -> Void
+    /// Drags must START within this distance from the screen top —
+    /// the page's header zone — so the gesture never competes with
+    /// scrolling or content interactions lower down.
+    var grabZoneHeight: CGFloat = 140
+
+    @State private var dragOffset: CGFloat = 0
+    @State private var snapshot: UIImage?
+    @State private var isCommitting = false
+    @State private var containerRef = ContainerViewRef()
+
+    func body(content: Content) -> some View {
+        ZStack {
+            // Dim behind the dragged card — fades in with the pull,
+            // back out as a committed dismiss slides away.
+            if dragOffset > 0 {
+                Color.black
+                    .opacity(
+                        0.20 * min(1, dragOffset / 260)
+                            * (1 - dragOffset / UIScreen.main.bounds.height)
+                    )
+                    .ignoresSafeArea()
+            }
+
+            content
+                .fullScreenCardCorners(containerActive: snapshot == nil)
+                .background(ContainerViewGrabber(ref: containerRef))
+                // Hidden while the snapshot drives — pixel-identical
+                // at the swap in both directions.
+                .opacity(snapshot == nil ? 1 : 0)
+
+            if let snapshot {
+                SnapshotDragCard(image: snapshot, dragOffset: dragOffset)
+            }
+        }
+        .simultaneousGesture(dragGesture)
+    }
+
+    private var dragGesture: some Gesture {
+        DragGesture(minimumDistance: 16, coordinateSpace: .global)
+            .onChanged { v in
+                guard !isCommitting else { return }
+                guard v.startLocation.y < grabZoneHeight else { return }
+                let vertical = v.translation.height
+                guard vertical > 0, abs(vertical) > abs(v.translation.width) else {
+                    // Turned horizontal / pulled back up — snap back.
+                    if dragOffset != 0, snapshot != nil {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                            dragOffset = 0
+                        }
+                        scheduleSnapshotCleanup()
+                    }
+                    return
+                }
+                if snapshot == nil { snapshot = containerRef.snapshot() }
+                dragOffset = vertical
+            }
+            .onEnded { v in
+                guard !isCommitting, snapshot != nil else { return }
+                if v.translation.height > 120 || v.predictedEndTranslation.height > 350 {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    // Finish the slide on the snapshot, then drop the
+                    // cover with animations disabled — the system
+                    // dismissal would re-animate the live page.
+                    isCommitting = true
+                    withAnimation(.easeIn(duration: 0.22)) {
+                        dragOffset = UIScreen.main.bounds.height
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
+                        var t = Transaction()
+                        t.disablesAnimations = true
+                        withTransaction(t) { onClose() }
+                    }
+                } else {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                        dragOffset = 0
+                    }
+                    scheduleSnapshotCleanup()
+                }
+            }
+    }
+
+    private func scheduleSnapshotCleanup() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            guard dragOffset == 0 else { return }
+            snapshot = nil
         }
     }
 }

@@ -49,6 +49,7 @@ struct FollowListSheet: View {
             .fullScreenCover(item: $selectedUserId) { userId in
                 UserProfileView(userId: userId, onDismiss: { selectedUserId = nil })
                     .environment(store)
+                    .presentationBackground(.clear)
             }
         }
     }

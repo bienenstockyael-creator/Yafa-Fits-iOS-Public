@@ -192,6 +192,7 @@ struct PublicFeedListView: View {
         .sheet(isPresented: $showDiscover) {
             DiscoverView()
                 .environment(store)
+                .roundedSheetBackground()
         }
         .alert("Find your friends on Yafa", isPresented: $showContactsPrompt) {
             Button("Share Contacts") {
@@ -220,6 +221,11 @@ struct PublicFeedListView: View {
                 onDismiss: { selectedDiscoveryProfile = nil }
             )
             .environment(store)
+            // (Corner rounding lives INSIDE UserProfileView — it must
+            // toggle with the page's snapshot drag.)
+            // Clear container so the rounded card slides over the
+            // presenting screen, not a black void.
+            .presentationBackground(.clear)
         }
     }
 
@@ -719,6 +725,7 @@ struct FeedPostCard: View {
         }
         .sheet(isPresented: $showLikers) {
             LikersSheet(outfitId: post.outfitId)
+                .roundedSheetBackground()
         }
         .sheet(isPresented: $showVibers) {
             VibersListSheet(source: .outfit(post.outfitId))
@@ -791,6 +798,7 @@ struct FeedPostCard: View {
                 if let authorId = post.authorId {
                     UserProfileView(userId: authorId, onDismiss: { showUserProfile = false })
                         .environment(store)
+                        .presentationBackground(.clear)
                 }
             }
 
@@ -854,6 +862,7 @@ struct FeedPostCard: View {
         .sheet(item: $reportTarget) { target in
             ReportSheet(target: target)
                 .environment(store)
+                .roundedSheetBackground()
         }
         .confirmationDialog(
             blockCandidate.map { "Block \($0.name)?" } ?? "Block user?",
@@ -908,6 +917,33 @@ struct FeedPostCard: View {
             preloadFullSequenceOnAppear: isRotatable
         )
         .frame(maxWidth: .infinity)
+        // Shared diary note, rendered at the owner's placement scaled down
+        // to the card. Position is clamped inside the image band so an
+        // around-the-fit placement can't collide with the card's chrome.
+        .overlay {
+            if outfit.noteShared == true, let note = outfit.diaryNote, !note.isEmpty {
+                GeometryReader { geo in
+                    if geo.size.width > 1 {
+                        DiaryNoteView(
+                            text: note,
+                            style: DiaryNoteStyle.from(outfit.noteStyle),
+                            color: DiaryInk.palette.indices.contains(outfit.noteColorIndex ?? 0)
+                                ? DiaryInk.palette[outfit.noteColorIndex ?? 0] : .white,
+                            size: 14   // 22pt editor base × card/slide height ratio
+                        )
+                        .frame(maxWidth: geo.size.width * 0.7)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .scaleEffect(CGFloat(outfit.noteScale ?? 1))
+                        .rotationEffect(.radians(outfit.noteRotation ?? 0))
+                        .position(
+                            x: min(0.92, max(0.08, outfit.noteX ?? 0.5)) * geo.size.width,
+                            y: min(0.92, max(0.08, outfit.noteY ?? 0.5)) * geo.size.height
+                        )
+                    }
+                }
+                .allowsHitTesting(false)
+            }
+        }
     }
 
     private var is3DOutfit: Bool {

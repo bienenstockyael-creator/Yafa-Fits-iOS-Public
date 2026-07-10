@@ -176,6 +176,12 @@ struct RootView: View {
                     Spacer(minLength: 0)
                 }
                 .zIndex(90)
+                // topBar's row has .contentShape(Rectangle()) — a full-width
+                // hit-testable strip ABOVE the whole grid subtree. While the
+                // diary-note editor is open its Cancel/Done buttons sit
+                // exactly under that strip, so the bar must stop claiming
+                // touches (it swallowed them silently — buttons went dead).
+                .allowsHitTesting(!store.isDiaryNoteEditing)
             }
 
             CalendarDetailOverlayHost()
@@ -268,7 +274,10 @@ struct RootView: View {
                         // empty space when the queue suddenly
                         // empties mid-morph).
                         returnCardToStack()
-                        store.generationOrchestrator.cancel(job)
+                        // discard (not cancel) — also clears the
+                        // persisted fork snapshot + temp 2D frames so
+                        // the job doesn't resurrect on next launch.
+                        store.generationOrchestrator.discard(job)
                         Task { @MainActor in
                             try? await Task.sleep(nanoseconds: 350_000_000)
                             await store.generationQueue.cancel(job)
@@ -388,7 +397,25 @@ struct RootView: View {
         // including the inset, so the carousel detail card stays
         // anchored when its location/tag TextFields gain focus.
         .ignoresSafeArea(.keyboard, edges: .bottom)
+        // In-app notification pill — foreground pushes render as a small
+        // Yafa-styled capsule at the top instead of the system banner.
+        .overlay(alignment: .top) {
+            // Read .shared inside body (MainActor) — @Observable tracking
+            // re-renders this overlay when a notice arrives/dismisses.
+            if let notice = InAppNoticeCenter.shared.current {
+                InAppNoticePill(notice: notice)
+                    .padding(.top, 4)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .id(notice.id)
+                    .zIndex(500)
+            }
+        }
         .onTapGesture {
+            // Global tap-anywhere-to-dismiss-keyboard — EXCEPT while the
+            // diary-note editor is open: it fires for taps on the editor's
+            // font/color chips too, which yanked the keyboard down on every
+            // restyle (the note editor manages its own keyboard lifecycle).
+            guard !store.isDiaryNoteEditing else { return }
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         }
         .onAppear {
@@ -436,10 +463,12 @@ struct RootView: View {
                     // unsaved edits — the inline Save can hide behind the keyboard.
             }
             .presentationDragIndicator(.visible)
+            .roundedSheetBackground()
         }
         .sheet(isPresented: $showsProfileShareSheet) {
             ProfileShareSheet()
                 .environment(store)
+                .roundedSheetBackground()
         }
         .sheet(isPresented: $showCreditPaywall) {
             CreditPaywallHost(
@@ -477,6 +506,8 @@ struct RootView: View {
                     showsVirtualCloset = false
                 }
                 .environment(store)
+                .snapshotDragDismiss(onClose: { showsVirtualCloset = false })
+                .presentationBackground(.clear)
             }
         }
         .fullScreenCover(isPresented: $showsAvatarOnboarding) {
@@ -497,13 +528,23 @@ struct RootView: View {
                 onClose: { showsAvatarOnboarding = false }
             )
             .environment(store)
+            .snapshotDragDismiss(onClose: { showsAvatarOnboarding = false })
+            .presentationBackground(.clear)
         }
         // Closet PAGE as a fullScreenCover — the only presentation that gives a
         // true full-screen hosting context where ignoresSafeArea works. As an
         // .overlay (even a top-level ZStack sibling) it was permanently clamped
         // to the safe area by the bottom safeAreaInset/tab bar above it.
+        // `fullScreenCardCorners` clips the page to the PHYSICAL screen
+        // corner radius: invisible at rest (full screen), but the page
+        // reads as a rounded card during the open/close slide and the
+        // drag-to-dismiss — the native-sheet look without giving up
+        // the full-screen layout.
         .fullScreenCover(isPresented: $showsCloset) {
             if let userId = store.userId {
+                // Card corners live INSIDE WardrobeView (under its
+                // drag-to-dismiss offset) so they follow the page in
+                // BOTH motions: the system slide and the finger drag.
                 WardrobeView(userId: userId, onClose: { showsCloset = false })
                     .environment(store)
                     // Transparent backdrop so swiping the closet down reveals the
@@ -828,20 +869,30 @@ struct RootView: View {
                         // The in-page section toggle has scrolled up
                         // to the top-bar level — swap share + settings
                         // for the toggle so it appears to pin in
-                        // place. The in-page copy fades out via the
-                        // same flag so it doesn't render twice.
+                        // place. SEQUENTIAL swap (out fast, in after a
+                        // beat) so the two never render on top of each
+                        // other.
                         ViewModeTogglePill(isCalendarActive: false) {
                             switchView(to: .calendar)
                         }
                         .padding(.trailing, 8)
-                        .transition(.opacity)
+                        .transition(.asymmetric(
+                            insertion: .opacity.animation(.easeIn(duration: 0.1).delay(0.1)),
+                            removal: .opacity.animation(.easeOut(duration: 0.08))
+                        ))
                     } else {
-                        shareProfileButton
-                        settingsButton
+                        Group {
+                            shareProfileButton
+                            settingsButton
+                        }
+                        .transition(.asymmetric(
+                            insertion: .opacity.animation(.easeIn(duration: 0.1).delay(0.1)),
+                            removal: .opacity.animation(.easeOut(duration: 0.08))
+                        ))
                     }
                 }
             }
-            .animation(.easeInOut(duration: 0.18), value: store.archiveTogglePinned)
+            .animation(.easeInOut(duration: 0.12), value: store.archiveTogglePinned)
         }
         .padding(.horizontal, LayoutMetrics.screenPadding)
         .padding(.top, 8)
@@ -939,32 +990,82 @@ struct RootView: View {
     private func switchView(to target: AppView) {
         guard target == .list || target == .calendar else { return }
         let goingToCalendar = target == .calendar
-        let sourceFrames = goingToCalendar ? store.listOutfitFrames : store.calendarOutfitFrames
-        let anchorId = mostCenteredOutfitId(in: sourceFrames)
+
+        // The zoom level TRAVELS across the switch — but each surface
+        // keeps its OWN default (archive 3, calendar 2). Only a
+        // deliberate zoom away from the source's default carries over;
+        // default→default means NO hidden re-layout of the destination
+        // (a forced re-layout raced the anchor polling and degraded
+        // the morph to a plain fade).
+        var densityChanged = false
+        if goingToCalendar {
+            let target = store.archiveColumnCount == OutfitStore.archiveDefaultColumns
+                ? OutfitStore.calendarDefaultColumns
+                : store.archiveColumnCount
+            densityChanged = store.calendarColumnCount != target
+            store.calendarColumnCount = target
+        } else {
+            let target = store.calendarColumnCount == OutfitStore.calendarDefaultColumns
+                ? OutfitStore.archiveDefaultColumns
+                : store.calendarColumnCount
+            densityChanged = store.archiveColumnCount != target
+            store.archiveColumnCount = target
+        }
 
         store.selectedOutfitId = nil
-        store.transitionAnchorOutfitId = anchorId
-        // Capture the source anchor's currently-displayed frame so
-        // the destination anchor can render the same frame during
-        // the morph. Independent of any persistent scrub state.
-        store.transitionAnchorFrameIndex = anchorId.flatMap {
-            store.currentDisplayedFrame[$0]
-        }
-        if let anchorId {
-            if goingToCalendar {
-                store.pendingCalendarScrollOutfitId = anchorId
-            } else {
-                store.pendingListScrollOutfitId = anchorId
-            }
-        }
 
         transitionTask?.cancel()
         transitionTask = Task { @MainActor in
+            if densityChanged {
+                // Give the hidden destination one beat to re-layout at
+                // its new density before the anchor scroll + frame
+                // polling run against its cells.
+                try? await Task.sleep(for: .milliseconds(150))
+                guard !Task.isCancelled else { return }
+            }
+            let sourceFrames = goingToCalendar ? store.listOutfitFrames : store.calendarOutfitFrames
+            // Going TO the calendar, the anchor must be an outfit the
+            // calendar can render — anything non-future-dated, now
+            // that multi-outfit days page: we point the anchor's day
+            // cell at the anchor below, so even a same-day "extra"
+            // outfit gets a real morph target. (Before day paging,
+            // anchoring on a same-day non-winner meant NO destination
+            // cell: scroll no-oped, the frame poll timed out at its
+            // full ~300ms, and the morph degraded to a fade every
+            // time — guaranteed near the archive top where several
+            // fits share a date.)
+            let eligible = goingToCalendar ? calendarRepresentableOutfitIds() : nil
+            let anchorId = mostCenteredOutfitId(in: sourceFrames, eligible: eligible)
+
+            if goingToCalendar, let anchorId,
+               let anchorOutfit = store.outfitById[anchorId] {
+                // Make the anchor's day cell display the anchor (not
+                // the day's default/newest) BEFORE the destination
+                // scroll, so the cell with the anchor's id exists for
+                // scrollTo and the frame poll. Deliberately not
+                // animated — the calendar is hidden at this point.
+                store.calendarDayDisplayedOutfitIds[anchorOutfit.date] = anchorId
+            }
+
+            store.transitionAnchorOutfitId = anchorId
+            // Capture the source anchor's currently-displayed frame so
+            // the destination anchor can render the same frame during
+            // the morph. Independent of any persistent scrub state.
+            store.transitionAnchorFrameIndex = anchorId.flatMap {
+                store.currentDisplayedFrame[$0]
+            }
+            if let anchorId {
+                if goingToCalendar {
+                    store.pendingCalendarScrollOutfitId = anchorId
+                } else {
+                    store.pendingListScrollOutfitId = anchorId
+                }
+            }
             if let anchorId {
                 await waitForDestinationScroll(goingToCalendar: goingToCalendar)
                 if Task.isCancelled { return }
 
-                let foundValidTarget = await waitForStableDestinationFrame(
+                let (foundValidTarget, _) = await waitForStableDestinationFrame(
                     anchorId: anchorId,
                     goingToCalendar: goingToCalendar
                 )
@@ -999,16 +1100,42 @@ struct RootView: View {
     /// Picks the outfit whose frame is closest to the screen center
     /// among those currently intersecting the viewport. Returns `nil`
     /// if no outfit is visible (e.g., scrolled past everything).
-    private func mostCenteredOutfitId(in frames: [String: CGRect]) -> String? {
+    /// When `eligible` is non-nil, only those ids are considered —
+    /// used to skip outfits the destination view can't render.
+    private func mostCenteredOutfitId(
+        in frames: [String: CGRect],
+        eligible: Set<String>? = nil
+    ) -> String? {
         let viewport = UIScreen.main.bounds
         let center = CGPoint(x: viewport.midX, y: viewport.midY)
         return frames
-            .filter { _, frame in frame.intersects(viewport) && frame.width > 0 }
+            .filter { id, frame in
+                frame.intersects(viewport) && frame.width > 0
+                    && (eligible?.contains(id) ?? true)
+            }
             .min { lhs, rhs in
                 let ld = squaredDistance(from: CGPoint(x: lhs.value.midX, y: lhs.value.midY), to: center)
                 let rd = squaredDistance(from: CGPoint(x: rhs.value.midX, y: rhs.value.midY), to: center)
                 return ld < rd
             }?.key
+    }
+
+    /// Ids of outfits that can own a calendar cell. Since multi-outfit
+    /// days page (any of a day's outfits can be displayed via
+    /// `calendarDayDisplayedOutfitIds`), the only exclusion left is
+    /// future-dated outfits — the calendar doesn't render future days.
+    private func calendarRepresentableOutfitIds() -> Set<String> {
+        let calendar = Calendar.current
+        let now = Date()
+        var ids = Set<String>()
+        for outfit in store.sortedOutfits {
+            if let date = outfit.parsedDate,
+               date > now, !calendar.isDateInToday(date) {
+                continue
+            }
+            ids.insert(outfit.id)
+        }
+        return ids
     }
 
     private func squaredDistance(from a: CGPoint, to b: CGPoint) -> CGFloat {
@@ -1038,31 +1165,40 @@ struct RootView: View {
     /// Phase 2 of the transition wait. Polls the destination cell's
     /// frame until it's on-screen with non-zero size AND has been
     /// stable across two consecutive 16ms samples. Returns whether a
-    /// stable frame was actually observed within 300ms.
+    /// stable frame was actually observed within 300ms, plus a short
+    /// failure-reason tag for the debug chip: "none" (the anchor id
+    /// never appeared in the destination's frame dict — cell never
+    /// mounted / scroll no-oped), "offscr" (mounted but never
+    /// intersected the viewport — scroll landed wrong), "unstb"
+    /// (on-screen but never stable — destination layout thrashing).
     @MainActor
     private func waitForStableDestinationFrame(
         anchorId: String,
         goingToCalendar: Bool
-    ) async -> Bool {
+    ) async -> (ok: Bool, reason: String) {
         let viewport = UIScreen.main.bounds
         let pollStart = Date()
         var lastFrame: CGRect?
+        var sawFrame = false
+        var sawOnScreen = false
         while Date().timeIntervalSince(pollStart) < Transition.stabilityPollTimeout {
             let frames = goingToCalendar ? store.calendarOutfitFrames : store.listOutfitFrames
-            if let frame = frames[anchorId],
-               frame.width > 0, frame.height > 0,
-               frame.intersects(viewport) {
-                if let last = lastFrame,
-                   abs(last.minX - frame.minX) < 0.5,
-                   abs(last.minY - frame.minY) < 0.5 {
-                    return true
+            if let frame = frames[anchorId] {
+                sawFrame = true
+                if frame.width > 0, frame.height > 0, frame.intersects(viewport) {
+                    sawOnScreen = true
+                    if let last = lastFrame,
+                       abs(last.minX - frame.minX) < 0.5,
+                       abs(last.minY - frame.minY) < 0.5 {
+                        return (true, "")
+                    }
+                    lastFrame = frame
                 }
-                lastFrame = frame
             }
             try? await Task.sleep(for: Transition.pollInterval)
-            if Task.isCancelled { return false }
+            if Task.isCancelled { return (false, "cancel") }
         }
-        return false
+        return (false, sawOnScreen ? "unstb" : (sawFrame ? "offscr" : "none"))
     }
 
     private var logoView: some View {
@@ -1211,6 +1347,12 @@ struct RootView: View {
                         calendarOpacity = 0
                         store.currentView = .list
                     }
+                    // Re-tap = "take me home": the STANDARD archive —
+                    // default densities and per-day outfit picks
+                    // restored along with the scroll-to-top.
+                    store.archiveColumnCount = OutfitStore.archiveDefaultColumns
+                    store.calendarColumnCount = OutfitStore.calendarDefaultColumns
+                    store.calendarDayDisplayedOutfitIds = [:]
                     store.archiveScrollToTopTrigger += 1
                 }
                 return
@@ -1231,6 +1373,16 @@ struct RootView: View {
             if isListCalendarSwitch {
                 switchView(to: targetTab)
             } else {
+                // Leaving the archive surfaces for another section —
+                // restore the standard densities (archive 3 / calendar
+                // 2) and per-day outfit picks so the next visit starts
+                // at the canonical views. Instant: both grids are
+                // hidden behind the new tab.
+                if targetTab != .list, targetTab != .calendar {
+                    store.archiveColumnCount = OutfitStore.archiveDefaultColumns
+                    store.calendarColumnCount = OutfitStore.calendarDefaultColumns
+                    store.calendarDayDisplayedOutfitIds = [:]
+                }
                 // When the target is list or calendar but we got here
                 // from a different section (upload/feed/profile), the
                 // per-view opacities may still hold their last
@@ -1630,6 +1782,12 @@ final class GlobalKeyboardDismiss: NSObject, UIGestureRecognizerDelegate {
     private var started = false
     private let recognizerName = "globalKeyboardDismissTap"
 
+    /// While true, taps do NOT resign first responder. The diary-note editor
+    /// suspends the dismisser while it's open: its font/color chips are
+    /// SwiftUI buttons (not UIControls), so the delegate exemption below
+    /// doesn't cover them — every restyle tap was yanking the keyboard down.
+    var isSuspended = false
+
     func start() {
         guard !started else { return }
         started = true
@@ -1661,6 +1819,7 @@ final class GlobalKeyboardDismiss: NSObject, UIGestureRecognizerDelegate {
     }
 
     @objc private func handleTap() {
+        guard !isSuspended else { return }
         UIApplication.shared.sendAction(
             #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
         )

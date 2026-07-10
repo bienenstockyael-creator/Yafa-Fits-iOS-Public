@@ -8,6 +8,11 @@ struct CarouselView: View {
     let showsChrome: Bool
     let showsCurrentLiveSlide: Bool
     let showsEntryOverlay: Bool
+    /// True while the grid-level hero image is flying over the carousel
+    /// (open/close transition). The hero draws ABOVE this whole view, so the
+    /// diary note must hide during it — otherwise it reads as the note being
+    /// "behind" the outfit, then popping in front when the hero fades.
+    var heroTransitionActive: Bool = false
     let entryFrame: CarouselEntryFrame?
     let entryImage: UIImage?
     let onHeroTargetFrameChange: (CGRect) -> Void
@@ -21,6 +26,12 @@ struct CarouselView: View {
     /// someone else's profile can still browse, scrub, like, and
     /// share without seeing actions they can't perform.
     var viewOnly: Bool = false
+    /// Ids of archived fits whose 3D upgrade is currently rendering.
+    /// Their slides show the sparkle field overlaid — everything else
+    /// (detail card, product tagging, notes) behaves exactly like any
+    /// saved 2D still, because that's what they are until the render
+    /// lands and swaps the frames in place.
+    var generatingOutfitIds: Set<String> = []
 
     @Environment(OutfitStore.self) private var store
     @State private var dragOffset: CGFloat = 0
@@ -128,6 +139,10 @@ struct CarouselView: View {
     /// Global frame of the current fit slide (captured from the hero
     /// preference). The note editor anchors to it so positioning is WYSIWYG.
     @State private var currentSlideFrame: CGRect = .zero
+    /// Ghost-note education state (see `ghostNoteGate` / `GhostNoteHintView`).
+    @State private var ghostNoteShownThisSession = false
+    private static let ghostNoteCountKey = "diaryNoteHintShownCount"
+    private static let ghostNoteCreatedKey = "diaryNoteCreatedOnce"
     /// Mirrors the chevron press inside the card and the new Info
     /// button outside it. Tracking it as a single source of truth
     /// keeps the spring animation consistent regardless of which
@@ -381,6 +396,16 @@ struct CarouselView: View {
                     // Note mode is a full takeover — hide RootView's X +
                     // temp toggle too (same flag the card editing uses).
                     store.isCarouselCardEditing = (newValue != nil) || editCoordinator.isEditing
+                    // And stand down RootView's global tap-to-dismiss-keyboard
+                    // handler, which was resigning the keyboard on every chip
+                    // tap inside the editor.
+                    store.isDiaryNoteEditing = (newValue != nil)
+                    // Any editor open — ghost tap, long-press, publish-sheet
+                    // row — retires the ghost hint forever: the user now
+                    // knows the feature exists, which is all it teaches.
+                    if newValue != nil {
+                        UserDefaults.standard.set(true, forKey: Self.ghostNoteCreatedKey)
+                    }
                 }
                 .onPreferenceChange(ActionRowHeightKey.self) { newHeight in
                     // Action row is conditionally mounted (hidden
@@ -424,25 +449,45 @@ struct CarouselView: View {
             if let outfit = currentOutfit {
                 ShareCardComposer(outfit: outfit)
                     .environment(store)
+                    .snapshotDragDismiss(onClose: { showShareComposer = false })
+                    .presentationBackground(.clear)
             }
         }
         .sheet(item: $outfitToPublish) { outfit in
-            PublishSheet(outfit: outfit) { _, _ in
+            PublishSheet(outfit: outfit, onAddNote: {
+                // Close the sheet, then open the note editor once the
+                // dismissal has visually cleared.
+                outfitToPublish = nil
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    withAnimation(.easeOut(duration: 0.2)) { outfitToEditNote = outfit }
+                }
+            }) { caption, products in
                 publishedOverride[outfit.id] = true
+                // Persist locally too — the override dies with this view,
+                // which made a just-published fit read as unpublished after
+                // closing and reopening the carousel.
+                store.setOutfitPublishedLocally(outfit.id, isPublic: true)
+                store.updateOutfit(outfit.id, caption: caption, products: products)
             }
             .environment(store)
+            .roundedSheetBackground()
         }
+        // In-place note editor — an overlay ON the carousel (IG-style): the
+        // chrome fades out and a dim drops over the live carousel; no sheet.
         .overlay {
             if let editing = outfitToEditNote {
                 DiaryNoteEditOverlay(
+                    slideFrame: currentSlideFrame,
                     initialText: editing.diaryNote ?? "",
                     initialStyle: DiaryNoteStyle.from(editing.noteStyle),
                     initialX: editing.noteX ?? 0.5,
-                    initialY: editing.noteY ?? 0.82,
+                    // Unpositioned notes sit CENTERED on the fit — leaving
+                    // typing mode keeps the text centered until the user
+                    // deliberately drags/scales it.
+                    initialY: editing.noteY ?? 0.5,
                     initialScale: editing.noteScale ?? 1,
                     initialRotation: editing.noteRotation ?? 0,
                     initialColorIndex: editing.noteColorIndex ?? 0,
-                    slideFrame: currentSlideFrame,
                     onSave: { text, style, x, y, scale, rotation, colorIndex in
                         store.updateOutfitDiaryNote(
                             outfitId: editing.id,
@@ -451,15 +496,20 @@ struct CarouselView: View {
                             shared: editing.noteShared ?? false,
                             x: x, y: y, scale: scale, rotation: rotation, colorIndex: colorIndex
                         )
+                        // First real note retires the ghost-note hint forever.
+                        if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            UserDefaults.standard.set(true, forKey: Self.ghostNoteCreatedKey)
+                        }
                         withAnimation(.easeOut(duration: 0.2)) { outfitToEditNote = nil }
                     },
                     onCancel: {
                         withAnimation(.easeOut(duration: 0.2)) { outfitToEditNote = nil }
                     }
                 )
-                // Belt-and-suspenders: stop any carousel animation from
-                // cascading into the note editor while manipulating.
-                .transaction { $0.animation = nil }
+                // Fade the whole editor in/out. Gesture 1:1 tracking is
+                // protected inside the editor itself (transaction strip is
+                // scoped to the note while a gesture is live).
+                .transition(.opacity)
             }
         }
         .overlay { unpublishConfirmOverlay }
@@ -803,6 +853,7 @@ struct CarouselView: View {
                         Button {
                             UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
                             publishedOverride[outfit.id] = false
+                            store.setOutfitPublishedLocally(outfit.id, isPublic: false)
                             Task { try? await OutfitService.setPublished(false, outfitId: outfit.id) }
                             dismissUnpublish()
                         } label: {
@@ -919,6 +970,12 @@ struct CarouselView: View {
         }
     }
 
+    /// True when this fit's 3D upgrade is rendering (sparkle overlay).
+    private func isGenerating(_ outfit: Outfit) -> Bool {
+        generatingOutfitIds.contains(outfit.id)
+    }
+
+
     /// Vertical offset applied to the slide stack (and the nav arrows)
     /// when the card opens, so the slide's bottom edge lands
     /// `slideToCardGap` above the card's top edge. `measuredCardHeight`
@@ -941,7 +998,20 @@ struct CarouselView: View {
 
             HStack(spacing: gap) {
                 ForEach(Array(outfits.enumerated()), id: \.element.id) { index, outfit in
-                    carouselSlide(outfit: outfit, index: index)
+                    // Window the slides: building all N outfits at mount hogged
+                    // the main thread for ~200-270ms right as the carousel
+                    // opened (measured via the open HUD: pre-flight sleeps
+                    // resuming ~8× late), which read as tap-then-nothing lag.
+                    // Only slides within ±2 of the focus are real; the rest
+                    // are size-matched clear placeholders so the HStack's
+                    // layout math is identical. During a swipe only ±1 is
+                    // ever visible, so the buffer materializes off-screen.
+                    if abs(index - currentIndex) <= 2 {
+                        carouselSlide(outfit: outfit, index: index)
+                    } else {
+                        Color.clear
+                            .frame(width: slideWidth, height: slideHeight)
+                    }
                 }
             }
             .offset(
@@ -997,7 +1067,14 @@ struct CarouselView: View {
                 height: slideHeight,
                 draggable: showsChrome && isCurrent,
                 eagerLoad: isNear,
-                preloadFullSequenceOnAppear: isCurrent,
+                // Deferred until the open transition lands (chrome fades in at
+                // the very end of the hero sequence). Preloading on mount ran
+                // a full-sequence decode storm DURING the hero flight — the
+                // grid→carousel open's polling gates (target-frame stabilize +
+                // displayed-frame wait) ran long against that contention, so
+                // opens felt slow and snapped on timeout. Scrubbing is gated
+                // on showsChrome anyway, so nothing is lost by waiting.
+                preloadFullSequenceOnAppear: isCurrent && showsChrome,
                 initialFrameIndex: entryFrameIndex,
                 initialImage: entryFrameImage,
                 syncFrameIndex: entryFrameIndex,
@@ -1040,12 +1117,24 @@ struct CarouselView: View {
                     .allowsHitTesting(false)
                     .opacity(showsEntryOverlay ? 1 : 0)
             }
+
+            // Temp 2D self: sparkles over the still — same "magic
+            // happening here" field as the archive placeholder cell.
+            if isGenerating(outfit) {
+                GenerationStarField(starSize: 200, interactive: false)
+                    .allowsHitTesting(false)
+                    .opacity(slideOpacity)
+            }
         }
         .frame(width: slideWidth, height: slideHeight)
         .overlay {
             if isCurrent && outfitToEditNote == nil {
                 diaryNoteOverlay(for: outfit)
-                    .opacity(slideOpacity)
+                    .opacity(heroTransitionActive ? 0 : slideOpacity)
+                    // Vanish instantly when a hero starts (close), fade in
+                    // gently once it lands (open) — never visible under it.
+                    .animation(heroTransitionActive ? nil : .easeOut(duration: 0.18),
+                               value: heroTransitionActive)
             }
         }
         // Long-press the fit → enter note mode (add or edit). Simultaneous
@@ -1055,7 +1144,8 @@ struct CarouselView: View {
             LongPressGesture(minimumDuration: 0.35).onEnded { _ in
                 guard isCurrent, !viewOnly else { return }
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                outfitToEditNote = outfit
+                retireGhostNote()
+                withAnimation(.easeOut(duration: 0.2)) { outfitToEditNote = outfit }
             }
         )
         .scaleEffect(scale, anchor: .bottom)
@@ -1097,36 +1187,72 @@ struct CarouselView: View {
                         .rotationEffect(.radians(outfit.noteRotation ?? 0))
                         .position(
                             x: (outfit.noteX ?? 0.5) * geo.size.width,
-                            y: (outfit.noteY ?? 0.82) * geo.size.height
+                            y: (outfit.noteY ?? 0.5) * geo.size.height
                         )
                     }
                 }
                 .allowsHitTesting(false)
             }
         } else if !viewOnly {
-            // Empty state: a standard app pill (matches WeatherPill), bottom.
-            VStack {
-                Spacer()
-                Button {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    outfitToEditNote = outfit
-                } label: {
-                    HStack(spacing: LayoutMetrics.xxSmall) {
-                        Image(systemName: "pencil.line")
-                            .font(.system(size: 12, weight: .semibold))
-                        Text("add a note")
-                            .font(.system(size: 12, weight: .semibold))
-                    }
-                    .foregroundStyle(AppPalette.textSecondary)
-                    .padding(.horizontal, LayoutMetrics.xSmall)
-                    .padding(.vertical, 7)
-                    .appCapsule(shadowRadius: 0, shadowY: 0)
-                    .shadow(color: AppPalette.uploadGlow.opacity(0.3), radius: 12, y: 0)
+            // Ghost-note education — no permanent button. The first few
+            // times an owner opens a note-less fit, a faint note fades in
+            // showing what a note looks like, where it lives, and the
+            // gesture that makes one. Self-retiring: gone forever after
+            // their first real note, or after 3 showings (max one per
+            // carousel session). The Publish sheet's "Add a note" row is
+            // the permanent discoverable fallback.
+            //
+            // Per-slide view with its OWN visibility state — a shared
+            // @State died on every swipe because SwiftUI delivers the
+            // previous slide's `onDisappear` late, switching the new
+            // slide's ghost off right after it appeared.
+            GhostNoteHintView(
+                suppressed: isCardVisible,
+                gate: ghostNoteGate,
+                markShown: markGhostNoteShown,
+                onTap: {
+                    retireGhostNote()
+                    withAnimation(.easeOut(duration: 0.2)) { outfitToEditNote = outfit }
                 }
-                .buttonStyle(SolidPressButtonStyle())
-                .padding(.bottom, 16)
-            }
+            )
         }
+    }
+
+    /// Whether the ghost may show right now. Retirement: the user has
+    /// opened the note editor once (they know the feature) or the hint
+    /// has shown 3 times; max one showing per carousel open.
+    private func ghostNoteGate() -> Bool {
+        let defaults = UserDefaults.standard
+
+        // One-time reset for existing installs: the pre-1.1 ghost had
+        // a shared-state bug that burned showings nobody ever saw, and
+        // the retirement rule changed (editor interaction, not note
+        // save) — start everyone fresh under the new rules.
+        if !defaults.bool(forKey: "diaryNoteHintRulesV2") {
+            defaults.set(true, forKey: "diaryNoteHintRulesV2")
+            defaults.removeObject(forKey: Self.ghostNoteCreatedKey)
+            defaults.removeObject(forKey: Self.ghostNoteCountKey)
+        }
+
+        guard !ghostNoteShownThisSession, !viewOnly else { return false }
+        return !defaults.bool(forKey: Self.ghostNoteCreatedKey)
+            && defaults.integer(forKey: Self.ghostNoteCountKey) < 3
+    }
+
+    /// The user interacted with the note editor — the ghost's lesson
+    /// is learned; retire it permanently. Called synchronously from
+    /// every editor entry point (ghost tap, long-press) so no showing
+    /// can slip through between the gesture and the state change.
+    private func retireGhostNote() {
+        ghostNoteShownThisSession = true
+        UserDefaults.standard.set(true, forKey: Self.ghostNoteCreatedKey)
+    }
+
+    private func markGhostNoteShown() {
+        ghostNoteShownThisSession = true
+        let defaults = UserDefaults.standard
+        defaults.set(defaults.integer(forKey: Self.ghostNoteCountKey) + 1,
+                     forKey: Self.ghostNoteCountKey)
     }
 
     private func carouselSwipeGesture(step: CGFloat) -> some Gesture {
@@ -1346,3 +1472,117 @@ private struct InputFieldChrome: ViewModifier {
     }
 }
 
+
+/// Single source of truth for the grid→carousel hero open choreography.
+/// The archive grid (`OutfitGridView`) and the user-profile sheet
+/// (`UserProfileSheet`) each drive their own copy of the open/close
+/// sequence; the timings and async primitives live HERE so a tuning change
+/// can't silently drift between the two again — it did: durations, the
+/// frame-stabilization fix, and the chrome-overlap order all diverged
+/// before this was extracted.
+enum CarouselHeroChoreography {
+    static let heroFlightDuration: Double = 0.26
+    static let revealFadeDuration: Double = 0.12
+    static let backdropFadeInDuration: Double = 0.22
+    static let chromeFadeInDuration: Double = 0.28
+    static var heroFlightAnimation: Animation {
+        .timingCurve(0.22, 0.84, 0.18, 1, duration: heroFlightDuration)
+    }
+
+    /// Polls `read()` every ~16ms until it returns the same non-null rect
+    /// across two consecutive samples within the landing tolerance. The
+    /// slide reports transient frames mid-initial-layout; flying the hero
+    /// toward one of those makes the landing snap.
+    @MainActor
+    static func waitForStableFrame(fallback: CGRect, read: () -> CGRect) async -> CGRect {
+        var lastFrame: CGRect?
+        for _ in 0 ..< 30 {
+            let frame = read()
+            if !frame.isNull, frame.width > 0, frame.height > 0 {
+                if let last = lastFrame, rectsMatch(last, frame) { return frame }
+                lastFrame = frame
+            }
+            try? await Task.sleep(for: .milliseconds(16))
+        }
+        return lastFrame ?? fallback
+    }
+
+    /// Polls every ~16ms until `check()` passes; false on timeout (~380ms).
+    @MainActor
+    static func waitUntil(_ check: () -> Bool) async -> Bool {
+        for _ in 0 ..< 24 {
+            if check() { return true }
+            try? await Task.sleep(for: .milliseconds(16))
+        }
+        return false
+    }
+
+    /// True when two rects agree within the landing tolerance (0.5pt).
+    /// Used both by the stabilization wait and by the post-flight landing
+    /// correction ("did the slide settle away from where the hero flew?").
+    static func rectsMatch(_ a: CGRect, _ b: CGRect) -> Bool {
+        abs(a.minX - b.minX) < 0.5 && abs(a.minY - b.minY) < 0.5
+            && abs(a.width - b.width) < 0.5 && abs(a.height - b.height) < 0.5
+    }
+}
+
+/// Per-slide ghost-note hint with its OWN visibility state. One
+/// instance mounts inside each note-less slide's overlay; unmounting
+/// (swipe away, long-press into the editor) cancels its task and
+/// takes its state with it. A CarouselView-shared @State was killed
+/// on every swipe by the previous slide's late `onDisappear`.
+///
+/// Styled as the classic "add a note" app pill (pencil + capsule +
+/// glow) and tappable straight into the editor — it just fades in and
+/// out on the ghost's transient schedule instead of living there
+/// permanently.
+private struct GhostNoteHintView: View {
+    /// True while the detail card covers the slide — hides the ghost
+    /// without cancelling its run.
+    let suppressed: Bool
+    /// Evaluates the show conditions (session cap, retirement) at
+    /// mount time.
+    let gate: () -> Bool
+    /// Marks the session flag + increments the lifetime counter.
+    let markShown: () -> Void
+    /// Tap → open the note editor for this fit.
+    let onTap: () -> Void
+
+    @State private var visible = false
+
+    var body: some View {
+        ZStack {
+            if visible && !suppressed {
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    onTap()
+                } label: {
+                    HStack(spacing: LayoutMetrics.xxSmall) {
+                        Image(systemName: "pencil.line")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text("long press to add a note")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundStyle(AppPalette.textSecondary)
+                    .padding(.horizontal, LayoutMetrics.xSmall)
+                    .padding(.vertical, 7)
+                    .appCapsule(shadowRadius: 0, shadowY: 0)
+                    .shadow(color: AppPalette.uploadGlow.opacity(0.3), radius: 12, y: 0)
+                }
+                .buttonStyle(SolidPressButtonStyle())
+                .transition(.opacity)
+            }
+        }
+        // Centered on the fit — it's an instruction about the gesture
+        // you perform right here.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .task {
+            guard gate() else { return }
+            markShown()
+            withAnimation(.easeIn(duration: 0.5)) { visible = true }
+            try? await Task.sleep(for: .seconds(3.2))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.8)) { visible = false }
+        }
+    }
+}

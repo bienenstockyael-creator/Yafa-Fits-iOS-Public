@@ -439,20 +439,16 @@ private struct VibesLeaderboardBust: View {
     private var bustImage: some View {
         if let cutout = cutoutURL, let url = URL(string: cutout) {
             // True transparent bust — fit so hair / shoulders aren't clipped.
-            // Transaction animation fades the cut-out in once it decodes.
-            AsyncImage(url: url, transaction: Transaction(animation: .easeInOut(duration: 0.35))) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().aspectRatio(contentMode: .fit)
-                        .transition(.opacity)
-                case .failure:
-                    // Couldn't load the cut-out → fall back to the framed photo.
-                    framedPhoto
-                default:
-                    // Still downloading → stay blank so we NEVER flash the photo
-                    // with its background before the transparent cut-out arrives.
-                    Color.clear
-                }
+            // Cached loader: memory/disk hits render instantly; while
+            // downloading stay blank so we NEVER flash the photo with
+            // its background before the transparent cut-out arrives.
+            CachedRemoteImage(
+                url: url,
+                maxPixelSize: 480,
+                contentMode: .fit,
+                failure: AnyView(framedPhoto)
+            ) {
+                Color.clear
             }
             .frame(width: frameWidth, height: avatarSize)
         } else if profile.avatarUrl != nil {
@@ -488,13 +484,8 @@ private struct VibesLeaderboardBust: View {
     private var framedPhoto: some View {
         Group {
             if let avatar = profile.avatarUrl, let url = URL(string: avatar) {
-                AsyncImage(url: url, transaction: Transaction(animation: .easeInOut(duration: 0.35))) { phase in
-                    if let image = phase.image {
-                        image.resizable().aspectRatio(contentMode: .fill)
-                            .transition(.opacity)
-                    } else {
-                        initialFill
-                    }
+                CachedRemoteImage(url: url, maxPixelSize: 320, contentMode: .fill) {
+                    initialFill
                 }
             } else {
                 initialFill

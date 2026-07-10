@@ -14,6 +14,10 @@ struct RotatableOutfitImage: View {
     var entranceSequenceActive: Bool = false
     var entranceSequenceDelay: Double = 0
     var preloadFullSequenceOnAppear: Bool = false
+    /// Grid cells pass false so a scrub that grabs the first finger of
+    /// a forming pinch doesn't cancel SwiftUI touch delivery (which
+    /// would keep the grid's MagnifyGesture from ever engaging).
+    var scrubPanCancelsTouches: Bool = true
     var initialFrameIndex: Int? = nil
     var initialImage: UIImage? = nil
     var syncFrameIndex: Int? = nil
@@ -53,6 +57,7 @@ struct RotatableOutfitImage: View {
         entranceSequenceActive: Bool = false,
         entranceSequenceDelay: Double = 0,
         preloadFullSequenceOnAppear: Bool = false,
+        scrubPanCancelsTouches: Bool = true,
         initialFrameIndex: Int? = nil,
         initialImage: UIImage? = nil,
         syncFrameIndex: Int? = nil,
@@ -74,6 +79,7 @@ struct RotatableOutfitImage: View {
         self.entranceSequenceActive = entranceSequenceActive
         self.entranceSequenceDelay = entranceSequenceDelay
         self.preloadFullSequenceOnAppear = preloadFullSequenceOnAppear
+        self.scrubPanCancelsTouches = scrubPanCancelsTouches
         self.initialFrameIndex = initialFrameIndex
         self.initialImage = initialImage
         self.syncFrameIndex = syncFrameIndex
@@ -93,15 +99,27 @@ struct RotatableOutfitImage: View {
             )
         )
 
-        if initialImage != nil {
-            self._thumbnail = State(initialValue: nil)
-        } else {
-            let previewImage: UIImage? =
-                (initialFrameIndex ?? 0) == 0 && outfit.resolvedRemoteBaseURL == nil
-                    ? LocalOutfitStore.shared.previewImage(for: outfit)
-                    : nil
-            self._thumbnail = State(initialValue: previewImage)
-        }
+        // NO disk work here. `init` runs on EVERY body evaluation of
+        // the parent (only @State's initialValue is discarded, the
+        // expression still executes) — and during a pinch the parent
+        // re-evaluates per frame for every visible cell. The local
+        // preview seed (fileExists + Data + decode per call, uncached)
+        // was a per-cell-per-frame disk read that froze the calendar/
+        // archive zoom. Seeded once per mount in onAppear instead.
+        self._thumbnail = State(initialValue: nil)
+    }
+
+    /// One-time thumbnail seed for local outfits (no remote base URL)
+    /// so the cell isn't blank while the async frame load runs. Runs
+    /// in onAppear — once per mount, never per body evaluation.
+    private func seedLocalThumbnailIfNeeded() {
+        guard thumbnail == nil,
+              viewModel.displayedImage == nil,
+              initialImage == nil,
+              (initialFrameIndex ?? 0) == 0,
+              outfit.resolvedRemoteBaseURL == nil
+        else { return }
+        thumbnail = LocalOutfitStore.shared.previewImage(for: outfit)
     }
 
     private var displayImage: UIImage? {
@@ -127,6 +145,7 @@ struct RotatableOutfitImage: View {
                 InteractiveTouchSurface(
                     onTap: handleTap,
                     panEnabled: draggable,
+                    panCancelsTouches: scrubPanCancelsTouches,
                     onHorizontalPanBegan: draggable ? startDragIfNeeded : nil,
                     onHorizontalPanChanged: draggable ? { delta in
                         viewModel.dragChanged(delta: delta)
@@ -141,6 +160,7 @@ struct RotatableOutfitImage: View {
             }
         }
         .onAppear {
+            seedLocalThumbnailIfNeeded()
             // Always make sure the visible frame is loaded for the
             // current cell. `ensureCurrentFrameLoaded` is idempotent
             // (no-op when `displayedImage` is set), so it's safe to

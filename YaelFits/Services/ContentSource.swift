@@ -69,6 +69,16 @@ private struct SupabaseOutfitRow: Decodable {
     let weatherCondition: String?
     let location: String?
     let isPublic: Bool?
+    // Diary note — these were MISSING from this DTO, so every server fetch
+    // returned note-less outfits and refreshOutfits() wiped local notes.
+    let diaryNote: String?
+    let noteStyle: String?
+    let noteShared: Bool?
+    let noteX: Double?
+    let noteY: Double?
+    let noteScale: Double?
+    let noteRotation: Double?
+    let noteColor: Int?
     let outfitProducts: [SupabaseProductRow]?
 
     enum CodingKeys: String, CodingKey {
@@ -82,6 +92,14 @@ private struct SupabaseOutfitRow: Decodable {
         case weatherTempC = "weather_temp_c"
         case weatherCondition = "weather_condition"
         case isPublic = "is_public"
+        case diaryNote = "diary_note"
+        case noteStyle = "note_style"
+        case noteShared = "note_shared"
+        case noteX = "note_x"
+        case noteY = "note_y"
+        case noteScale = "note_scale"
+        case noteRotation = "note_rotation"
+        case noteColor = "note_color"
         case outfitProducts = "outfit_products"
     }
 
@@ -108,7 +126,15 @@ private struct SupabaseOutfitRow: Decodable {
             products: products,
             caption: caption,
             location: location,
-            isPublic: isPublic
+            isPublic: isPublic,
+            diaryNote: diaryNote,
+            noteStyle: noteStyle,
+            noteShared: noteShared,
+            noteX: noteX,
+            noteY: noteY,
+            noteScale: noteScale,
+            noteRotation: noteRotation,
+            noteColorIndex: noteColor
         )
     }
 }
@@ -462,7 +488,12 @@ struct ContentSource {
     }
 
     /// Fallback: all public outfits (used when not following anyone yet).
-    static func getPublicFeed() async -> [FeedPost] {
+    ///
+    /// `featuredFirst` floats each featured account's latest post to the
+    /// top — wanted ONLY on the Community feed (culture-setting surface);
+    /// the main feed stays purely chronological since it's headed toward
+    /// being the following-only feed.
+    static func getPublicFeed(featuredFirst: Bool = false) async -> [FeedPost] {
         do {
             struct FeedOutfitRow: Decodable {
                 let id: String
@@ -516,7 +547,7 @@ struct ContentSource {
                 }
             }
 
-            return rows.map { row in
+            let posts = rows.map { row -> FeedPost in
                 let profile = row.userId.flatMap { profileMap[$0.lowercased()] }
                 return FeedPost(
                     id: "feed-\(row.id)",
@@ -528,9 +559,31 @@ struct ContentSource {
                     avatarUrl: profile?.avatarUrl,
                     authorId: row.userId.flatMap { UUID(uuidString: $0) },
                     isAuthorPro: profile?.isPro,
+                    isAuthorFeatured: profile?.isFeatured,
                     createdAt: row.createdAt
                 )
             }
+
+            guard featuredFirst else { return posts }
+
+            // Featured rail: each featured account's MOST RECENT post floats
+            // to the top (newest-first among them); everything else — incl.
+            // featured users' older posts — stays chronological below. Sets
+            // the feed's tone without freezing its freshness.
+            var rail: [FeedPost] = []
+            var railAuthors = Set<UUID>()
+            var rest: [FeedPost] = []
+            for post in posts {   // rows arrive newest-first
+                if post.isAuthorFeatured == true,
+                   let author = post.authorId,
+                   !railAuthors.contains(author) {
+                    rail.append(post)
+                    railAuthors.insert(author)
+                } else {
+                    rest.append(post)
+                }
+            }
+            return rail + rest
         } catch {
             AppLogger.data.error("ContentSource getPublicFeed failed: \(error.localizedDescription)")
             let publicOutfits = await getPublicOutfits()

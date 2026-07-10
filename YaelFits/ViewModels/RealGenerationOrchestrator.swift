@@ -32,6 +32,10 @@ final class RealGenerationOrchestrator {
     private let userIdProvider: () -> UUID?
     private let onAcceptOutfit: (Outfit) -> Void
     private let onPublishOutfit: (Outfit) -> Void
+    /// Looks up the archive's current copy of an outfit by id. Used
+    /// at 3D-accept time to merge products / caption / note the user
+    /// added to the archived 2D while the render was in flight.
+    private let existingOutfitProvider: (String) -> Outfit?
     private var tasks: [String: Task<Void, Never>] = [:]
 
     /// Active background-task identifier, reference-counted so
@@ -45,12 +49,14 @@ final class RealGenerationOrchestrator {
         queue: GenerationQueue,
         userIdProvider: @escaping () -> UUID?,
         onAcceptOutfit: @escaping (Outfit) -> Void,
-        onPublishOutfit: @escaping (Outfit) -> Void
+        onPublishOutfit: @escaping (Outfit) -> Void,
+        existingOutfitProvider: @escaping (String) -> Outfit? = { _ in nil }
     ) {
         self.queue = queue
         self.userIdProvider = userIdProvider
         self.onAcceptOutfit = onAcceptOutfit
         self.onPublishOutfit = onPublishOutfit
+        self.existingOutfitProvider = existingOutfitProvider
     }
 
     // MARK: - Phase entry points
@@ -107,6 +113,12 @@ final class RealGenerationOrchestrator {
             job.statusTitle = "GENERATING 3D"
             job.statusDetail = "Spinning your fit..."
 
+            // "Generate 3D" implicitly keeps the 2D: the still enters
+            // the archive as a real 2D fit right now (hero transition,
+            // detail card, product tagging — everything a saved 2D
+            // does), wearing sparkles until the 3D replaces its frames.
+            archivePreview2DIfNeeded(for: job)
+
             do {
                 let (jobId, sourceImagePath) = try await GenerationJobService.shared.submitJob(
                     imageData: greenScreenData,
@@ -123,6 +135,7 @@ final class RealGenerationOrchestrator {
                     throw UploadPipelineError.outOfCredits
                 }
 
+                persistPendingJob(for: job)
                 await runPollingLoop(jobId: jobId, job: job)
             } catch is CancellationError {
                 self.endBackgroundActivity()
@@ -134,6 +147,7 @@ final class RealGenerationOrchestrator {
                 if let pipelineError = error as? UploadPipelineError,
                    case .outOfCredits = pipelineError {
                     job.step = .fork  // back to the fork so user can pick 2D
+                    persistPendingJob(for: job)
                     // Flag the job so the fork chin can swap its
                     // "Generate 3D" CTA for "Buy 3D credits" —
                     // routes the user to the paywall instead of
@@ -191,18 +205,30 @@ final class RealGenerationOrchestrator {
     /// against the same `sourceImagePath`.
     func retake(_ job: PipelineJob) {
         cancel(job)
-        guard let userId = userIdProvider(),
-              let sourceImagePath = job.sourceImagePath else {
-            // No saved source — restart from the original image.
+        guard let userId = userIdProvider() else { return }
+
+        guard let sourceImagePath = job.sourceImagePath else {
             tasks[job.id] = Task { @MainActor in
-                job.cutoutImage = nil
-                job.greenScreenImage = nil
-                job.stagedOutfit = nil
-                job.serverJobId = nil
+                if job.sourceImage != nil {
+                    // No uploaded green-screen but the original photo
+                    // is still in memory — rerun the on-device pipeline.
+                    job.cutoutImage = nil
+                    job.greenScreenImage = nil
+                    job.stagedOutfit = nil
+                    job.serverJobId = nil
+                    self.start(job)
+                } else {
+                    // Nothing to regenerate from (shouldn't happen now
+                    // that restored jobs carry source_image_path) — say
+                    // so instead of silently doing nothing.
+                    job.isProcessing = false
+                    job.error = "Couldn't regenerate this fit — please start a new upload."
+                }
             }
-            start(job)
             return
         }
+
+        let oldServerJobId = job.serverJobId
 
         tasks[job.id] = Task { @MainActor in
             self.beginBackgroundActivity()
@@ -231,6 +257,21 @@ final class RealGenerationOrchestrator {
                     prompt: job.prompt
                 )
                 job.serverJobId = jobId
+
+                // Move the credit reservation from the discarded
+                // attempt onto the new one (release refunds the old
+                // bucket, reserve re-debits it — net zero for the
+                // user). Without this, Accept commits against a job
+                // with no reservation and the accounting silently
+                // dangles. Retiring the old row also stops it from
+                // resurfacing as a pending review on next launch.
+                if let oldServerJobId {
+                    try? await GenerationJobService.shared.markRejected(jobId: oldServerJobId)
+                    try? await CreditService.shared.release(jobId: oldServerJobId)
+                }
+                _ = try? await CreditService.shared.reserve(jobId: jobId)
+
+                persistPendingJob(for: job)
                 await runPollingLoop(jobId: jobId, job: job)
             } catch is CancellationError {
                 self.endBackgroundActivity()
@@ -290,10 +331,19 @@ final class RealGenerationOrchestrator {
 
             job.cutoutImage = preparedAssets.cutoutPNGData
             job.greenScreenImage = preparedAssets.greenScreenPNGData
+            stagePreviewOutfit(for: job)
             job.step = .fork
             job.isProcessing = false
             job.statusTitle = "READY"
             job.statusDetail = "Save your fit or spin it in 3D."
+            // The still + decision must survive an app kill no matter
+            // how long the user sits on the fork — persist everything
+            // needed to rebuild this card on next launch.
+            persistPendingJob(for: job, includeImages: true)
+            // The fork needs the USER's decision (2D vs 3D) — if they
+            // backgrounded during the cutout, nothing would ever tell
+            // them the pipeline is waiting on them.
+            sendForkReadyNotificationIfNeeded()
             endBackgroundActivity()
         } catch is CancellationError {
             endBackgroundActivity()
@@ -341,7 +391,7 @@ final class RealGenerationOrchestrator {
                 job.error = nil
                 job.statusTitle = "READY TO REVIEW"
                 job.statusDetail = "Spin's ready to view."
-                persistPendingReviewIfNeeded(for: job)
+                persistPendingJob(for: job)
                 endBackgroundActivity()
                 sendGenerationCompleteNotificationIfNeeded()
             } else {
@@ -373,6 +423,22 @@ final class RealGenerationOrchestrator {
 
     @MainActor
     private func build2DOutfit(job: PipelineJob, userId: UUID, cutoutData: Data) {
+        // The fork already staged this exact outfit (frame + preview
+        // saved locally under the shared id) — reuse it so the 2D
+        // temp self and the saved outfit are one and the same.
+        if var staged = job.previewOutfit {
+            if staged.weather == nil { staged.weather = job.uploadWeather }
+            if staged.location == nil { staged.location = job.uploadLocation }
+            job.stagedOutfit = staged
+            job.step = .review
+            job.isProcessing = false
+            job.error = nil
+            job.statusTitle = "READY TO REVIEW"
+            job.statusDetail = "Your fit is ready."
+            persistPendingJob(for: job)
+            return
+        }
+
         let outfitId = "outfit-\(userId.uuidString.prefix(8))-\(job.outfitNum)"
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
@@ -410,7 +476,7 @@ final class RealGenerationOrchestrator {
         job.error = nil
         job.statusTitle = "READY TO REVIEW"
         job.statusDetail = "Your fit is ready."
-        persistPendingReviewIfNeeded(for: job)
+        persistPendingJob(for: job)
     }
 
     /// Accept the staged outfit (+ optionally publish). Adds to the
@@ -427,6 +493,39 @@ final class RealGenerationOrchestrator {
             finalizedOutfit.location = uploadLocation
         }
 
+        // A 3D accept replaces the archived 2D that entered the
+        // archive when generation started — carry over everything the
+        // user did to it in the meantime (tagged products, caption,
+        // diary note) so the frame upgrade doesn't wipe their work.
+        if let existing = existingOutfitProvider(finalizedOutfit.id) {
+            let newProducts = finalizedOutfit.products ?? []
+            let existingProducts = existing.products ?? []
+            let merged = existingProducts + newProducts.filter { new in
+                !existingProducts.contains(where: { $0.id == new.id })
+            }
+            finalizedOutfit.products = merged.isEmpty ? nil : merged
+            if finalizedOutfit.caption == nil { finalizedOutfit.caption = existing.caption }
+            if finalizedOutfit.tags == nil { finalizedOutfit.tags = existing.tags }
+            if finalizedOutfit.diaryNote == nil {
+                finalizedOutfit.diaryNote = existing.diaryNote
+                finalizedOutfit.noteStyle = existing.noteStyle
+                finalizedOutfit.noteShared = existing.noteShared
+                finalizedOutfit.noteX = existing.noteX
+                finalizedOutfit.noteY = existing.noteY
+                finalizedOutfit.noteScale = existing.noteScale
+                finalizedOutfit.noteRotation = existing.noteRotation
+                finalizedOutfit.noteColorIndex = existing.noteColorIndex
+            }
+            if finalizedOutfit.weather == nil { finalizedOutfit.weather = existing.weather }
+            if finalizedOutfit.location == nil { finalizedOutfit.location = existing.location }
+            // Published mid-render (review-card sheet or archive
+            // globe) → the frame upgrade must not reset the local
+            // published flag, or the archive reads unpublished and
+            // the user can't unpublish.
+            if finalizedOutfit.isPublic == nil { finalizedOutfit.isPublic = existing.isPublic }
+        }
+        if publishToFeed { finalizedOutfit.isPublic = true }
+
         onAcceptOutfit(finalizedOutfit)
         if publishToFeed {
             onPublishOutfit(finalizedOutfit)
@@ -441,6 +540,18 @@ final class RealGenerationOrchestrator {
 
         if let userId = userIdProvider() {
             LocalOutfitStore.shared.clearPendingReview(userId: userId)
+            LocalOutfitStore.shared.removePendingJob(outfitNum: job.outfitNum, userId: userId)
+            // 3D accept: the accepted outfit's frames live on the CDN,
+            // but the temp 2D still saved at fork time sits in local
+            // storage under the SAME outfit id — and FrameLoader
+            // resolves local files first, so it would shadow frame 0
+            // of the real spin. Remove it. (2D accepts keep the local
+            // frames — they ARE the outfit.)
+            if finalizedOutfit.remoteBaseURL != nil,
+               let preview = job.previewOutfit {
+                LocalOutfitStore.shared.deleteLocalFrames(for: preview, userId: userId)
+                Task { await FrameLoader.shared.evict(outfit: preview) }
+            }
         }
         endBackgroundActivity()
 
@@ -498,13 +609,121 @@ final class RealGenerationOrchestrator {
         }
     }
 
+    /// Snapshots the job to disk so it can be rebuilt on next launch.
+    /// Valid from the fork onward; earlier/terminal steps clear the
+    /// snapshot instead. `includeImages` writes the cutout and
+    /// green-screen PNGs too — pass true once at fork time (they never
+    /// change afterwards, and they're the heavy part).
     @MainActor
-    private func persistPendingReviewIfNeeded(for job: PipelineJob) {
+    private func persistPendingJob(for job: PipelineJob, includeImages: Bool = false) {
         guard let userId = userIdProvider() else { return }
-        if let review = PersistedPipelineReview(job: job) {
-            LocalOutfitStore.shared.savePendingReview(review, userId: userId)
+        if let record = PersistedPendingJob(job: job) {
+            LocalOutfitStore.shared.savePendingJob(record, userId: userId)
+            if includeImages {
+                LocalOutfitStore.shared.savePendingJobImages(
+                    cutout: job.cutoutImage,
+                    greenScreen: job.greenScreenImage,
+                    outfitNum: job.outfitNum,
+                    userId: userId
+                )
+            }
         } else {
-            LocalOutfitStore.shared.clearPendingReview(userId: userId)
+            LocalOutfitStore.shared.removePendingJob(outfitNum: job.outfitNum, userId: userId)
+        }
+    }
+
+    /// Builds the "2D temporary self" from the Bria cutout and saves
+    /// its frame locally under the SAME outfit id the eventual accept
+    /// will use (lowercased to match the server worker's id scheme),
+    /// so the archive grid and carousel can show the still while the
+    /// fork/3D render is pending, and the final accept swaps in place.
+    @MainActor
+    private func stagePreviewOutfit(for job: PipelineJob) {
+        guard job.previewOutfit == nil,
+              let userId = userIdProvider(),
+              let cutoutData = job.cutoutImage else { return }
+
+        let outfitId = "outfit-\(userId.uuidString.lowercased().prefix(8))-\(job.outfitNum)"
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        let outfit = Outfit(
+            id: outfitId,
+            name: "Outfit \(job.outfitNum)",
+            date: dateFormatter.string(from: Date()),
+            frameCount: 1,
+            folder: outfitId,
+            prefix: "",
+            frameExt: "png",
+            remoteBaseURL: nil,
+            scale: 1.0,
+            isRotationReversed: false,
+            tags: nil,
+            activity: nil,
+            weather: job.uploadWeather,
+            products: nil,
+            caption: nil,
+            location: job.uploadLocation,
+            localOwnerUserId: userId.uuidString
+        )
+
+        do {
+            try LocalOutfitStore.shared.saveFrame(cutoutData, outfit: outfit, userId: userId, index: 0)
+            try LocalOutfitStore.shared.savePreview(cutoutData, outfit: outfit, userId: userId)
+        } catch {
+            return  // No local frame → grid/carousel just keep the sparkle-only card.
+        }
+        job.previewOutfit = outfit
+    }
+
+    /// Commits the fork's 2D still into the archive as a real fit
+    /// (what "Save as 2D" produces, minus removing the job from the
+    /// queue). Called when the user picks "Generate 3D" — the 2D
+    /// temporarily IS the outfit; the eventual accept upgrades its
+    /// frames in place under the same id. Idempotent.
+    @MainActor
+    private func archivePreview2DIfNeeded(for job: PipelineJob) {
+        guard job.resultOutfitId == nil,
+              var preview = job.previewOutfit,
+              let userId = userIdProvider() else { return }
+        if preview.weather == nil { preview.weather = job.uploadWeather }
+        if preview.location == nil { preview.location = job.uploadLocation }
+        job.previewOutfit = preview
+
+        onAcceptOutfit(preview)
+        job.resultOutfitId = preview.id
+
+        let cutoutData = job.cutoutImage
+        Task {
+            var outfitToSave = preview
+            if let cutoutData {
+                do {
+                    outfitToSave.remoteBaseURL = try await TwoDOutfitService.uploadFrame(
+                        cutoutData,
+                        outfitId: outfitToSave.id,
+                        userId: userId
+                    )
+                } catch {
+                    // Bucket upload failed — local copy still persists.
+                }
+            }
+            try? await OutfitService.saveArchiveOutfit(outfitToSave, userId: userId, isPublic: false)
+        }
+    }
+
+    /// User discarded the job (X on the pill / review card). Clears
+    /// the persisted snapshot + the temp 2D frames so the still
+    /// doesn't come back on next launch — UNLESS the 2D already
+    /// entered the archive (Generate-3D path), in which case the fit
+    /// stays: it behaves like a saved 2D still, cancelling only stops
+    /// the 3D upgrade. The queue's own `cancel` handles the
+    /// server-side kill + credit release.
+    func discard(_ job: PipelineJob) {
+        cancel(job)
+        guard let userId = userIdProvider() else { return }
+        LocalOutfitStore.shared.removePendingJob(outfitNum: job.outfitNum, userId: userId)
+        if let preview = job.previewOutfit, job.resultOutfitId == nil {
+            LocalOutfitStore.shared.deleteLocalFrames(for: preview, userId: userId)
+            Task { await FrameLoader.shared.evict(outfit: preview) }
         }
     }
 
@@ -548,6 +767,26 @@ final class RealGenerationOrchestrator {
 
         let request = UNNotificationRequest(
             identifier: "generation-complete-\(UUID().uuidString)",
+            content: content,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request)
+    }
+
+    /// Fires when the cutout lands on the 2D/3D fork while the app is
+    /// backgrounded — the pipeline is PAUSED waiting for the user's
+    /// choice, so without this nudge the job sits silently forever.
+    @MainActor
+    private func sendForkReadyNotificationIfNeeded() {
+        guard UIApplication.shared.applicationState != .active else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = "Your fit is cut out ✂️"
+        content.body = "Come pick: save it as-is or spin it in 3D."
+        content.sound = .default
+
+        let request = UNNotificationRequest(
+            identifier: "fork-ready-\(UUID().uuidString)",
             content: content,
             trigger: nil
         )

@@ -33,8 +33,14 @@ struct GenerationExpandedCard: View {
     let onReverseRotation: () -> Void
     let onDismiss: () -> Void
 
+    @Environment(OutfitStore.self) private var store
+
     @State private var dragOffset: CGFloat = 0
     @State private var publishToFeed: Bool = false
+    /// Non-nil while the caption/products `PublishSheet` is up —
+    /// toggling "Publish to Feed" ON routes through the same sheet
+    /// the archive uses, so publishing is identical on both surfaces.
+    @State private var outfitToPublish: Outfit?
 
     /// Remembered chin-content phase. Keeps the chin's buttons
     /// visible during a close animation that overlaps with `phase`
@@ -107,6 +113,45 @@ struct GenerationExpandedCard: View {
             if newPhase == .awaitingDecision || newPhase == .readyToReview {
                 lastChinPhase = newPhase
             }
+            if newPhase == .readyToReview {
+                syncPublishToggleWithArchive()
+            }
+        }
+        .onAppear {
+            if phase == .readyToReview {
+                syncPublishToggleWithArchive()
+            }
+        }
+        .sheet(item: $outfitToPublish) { outfit in
+            PublishSheet(outfit: outfit) { caption, products in
+                publishToFeed = true
+                // Mirror the archive flow exactly — mark the archived
+                // copy published locally so its globe fills in and
+                // unpublishing works from the carousel too.
+                store.setOutfitPublishedLocally(outfit.id, isPublic: true)
+                store.updateOutfit(outfit.id, caption: caption, products: products)
+            }
+            .environment(store)
+            .roundedSheetBackground()
+        }
+    }
+
+    /// The outfit the review's publish toggle operates on — prefer the
+    /// archive's live copy (it carries caption/products/note added
+    /// while the render was in flight), fall back to the staged one.
+    private var reviewOutfit: Outfit? {
+        let staged = job.stagedOutfit ?? job.previewOutfit
+        guard let id = staged?.id else { return nil }
+        return store.outfits.first(where: { $0.id == id }) ?? staged
+    }
+
+    /// Entering review: if this fit was already published (e.g. the
+    /// archived 2D was published mid-render, or a restored review),
+    /// the toggle must reflect it — otherwise it reads unpublished
+    /// and the user can't unpublish from here.
+    private func syncPublishToggleWithArchive() {
+        if let outfit = reviewOutfit, outfit.isPublic == true {
+            publishToFeed = true
         }
     }
 
@@ -594,7 +639,26 @@ struct GenerationExpandedCard: View {
     private var publishToggleRow: some View {
         Button {
             UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-            publishToFeed.toggle()
+            if publishToFeed {
+                // Toggle OFF = unpublish, same calls as the archive's
+                // globe flow — keeps both surfaces in lockstep.
+                publishToFeed = false
+                if let outfit = reviewOutfit {
+                    store.setOutfitPublishedLocally(outfit.id, isPublic: false)
+                    Task { try? await OutfitService.setPublished(false, outfitId: outfit.id) }
+                }
+            } else if let outfit = reviewOutfit {
+                // Toggle ON = the same caption/products PublishSheet
+                // the archive shows. `publishToFeed` flips true only
+                // after the sheet actually publishes; cancelling
+                // leaves the toggle off.
+                outfitToPublish = outfit
+            } else {
+                // No staged outfit to publish against (shouldn't
+                // happen at review) — fall back to the plain flag so
+                // Accept & Publish still works.
+                publishToFeed = true
+            }
         } label: {
             HStack {
                 Text("Publish to Feed")

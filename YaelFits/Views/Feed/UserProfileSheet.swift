@@ -61,18 +61,32 @@ struct UserProfileView: View {
     @State private var heroFrame: CGRect = .zero
     @State private var carouselTargetFrame: CGRect = .null
     @State private var carouselTransitionTask: Task<Void, Never>?
+    /// Set to the closing outfit's id AFTER the exit hero lands, so the grid
+    /// cell reveals underneath the hero for the final fade — never before
+    /// (which showed the outfit twice). Mirrors OutfitGridView.
+    @State private var revealGridOutfitIdDuringHero: String?
 
     // Swipe-down-to-dismiss state.
     @State private var scrollOffset: CGFloat = 0
     @State private var dismissDragOffset: CGFloat = 0
+    /// Bitmap of the page captured at drag start — the thing that
+    /// follows the finger (snapshot-driven dismissal, same mechanism
+    /// as the closet). nil at rest.
+    @State private var dismissDragSnapshot: UIImage?
+    /// True once a committed dismiss slide is running.
+    @State private var isCommittingDismiss = false
+    /// Weak handle to the cover's UIKit container, for snapshotting.
+    @State private var containerRef = ContainerViewRef()
     @State private var isDismissDragging = false
 
-    private let heroTransitionDuration: Double = 0.32
-    private let heroFadeInDuration: Double = 0.12
+    // Open-transition timings come from the SHARED choreography so they
+    // cannot drift from the archive grid's copy of this sequence.
+    private let heroTransitionDuration = CarouselHeroChoreography.heroFlightDuration
+    private let heroFadeInDuration = CarouselHeroChoreography.revealFadeDuration
     private let heroFadeOutDuration: Double = 0.08
-    private let carouselBackdropFadeInDuration: Double = 0.22
+    private let carouselBackdropFadeInDuration = CarouselHeroChoreography.backdropFadeInDuration
     private let carouselBackdropFadeOutDuration: Double = 0.12
-    private let carouselChromeFadeInDuration: Double = 0.28
+    private let carouselChromeFadeInDuration = CarouselHeroChoreography.chromeFadeInDuration
     private let carouselChromeFadeOutDuration: Double = 0.1
 
     private let gridColumns = [
@@ -90,8 +104,34 @@ struct UserProfileView: View {
         // the contents down reveals the fullScreenCover's default
         // black backdrop at the top edge.
         ZStack {
-            AppPalette.pageBackground.ignoresSafeArea()
-            bodyContent
+            // Dim behind the dragged card (snapshot dismissal) —
+            // fades in with the pull, back out as a committed
+            // dismiss slides away.
+            if dismissDragOffset > 0 {
+                Color.black
+                    .opacity(
+                        0.20 * min(1, dismissDragOffset / 260)
+                            * (1 - dismissDragOffset / UIScreen.main.bounds.height)
+                    )
+                    .ignoresSafeArea()
+            }
+
+            ZStack {
+                AppPalette.pageBackground.ignoresSafeArea()
+                bodyContent
+            }
+            // System open/close slides get corners from the UIKit
+            // container rounding; disabled while the snapshot drag is
+            // live so the stationary mask can't carve the moving card.
+            .fullScreenCardCorners(containerActive: dismissDragSnapshot == nil)
+            .background(ContainerViewGrabber(ref: containerRef))
+            // Hidden while the snapshot drives the drag — the two are
+            // pixel-identical at the swap.
+            .opacity(dismissDragSnapshot == nil ? 1 : 0)
+
+            if let snapshot = dismissDragSnapshot {
+                SnapshotDragCard(image: snapshot, dragOffset: dismissDragOffset)
+            }
         }
         // Same fix as OutfitGridView: opt the whole surface out of
         // keyboard avoidance so focusing the carousel card's
@@ -167,6 +207,10 @@ struct UserProfileView: View {
                         showsChrome: carouselChromeVisible,
                         showsCurrentLiveSlide: showCurrentCarouselLiveSlide,
                         showsEntryOverlay: showCarouselEntryOverlay,
+                        // Hide a shared diary note while this sheet's hero
+                        // image flies above the carousel (same behind-then-in-
+                        // front flicker fix as the archive grid).
+                        heroTransitionActive: heroTransition != nil,
                         entryFrame: carouselEntryFrame,
                         entryImage: carouselEntryImage,
                         onHeroTargetFrameChange: { frame in
@@ -213,8 +257,9 @@ struct UserProfileView: View {
             .onPreferenceChange(ListOutfitFramePreferenceKey.self) { frames in
                 outfitFrames = frames
             }
-            .offset(y: dismissDragOffset)
-            .opacity(isDismissDragging ? max(0.3, 1.0 - dismissDragOffset / 500) : 1)
+            // The snapshot card carries the motion; the live page only
+            // follows as a fallback if a snapshot couldn't be captured.
+            .offset(y: dismissDragSnapshot == nil ? dismissDragOffset : 0)
         }
         .task { await loadProfile() }
         .onChange(of: store.carouselDismissTrigger) { _, _ in
@@ -294,6 +339,7 @@ struct UserProfileView: View {
         .zIndex(3)
         .sheet(item: $reportTarget) { target in
             ReportSheet(target: target).environment(store)
+                .roundedSheetBackground()
         }
         .confirmationDialog(
             blockCandidate.map { "Block \($0.name)?" } ?? "Block user?",
@@ -425,24 +471,19 @@ struct UserProfileView: View {
     private var bustImage: some View {
         if let urlString = profile?.avatarCutoutUrl,
            let url = URL(string: urlString) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().aspectRatio(contentMode: .fit)
-                case .failure:
-                    // Real load error — fall back to the
-                    // circle so the header is never empty.
-                    avatar
-                default:
-                    // `.empty` (loading). Don't show the circle
-                    // avatar mid-load — the profile has a cutout
-                    // URL on file, so the right answer IS the
-                    // bust silhouette. Transparent placeholder
-                    // for the ms before URLCache fills it in,
-                    // rather than flashing the wrong shape on
-                    // every tab return.
-                    Color.clear
-                }
+            // Cached loader — repeat opens render instantly from
+            // memory/disk. While loading, stay transparent (the
+            // profile has a cutout on file, so the right answer IS
+            // the bust silhouette — don't flash the circle). On a
+            // real failure, fall back to the circle so the header
+            // is never empty.
+            CachedRemoteImage(
+                url: url,
+                maxPixelSize: 800,
+                contentMode: .fit,
+                failure: AnyView(avatar)
+            ) {
+                Color.clear
             }
             .frame(
                 width: ProfileHeaderMetrics.liveBustFrameWidth,
@@ -583,6 +624,15 @@ struct UserProfileView: View {
                 presentCarousel(for: outfit, at: index, frameIndex: frameIndex, image: image)
             }
         )
+        // Hide the cell while it's the source/target of an in-flight hero
+        // zoom — without this the grid "double" shows UNDER the flying hero
+        // (two outfits at once during the close). Mirrors OutfitGridView's
+        // reveal mechanism: the cell reappears only after the hero lands.
+        .opacity(
+            (heroTransition?.outfit.id == outfit.id && revealGridOutfitIdDuringHero != outfit.id)
+                ? 0.001
+                : 1
+        )
         // Emit the cell's screen-space frame so presentCarousel knows
         // where to start the hero morph from.
         .background {
@@ -659,12 +709,24 @@ struct UserProfileView: View {
             let targetFrame = await waitForCarouselTargetFrame(fallback: sourceFrame)
             guard !Task.isCancelled else { return }
 
-            withAnimation(.timingCurve(0.22, 0.84, 0.18, 1, duration: heroTransitionDuration)) {
+            withAnimation(CarouselHeroChoreography.heroFlightAnimation) {
                 heroFrame = targetFrame
             }
 
             try? await Task.sleep(for: .milliseconds(Int(heroTransitionDuration * 1000)))
             guard !Task.isCancelled else { return }
+
+            // Same landing-drift guard as the archive grid: the slide can
+            // settle a few points away from the pre-flight measurement —
+            // glide the difference out concurrently with the reveal so the
+            // handoff is pixel-aligned without adding a pause.
+            let settledFrame = await waitForCarouselTargetFrame(fallback: targetFrame)
+            guard !Task.isCancelled else { return }
+            if !CarouselHeroChoreography.rectsMatch(settledFrame, targetFrame) {
+                withAnimation(.easeOut(duration: 0.1)) {
+                    heroFrame = settledFrame
+                }
+            }
 
             _ = await waitForCarouselDisplayedFrame(entryFrameIndex, outfitId: outfit.id)
             guard !Task.isCancelled else { return }
@@ -674,16 +736,17 @@ struct UserProfileView: View {
                 showCarouselEntryOverlay = carouselEntryImage != nil
                 heroOpacity = 0
             }
+            // Chrome fades in WITH the reveal crossfade (was serialized after
+            // it) — same ~120ms perceived-speed win as the archive open.
+            withAnimation(.easeInOut(duration: carouselChromeFadeInDuration)) {
+                carouselChromeVisible = true
+            }
 
             try? await Task.sleep(for: .milliseconds(Int(heroFadeInDuration * 1000)))
             guard !Task.isCancelled else { return }
 
             heroTransition = nil
             heroOpacity = 1
-
-            withAnimation(.easeInOut(duration: carouselChromeFadeInDuration)) {
-                carouselChromeVisible = true
-            }
         }
     }
 
@@ -730,14 +793,28 @@ struct UserProfileView: View {
             heroTransition = HeroTransition(outfit: currentOutfit, frameIndex: exitFrameIndex, image: exitImage)
             heroFrame = startFrame
 
-            withAnimation(.timingCurve(0.22, 0.84, 0.18, 1, duration: heroTransitionDuration)) {
+            // Let the hero mount (and the cell-hide land) for one frame
+            // before the flight — same as OutfitGridView.
+            try? await Task.sleep(for: .milliseconds(16))
+            guard !Task.isCancelled else { return }
+
+            withAnimation(CarouselHeroChoreography.heroFlightAnimation) {
                 heroFrame = targetFrame
             }
 
             try? await Task.sleep(for: .milliseconds(Int(heroTransitionDuration * 1000)))
             guard !Task.isCancelled else { return }
 
-            withAnimation(.easeIn(duration: heroFadeOutDuration)) {
+            // Land → drop the carousel → reveal the grid cell UNDER the
+            // hero → fade the hero out over it. Revealing any earlier
+            // shows the outfit twice (hero + cell). Mirrors OutfitGridView.
+            showCarousel = false
+            revealGridOutfitIdDuringHero = currentOutfit.id
+
+            try? await Task.sleep(for: .milliseconds(16))
+            guard !Task.isCancelled else { return }
+
+            withAnimation(.easeOut(duration: heroFadeOutDuration)) {
                 heroOpacity = 0
             }
             try? await Task.sleep(for: .milliseconds(Int(heroFadeOutDuration * 1000)))
@@ -753,6 +830,7 @@ struct UserProfileView: View {
         carouselChromeVisible = false
         heroTransition = nil
         heroOpacity = 1
+        revealGridOutfitIdDuringHero = nil
         showCurrentCarouselLiveSlide = false
         showCarouselEntryOverlay = false
         carouselEntryFrame = nil
@@ -772,25 +850,20 @@ struct UserProfileView: View {
 
     @MainActor
     private func waitForCarouselTargetFrame(fallback: CGRect) async -> CGRect {
-        for _ in 0 ..< 30 {
-            if !carouselTargetFrame.isNull {
-                return carouselTargetFrame
-            }
-            try? await Task.sleep(for: .milliseconds(16))
+        // Shared implementation — includes the 2-sample stabilization the
+        // grid gained long ago but this copy never did (the drift this
+        // extraction exists to prevent).
+        await CarouselHeroChoreography.waitForStableFrame(fallback: fallback) {
+            carouselTargetFrame
         }
-        return fallback
     }
 
     @MainActor
     private func waitForCarouselDisplayedFrame(_ frameIndex: Int, outfitId: String) async -> Bool {
-        for _ in 0 ..< 24 {
-            if outfits[safe: carouselIndex]?.id == outfitId,
-               activeCarouselDisplayedFrame == frameIndex {
-                return true
-            }
-            try? await Task.sleep(for: .milliseconds(16))
+        await CarouselHeroChoreography.waitUntil {
+            outfits[safe: carouselIndex]?.id == outfitId
+                && activeCarouselDisplayedFrame == frameIndex
         }
-        return false
     }
 
     private func displayedHeroFrame(in viewportFrame: CGRect) -> CGRect {
@@ -820,10 +893,14 @@ struct UserProfileView: View {
                 guard canEngage else {
                     // Drag turned horizontal or pulled back up — let
                     // any in-progress dismiss snap back.
-                    if isDismissDragging {
+                    if isDismissDragging, !isCommittingDismiss {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                             dismissDragOffset = 0
                             isDismissDragging = false
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                            guard dismissDragOffset == 0 else { return }
+                            dismissDragSnapshot = nil
                         }
                     }
                     return
@@ -832,20 +909,43 @@ struct UserProfileView: View {
                     isDismissDragging = true
                 }
                 if isDismissDragging {
+                    guard !isCommittingDismiss else { return }
+                    // Snapshot-driven (same as the closet): capture the
+                    // page's pixels once and drag THOSE — a live page
+                    // reflows its safe-area layout the moment it's
+                    // offset, which read as a clipping pop.
+                    if dismissDragSnapshot == nil {
+                        dismissDragSnapshot = containerRef.snapshot()
+                    }
                     dismissDragOffset = max(0, vertical * 0.7)
                 }
             }
             .onEnded { value in
-                guard isDismissDragging else { return }
+                guard isDismissDragging, !isCommittingDismiss else { return }
                 let velocity = value.predictedEndTranslation.height
                 if dismissDragOffset > 100 || velocity > 500 {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    onDismiss()
+                    // Finish the slide on the snapshot, then drop the
+                    // cover with animations disabled — the system
+                    // dismissal would re-animate the live page.
+                    isCommittingDismiss = true
+                    withAnimation(.easeIn(duration: 0.22)) {
+                        dismissDragOffset = UIScreen.main.bounds.height
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
+                        var t = Transaction()
+                        t.disablesAnimations = true
+                        withTransaction(t) { onDismiss() }
+                    }
                     return
                 }
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                     dismissDragOffset = 0
                     isDismissDragging = false
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    guard dismissDragOffset == 0 else { return }
+                    dismissDragSnapshot = nil
                 }
             }
     }

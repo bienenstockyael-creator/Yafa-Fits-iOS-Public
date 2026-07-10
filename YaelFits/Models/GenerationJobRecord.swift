@@ -11,6 +11,11 @@ struct GenerationJobRecord: Decodable {
     let progress: Double?
     let error: String?
     let remoteOutfit: Outfit?    // decoded from jsonb — camelCase keys set by server
+    // Needed to rebuild a retake-capable PipelineJob on restore —
+    // without these, Regenerate on a restored review card has no
+    // green-screen to resubmit and silently no-ops.
+    let sourceImagePath: String?
+    let prompt: String?
 
     var isTerminal: Bool {
         ["complete", "failed", "cancelled"].contains(status)
@@ -47,5 +52,7 @@ struct GenerationJobRecord: Decodable {
         case progress
         case error
         case remoteOutfit  = "remote_outfit"
+        case sourceImagePath = "source_image_path"
+        case prompt
     }
 }

@@ -35,10 +35,48 @@ struct CalendarMonthView: View {
     @State private var pendingScrollTask: Task<Void, Never>?
     @State private var lastObservedScrollOffset: CGFloat = 0
 
-    private let columns = [
-        GridItem(.flexible(), spacing: 28, alignment: .top),
-        GridItem(.flexible(), spacing: 28, alignment: .top),
+    // MARK: Pinch zoom (mirrors the closet grid)
+
+    /// Pinch out → fewer/bigger day cells; pinch in → more/smaller.
+    /// Store-backed so RootView can normalize it back to the default
+    /// before every archive↔calendar transition.
+    private var columnCount: Int { store.calendarColumnCount }
+    @State private var pinchScale: CGFloat = 1
+    @State private var pinchAnchor: UnitPoint = .center
+    @State private var isPinching = false
+    @State private var pinchStartColumns: Int?
+    @State private var twoFingersDown = false
+    private static let minColumns = 2
+    private static let maxColumns = 4
+
+    /// STATIC layout instances per density — building a fresh
+    /// [GridItem] on every body evaluation made LazyVGrid re-lay the
+    /// whole grid continuously during the transition's opacity
+    /// animation, so the anchor cell's frame never went stable and
+    /// the morph degraded to a fade (the p2=FAIL diagnostic).
+    private static let columnLayouts: [Int: [GridItem]] = [
+        2: Array(repeating: GridItem(.flexible(), spacing: 28, alignment: .top), count: 2),
+        3: Array(repeating: GridItem(.flexible(), spacing: 18, alignment: .top), count: 3),
+        4: Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: 4),
     ]
+
+    private var columns: [GridItem] {
+        Self.columnLayouts[columnCount] ?? Self.columnLayouts[2]!
+    }
+
+    private var rowSpacing: CGFloat {
+        switch columnCount {
+        case 2: 34
+        case 3: 24
+        default: 18
+        }
+    }
+
+    /// Day-cell thumbnail height scales with the zoom so the cells
+    /// keep their proportions (156pt at the default 2 columns).
+    private var dayThumbHeight: CGFloat {
+        312 / CGFloat(columnCount)
+    }
 
     var body: some View {
         ScrollViewReader { reader in
@@ -67,7 +105,7 @@ struct CalendarMonthView: View {
                     // `calendarDay`) rather than as a separate strip,
                     // so a freshly-kicked-off job lands at the right
                     // date instead of floating above the months.
-                    ForEach(monthSections) { section in
+                    ForEach(cachedSections) { section in
                         monthSection(section)
                     }
 
@@ -76,19 +114,135 @@ struct CalendarMonthView: View {
                 }
                 .padding(.horizontal, LayoutMetrics.large)
                 .padding(.top, LayoutMetrics.calendarTopInset)
+                // Zoom from the pinch focal point, not the content center.
+                .scaleEffect(pinchScale, anchor: pinchAnchor)
+                // The WHOLE content surface must be hit-testable for
+                // the magnify: the calendar is sparse (empty days,
+                // gaps, blank rows aren't hit-testable by default),
+                // so a pinch with one finger on empty space only ever
+                // delivered ONE touch to the gesture — it never
+                // formed. This is why the calendar pinch felt far
+                // flakier than the archive's (a dense wall of images).
+                .contentShape(Rectangle())
+                // SIMULTANEOUS, not high-priority: SwiftUI gesture
+                // priority only orders gestures within this subtree —
+                // it cannot preempt the parent ScrollView's pan. As a
+                // high-priority gesture the magnify had to WIN a race
+                // against the scroll (via the twoFingersDown
+                // roundtrip) and usually lost ("pinch works 1 in 6").
+                // Simultaneous lets it co-recognize with the scroll;
+                // scrollDisabled(twoFingersDown) then freezes the
+                // scroll a beat later, so the pinch always engages.
+                .simultaneousGesture(zoomGesture)
             }
-            .scrollDisabled(isScrubbing || store.selectedOutfitId != nil)
+            // Disable scrolling the moment a second finger lands, so a
+            // pinch is never read as a scroll. One-finger scrolling is
+            // unaffected. (Same setup as the closet grid.)
+            .scrollDisabled(isScrubbing || store.selectedOutfitId != nil || twoFingersDown)
+            // Chrome cover ABOVE the per-cell fade band. The fade's
+            // stale-geometry guard skips cells whose top has scrolled
+            // past ~the screen top — their lower halves otherwise hang
+            // CRISP over the status bar / logo ("header blur
+            // clipping"). Solid page background over the chrome strip,
+            // dissolving to transparent right where the per-cell fade
+            // band (headerBottom + fadeZone) takes over, so the two
+            // treatments read as one continuous dissolve.
+            .overlay(alignment: .top) {
+                LinearGradient(
+                    stops: [
+                        .init(color: AppPalette.pageBackground, location: 0),
+                        .init(color: AppPalette.pageBackground, location: 0.45),
+                        .init(color: AppPalette.pageBackground.opacity(0), location: 1),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 96)
+                .ignoresSafeArea(edges: .top)
+                .allowsHitTesting(false)
+            }
+            .background(
+                TouchCountReporter { count in
+                    // Window-level recognizer: ignore touches while
+                    // this surface isn't the visible one (the archive
+                    // + calendar stay mounted) — but ALWAYS let a
+                    // zero-count through so the flag can't latch
+                    // scroll off.
+                    guard store.currentView == .calendar || count == 0 else { return }
+                    let down = count >= 2
+                    if down != twoFingersDown { twoFingersDown = down }
+                }
+            )
             .onPreferenceChange(CalendarOutfitFramePreferenceKey.self) { frames in
                 store.calendarOutfitFrames = frames
             }
             .onAppear {
+                if cachedSections.isEmpty { cachedSections = monthSections }
                 scrollToPendingTarget(using: reader, animated: false)
+            }
+            .onChange(of: store.sortedOutfits) { _, _ in
+                cachedSections = monthSections
+            }
+            .onChange(of: generationPlaceholderJobs.isEmpty) { _, _ in
+                cachedSections = monthSections
             }
             .onChange(of: store.pendingCalendarScrollOutfitId) { _, newId in
                 guard newId != nil else { return }
                 scrollToPendingTarget(using: reader, animated: false)
             }
+            .onChange(of: store.currentView) { _, _ in
+                // A view switch can unmount a cell mid-scrub, so its
+                // drag-end callback never fires — `isScrubbing` then
+                // latches true and scroll is permanently disabled.
+                isScrubbing = false
+                twoFingersDown = false
+            }
         }
+    }
+
+    // MARK: - Pinch zoom gesture
+
+    /// Pinch out → fewer/bigger day cells; pinch in → more/smaller.
+    /// Mirrors the closet grid exactly: the calendar scales live under
+    /// the fingers, steps the column count mid-pinch with a selection
+    /// tick, then springs to rest with a light bounce on release.
+    private var zoomGesture: some Gesture {
+        MagnifyGesture()
+            .onChanged { value in
+                isPinching = true
+                pinchAnchor = value.startAnchor   // finger midpoint
+                if pinchStartColumns == nil { pinchStartColumns = columnCount }
+                let start = Double(pinchStartColumns ?? columnCount)
+                // Continuous desired column count (zoom out → bigger
+                // cells → fewer columns).
+                let raw = start / Double(value.magnification)
+                let lo = Double(Self.minColumns), hi = Double(Self.maxColumns)
+                // Rubber-band past the limits so the extremes still
+                // have an overshoot to spring back from on release.
+                let effective: Double
+                if raw < lo { effective = lo - (lo - raw) * 0.28 }
+                else if raw > hi { effective = hi + (raw - hi) * 0.28 }
+                else { effective = raw }
+                let whole = min(Self.maxColumns, max(Self.minColumns, Int(raw.rounded())))
+                if whole != columnCount {
+                    store.calendarColumnCount = whole   // steps 2→3→4 mid-pinch
+                    UISelectionFeedbackGenerator().selectionChanged()
+                }
+                // Compensating scale (overshoots past the limits → bounce).
+                pinchScale = CGFloat(Double(columnCount) / effective)
+            }
+            .onEnded { _ in
+                pinchStartColumns = nil
+                // Settle with an underdamped spring so the end of the
+                // zoom has a light, organic bounce.
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.62)) { pinchScale = 1 }
+                // Keep `isPinching` true a beat longer so the finger-
+                // lift doesn't register as a tap and scrolling doesn't
+                // snap back mid-settle.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+                    isPinching = false
+                }
+            }
     }
 
     // MARK: - Generation placeholders
@@ -125,7 +279,7 @@ struct CalendarMonthView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .headerProximityFade(headerBottom: headerBottom, fadeZone: fadeZone)
 
-            LazyVGrid(columns: columns, spacing: 34) {
+            LazyVGrid(columns: columns, spacing: rowSpacing) {
                 ForEach(Array(section.days.enumerated()), id: \.element.id) { _, day in
                     calendarDay(day)
                 }
@@ -134,64 +288,65 @@ struct CalendarMonthView: View {
     }
 
     private func calendarDay(_ day: CalendarDay) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(day.numberLabel)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(day.outfit == nil ? inactiveDayColor : activeDayColor)
-                .frame(height: 18, alignment: .topLeading)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        let displayed = displayedOutfit(for: day)
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Text(day.numberLabel)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(day.outfits.isEmpty ? inactiveDayColor : activeDayColor)
 
-            Group {
-                if let outfit = day.outfit {
-                    RotatableOutfitImage(
-                        outfit: outfit,
-                        height: 156,
-                        draggable: true,
-                        preloadFullSequenceOnAppear: true,
-                        // Sync to the source anchor's frame ONLY during
-                        // a list↔calendar transition (so the morph is
-                        // visually continuous). Outside of transitions
-                        // the cell is free to scrub on its own without
-                        // affecting the archive's view.
-                        syncFrameIndex: anchorTransitionFrame(for: outfit.id),
-                        onTap: {
-                            let impact = UIImpactFeedbackGenerator(style: .medium)
-                            impact.impactOccurred()
-                            store.selectedOutfitId = outfit.id
-                        },
-                        onHorizontalDragChange: { isDragging in
-                            isScrubbing = isDragging
-                        },
-                        onFrameChange: { newFrame in
-                            // Broadcast for the transition-frame
-                            // capture in switchView. No view body reads
-                            // this dict so writes don't trigger
-                            // re-renders.
-                            store.currentDisplayedFrame[outfit.id] = newFrame
-                        }
-                    )
-                    .frame(maxWidth: .infinity)
-                    .anchorTransition(
-                        outfitId: outfit.id,
-                        namespace: transitionNamespace,
-                        isAnchor: store.transitionAnchorOutfitId == outfit.id,
-                        viewName: "calendar",
-                        isSource: store.currentView == .calendar
-                    )
-                    .background {
-                        GeometryReader { proxy in
-                            Color.clear.preference(
-                                key: CalendarOutfitFramePreferenceKey.self,
-                                value: [outfit.id: proxy.frame(in: .global)]
-                            )
-                        }
+                // +N pill: this day holds more outfits than the one
+                // shown — tap steps through them (swiping the outfit
+                // pages too). Metrics match `WeatherPill` 1:1 — 12pt
+                // semibold, 22pt content height (its icon's height),
+                // xSmall/7 padding — so the two pills read as the same
+                // species. Hidden at the max-density zoom: the tiny
+                // cells have no room for it, and the swipe still
+                // pages (the pill returns on pinch-in). Vertically
+                // centered against the day number; the overflow rides
+                // into the row gaps, floating like the weather pill.
+                if day.outfits.count > 1, columnCount < Self.maxColumns {
+                    Button {
+                        pageDay(day, forward: true)
+                    } label: {
+                        // Elongated pill proportions: short "+N" text
+                        // with equal-ish padding all around read as a
+                        // circle — wide horizontal padding + tighter
+                        // vertical keeps it visibly a pill.
+                        Text("+\(day.outfits.count - 1)")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(AppPalette.textSecondary)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 5)
+                            // Solid WHITE capsule (appCapsule is a
+                            // translucent blur fill — read as grey
+                            // here), same hairline border as the app
+                            // capsules.
+                            .background(Capsule().fill(Color.white))
+                            .overlay(Capsule().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
+                            // Explicit glow blob — a `.shadow` here is
+                            // near-invisible (shadows derive from the
+                            // view's alpha and wash out on the white
+                            // page). A blurred capsule painted behind
+                            // the pill always shows.
+                            .background {
+                                Capsule()
+                                    .fill(Self.dayPagePillGlow)
+                                    .blur(radius: 10)
+                                    .offset(y: 3)
+                                    .padding(.horizontal, -3)
+                            }
                     }
-                    // Drop stale frame entries when the cell scrolls
-                    // out of the lazy-render region, so transition
-                    // logic can't pick a frame from a previous scroll.
-                    .onDisappear {
-                        store.calendarOutfitFrames[outfit.id] = nil
-                    }
+                    .buttonStyle(SolidPressButtonStyle())
+                }
+            }
+            .frame(height: 18, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            ZStack {
+                if let outfit = displayed {
+                    dayOutfitImage(outfit, day: day)
+                        .transition(dayPageTransition)
                 } else if calendar.isDateInToday(day.date),
                           let placeholder = todayPlaceholderJob {
                     // In-flight generation kicked off today — sits in
@@ -204,11 +359,20 @@ struct CalendarMonthView: View {
                         onTap: { onExpandGenerationJob(placeholder) },
                         compact: true
                     )
-                    .frame(height: 156)
+                    .frame(height: dayThumbHeight)
                 } else {
                     Color.clear
-                        .frame(height: 156)
+                        .frame(height: dayThumbHeight)
                 }
+            }
+            // SwiftUI pager for 2D outfits (no pan recognizer to hand
+            // us a release) — 3D outfits page via the scrub-release
+            // discrimination inside `dayOutfitImage`, whose UIKit pan
+            // cancels this gesture, so the two paths never both fire.
+            // Only attached on multi-outfit days: a gesture per cell
+            // adds arbitration weight against the pinch's magnify.
+            .if(day.outfits.count > 1) {
+                $0.simultaneousGesture(pagerGesture(for: day, displayed: displayed))
             }
         }
         // Apply the 3D badge on the outer VStack so it sits at the
@@ -216,11 +380,200 @@ struct CalendarMonthView: View {
         // below. topInset centers the 11pt icon vertically against
         // the 18pt-tall day-number frame; trailingInset pulls it a
         // touch inward from the right edge.
-        .outfit3DBadge(active: (day.outfit?.frameCount ?? 0) > 1, topInset: 4, trailingInset: 8)
-        .headerProximityFade(headerBottom: headerBottom, fadeZone: fadeZone)
-        .id(day.scrollID)
+        .outfit3DBadge(active: (displayed?.frameCount ?? 0) > 1, topInset: 4, trailingInset: 8)
+        // Dissolve under the top chrome (logo + toggle have no
+        // backdrop; content scrolls beneath them). The "outfits
+        // randomly disappear" bug blamed on this fade was actually
+        // cover-frame starvation from the appear-time sequence
+        // preloads (now removed) — the fade itself is safe with the
+        // stale-geometry guard. Disabled on the transition anchor so
+        // the morphing cell is never dimmed mid-flight.
+        .headerProximityFade(
+            headerBottom: headerBottom,
+            fadeZone: fadeZone,
+            enabled: displayed == nil || store.transitionAnchorOutfitId != displayed?.id
+        )
+        // Scroll-target id MUST live on the OUTER cell — the direct
+        // lazy-grid child. ScrollViewReader can only find ids of
+        // not-yet-instantiated lazy content when they're registered at
+        // this level; an id nested inside the cell made scrollTo
+        // silently no-op for any unmounted month, so every long-jump
+        // transition degraded to a fade (p2=FAIL "none"). Doubling as
+        // the paging identity: displayed change remounts the cell and
+        // fires the nudge+fade transition on the image block; the day
+        // number and pill crossfade with themselves, invisibly.
+        .id(displayed?.id ?? day.dateKey)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
+
+    private func dayOutfitImage(_ outfit: Outfit, day: CalendarDay) -> some View {
+        RotatableOutfitImage(
+            outfit: outfit,
+            height: dayThumbHeight,
+            // Two fingers down = pinch — the scrub must not
+            // steal a finger from the magnify (this was the
+            // "pinch doesn't always engage" intermittency).
+            draggable: !twoFingersDown,
+            // NEVER preload the full 242-frame sequence from
+            // a grid cell. Every appear-time preload queues
+            // ~242 serialized disk-reads/decodes on the
+            // FrameLoader actor; the transition's scrollTo
+            // mounts dozens of cells at once, and newly
+            // visible cells' single cover-frame loads then
+            // wait SECONDS behind that queue (blank
+            // "disappearing" cells, 2s+ transition stalls,
+            // unresponsive pinch). Scrubbing lazy-loads
+            // frames on demand, so nothing is lost.
+            preloadFullSequenceOnAppear: false,
+            // Don't let a scrub that stole the first finger of a
+            // forming pinch cancel SwiftUI touch delivery — the
+            // grid's magnify takes over and the scrub is disabled a
+            // beat later (draggable flips with twoFingersDown).
+            scrubPanCancelsTouches: false,
+            // Sync to the source anchor's frame ONLY during
+            // a list↔calendar transition (so the morph is
+            // visually continuous). Outside of transitions
+            // the cell is free to scrub on its own without
+            // affecting the archive's view.
+            syncFrameIndex: anchorTransitionFrame(for: outfit.id),
+            onTap: {
+                // A finger-lift at the end of a pinch must
+                // not read as a tap (same guard as the
+                // closet grid).
+                guard !isPinching else { return }
+                let impact = UIImpactFeedbackGenerator(style: .medium)
+                impact.impactOccurred()
+                store.selectedOutfitId = outfit.id
+            },
+            onHorizontalDragChange: { isDragging in
+                isScrubbing = isDragging
+            },
+            onFrameChange: { newFrame in
+                // Broadcast for the transition-frame
+                // capture in switchView. No view body reads
+                // this dict so writes don't trigger
+                // re-renders.
+                store.currentDisplayedFrame[outfit.id] = newFrame
+            },
+            onHorizontalDragRelease: { release in
+                // Scrub-vs-page discrimination, same thresholds as the
+                // carousel: a decisive one-direction flick pages to the
+                // day's next outfit; a back-and-forth scrub (low
+                // monotonicity) stays on this outfit and just rotates.
+                guard day.outfits.count > 1,
+                      abs(release.totalTranslation) > Self.dayPageDistanceFloor,
+                      release.monotonicityRatio >= Self.dayPageMonotonicityFloor
+                else { return }
+                pageDay(day, forward: release.totalTranslation < 0)
+            }
+        )
+        .frame(maxWidth: .infinity)
+        .anchorTransition(
+            outfitId: outfit.id,
+            namespace: transitionNamespace,
+            isAnchor: store.transitionAnchorOutfitId == outfit.id,
+            viewName: "calendar",
+            isSource: store.currentView == .calendar
+        )
+        .background {
+            GeometryReader { proxy in
+                Color.clear.preference(
+                    key: CalendarOutfitFramePreferenceKey.self,
+                    value: [outfit.id: proxy.frame(in: .global)]
+                )
+            }
+        }
+        // Drop stale frame entries when the cell scrolls
+        // out of the lazy-render region, so transition
+        // logic can't pick a frame from a previous scroll.
+        .onDisappear {
+            store.calendarOutfitFrames[outfit.id] = nil
+        }
+    }
+
+    // MARK: - Multi-outfit day paging
+
+    /// Matches `CarouselView.ScrubSwipe` so paging a day cell feels
+    /// identical to paging the carousel.
+    private static let dayPageDistanceFloor: CGFloat = 55
+    private static let dayPageMonotonicityFloor: CGFloat = 0.80
+    private static let dayPageAnimation = Animation.timingCurve(0.32, 0.72, 0, 1, duration: 0.56)
+    /// Glow under the +N pill — subtle light blue (the WeatherPill's
+    /// rainy tint), painted as an explicit blurred blob (a `.shadow`
+    /// washes out on the white page).
+    private static let dayPagePillGlow = Color(red: 0.71, green: 0.86, blue: 1).opacity(0.55)
+
+    /// Direction of the last page action — drives which edge the
+    /// incoming/outgoing outfit nudges toward.
+    @State private var dayPageForward = true
+
+    /// Nudge+fade rather than a full edge slide: the day cell isn't
+    /// clipped (clipping would carve the archive↔calendar morph as it
+    /// passes through), so the outgoing outfit must not travel into
+    /// neighboring cells.
+    private var dayPageTransition: AnyTransition {
+        .asymmetric(
+            insertion: .offset(x: dayPageForward ? 44 : -44).combined(with: .opacity),
+            removal: .offset(x: dayPageForward ? -44 : 44).combined(with: .opacity)
+        )
+    }
+
+    /// The outfit a day cell currently shows: the user's page choice
+    /// (or the transition's anchor override) if it still exists on
+    /// that day, else the day's newest.
+    private func displayedOutfit(for day: CalendarDay) -> Outfit? {
+        guard !day.outfits.isEmpty else { return nil }
+        if let overrideId = store.calendarDayDisplayedOutfitIds[day.dateKey],
+           let match = day.outfits.first(where: { $0.id == overrideId }) {
+            return match
+        }
+        return day.outfits.first
+    }
+
+    private func pageDay(_ day: CalendarDay, forward: Bool) {
+        guard day.outfits.count > 1,
+              let current = displayedOutfit(for: day),
+              let index = day.outfits.firstIndex(where: { $0.id == current.id })
+        else { return }
+        let count = day.outfits.count
+        let next = (index + (forward ? 1 : -1) + count) % count
+        dayPageForward = forward
+        UISelectionFeedbackGenerator().selectionChanged()
+        withAnimation(Self.dayPageAnimation) {
+            store.calendarDayDisplayedOutfitIds[day.dateKey] = day.outfits[next].id
+        }
+    }
+
+    /// Backup pager for 2D outfits: they have no pan recognizer, so a
+    /// horizontal flick reaches SwiftUI directly. Gated to 2D — on 3D
+    /// cells the scrub's UIKit pan (cancelsTouchesInView) cancels this
+    /// gesture, and the release-discrimination path pages instead.
+    private func pagerGesture(for day: CalendarDay, displayed: Outfit?) -> some Gesture {
+        DragGesture(minimumDistance: 18)
+            .onEnded { value in
+                guard day.outfits.count > 1,
+                      (displayed?.frameCount ?? 1) <= 1,
+                      !isPinching, !twoFingersDown
+                else { return }
+                let dx = value.translation.width
+                guard abs(dx) > abs(value.translation.height) * 1.2,
+                      abs(dx) > 44
+                else { return }
+                pageDay(day, forward: dx < 0)
+            }
+    }
+
+    /// Cached sections — rebuilding on every body evaluation froze the
+    /// pinch: `pinchScale` changes per frame, and each rebuild
+    /// allocated a DateFormatter and ran hundreds of Calendar ops.
+    /// Rebuilt only when the outfits (or the placeholder) change.
+    @State private var cachedSections: [MonthSection] = []
+
+    private static let dayKeyFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
 
     private var monthSections: [MonthSection] {
         let grouped = Dictionary(grouping: store.sortedOutfits) { $0.monthBucket ?? .distantPast }
@@ -249,21 +602,29 @@ struct CalendarMonthView: View {
     }
 
     private func days(for month: Date, outfits: [Outfit]) -> [CalendarDay] {
-        let outfitsByDate = Dictionary(outfits.map { ($0.date, $0) }, uniquingKeysWith: { first, _ in first })
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
+        // ALL outfits per date (newest first — grouping preserves the
+        // sortedOutfits order). The cell shows one at a time; the +N
+        // pill / swipe pages through the rest.
+        let outfitsByDate = Dictionary(grouping: outfits, by: \.date)
+        let formatter = Self.dayKeyFormatter
 
         guard let range = calendar.range(of: .day, in: .month, for: month) else { return [] }
 
         // Newest day first within each month, matching the grid's
         // newest-first order so toggling between views doesn't reorder
         // the user's mental list of outfits.
+        let now = Date()
         return range.reversed().compactMap { day in
             var components = calendar.dateComponents([.year, .month], from: month)
             components.day = day
             guard let date = calendar.date(from: components) else { return nil }
+            // FUTURE days don't render — a screenful of blank
+            // end-of-month cells sat above today at the top of the
+            // calendar, so every toggle from the archive landed on
+            // emptiness instead of the anchor outfit.
+            if date > now, !calendar.isDateInToday(date) { return nil }
             let key = formatter.string(from: date)
-            return CalendarDay(date: date, outfit: outfitsByDate[key])
+            return CalendarDay(date: date, dateKey: key, outfits: outfitsByDate[key] ?? [])
         }
     }
 
@@ -506,9 +867,11 @@ struct CalendarDetailSheet: View {
         }
         .sheet(item: $selectedLinkedProduct) { product in
             LinkedProductOutfitsSheet(product: product, sourceOutfit: outfit)
+                .roundedSheetBackground()
         }
         .sheet(item: $selectedLinkedTag) { selection in
             LinkedTagOutfitsSheet(tag: selection.tag, sourceOutfit: outfit)
+                .roundedSheetBackground()
         }
         .task {
             let published = await OutfitService.isPublished(outfitId: outfit.id)
@@ -693,6 +1056,8 @@ struct CalendarDetailSheet: View {
         }
         .fullScreenCover(isPresented: $showShareComposer) {
             ShareCardComposer(outfit: outfit).environment(store)
+                .snapshotDragDismiss(onClose: { showShareComposer = false })
+                .presentationBackground(.clear)
         }
         .sheet(isPresented: $showAddProduct) {
             if let userId = store.userId {
@@ -702,6 +1067,7 @@ struct CalendarDetailSheet: View {
                     store.updateOutfit(outfit.id, caption: outfit.caption,
                                        products: (outfit.products ?? []) + [p])
                 }
+                .roundedSheetBackground()
             }
         }
         .sheet(item: $autoDetectSource) { source in
@@ -718,6 +1084,7 @@ struct CalendarDetailSheet: View {
                         products: existing + [newProduct]
                     )
                 }
+                .roundedSheetBackground()
             }
         }
         .sheet(isPresented: $showDatePicker) {
@@ -1081,19 +1448,13 @@ struct CalendarDetailSheet: View {
     private func calendarProductImage(_ product: Product) -> some View {
         Group {
             if let imageURL = product.resolvedImageURL {
-                AsyncImage(url: imageURL, transaction: Transaction(animation: .easeOut(duration: 0.2))) { phase in
-                    switch phase {
-                    case let .success(image):
-                        image.resizable().scaledToFill()
-                            .frame(width: 72, height: 72)
-                            .clipped()
-                    case .failure:
-                        placeholderProductImage
-                    case .empty:
-                        ProgressView().tint(AppPalette.textMuted)
-                    @unknown default:
-                        placeholderProductImage
-                    }
+                CachedRemoteImage(
+                    url: imageURL,
+                    maxPixelSize: 640,
+                    contentMode: .fill,
+                    failure: AnyView(placeholderProductImage)
+                ) {
+                    ProgressView().tint(AppPalette.textMuted)
                 }
             } else {
                 placeholderProductImage
@@ -1137,10 +1498,13 @@ private struct MonthSection: Identifiable {
 
 private struct CalendarDay: Identifiable {
     let date: Date
-    let outfit: Outfit?
+    /// "yyyy-MM-dd" — keys the per-day displayed-outfit override.
+    let dateKey: String
+    /// Every outfit on this date, newest first. The cell displays one
+    /// (see `displayedOutfit(for:)`) and pages through the rest.
+    let outfits: [Outfit]
 
     var id: Date { date }
-    var scrollID: String { outfit?.id ?? date.ISO8601Format() }
 
     var numberLabel: String {
         date.formatted(.dateTime.day())

@@ -110,6 +110,8 @@ struct VirtualClosetView: View {
         .onDisappear { dressTask?.cancel() }
         .fullScreenCover(isPresented: $showsRemixArchive) {
             RemixArchiveSheetView(onClose: { showsRemixArchive = false })
+                .snapshotDragDismiss(onClose: { showsRemixArchive = false })
+                .presentationBackground(.clear)
         }
     }
 

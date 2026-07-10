@@ -352,12 +352,11 @@ private struct LibraryPickerView: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(Color(white: 0.96))
-                AsyncImage(url: URL(string: product.imageURL)) { phase in
-                    if case .success(let img) = phase {
-                        img.resizable().scaledToFit().padding(4)
-                    } else {
+                if let productImageURL = URL(string: product.imageURL) {
+                    CachedRemoteImage(url: productImageURL, maxPixelSize: 640, contentMode: .fit) {
                         Color.clear
                     }
+                    .padding(4)
                 }
             }
             .frame(width: 48, height: 48)

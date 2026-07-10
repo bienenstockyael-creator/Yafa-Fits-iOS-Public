@@ -17,22 +17,19 @@ struct ProductImageView: View {
                 .fill(Color.white.opacity(0.28))
 
             if let imageURL = product.resolvedImageURL {
-                AsyncImage(url: imageURL, transaction: Transaction(animation: .easeOut(duration: 0.2))) { phase in
-                    switch phase {
-                    case let .success(image):
-                        image
-                            .resizable()
-                            .scaledToFit()
-                            .padding(8)
-                    case .failure:
-                        fallbackLabel
-                    case .empty:
-                        ProgressView()
-                            .tint(AppPalette.textPrimary)
-                    @unknown default:
-                        fallbackLabel
-                    }
+                // Cached loader (memory + disk + downsampled decode) —
+                // plain AsyncImage re-downloaded and full-res-decoded
+                // product images on every appearance.
+                CachedRemoteImage(
+                    url: imageURL,
+                    maxPixelSize: 640,
+                    contentMode: .fit,
+                    failure: AnyView(fallbackLabel)
+                ) {
+                    ProgressView()
+                        .tint(AppPalette.textPrimary)
                 }
+                .padding(8)
             } else {
                 fallbackLabel
             }

@@ -5,6 +5,10 @@ import UIKit
 
 struct PublishSheet: View {
     let outfit: Outfit
+    /// The quiet fallback path into the note editor for fits without a
+    /// note — the carousel's floating pill was removed (gesture-first),
+    /// so this row is where anyone who missed the long-press finds it.
+    var onAddNote: (() -> Void)?
     var onPublished: (String?, [Product]) -> Void
 
     @Environment(OutfitStore.self) private var store
@@ -29,8 +33,13 @@ struct PublishSheet: View {
     /// when the outfit has a note; the toggle row hides otherwise.
     @State private var shareNote = false
 
-    init(outfit: Outfit, onPublished: @escaping (String?, [Product]) -> Void) {
+    init(
+        outfit: Outfit,
+        onAddNote: (() -> Void)? = nil,
+        onPublished: @escaping (String?, [Product]) -> Void
+    ) {
         self.outfit = outfit
+        self.onAddNote = onAddNote
         self.onPublished = onPublished
         _caption = State(initialValue: outfit.caption ?? "")
         _shareNote = State(initialValue: outfit.noteShared ?? false)
@@ -71,6 +80,7 @@ struct PublishSheet: View {
                                         productId: product.id, tags: product.tags)
                         taggedProducts.append(ProductWithShopLink(product: p, shopURL: ""))
                     }
+                    .roundedSheetBackground()
                 }
             }
             .sheet(item: $autoDetectSource) { source in
@@ -82,6 +92,7 @@ struct PublishSheet: View {
                         guard !taggedProducts.contains(where: { $0.product.name == newProduct.name }) else { return }
                         taggedProducts.append(ProductWithShopLink(product: newProduct, shopURL: ""))
                     }
+                    .roundedSheetBackground()
                 }
             }
             .alert("Couldn't publish", isPresented: .constant(publishError != nil)) {
@@ -121,18 +132,30 @@ struct PublishSheet: View {
         if let note = outfit.diaryNote, !note.isEmpty {
             VStack(alignment: .leading, spacing: LayoutMetrics.xxSmall) {
                 label("DIARY NOTE")
-                Toggle(isOn: $shareNote) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Share your diary note")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(AppPalette.textPrimary)
-                        Text("Show your note on this fit for others + on the share card.")
-                            .font(.system(size: 12))
-                            .foregroundStyle(AppPalette.textMuted)
-                            .fixedSize(horizontal: false, vertical: true)
+                // Custom flat switch matching the generation card's
+                // "Publish to Feed" toggle — not the system Toggle, which
+                // picks up iOS's glassy/3D material look.
+                Button {
+                    UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+                    shareNote.toggle()
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Share your diary note")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(AppPalette.textSecondary)
+                            Text("Show your note on this fit for others + on the share card.")
+                                .font(.system(size: 12))
+                                .foregroundStyle(AppPalette.textMuted)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .multilineTextAlignment(.leading)
+                        }
+                        Spacer()
+                        flatNoteToggleSwitch
                     }
+                    .contentShape(Rectangle())
                 }
-                .tint(AppPalette.uploadGlow)
+                .buttonStyle(SolidPressButtonStyle())
                 .onChange(of: shareNote) { _, newValue in
                     store.updateOutfitDiaryNote(
                         outfitId: outfit.id,
@@ -144,7 +167,51 @@ struct PublishSheet: View {
                 .padding(LayoutMetrics.small)
                 .appCard(cornerRadius: LayoutMetrics.cardCornerRadius)
             }
+        } else if let onAddNote {
+            // No note yet — the discoverable path into the editor now that
+            // the carousel has no permanent note button.
+            VStack(alignment: .leading, spacing: LayoutMetrics.xxSmall) {
+                label("DIARY NOTE")
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    onAddNote()
+                } label: {
+                    HStack(spacing: LayoutMetrics.xxSmall) {
+                        Image(systemName: "pencil.line")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppPalette.textSecondary)
+                        Text("Add a note")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(AppPalette.textSecondary)
+                        Spacer()
+                        Image(systemName: "plus")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(AppPalette.textMuted)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(SolidPressButtonStyle())
+                .padding(LayoutMetrics.small)
+                .appCard(cornerRadius: LayoutMetrics.cardCornerRadius)
+            }
         }
+    }
+
+    /// Same dimensions as the system switch, but a plain solid capsule
+    /// track + white circle thumb — mirrors the generation card's
+    /// `flatToggleSwitch` so the two publish surfaces look identical.
+    private var flatNoteToggleSwitch: some View {
+        ZStack(alignment: shareNote ? .trailing : .leading) {
+            Capsule()
+                .fill(shareNote ? AppPalette.uploadGlow : Color(white: 0.82))
+                .frame(width: 44, height: 26)
+            Circle()
+                .fill(Color.white)
+                .frame(width: 22, height: 22)
+                .padding(2)
+                .shadow(color: Color.black.opacity(0.15), radius: 1.5, y: 0.5)
+        }
+        .animation(.spring(response: 0.25, dampingFraction: 0.75), value: shareNote)
     }
 
     // MARK: - Products
@@ -231,10 +298,11 @@ struct PublishSheet: View {
                 ZStack {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .fill(Color(white: 0.96))
-                    AsyncImage(url: URL(string: product.image)) { phase in
-                        if case .success(let img) = phase {
-                            img.resizable().scaledToFit().padding(4)
-                        } else { Color.clear }
+                    if let productImageURL = URL(string: product.image) {
+                        CachedRemoteImage(url: productImageURL, maxPixelSize: 640, contentMode: .fit) {
+                            Color.clear
+                        }
+                        .padding(4)
                     }
                 }
                 .frame(width: 44, height: 44)
@@ -307,7 +375,7 @@ struct PublishSheet: View {
             Image(systemName: "info.circle")
                 .font(.system(size: 12))
                 .foregroundStyle(AppPalette.textFaint)
-            Text("Only products with a shop link will appear on your public feed card.")
+            Text("Products without a shop link will open in Google Lens so viewers can still find them.")
                 .font(.system(size: 11))
                 .foregroundStyle(AppPalette.textFaint)
         }

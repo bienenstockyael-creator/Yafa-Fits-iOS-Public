@@ -398,6 +398,77 @@ class LocalOutfitStore {
         try? fileManager.removeItem(at: pendingReviewFile(for: userId))
     }
 
+    // MARK: - Pending pipeline jobs (fork / generating / review persistence)
+
+    // A fork-stage 2D still must survive app kills indefinitely —
+    // it only leaves disk when the user acts on it (save 2D, accept
+    // 3D, or cancel). One JSON per job keyed by outfit number, with
+    // the cutout / green-screen PNGs saved alongside.
+
+    private func pendingJobsDirectory(for userId: UUID) -> URL {
+        let dir = userDirectory(for: userId).appendingPathComponent("pending-jobs", isDirectory: true)
+        try? fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    private func pendingJobFile(outfitNum: Int, userId: UUID) -> URL {
+        pendingJobsDirectory(for: userId).appendingPathComponent("job-\(outfitNum).json")
+    }
+
+    private func pendingJobImageFile(outfitNum: Int, kind: String, userId: UUID) -> URL {
+        pendingJobsDirectory(for: userId).appendingPathComponent("job-\(outfitNum)-\(kind).png")
+    }
+
+    func savePendingJob(_ record: PersistedPendingJob, userId: UUID) {
+        guard let encoded = try? JSONEncoder().encode(record) else { return }
+        try? encoded.write(to: pendingJobFile(outfitNum: record.outfitNum, userId: userId), options: .atomic)
+    }
+
+    /// Saves the job's heavy image assets once — subsequent persists
+    /// only rewrite the small JSON snapshot.
+    func savePendingJobImages(cutout: Data?, greenScreen: Data?, outfitNum: Int, userId: UUID) {
+        if let cutout {
+            try? cutout.write(to: pendingJobImageFile(outfitNum: outfitNum, kind: "cutout", userId: userId), options: .atomic)
+        }
+        if let greenScreen {
+            try? greenScreen.write(to: pendingJobImageFile(outfitNum: outfitNum, kind: "green", userId: userId), options: .atomic)
+        }
+    }
+
+    func loadPendingJobImage(outfitNum: Int, kind: String, userId: UUID) -> Data? {
+        try? Data(contentsOf: pendingJobImageFile(outfitNum: outfitNum, kind: kind, userId: userId))
+    }
+
+    func loadPendingJobs(userId: UUID) -> [PersistedPendingJob] {
+        guard let files = try? fileManager.contentsOfDirectory(
+            at: pendingJobsDirectory(for: userId),
+            includingPropertiesForKeys: nil
+        ) else { return [] }
+        return files
+            .filter { $0.pathExtension == "json" }
+            .compactMap { url in
+                guard let data = try? Data(contentsOf: url) else { return nil }
+                return try? JSONDecoder().decode(PersistedPendingJob.self, from: data)
+            }
+            .sorted { $0.outfitNum < $1.outfitNum }
+    }
+
+    func removePendingJob(outfitNum: Int, userId: UUID) {
+        try? fileManager.removeItem(at: pendingJobFile(outfitNum: outfitNum, userId: userId))
+        for kind in ["cutout", "green"] {
+            try? fileManager.removeItem(at: pendingJobImageFile(outfitNum: outfitNum, kind: kind, userId: userId))
+        }
+    }
+
+    /// Removes the locally-saved frames/preview for an outfit WITHOUT
+    /// touching the local manifest or feed posts. Used when a 3D
+    /// accept supersedes the temp 2D still saved at fork time — the
+    /// local frame 0 would otherwise shadow the remote 3D frames in
+    /// `FrameLoader`.
+    func deleteLocalFrames(for outfit: Outfit, userId: UUID) {
+        try? fileManager.removeItem(at: outfitDirectory(for: outfit, userId: userId))
+    }
+
     func storageUsed() -> Int64 {
         guard let enumerator = fileManager.enumerator(at: rootDir, includingPropertiesForKeys: [.fileSizeKey]) else {
             return 0

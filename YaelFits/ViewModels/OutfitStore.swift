@@ -59,9 +59,40 @@ class OutfitStore {
         queue: generationQueue,
         userIdProvider: { [weak self] in self?.userId },
         onAcceptOutfit: { [weak self] outfit in self?.addOutfit(outfit) },
-        onPublishOutfit: { [weak self] outfit in self?.publishOutfitToFeed(outfit) }
+        onPublishOutfit: { [weak self] outfit in self?.publishOutfitToFeed(outfit) },
+        existingOutfitProvider: { [weak self] id in self?.outfits.first { $0.id == id } }
     )
+
+    /// Ids of archived outfits whose 3D upgrade is currently rendering
+    /// — the "Generate 3D" flow saves the 2D still into the archive
+    /// immediately and these fits wear the sparkle overlay (grid cell
+    /// + carousel slide) until the render is accepted or the job ends.
+    var generating3DOutfitIds: Set<String> {
+        Set(
+            (generationQueue.activeJobs + generationQueue.waitingJobs).compactMap { job in
+                guard job.step == .generate else { return nil }
+                return job.resultOutfitId ?? job.previewOutfit?.id
+            }
+        )
+    }
     var currentView: AppView = .list
+    /// Pinch-zoom densities for the archive grid and the calendar.
+    /// TRANSIENT browsing state: `RootView.switchView` normalizes both
+    /// back to the defaults before every archive↔calendar transition,
+    /// so the anchor hero morph always runs between same-scale grids
+    /// (a 4-column calendar morphing into the 3-column archive read as
+    /// a discontinuous fade).
+    var archiveColumnCount: Int = OutfitStore.archiveDefaultColumns
+    var calendarColumnCount: Int = OutfitStore.calendarDefaultColumns
+    static let archiveDefaultColumns = 3
+    static let calendarDefaultColumns = 2
+    /// Calendar multi-outfit days: which outfit id each date key
+    /// ("yyyy-MM-dd") currently displays. Days with several outfits
+    /// show one at a time — the user pages via the +N pill / swipe,
+    /// and `RootView.switchView` sets the anchor outfit's date here
+    /// so ANY archive outfit can be a calendar morph target (not just
+    /// each day's newest). Unset dates fall back to the newest outfit.
+    var calendarDayDisplayedOutfitIds: [String: String] = [:]
     var useFahrenheit: Bool = (UserDefaults.standard.object(forKey: "preferredTempUnitFahrenheit") as? Bool) ?? true {
         didSet {
             UserDefaults.standard.set(useFahrenheit, forKey: "preferredTempUnitFahrenheit")
@@ -116,6 +147,11 @@ class OutfitStore {
     /// the resting expanded state we keep them visible so the user
     /// can still see the weather + dismiss the carousel.
     var isCarouselCardEditing = false
+    /// True while the diary-note editor is open. RootView's global
+    /// tap-anywhere-to-dismiss-keyboard handler MUST stand down during
+    /// note editing — it was resigning the keyboard on every font/color
+    /// chip tap and on the entry touch (the keyboard-bounce root cause).
+    var isDiaryNoteEditing = false
     /// Set to true once the in-page grid/calendar toggle on the
     /// profile-home screen has scrolled up to the top-bar threshold.
     /// RootView's top bar reads this to swap settings + share for the
@@ -639,6 +675,16 @@ class OutfitStore {
         persistCache()
     }
 
+    /// Durable local publish state. The carousel used to track this only in
+    /// an ephemeral per-view override — close + reopen the carousel and the
+    /// fit looked unpublished (white globe) until the next server refresh,
+    /// even though the server row was already public.
+    func setOutfitPublishedLocally(_ outfitId: String, isPublic: Bool) {
+        guard let index = outfits.firstIndex(where: { $0.id == outfitId }) else { return }
+        outfits[index].isPublic = isPublic
+        persistCache()
+    }
+
     func updateOutfitTags(outfitId: String, tags: [String]) {
         guard let index = outfits.firstIndex(where: { $0.id == outfitId }) else { return }
         outfits[index].tags = tags
@@ -661,6 +707,13 @@ class OutfitStore {
     /// Writes the owner's diary note (text + style + share flag) both
     /// locally (optimistic, cached) and to the server. Clearing the
     /// text also forces `shared` off — an empty note can't be shared.
+    /// Outfits with a diary-note write still in flight to the server.
+    /// While an id is in here, `refreshOutfits` must treat the LOCAL
+    /// note fields as truth — a refresh racing the write would
+    /// otherwise re-import the pre-edit note from the server (the
+    /// "deleted note comes back" bug).
+    @ObservationIgnored private var pendingNoteWriteIds: Set<String> = []
+
     func updateOutfitDiaryNote(
         outfitId: String,
         note: String?,
@@ -692,6 +745,7 @@ class OutfitStore {
         outfits[index].noteRotation = finalRotation
         outfits[index].noteColorIndex = finalColor
         persistCache()
+        pendingNoteWriteIds.insert(outfitId)
         Task {
             try? await OutfitService.updateOutfitDiaryNote(
                 outfitId: outfitId,
@@ -704,6 +758,7 @@ class OutfitStore {
                 rotation: finalRotation,
                 colorIndex: finalColor
             )
+            await MainActor.run { _ = self.pendingNoteWriteIds.remove(outfitId) }
         }
     }
 
@@ -864,6 +919,84 @@ class OutfitStore {
         } catch {
             // Non-fatal — user can still manually check
         }
+
+        restoreLocallyPersistedJobs(userId: userId)
+    }
+
+    /// Rebuilds jobs from the on-disk pending-job snapshots (fork-stage
+    /// 2D stills the server knows nothing about, plus the cutout/
+    /// green-screen images for jobs the server restore DID bring back
+    /// but which carry no image data). A fork-stage still must never
+    /// disappear on its own — it comes back on every launch until the
+    /// user acts on it.
+    private func restoreLocallyPersistedJobs(userId: UUID) {
+        let records = LocalOutfitStore.shared.loadPendingJobs(userId: userId)
+        guard !records.isEmpty else { return }
+
+        // Disk reads off the main hop.
+        var images: [Int: (cutout: Data?, green: Data?)] = [:]
+        for record in records {
+            images[record.outfitNum] = (
+                cutout: LocalOutfitStore.shared.loadPendingJobImage(outfitNum: record.outfitNum, kind: "cutout", userId: userId),
+                green: LocalOutfitStore.shared.loadPendingJobImage(outfitNum: record.outfitNum, kind: "green", userId: userId)
+            )
+        }
+
+        Task { @MainActor in
+            guard self.userId == userId else { return }
+            let queueJobs = generationQueue.activeJobs + generationQueue.waitingJobs
+            let archivedIds = Set(outfits.map(\.id))
+
+            for record in records {
+                let assets = images[record.outfitNum] ?? (nil, nil)
+                let previewArchived = record.previewOutfit.map { archivedIds.contains($0.id) } ?? false
+
+                // An archived preview at the FORK is stale (the fit
+                // completed through some other path) — clean it up.
+                // For .generate/.review it's the normal Generate-3D
+                // state: the 2D entered the archive when the render
+                // started and is awaiting its frame upgrade.
+                if previewArchived, record.step == .fork {
+                    LocalOutfitStore.shared.removePendingJob(outfitNum: record.outfitNum, userId: userId)
+                    continue
+                }
+
+                // A queue twin exists (alive in-session, or restored
+                // from the server this launch) → just re-attach the
+                // heavy fields the server record doesn't carry.
+                if let twin = queueJobs.first(where: {
+                    $0.outfitNum == record.outfitNum
+                        || ($0.serverJobId != nil && $0.serverJobId == record.serverJobId)
+                }) {
+                    if twin.cutoutImage == nil { twin.cutoutImage = assets.cutout }
+                    if twin.greenScreenImage == nil { twin.greenScreenImage = assets.green }
+                    if twin.previewOutfit == nil { twin.previewOutfit = record.previewOutfit }
+                    if twin.uploadWeather == nil { twin.uploadWeather = record.uploadWeather }
+                    if twin.uploadLocation == nil { twin.uploadLocation = record.uploadLocation }
+                    if twin.sourceImagePath == nil { twin.sourceImagePath = record.sourceImagePath }
+                    if twin.resultOutfitId == nil, previewArchived {
+                        twin.resultOutfitId = record.previewOutfit?.id
+                    }
+                    continue
+                }
+
+                // No twin → rebuild the job wholesale from disk.
+                let job = record.makePipelineJob(cutout: assets.cutout, greenScreen: assets.green)
+                if previewArchived {
+                    // Marks the archived 2D as this job's outfit: hides
+                    // the grid placeholder (the real cell is showing)
+                    // and keeps the sparkle overlay keyed to its id.
+                    job.resultOutfitId = record.previewOutfit?.id
+                }
+                generationQueue.adoptFromServer(job)
+                if job.step == .generate {
+                    // Re-attach polling; if the server job died while
+                    // we were gone, the poll loop surfaces the error
+                    // and the user can retry or discard.
+                    generationOrchestrator.resume(job)
+                }
+            }
+        }
     }
 
     private func restoredJob(from record: GenerationJobRecord, outfit: Outfit?) -> PipelineJob {
@@ -873,6 +1006,13 @@ class OutfitStore {
         let job = PipelineJob(outfitNum: outfitNum)
         job.serverJobId = record.id
         job.loaderStage = record.loaderStage
+        // Carry the uploaded green-screen path + prompt so Regenerate
+        // works on restored review cards — retake() resubmits against
+        // these; without them it falls back to the full on-device
+        // pipeline, which needs the original photo bytes we no longer
+        // have after a relaunch.
+        job.sourceImagePath = record.sourceImagePath
+        if let prompt = record.prompt { job.prompt = prompt }
         if let outfit {
             job.stagedOutfit = outfit
             job.step = .review
@@ -962,6 +1102,33 @@ class OutfitStore {
             }
             if (outfit.location ?? "").isEmpty, let cachedLocation = cached.location, !cachedLocation.isEmpty {
                 preserved.location = cachedLocation
+            }
+            // Diary note: LOCAL is truth while a note write is in
+            // flight — a refresh racing the write would re-import the
+            // pre-edit note from the server (incl. resurrecting a
+            // just-deleted one). Copy ALL note fields from cache, even
+            // when the cached note is nil (that nil IS the deletion).
+            if pendingNoteWriteIds.contains(outfit.id) {
+                preserved.diaryNote = cached.diaryNote
+                preserved.noteStyle = cached.noteStyle
+                preserved.noteShared = cached.noteShared
+                preserved.noteX = cached.noteX
+                preserved.noteY = cached.noteY
+                preserved.noteScale = cached.noteScale
+                preserved.noteRotation = cached.noteRotation
+                preserved.noteColorIndex = cached.noteColorIndex
+            } else if (outfit.diaryNote ?? "").isEmpty, let cachedNote = cached.diaryNote, !cachedNote.isEmpty {
+                // Server has no note but we do locally — covers a
+                // failed server write so a refresh can't wipe a note
+                // the user just wrote.
+                preserved.diaryNote = cachedNote
+                preserved.noteStyle = cached.noteStyle
+                preserved.noteShared = cached.noteShared
+                preserved.noteX = cached.noteX
+                preserved.noteY = cached.noteY
+                preserved.noteScale = cached.noteScale
+                preserved.noteRotation = cached.noteRotation
+                preserved.noteColorIndex = cached.noteColorIndex
             }
             return preserved
         }

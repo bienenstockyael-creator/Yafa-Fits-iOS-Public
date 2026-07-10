@@ -116,15 +116,32 @@ struct OutfitService {
             let note_rotation: Double?
             let note_color: Int?
         }
-        try await supabase
-            .from("outfits")
-            .update(NoteUpdate(
-                diary_note: note, note_style: style, note_shared: shared,
-                note_x: x, note_y: y, note_scale: scale, note_rotation: rotation,
-                note_color: colorIndex
-            ))
-            .eq("id", value: outfitId)
-            .execute()
+        do {
+            try await supabase
+                .from("outfits")
+                .update(NoteUpdate(
+                    diary_note: note, note_style: style, note_shared: shared,
+                    note_x: x, note_y: y, note_scale: scale, note_rotation: rotation,
+                    note_color: colorIndex
+                ))
+                .eq("id", value: outfitId)
+                .execute()
+        } catch {
+            // If the position columns don't exist yet (migration pending),
+            // PostgREST rejects the WHOLE update — which used to mean the
+            // note text never reached the server and any refresh wiped it.
+            // Fall back to the base columns so the note itself persists.
+            struct BaseNoteUpdate: Encodable {
+                let diary_note: String?
+                let note_style: String?
+                let note_shared: Bool
+            }
+            try await supabase
+                .from("outfits")
+                .update(BaseNoteUpdate(diary_note: note, note_style: style, note_shared: shared))
+                .eq("id", value: outfitId)
+                .execute()
+        }
     }
 
     static func setPublished(_ isPublic: Bool, outfitId: String) async throws {

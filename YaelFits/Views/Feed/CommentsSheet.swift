@@ -32,10 +32,12 @@ struct CommentsSheet: View {
             .fullScreenCover(item: $selectedUserId) { userId in
                 UserProfileView(userId: userId, onDismiss: { selectedUserId = nil })
                     .environment(store)
+                    .presentationBackground(.clear)
             }
             .sheet(item: $reportTarget) { target in
                 ReportSheet(target: target)
                     .environment(store)
+                    .roundedSheetBackground()
             }
             .confirmationDialog(
                 blockCandidate.map { "Block \($0.name)?" } ?? "Block user?",

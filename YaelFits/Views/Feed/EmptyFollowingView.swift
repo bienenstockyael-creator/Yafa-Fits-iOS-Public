@@ -167,7 +167,7 @@ struct EmptyFollowingView: View {
         // pre-warm, killed disco-ball 3× ramp) are doing most of
         // the work keeping the springs smooth.)
         _ = mountTime  // retained on the signature for future use
-        let posts = await ContentSource.getPublicFeed()
+        let posts = await ContentSource.getPublicFeed(featuredFirst: true)
         await MainActor.run { communityPosts = posts }
         await loadCounts(for: posts.map(\.outfitId))
         await loadVibes(for: posts.map(\.outfitId))
@@ -176,7 +176,7 @@ struct EmptyFollowingView: View {
     /// Force-reloads the community feed (globe re-tap refresh) — the same fetch
     /// as `loadCommunityIfNeeded` but without the once-per-mount guard.
     private func refreshCommunity() async {
-        let posts = await ContentSource.getPublicFeed()
+        let posts = await ContentSource.getPublicFeed(featuredFirst: true)
         await MainActor.run { communityPosts = posts }
         await loadCounts(for: posts.map(\.outfitId))
         await loadVibes(for: posts.map(\.outfitId))

@@ -73,19 +73,59 @@ struct OutfitGridView: View {
     /// fires on real user gestures.
     @State private var lastObservedScrollOffset: CGFloat = 0
 
-    private let heroTransitionDuration: Double = 0.32
-    private let heroFadeInDuration: Double = 0.12
+    // Open-transition timings come from the SHARED choreography so they
+    // cannot drift from the user-profile sheet's copy of this sequence.
+    private let heroTransitionDuration = CarouselHeroChoreography.heroFlightDuration
+    private let heroFadeInDuration = CarouselHeroChoreography.revealFadeDuration
     private let heroFadeOutDuration: Double = 0.08
-    private let carouselBackdropFadeInDuration: Double = 0.22
+    private let carouselBackdropFadeInDuration = CarouselHeroChoreography.backdropFadeInDuration
     private let carouselBackdropFadeOutDuration: Double = 0.12
-    private let carouselChromeFadeInDuration: Double = 0.28
+    private let carouselChromeFadeInDuration = CarouselHeroChoreography.chromeFadeInDuration
     private let carouselChromeFadeOutDuration: Double = 0.1
     private let initialVisibleCount = 9
-    private let columns = [
-        GridItem(.flexible(), spacing: 24, alignment: .top),
-        GridItem(.flexible(), spacing: 24, alignment: .top),
-        GridItem(.flexible(), spacing: 24, alignment: .top),
+    // MARK: Pinch zoom (mirrors the closet grid + calendar)
+
+    @State private var pinchScale: CGFloat = 1
+    @State private var pinchAnchor: UnitPoint = .center
+    @State private var isPinching = false
+    @State private var pinchStartColumns: Int?
+    @State private var twoFingersDown = false
+    /// Latched when a pinch pushes past the biggest cells into the
+    /// carousel — the zoom continuum's final stop. One trigger per
+    /// pinch.
+    @State private var didPinchIntoCarousel = false
+    private static let minColumns = 2
+    private static let maxColumns = 4
+
+    private var columnCount: Int { store.archiveColumnCount }
+
+    /// STATIC layout instances per density — a fresh [GridItem] per
+    /// body evaluation forced LazyVGrid to re-lay the grid on every
+    /// render (transition instability, pinch cost). Same fix as the
+    /// calendar.
+    private static let columnLayouts: [Int: [GridItem]] = [
+        2: Array(repeating: GridItem(.flexible(), spacing: 28, alignment: .top), count: 2),
+        3: Array(repeating: GridItem(.flexible(), spacing: 24, alignment: .top), count: 3),
+        4: Array(repeating: GridItem(.flexible(), spacing: 14, alignment: .top), count: 4),
     ]
+
+    private var columns: [GridItem] {
+        Self.columnLayouts[columnCount] ?? Self.columnLayouts[3]!
+    }
+
+    private var gridRowSpacing: CGFloat {
+        switch columnCount {
+        case 2: 48
+        case 3: 42
+        default: 30
+        }
+    }
+
+    /// Cell height scales with the zoom (168pt at the default 3
+    /// columns) so cards keep their proportions.
+    private var cardHeight: CGFloat {
+        504 / CGFloat(columnCount)
+    }
 
     var body: some View {
         ScrollViewReader { reader in
@@ -156,10 +196,29 @@ struct OutfitGridView: View {
                         .padding(.horizontal, LayoutMetrics.small)
                     }
                     .compositingGroup()
-                    .scrollDisabled(isScrubbing || showCarousel)
+                    // Two fingers down = pinch, never a scroll (same
+                    // setup as the closet grid + calendar).
+                    .scrollDisabled(isScrubbing || showCarousel || twoFingersDown)
+                    .background(
+                        TouchCountReporter { count in
+                            // Window-level recognizer: ignore touches
+                            // while this surface isn't the visible one
+                            // (the archive + calendar stay mounted) —
+                            // but ALWAYS let a zero-count through so
+                            // the flag can't latch scroll off.
+                            guard store.currentView == .list || count == 0 else { return }
+                            let down = count >= 2
+                            if down != twoFingersDown { twoFingersDown = down }
+                        }
+                    )
                     .allowsHitTesting(!showCarousel)
                     .overlay {
-                        if store.sortedOutfits.isEmpty {
+                        // Hide the CTA the moment ANY generation is in flight
+                        // (2D or 3D) — the in-progress placeholder card is the
+                        // content now; the button was overlapping it.
+                        if store.sortedOutfits.isEmpty,
+                           store.generationQueue.activeJobs.isEmpty,
+                           store.generationQueue.waitingJobs.isEmpty {
                             emptyStatePrompt
                                 .blurFadeReveal(active: contentVisible, delay: 0.06, blurRadius: 10)
                         }
@@ -167,12 +226,13 @@ struct OutfitGridView: View {
 
                     if showCarousel {
                         CarouselView(
-                            outfits: store.sortedOutfits,
+                            outfits: carouselOutfits,
                             currentIndex: $carouselIndex,
                             backdropOpacity: carouselBackdropVisible ? 1 : 0,
                             showsChrome: carouselChromeVisible,
                             showsCurrentLiveSlide: showCurrentCarouselLiveSlide,
                             showsEntryOverlay: showCarouselEntryOverlay,
+                            heroTransitionActive: heroTransition != nil,
                             entryFrame: carouselEntryFrame,
                             entryImage: carouselEntryImage,
                             onHeroTargetFrameChange: { frame in
@@ -181,7 +241,7 @@ struct OutfitGridView: View {
                             onCurrentFrameChange: { frameIndex in
                                 activeCarouselFrameIndex = frameIndex
                                 if let entryFrame = carouselEntryFrame,
-                                   store.sortedOutfits[safe: carouselIndex]?.id == entryFrame.outfitId,
+                                   carouselOutfits[safe: carouselIndex]?.id == entryFrame.outfitId,
                                    frameIndex != entryFrame.frameIndex {
                                     hideCarouselEntryOverlay()
                                 }
@@ -197,7 +257,8 @@ struct OutfitGridView: View {
                             },
                             onDismiss: {
                                 dismissCarousel(using: reader)
-                            }
+                            },
+                            generatingOutfitIds: store.generating3DOutfitIds
                         )
                         .compositingGroup()
                         .zIndex(1)
@@ -215,6 +276,7 @@ struct OutfitGridView: View {
                             .allowsHitTesting(false)
                             .zIndex(2)
                     }
+
                 }
                 .onPreferenceChange(ListOutfitFramePreferenceKey.self) { frames in
                     outfitFrames = frames
@@ -237,6 +299,14 @@ struct OutfitGridView: View {
                 withAnimation(.easeInOut(duration: 0.32)) {
                     reader.scrollTo("archiveTop", anchor: .top)
                 }
+            }
+            .onChange(of: store.currentView) { _, _ in
+                // A view switch can unmount a cell mid-scrub, so its
+                // drag-end callback never fires — `isScrubbing` then
+                // latches true and scroll is permanently disabled
+                // (the "scroll freezes after a few back-and-forths").
+                isScrubbing = false
+                twoFingersDown = false
             }
             .onChange(of: store.carouselDismissTrigger) { _, _ in
                 // Fired by the global X button in the top bar when
@@ -318,7 +388,7 @@ struct OutfitGridView: View {
     }
 
     private var outfitsGrid: some View {
-        LazyVGrid(columns: columns, spacing: 42) {
+        LazyVGrid(columns: columns, spacing: gridRowSpacing) {
             // Generation placeholders sit at the top of the grid —
             // newest selection first — so the user's "I just picked
             // this" moment lands in the highest-priority visual slot.
@@ -330,13 +400,91 @@ struct OutfitGridView: View {
                 GenerationPlaceholderCard(
                     job: job,
                     phase: store.generationQueue.phase(for: job),
-                    onTap: { onExpandGenerationJob(job) }
+                    onTap: {
+                        guard !isPinching else { return }
+                        onExpandGenerationJob(job)
+                    },
+                    height: cardHeight
                 )
             }
             ForEach(Array(store.sortedOutfits.enumerated()), id: \.element.id) { index, outfit in
                 gridItem(outfit: outfit, index: index)
             }
         }
+        // Zoom from the pinch focal point, not the content center.
+        .scaleEffect(pinchScale, anchor: pinchAnchor)
+        // Whole surface hit-testable so a pinch finger landing in a
+        // gap between cards still counts toward the magnify (mirrors
+        // the calendar).
+        .contentShape(Rectangle())
+        // SIMULTANEOUS, not high-priority: gesture priority can't
+        // preempt the parent ScrollView's pan (it only orders gestures
+        // within this subtree), so a high-priority magnify had to race
+        // the scroll and usually lost. Simultaneous co-recognizes;
+        // scrollDisabled(twoFingersDown) freezes the scroll a beat
+        // later, so the pinch always engages. (Mirrors the calendar.)
+        .simultaneousGesture(zoomGesture)
+    }
+
+    /// Pinch out → fewer/bigger cards; pinch in → more/smaller.
+    /// Identical mechanics to the closet grid and the calendar — plus
+    /// the continuum's final stop: pushing PAST the biggest cells
+    /// (2 columns) zooms straight into the carousel on the outfit
+    /// you're zooming toward.
+    private var zoomGesture: some Gesture {
+        MagnifyGesture()
+            .onChanged { value in
+                isPinching = true
+                pinchAnchor = value.startAnchor
+                if pinchStartColumns == nil { pinchStartColumns = columnCount }
+                let start = Double(pinchStartColumns ?? columnCount)
+                let raw = start / Double(value.magnification)
+
+                // Zooming in past the 2-column cells arms the
+                // carousel hand-off (the continuum's final stop) —
+                // fired on RELEASE, so the open never fights the live
+                // gesture. One haptic marks crossing the threshold.
+                let arming = raw < 1.45
+                if arming != didPinchIntoCarousel {
+                    didPinchIntoCarousel = arming
+                    if arming {
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    }
+                }
+
+                let lo = Double(Self.minColumns), hi = Double(Self.maxColumns)
+                let effective: Double
+                if raw < lo { effective = lo - (lo - raw) * 0.28 }
+                else if raw > hi { effective = hi + (raw - hi) * 0.28 }
+                else { effective = raw }
+                let whole = min(Self.maxColumns, max(Self.minColumns, Int(raw.rounded())))
+                if whole != columnCount {
+                    store.archiveColumnCount = whole
+                    UISelectionFeedbackGenerator().selectionChanged()
+                }
+                pinchScale = CGFloat(Double(columnCount) / effective)
+            }
+            .onEnded { _ in
+                pinchStartColumns = nil
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.62)) { pinchScale = 1 }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+                    isPinching = false
+                }
+                // Pinched past the biggest cells → open the carousel
+                // on the centered outfit, now that the fingers are up.
+                if didPinchIntoCarousel {
+                    didPinchIntoCarousel = false
+                    if let id = store.centeredListOutfitId ?? store.sortedOutfits.first?.id,
+                       let index = store.sortedOutfits.firstIndex(where: { $0.id == id }) {
+                        presentCarousel(
+                            for: store.sortedOutfits[index],
+                            at: index,
+                            frameIndex: store.listOutfitFrameIndices[id] ?? 0,
+                            image: nil
+                        )
+                    }
+                }
+            }
     }
 
     private var generationPlaceholderJobs: [PipelineJob] {
@@ -349,6 +497,14 @@ struct OutfitGridView: View {
                 return !archived.contains(resultId)
             }
             .reversed()
+    }
+
+    /// Outfits shown by the carousel. Fits whose 3D upgrade is
+    /// rendering are REAL archive entries (the Generate-3D flow saves
+    /// the 2D immediately), so no injection is needed — they're in
+    /// `sortedOutfits` like any saved 2D, just wearing sparkles.
+    private var carouselOutfits: [Outfit] {
+        store.sortedOutfits
     }
 
     private func placeholderCard(index: Int) -> some View {
@@ -374,6 +530,19 @@ struct OutfitGridView: View {
     private func gridItem(outfit: Outfit, index: Int) -> some View {
         OutfitCardView(
             outfit: outfit,
+            height: cardHeight,
+            scrubEnabled: !twoFingersDown,
+            // NEVER preload the full 242-frame sequence from a grid
+            // cell (the old `columnCount <= 3` gate was always true at
+            // the default density, so the storm ran on every mount).
+            // Each preload queues ~242 serialized decodes on the
+            // FrameLoader actor; cover-frame loads for newly visible
+            // cells then starve behind them — blank cells, transition
+            // stalls, unresponsive pinch. Scrubbing lazy-loads frames
+            // on demand, and the launch entrance spin still preloads
+            // via `playEntranceSequence` (bounded to the first
+            // screenful).
+            preloadFullSequence: false,
             eagerLoad: index < initialVisibleCount,
             playEntranceSequence: playsInitialSequence && index < initialVisibleCount,
             entranceSequenceActive: contentVisible,
@@ -386,6 +555,9 @@ struct OutfitGridView: View {
             syncFrameIndex: anchorTransitionFrame(for: outfit.id) ?? outfitFrameIndices[outfit.id],
             syncImage: outfitFrameImages[outfit.id],
             onTap: { frameIndex, image in
+                // A finger-lift at the end of a pinch must not read
+                // as a tap.
+                guard !isPinching else { return }
                 let impact = UIImpactFeedbackGenerator(style: .medium)
                 impact.impactOccurred()
                 presentCarousel(for: outfit, at: index, frameIndex: frameIndex, image: image)
@@ -416,6 +588,16 @@ struct OutfitGridView: View {
                 store.currentDisplayedFrame[outfit.id] = newFrame
             }
         )
+        .overlay {
+            // 3D upgrade in flight: the archived 2D wears the sparkle
+            // field until the render is accepted. Non-interactive —
+            // taps pass through to the card underneath.
+            if store.generating3DOutfitIds.contains(outfit.id) {
+                GenerationStarField(starSize: 200, interactive: false)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .allowsHitTesting(false)
+            }
+        }
         .blurFadeReveal(active: contentVisible, delay: revealDelay(for: index))
         .id(outfit.id)
         .anchorTransition(
@@ -472,7 +654,7 @@ struct OutfitGridView: View {
             } label: {
                 HStack(spacing: 6) {
                     AppIcon(glyph: .plusCircle, size: 14, color: AppPalette.textPrimary)
-                    Text("CREATE YOUR FIRST OUTFIT")
+                    Text("CREATE YOUR FIRST FIT")
                         .font(.system(size: 12, weight: .semibold))
                         .tracking(1.5)
                         .foregroundStyle(AppPalette.textPrimary)
@@ -550,6 +732,21 @@ struct OutfitGridView: View {
 
     private func presentCarousel(for outfit: Outfit, at index: Int, frameIndex: Int, image: UIImage?) {
         carouselTransitionTask?.cancel()
+        // Rapid open → close → open: cancelling a mid-flight dismissal
+        // leaves the PREVIOUS outfit's hero image mounted above the
+        // stack (it only unmounts at the end of the dismiss task). A
+        // stale hero over a fresh open is exactly the "two outfits
+        // crossing" glitch — clear every transition leftover up front,
+        // synchronously, before staging this open.
+        heroTransition = nil
+        heroOpacity = 1
+        showCarouselEntryOverlay = false
+        showCurrentCarouselLiveSlide = false
+        revealGridOutfitIdDuringHero = nil
+        carouselEntryFrame = nil
+        carouselEntryImage = nil
+        carouselTargetFrame = .null
+
         let entryFrameIndex = frameIndex
         carouselTransitionTask = Task { @MainActor in
             let entryImage: UIImage?
@@ -602,12 +799,26 @@ struct OutfitGridView: View {
             let targetFrame = await waitForCarouselTargetFrame(fallback: sourceFrame)
             guard !Task.isCancelled else { return }
 
-            withAnimation(.timingCurve(0.22, 0.84, 0.18, 1, duration: heroTransitionDuration)) {
+            withAnimation(CarouselHeroChoreography.heroFlightAnimation) {
                 heroFrame = targetFrame
             }
 
             try? await Task.sleep(for: .milliseconds(Int(heroTransitionDuration * 1000)))
             guard !Task.isCancelled else { return }
+
+            // The slide can settle a few points away from where it was when
+            // the flight started (initial slideHeight placeholder, late layout
+            // under load) — landing on the stale rect made the live slide pop
+            // in visibly offset from the hero. Re-measure and glide out any
+            // drift concurrently with the reveal so the swap is pixel-aligned
+            // without adding a pause.
+            let settledFrame = await waitForCarouselTargetFrame(fallback: targetFrame)
+            guard !Task.isCancelled else { return }
+            if !CarouselHeroChoreography.rectsMatch(settledFrame, targetFrame) {
+                withAnimation(.easeOut(duration: 0.1)) {
+                    heroFrame = settledFrame
+                }
+            }
 
             _ = await waitForCarouselDisplayedFrame(entryFrameIndex, outfitId: outfit.id)
             guard !Task.isCancelled else { return }
@@ -617,16 +828,18 @@ struct OutfitGridView: View {
                 showCarouselEntryOverlay = carouselEntryImage != nil
                 heroOpacity = 0
             }
+            // Chrome fades in WITH the reveal crossfade — it used to wait for
+            // the crossfade to fully finish first, adding ~120ms of dead
+            // serialization to every open for no structural reason.
+            withAnimation(.easeInOut(duration: carouselChromeFadeInDuration)) {
+                carouselChromeVisible = true
+            }
 
             try? await Task.sleep(for: .milliseconds(Int(heroFadeInDuration * 1000)))
             guard !Task.isCancelled else { return }
 
             heroTransition = nil
             heroOpacity = 1
-
-            withAnimation(.easeInOut(duration: carouselChromeFadeInDuration)) {
-                carouselChromeVisible = true
-            }
         }
     }
 
@@ -636,7 +849,7 @@ struct OutfitGridView: View {
 
         guard
             showCarousel,
-            let currentOutfit = store.sortedOutfits[safe: carouselIndex]
+            let currentOutfit = carouselOutfits[safe: carouselIndex]
         else {
             showCarousel = false
             heroTransition = nil
@@ -702,7 +915,7 @@ struct OutfitGridView: View {
             try? await Task.sleep(for: .milliseconds(16))
             guard !Task.isCancelled else { return }
 
-            withAnimation(.timingCurve(0.22, 0.84, 0.18, 1, duration: heroTransitionDuration)) {
+            withAnimation(CarouselHeroChoreography.heroFlightAnimation) {
                 heroFrame = targetFrame
             }
 
@@ -768,7 +981,7 @@ struct OutfitGridView: View {
 
     @MainActor
     private func syncGridToCarouselSelection(using reader: ScrollViewProxy) async {
-        guard let outfitId = store.sortedOutfits[safe: carouselIndex]?.id else { return }
+        guard let outfitId = carouselOutfits[safe: carouselIndex]?.id else { return }
         var transaction = Transaction()
         transaction.animation = nil
         withTransaction(transaction) {
@@ -780,45 +993,17 @@ struct OutfitGridView: View {
 
     @MainActor
     private func waitForCarouselTargetFrame(fallback: CGRect) async -> CGRect {
-        // Wait for the slide's reported frame to STABILIZE — same
-        // value across two consecutive 16ms samples within a 0.5pt
-        // tolerance. Returning the first non-null value (the old
-        // behavior) was catching the slide mid-initial-layout, so
-        // the hero animated toward an unsettled position and snapped
-        // when the slide finally landed. Mirrors the calendar/list
-        // transition's `waitForStableDestinationFrame`.
-        let maxIterations = 30
-        var lastFrame: CGRect?
-        for _ in 0 ..< maxIterations {
-            let frame = carouselTargetFrame
-            if !frame.isNull, frame.width > 0, frame.height > 0 {
-                if let last = lastFrame,
-                   abs(last.minX - frame.minX) < 0.5,
-                   abs(last.minY - frame.minY) < 0.5,
-                   abs(last.width - frame.width) < 0.5,
-                   abs(last.height - frame.height) < 0.5 {
-                    return frame
-                }
-                lastFrame = frame
-            }
-            try? await Task.sleep(for: .milliseconds(16))
+        await CarouselHeroChoreography.waitForStableFrame(fallback: fallback) {
+            carouselTargetFrame
         }
-        // Polling deadline reached without two stable samples.
-        // Prefer the most recent non-null reading if we have one;
-        // otherwise fall back to the source frame (no morph).
-        return lastFrame ?? fallback
     }
 
     @MainActor
     private func waitForCarouselDisplayedFrame(_ frameIndex: Int, outfitId: String) async -> Bool {
-        for _ in 0 ..< 24 {
-            if store.sortedOutfits[safe: carouselIndex]?.id == outfitId,
-               activeCarouselDisplayedFrame == frameIndex {
-                return true
-            }
-            try? await Task.sleep(for: .milliseconds(16))
+        await CarouselHeroChoreography.waitUntil {
+            carouselOutfits[safe: carouselIndex]?.id == outfitId
+                && activeCarouselDisplayedFrame == frameIndex
         }
-        return false
     }
 
     private func displayedHeroFrame(in viewportFrame: CGRect) -> CGRect {
@@ -855,7 +1040,7 @@ struct OutfitGridView: View {
         carouselTargetFrame = .null
         activeCarouselFrameIndex = 0
         activeCarouselDisplayedFrame = nil
-        carouselIndex = min(carouselIndex, max(store.sortedOutfits.count - 2, 0))
+        carouselIndex = min(carouselIndex, max(carouselOutfits.count - 2, 0))
         store.selectedOutfitId = nil
         store.deleteOutfit(outfit)
     }

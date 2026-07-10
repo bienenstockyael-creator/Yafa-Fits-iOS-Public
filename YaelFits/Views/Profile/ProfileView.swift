@@ -171,6 +171,7 @@ struct ProfileView: View {
         }
         .sheet(isPresented: $showBlockedAccounts) {
             BlockedAccountsSheet().environment(store)
+                .roundedSheetBackground()
         }
         .onChange(of: selectedPhoto) { _, newValue in
             guard let newValue else { return }
@@ -251,13 +252,8 @@ struct ProfileView: View {
                 .aspectRatio(contentMode: .fill)
         } else if let urlString = store.currentProfile?.avatarUrl,
                   let url = URL(string: urlString) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().aspectRatio(contentMode: .fill)
-                default:
-                    initialFallback
-                }
+            CachedRemoteImage(url: url, maxPixelSize: 320, contentMode: .fill) {
+                initialFallback
             }
         } else {
             initialFallback

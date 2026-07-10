@@ -188,7 +188,9 @@ final class RemoteImageCache {
 
     private init() {
         memory.countLimit = 300
-        memory.totalCostLimit = 32 * 1024 * 1024 // ~32 MB of decoded UIImage bytes
+        // Carries product thumbnails (~640px) as well as avatars now,
+        // so the budget is roomier than the avatar-only 32 MB.
+        memory.totalCostLimit = 64 * 1024 * 1024 // ~64 MB of decoded UIImage bytes
     }
 
     /// Synchronous memory-cache read. Used on view appear so
@@ -318,14 +320,18 @@ final class RemoteImageCache {
 }
 
 /// Drop-in AsyncImage replacement that doesn't get cancelled by view
-/// recycling. Renders `placeholder` until the image arrives.
+/// recycling. Renders `placeholder` until the image arrives; on a
+/// completed-but-failed load it renders `failure` (defaults to the
+/// placeholder) so call sites can distinguish "loading" from "broken".
 struct CachedRemoteImage<Placeholder: View>: View {
     let url: URL
     var maxPixelSize: CGFloat = 240
     var contentMode: ContentMode = .fill
+    var failure: AnyView? = nil
     @ViewBuilder let placeholder: () -> Placeholder
 
     @State private var image: UIImage?
+    @State private var didFail = false
 
     var body: some View {
         Group {
@@ -333,11 +339,14 @@ struct CachedRemoteImage<Placeholder: View>: View {
                 Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: contentMode)
+            } else if didFail, let failure {
+                failure
             } else {
                 placeholder()
             }
         }
         .task(id: url) {
+            didFail = false
             // Sync cache hit on appear avoids any placeholder flash.
             if let hit = RemoteImageCache.shared.cached(url) {
                 self.image = hit
@@ -349,6 +358,8 @@ struct CachedRemoteImage<Placeholder: View>: View {
             // populates both caches for next time.
             if let loaded = await RemoteImageCache.shared.load(url, maxPixelSize: maxPixelSize) {
                 self.image = loaded
+            } else {
+                didFail = true
             }
         }
     }

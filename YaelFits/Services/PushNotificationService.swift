@@ -1,9 +1,109 @@
 import UIKit
+import SwiftUI
 import UserNotifications
+
+// MARK: - In-app notice pill
+
+/// Foreground notifications don't use the system banner — iOS can't style
+/// it. Instead `willPresent` suppresses it and routes the content here,
+/// and RootView overlays a small Yafa-styled pill at the top of the screen.
+@Observable
+@MainActor
+final class InAppNoticeCenter {
+    static let shared = InAppNoticeCenter()
+
+    struct Notice: Identifiable, Equatable {
+        let id = UUID()
+        let kind: String?
+        let title: String
+    }
+
+    private(set) var current: Notice?
+    private var dismissTask: Task<Void, Never>?
+
+    func show(kind: String?, title: String) {
+        dismissTask?.cancel()
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.8)) {
+            current = Notice(kind: kind, title: title)
+        }
+        dismissTask = Task {
+            try? await Task.sleep(for: .seconds(3.2))
+            guard !Task.isCancelled else { return }
+            self.dismiss()
+        }
+    }
+
+    func dismiss() {
+        dismissTask?.cancel()
+        withAnimation(.easeOut(duration: 0.25)) { current = nil }
+    }
+}
+
+/// The pill itself — compact capsule, app-styled, kind-matched icon.
+/// Vibes use the SAME gradient flame as the profile chip and the
+/// particle burst, so the notification reads as "a vibe arrived".
+struct InAppNoticePill: View {
+    let notice: InAppNoticeCenter.Notice
+
+    var body: some View {
+        HStack(spacing: LayoutMetrics.xxSmall) {
+            icon
+            Text(notice.title)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(AppPalette.textPrimary)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, LayoutMetrics.xSmall)
+        .padding(.vertical, 8)
+        .appCapsule(shadowRadius: 8, shadowY: 2)
+        .onTapGesture { InAppNoticeCenter.shared.dismiss() }
+    }
+
+    @ViewBuilder
+    private var icon: some View {
+        switch notice.kind {
+        case "vibe":
+            GradientFlameIcon(size: 15, stroked: true)
+        case "like":
+            AppIcon(glyph: .heart, size: 14, color: AppPalette.iconPrimary, filled: true)
+        case "comment":
+            AppIcon(glyph: .comment, size: 14, color: AppPalette.iconPrimary)
+        case "follow":
+            AppIcon(glyph: .person, size: 14, color: AppPalette.iconPrimary)
+        default:
+            Image(systemName: "sparkles")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(AppPalette.iconPrimary)
+        }
+    }
+}
 
 // MARK: - App Delegate (token registration hook)
 
-final class PushNotificationAppDelegate: NSObject, UIApplicationDelegate {
+final class PushNotificationAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        // Without a delegate, iOS suppresses ALL notification banners while
+        // the app is foregrounded — a like arriving mid-session showed
+        // nothing. Present social pushes as banners in-app too.
+        UNUserNotificationCenter.current().delegate = self
+        return true
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification
+    ) async -> UNNotificationPresentationOptions {
+        // In-app: suppress the (unstylable) system banner and show the
+        // Yafa pill instead. Backgrounded/locked delivery is untouched.
+        let content = notification.request.content
+        let kind = content.userInfo["kind"] as? String
+        await InAppNoticeCenter.shared.show(kind: kind, title: content.title)
+        return []
+    }
+
     func application(
         _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data

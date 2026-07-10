@@ -190,9 +190,11 @@ struct CarouselDetailCard: View {
         )
         .sheet(item: $selectedLinkedProduct) { product in
             LinkedProductOutfitsSheet(product: product, sourceOutfit: outfit)
+                .roundedSheetBackground()
         }
         .sheet(item: $selectedLinkedTag) { selection in
             LinkedTagOutfitsSheet(tag: selection.tag, sourceOutfit: outfit)
+                .roundedSheetBackground()
         }
         .sheet(isPresented: $showAddProduct) {
             if let userId = store.userId {
@@ -207,6 +209,7 @@ struct CarouselDetailCard: View {
                     store.updateOutfit(outfit.id, caption: outfit.caption,
                                        products: (outfit.products ?? []) + [newProduct])
                 }
+                .roundedSheetBackground()
             }
         }
         .sheet(item: $autoDetectSource) { source in
@@ -232,6 +235,7 @@ struct CarouselDetailCard: View {
                         products: existing + [newProduct]
                     )
                 }
+                .roundedSheetBackground()
             }
         }
     }
@@ -539,19 +543,13 @@ struct CarouselDetailCard: View {
     private func archiveProductImage(_ product: Product) -> some View {
         Group {
             if let imageURL = product.resolvedImageURL {
-                AsyncImage(url: imageURL, transaction: Transaction(animation: .easeOut(duration: 0.2))) { phase in
-                    switch phase {
-                    case let .success(image):
-                        image.resizable().scaledToFill()
-                            .frame(width: 100, height: 100)
-                            .clipped()
-                    case .failure:
-                        placeholderProductImage
-                    case .empty:
-                        ProgressView().tint(AppPalette.textMuted)
-                    @unknown default:
-                        placeholderProductImage
-                    }
+                CachedRemoteImage(
+                    url: imageURL,
+                    maxPixelSize: 640,
+                    contentMode: .fill,
+                    failure: AnyView(placeholderProductImage)
+                ) {
+                    ProgressView().tint(AppPalette.textMuted)
                 }
             } else {
                 placeholderProductImage

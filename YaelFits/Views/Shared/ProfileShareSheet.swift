@@ -168,17 +168,16 @@ struct ProfileShareSheet: View {
             // user's header style. (Previously the in-memory circle avatar was
             // checked first, so a cut-out that only existed as a saved URL got
             // skipped — the rounded-avatar regression.)
-            AsyncImage(url: cutoutURL) { phase in
-                if let image = phase.image {
-                    image.resizable().aspectRatio(contentMode: .fit).frame(height: height)
-                } else if let avatar = store.currentAvatarImage {
-                    // Cut-out still downloading → show the circle avatar meanwhile.
+            CachedRemoteImage(url: cutoutURL, maxPixelSize: 1000, contentMode: .fit) {
+                // Cut-out still downloading → show the circle avatar meanwhile.
+                if let avatar = store.currentAvatarImage {
                     Image(uiImage: avatar).resizable().aspectRatio(contentMode: .fill)
                         .frame(width: height, height: height).clipShape(Circle())
                 } else {
                     silhouette(height: height)
                 }
             }
+            .frame(height: height)
         } else if let avatar = store.currentAvatarImage {
             Image(uiImage: avatar)
                 .resizable()
@@ -186,14 +185,11 @@ struct ProfileShareSheet: View {
                 .frame(width: height, height: height)
                 .clipShape(Circle())
         } else if let avatarURL = remoteURL(store.currentProfile?.avatarUrl) {
-            AsyncImage(url: avatarURL) { phase in
-                if let image = phase.image {
-                    image.resizable().aspectRatio(contentMode: .fill)
-                        .frame(width: height, height: height).clipShape(Circle())
-                } else {
-                    silhouette(height: height)
-                }
+            CachedRemoteImage(url: avatarURL, maxPixelSize: 480, contentMode: .fill) {
+                silhouette(height: height)
             }
+            .frame(width: height, height: height)
+            .clipShape(Circle())
         } else {
             silhouette(height: height)
         }

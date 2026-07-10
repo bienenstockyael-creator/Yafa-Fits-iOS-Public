@@ -11,6 +11,9 @@ struct FeedPost: Codable, Identifiable, Equatable {
     var avatarUrl: String?
     var authorId: UUID?
     var isAuthorPro: Bool?
+    /// Author is a curated/featured account — their latest post floats
+    /// to the top rail of the community feed.
+    var isAuthorFeatured: Bool?
     var createdAt: String?
 
     var publishedDate: Date? {

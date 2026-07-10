@@ -459,27 +459,20 @@ struct ProfileHeader: View {
                 .aspectRatio(contentMode: .fit)
         } else if let urlString = store.currentProfile?.avatarCutoutUrl,
                   let url = URL(string: urlString) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().aspectRatio(contentMode: .fit)
-                case .failure:
-                    // Genuine load error — fall back to the
-                    // circle-clipped avatar so the header is
-                    // never empty.
-                    avatarContent.clipShape(Circle())
-                default:
-                    // `.empty` (loading). DON'T show the circle
-                    // fallback here: we know a cutout exists on
-                    // the profile so the right answer is "the
-                    // bust shape" — flashing the circular avatar
-                    // mid-load makes it look like the bust style
-                    // briefly reverted on every tab return. A
-                    // transparent placeholder for the few ms
-                    // before the URLCache hit completes reads
-                    // as "loading" rather than "wrong silhouette".
-                    Color.clear
-                }
+            // Cached loader — repeat renders (tab returns, relaunches)
+            // come from memory/disk with no placeholder flash at all.
+            // While genuinely loading, stay transparent: we know a
+            // cutout exists, so flashing the circular avatar mid-load
+            // would read as the bust style briefly reverting. On a
+            // real load failure, fall back to the circle so the
+            // header is never empty.
+            CachedRemoteImage(
+                url: url,
+                maxPixelSize: 800,
+                contentMode: .fit,
+                failure: AnyView(avatarContent.clipShape(Circle()))
+            ) {
+                Color.clear
             }
         } else {
             avatarContent
@@ -505,13 +498,8 @@ struct ProfileHeader: View {
                 .aspectRatio(contentMode: .fill)
         } else if let urlString = store.currentProfile?.avatarUrl,
                   let url = URL(string: urlString) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().aspectRatio(contentMode: .fill)
-                default:
-                    initialFallback
-                }
+            CachedRemoteImage(url: url, maxPixelSize: 320, contentMode: .fill) {
+                initialFallback
             }
         } else {
             initialFallback

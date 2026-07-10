@@ -1,5 +1,7 @@
 import SwiftUI
 import UIKit
+import Vision
+import simd
 
 /// The wardrobe (product closet): every product the user has tagged,
 /// shown as a filterable grid.
@@ -60,6 +62,14 @@ struct WardrobeView: View {
     /// Live downward offset while swiping the closet page down to dismiss it
     /// (like a sheet). Drives the pull; release past a threshold closes it.
     @State private var closetDragOffset: CGFloat = 0
+    /// Bitmap of the page captured at drag start — THE thing that
+    /// follows the finger (see closetDismissDrag). nil at rest.
+    @State private var dragSnapshot: UIImage?
+    /// True once a committed dismiss slide is running — blocks new
+    /// drag input during the hand-off to the (unanimated) unmount.
+    @State private var isCommittingDismiss = false
+    /// Weak handle to the cover's UIKit container, for snapshotting.
+    @State private var containerRef = ContainerViewRef()
     /// Items deleted this session — filtered out immediately so the grid
     /// updates even before the (cached) outfit list re-syncs.
     @State private var deletedItemIDs: Set<String> = []
@@ -126,9 +136,18 @@ struct WardrobeView: View {
     /// Shrink the lightbox back into its tile. SAME spring as the open so the
     /// exit feels symmetric with the entry, not abrupt.
     private func closeLightbox() {
-        withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
             selectedItem = nil
         }
+    }
+
+    /// Real device top inset from the key window — the page root
+    /// ignores the safe area (it owns the full physical screen), so
+    /// the header clears the status bar with explicit padding.
+    private static var windowSafeTopInset: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.keyWindow?.safeAreaInsets.top ?? 59
     }
 
     var body: some View {
@@ -138,15 +157,52 @@ struct WardrobeView: View {
         // screen never reached the edges. A custom header replaces the (purely
         // cosmetic) nav bar.
         ZStack {
-            AppPalette.groupedBackground.ignoresSafeArea()
+            // Dim behind the dragged card — a physical sheet needs
+            // separation from the screen it slides over. Fades in with
+            // the pull, back out as a committed dismiss slides away.
+            if closetDragOffset > 0 {
+                Color.black
+                    .opacity(
+                        0.20 * min(1, closetDragOffset / 260)
+                            * (1 - closetDragOffset / UIScreen.main.bounds.height)
+                    )
+                    .ignoresSafeArea()
+            }
 
-            VStack(spacing: 0) {
-                closetHeader
-                content
+            // THE LIVE PAGE — never offset, never clipped, so SwiftUI's
+            // position-dependent safe-area layout never reflows it (the
+            // reflow inside a moving live page was the drag's "clipping
+            // pop", proven across three instrumented rounds). Hidden
+            // while the snapshot drives the drag; the two are pixel-
+            // identical at the moment of the swap.
+            ZStack {
+                AppPalette.groupedBackground
+
+                VStack(spacing: 0) {
+                    closetHeader
+                    content
+                }
+                // Manual top inset (window safe area) — the root owns
+                // the FULL physical screen, so the header clears the
+                // status bar by explicit padding, not safe-area layout.
+                .padding(.top, Self.windowSafeTopInset)
+            }
+            .ignoresSafeArea(.container)
+            // System open/close slides get their corners from the UIKit
+            // container rounding — disabled while the snapshot drag is
+            // live so the stationary container's mask can't carve into
+            // the moving snapshot.
+            .fullScreenCardCorners(containerActive: dragSnapshot == nil)
+            .background(ContainerViewGrabber(ref: containerRef))
+            .opacity(dragSnapshot == nil ? 1 : 0)
+
+            // THE DRAGGED CARD — a bitmap of the page, following the
+            // finger with progressively rounding corners and a shadow.
+            // Pixels cannot reflow.
+            if let snapshot = dragSnapshot {
+                SnapshotDragCard(image: snapshot, dragOffset: closetDragOffset)
             }
         }
-        // Follow the finger while swiping the closet down to dismiss.
-        .offset(y: closetDragOffset)
         .task { await load() }
         .onAppear {
             // First-ever open: surface the explainer once the page has settled.
@@ -204,6 +260,16 @@ struct WardrobeView: View {
                         onDeleted: {
                             withAnimation(.spring(response: 0.42, dampingFraction: 0.9)) {
                                 _ = deletedItemIDs.insert(item.id)
+                            }
+                        },
+                        similarCandidates: allItems,
+                        onSelectSimilar: { next in
+                            // Swap the lightbox to the tapped similar item —
+                            // fresh identity (new token) so the form state
+                            // rebuilds for the new product.
+                            lightboxOpenToken += 1
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                selectedItem = next
                             }
                         }
                     )
@@ -317,27 +383,57 @@ struct WardrobeView: View {
     /// Swipe-down-to-dismiss for the whole closet page (the closet is a
     /// fullScreenCover, which has no built-in interactive dismiss). Disabled
     /// while a product lightbox is open so it can't fight the lightbox.
+    ///
+    /// SNAPSHOT-DRIVEN, the way UIKit's own interactive dismissals work:
+    /// at drag start the page is captured as an image and THE PIXELS are
+    /// what follow the finger (rounded, shadowed, over the dim). SwiftUI
+    /// re-applies safe-area layout the moment a live page is offset —
+    /// content visibly reflowed inside the moving card on every drag
+    /// start (the "clipping pop"); a bitmap cannot reflow.
     private var closetDismissDrag: some Gesture {
         // GLOBAL coordinate space: the header is inside the view we offset, so a
         // .local translation would move WITH the offset and feed back into itself
         // (the frantic jitter). Global = the finger's actual screen movement.
         DragGesture(coordinateSpace: .global)
             .onChanged { v in
-                guard selectedItem == nil else { return }
+                guard selectedItem == nil, !isCommittingDismiss else { return }
+                if dragSnapshot == nil, v.translation.height > 0 {
+                    dragSnapshot = containerRef.snapshot()
+                }
                 closetDragOffset = max(0, v.translation.height)
             }
             .onEnded { v in
-                guard selectedItem == nil else { return }
+                guard selectedItem == nil, !isCommittingDismiss else { return }
                 if v.translation.height > 120 || v.predictedEndTranslation.height > 350 {
-                    // Dismiss — the cover's slide-down continues from the offset.
-                    if let onClose { onClose() } else { dismiss() }
+                    // Commit: finish the slide OURSELVES on the snapshot,
+                    // then drop the cover with animations disabled — the
+                    // system dismissal would otherwise re-animate the
+                    // (reflowed) live page from the top.
+                    isCommittingDismiss = true
+                    withAnimation(.easeIn(duration: 0.22)) {
+                        closetDragOffset = UIScreen.main.bounds.height
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
+                        var t = Transaction()
+                        t.disablesAnimations = true
+                        withTransaction(t) {
+                            if let onClose { onClose() } else { dismiss() }
+                        }
+                    }
                 } else {
+                    // Cancel: spring the snapshot back flat, then swap the
+                    // (identical-pixels) live page back in.
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                         closetDragOffset = 0
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                        guard closetDragOffset == 0 else { return }
+                        dragSnapshot = nil
                     }
                 }
             }
     }
+
 
     /// Same look as the public-feed search bar (appCard 14 / search icon /
     /// 13pt), but a live text field that filters the grid.
@@ -422,7 +518,7 @@ struct WardrobeView: View {
                                 lightboxOpenToken += 1
                                 // iOS app-launch feel: springs up from the tile and
                                 // settles softly — snappy and light, not rubbery.
-                                withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                                     selectedItem = item
                                 }
                             } label: {
@@ -551,6 +647,14 @@ struct WardrobeView: View {
                         statusFilter = nil
                     }
                     .id("all")
+                    // Wishlist right after All — the highest-value filter,
+                    // always present (even on an empty closet) so people
+                    // know it exists and where saved items will land.
+                    chip(title: "Wishlist", isOn: statusFilter == .wishlist) {
+                        categoryFilter = nil
+                        statusFilter = (statusFilter == .wishlist) ? nil : .wishlist
+                    }
+                    .id("wishlist")
                     ForEach(availableCategories, id: \.self) { cat in
                         chip(title: cat.label, isOn: categoryFilter == cat && statusFilter == nil) {
                             statusFilter = nil
@@ -558,13 +662,6 @@ struct WardrobeView: View {
                         }
                         .id(cat.rawValue)
                     }
-                    // Always present (even on an empty closet) so people know
-                    // the wishlist exists and where saved items will land.
-                    chip(title: "Wishlist", isOn: statusFilter == .wishlist) {
-                        categoryFilter = nil
-                        statusFilter = (statusFilter == .wishlist) ? nil : .wishlist
-                    }
-                    .id("wishlist")
                 }
                 .padding(.horizontal, LayoutMetrics.screenPadding)
             }
@@ -613,9 +710,9 @@ struct WardrobeView: View {
     }
 
     private var filterTabs: [FilterTab] {
-        var tabs: [FilterTab] = [.all]
+        // Order matches the pill row: All · Wishlist · categories.
+        var tabs: [FilterTab] = [.all, .wishlist]
         tabs += availableCategories.map(FilterTab.category)
-        tabs.append(.wishlist)
         return tabs
     }
 
@@ -936,6 +1033,31 @@ private struct ScrollTopKey: PreferenceKey {
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
+/// Staggered top-to-bottom fade for the compact lightbox's sections.
+/// Opacity-only and value-scoped, so it can never animate layout —
+/// sections are laid out in their final positions from frame one and
+/// simply fade in.
+private struct LightboxRevealModifier: ViewModifier {
+    let index: Int
+    let revealed: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(revealed ? 1 : 0)
+            .animation(
+                .easeOut(duration: 0.4).delay(0.08 + Double(index) * 0.06),
+                value: revealed
+            )
+    }
+}
+
+private extension View {
+    func lightboxReveal(_ index: Int, revealed: Bool) -> some View {
+        modifier(LightboxRevealModifier(index: index, revealed: revealed))
+    }
+}
+
+
 private struct WardrobeItemCell: View {
     let item: WardrobeDisplayItem
     /// Show the category pill (only on the All filter, 2 columns).
@@ -1063,6 +1185,10 @@ private struct ProductLightbox: View {
     var onChanged: () async -> Void
     /// Called after a successful delete so the closet can drop it locally.
     var onDeleted: () -> Void
+    /// The whole closet — pool for the "similar items" row.
+    var similarCandidates: [WardrobeDisplayItem] = []
+    /// Tap on a similar item → parent swaps the lightbox to it.
+    var onSelectSimilar: (WardrobeDisplayItem) -> Void = { _ in }
 
     @Environment(\.openURL) private var openURL
     @Environment(OutfitStore.self) private var store
@@ -1098,6 +1224,13 @@ private struct ProductLightbox: View {
     /// until the open/close scale spring has settled — building/loading it during
     /// the spring competes for the main thread and jitters the animation.
     @State private var showTaggedOn = false
+    /// Similar items re-ranked by on-device VISUAL similarity (feature
+    /// print + dominant color). nil until the async pass lands — the
+    /// row stays hidden until its FINAL order is known, so it never
+    /// visibly reorders in front of the user.
+    @State private var visuallyRankedSimilar: [WardrobeDisplayItem]?
+    /// Drives the compact card's staggered section fade-in.
+    @State private var contentRevealed = false
 
     /// Real device safe-area insets from the key window. We position content
     /// manually because the overlay ignores the safe area (so SwiftUI reports
@@ -1114,13 +1247,17 @@ private struct ProductLightbox: View {
         userId: UUID,
         onClose: @escaping () -> Void,
         onChanged: @escaping () async -> Void,
-        onDeleted: @escaping () -> Void = {}
+        onDeleted: @escaping () -> Void = {},
+        similarCandidates: [WardrobeDisplayItem] = [],
+        onSelectSimilar: @escaping (WardrobeDisplayItem) -> Void = { _ in }
     ) {
         self.item = item
         self.userId = userId
         self.onClose = onClose
         self.onChanged = onChanged
         self.onDeleted = onDeleted
+        self.similarCandidates = similarCandidates
+        self.onSelectSimilar = onSelectSimilar
         _name = State(initialValue: item.name)
         _category = State(initialValue: item.category)
         _brand = State(initialValue: item.brand ?? "")
@@ -1132,21 +1269,26 @@ private struct ProductLightbox: View {
     var body: some View {
         ZStack {
             ZStack(alignment: .top) {
-                // One continuous scroll (title, image, form) so nothing
-                // clips at a fixed header — content scrolls edge to edge.
-                scrollContent
-                // The ONLY pinned chrome — X and Save float above the scroll.
+                // ONE content tree for both modes. The hero image is a
+                // single view that NEVER unmounts — its frame morphs
+                // between preview (170) and editor (200) inside the
+                // expand spring, which is what makes the transition
+                // read as one continuous product. Only the content
+                // below it swaps (crossfade): compact sections vs the
+                // scrolling editor form.
+                unifiedContent
+                // The ONLY pinned chrome — X (and Save, full mode only).
                 pinnedControls
             }
             .background(AppPalette.groupedBackground)
             // Card → square edge-to-edge as it goes full screen.
             .clipShape(RoundedRectangle(cornerRadius: isFull ? 0 : 28, style: .continuous))
-            .padding(.top, isFull ? 0 : insetTop + 8)
-            .padding(.bottom, isFull ? 0 : insetBottom + 8)
             .padding(.horizontal, isFull ? 0 : 10)
             .shadow(color: .black.opacity(isFull ? 0 : 0.18), radius: isFull ? 0 : 30, y: isFull ? 0 : 12)
-            // Follow the finger when pulling the full sheet down to dismiss.
-            .offset(y: sheetDrag)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            // Follow the finger when pulling the FULL sheet down to
+            // dismiss — the compact card is fixed and never follows.
+            .offset(y: isFull ? sheetDrag : 0)
         }
         // Fill the screen via the parent overlay's safe-area bypass — NOT by
         // ignoring the safe area on this (scaling) view, which moved the grow
@@ -1159,6 +1301,7 @@ private struct ProductLightbox: View {
             // Mount the tagged-on carousel only after the open spring settles.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showTaggedOn = true }
         }
+        .task(id: item.id) { await rankSimilarVisually() }
         // ONE unified gesture: in card mode any drag expands to full; in full
         // mode a pull-down at the very top dismisses. Simultaneous, so the
         // ScrollView still scrolls normally underneath it.
@@ -1171,17 +1314,40 @@ private struct ProductLightbox: View {
         }
     }
 
-    /// The entire card as ONE scroll — title, image, form. Only X/Save
-    /// are pinned (see pinnedControls), so content never clips at a fixed header
-    /// and scrolls all the way to the bottom edge. A zero-size probe reports the
-    /// content offset so the gesture knows when it's pinned to the top.
-    private var scrollContent: some View {
+    /// ONE tree for both modes. The hero image never unmounts — its
+    /// frame morphs inside the expand spring, so the product is a
+    /// single continuous element across preview ↔ editor. Below it,
+    /// the compact sections and the scrolling editor form swap with a
+    /// crossfade. (An earlier matchedGeometryEffect pair across the
+    /// ScrollView boundary resolved unreliably and fell back to a
+    /// fade — a never-unmounting view can't fail that way.)
+    private var unifiedContent: some View {
+        VStack(spacing: 0) {
+            // (The "Edit item" title lives in `pinnedControls`, centered
+            // on the X/Save row like the app's other sheet headers.)
+            TrimmedRemoteImage(url: item.resolvedImageURL)
+                .frame(height: isFull ? 200 : 170)
+                .frame(maxWidth: .infinity)
+                .padding(.top, isFull ? insetTop + LayoutMetrics.screenPadding + 44 + LayoutMetrics.small : 32)
+                .lightboxReveal(0, revealed: contentRevealed)
+            if isFull {
+                editorScroll
+                    .transition(.opacity)
+            } else {
+                compactSections
+                    .transition(.opacity)
+            }
+        }
+        .onAppear { contentRevealed = true }
+    }
+
+    /// FULL mode: the form scrolls UNDER the pinned hero — the product
+    /// stays visible while editing. A zero-size probe reports the
+    /// content offset so the pull-down-to-dismiss gesture knows when
+    /// it's pinned to the top.
+    private var editorScroll: some View {
         ScrollView {
             VStack(spacing: LayoutMetrics.large) {
-                Text("Edit item")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(AppPalette.textStrong)
-                heroImage
                 formCard
                 statusSection
                 if !sourceURL.isEmpty, let linkURL = URL(string: sourceURL) {
@@ -1197,11 +1363,10 @@ private struct ProductLightbox: View {
                 deleteButton
             }
             .padding(.horizontal, LayoutMetrics.screenPadding)
-            // Top: clear the island (full) + the floating X/Save pills. Bottom:
-            // clear the home indicator (full) — as SCROLLABLE padding so the last
-            // row reaches the very edge instead of clipping above it.
-            .padding(.top, (isFull ? insetTop : 0) + LayoutMetrics.screenPadding + 44)
-            .padding(.bottom, (isFull ? insetBottom : 0) + LayoutMetrics.large)
+            .padding(.top, LayoutMetrics.large)
+            // Clear the home indicator — as SCROLLABLE padding so the
+            // last row reaches the very edge instead of clipping.
+            .padding(.bottom, insetBottom + LayoutMetrics.large)
             // Tap anywhere on the page (but not on a field/control) to dismiss the
             // keyboard. Text fields consume their own taps, so they still focus.
             .contentShape(Rectangle())
@@ -1220,6 +1385,37 @@ private struct ProductLightbox: View {
         .onPreferenceChange(ScrollTopKey.self) { atTop = $0 >= -1 }
     }
 
+    /// CARD mode sections below the hero: a plain VStack — intrinsic
+    /// height, no scroll, no measurement. The card wraps this exactly,
+    /// so every section is always fully visible and a vertical swipe
+    /// can only mean expand / dismiss. Components mirror PublishSheet.
+    ///
+    /// Every section is mounted from the FIRST frame (fixed layout, no
+    /// popping or reordering as the card opens) and revealed with a
+    /// gentle top-to-bottom staggered fade. The one exception is the
+    /// similar row, which appears only once its FINAL visually-ranked
+    /// order is known — the card glides taller as it fades in.
+    private var compactSections: some View {
+        VStack(spacing: LayoutMetrics.medium) {
+            compactIdentity
+                .lightboxReveal(1, revealed: contentRevealed)
+            compactShopSection
+                .lightboxReveal(2, revealed: contentRevealed)
+            compactSimilarSection
+            compactTaggedOnSection
+                .lightboxReveal(3, revealed: contentRevealed)
+            Text("swipe up to edit")
+                .font(.system(size: 11))
+                .foregroundStyle(AppPalette.textFaint)
+                .frame(maxWidth: .infinity)
+                .lightboxReveal(4, revealed: contentRevealed)
+        }
+        .padding(.horizontal, LayoutMetrics.screenPadding)
+        .padding(.top, LayoutMetrics.medium)
+        // Bottom breathing room mirrors the hero's 32pt top inset.
+        .padding(.bottom, 32)
+    }
+
     /// Unified scroll/drag behaviour:
     ///   • card mode → drag UP expands to full; drag DOWN follows the finger and
     ///     dismisses (it must NOT expand on a downward drag)
@@ -1235,13 +1431,10 @@ private struct ProductLightbox: View {
                 let startedFull = dragStartFull ?? isFull
 
                 guard startedFull else {
-                    // CARD mode: follow the finger DOWN toward dismiss; an UP drag
-                    // expands (decided on release, so direction is respected).
-                    if v.translation.height > 0 {
-                        sheetDrag = v.translation.height
-                    } else if sheetDrag != 0 {
-                        sheetDrag = 0
-                    }
+                    // CARD mode: the preview is FIXED in the center —
+                    // it never follows the finger. Swipes still act as
+                    // triggers (up → expand, down → dismiss), decided
+                    // on release.
                     return
                 }
                 // FULL mode: the sheet only follows the OVERSCROLL past the top.
@@ -1266,14 +1459,12 @@ private struct ProductLightbox: View {
                 let flick = v.predictedEndTranslation.height
 
                 if !startedFull {
-                    // CARD mode: up → expand, down → dismiss, else spring back.
+                    // CARD mode: pure triggers, no movement — up →
+                    // expand into the editor, a committed down → close.
                     if dy < -55 || flick < -200 {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) { sheetDrag = 0 }
                         setExpanded(true)
                     } else if dy > 110 || flick > 350 {
                         onClose()
-                    } else {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) { sheetDrag = 0 }
                     }
                     return
                 }
@@ -1291,7 +1482,7 @@ private struct ProductLightbox: View {
     }
 
     private func setExpanded(_ full: Bool) {
-        withAnimation(.spring(response: 0.42, dampingFraction: 0.86)) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) {
             isFull = full
         }
     }
@@ -1307,26 +1498,41 @@ private struct ProductLightbox: View {
     /// them lets scrolling content dissolve underneath instead of cutting hard.
     private var pinnedControls: some View {
         let topInset = (isFull ? insetTop : 0)
-        return HStack(spacing: 0) {
-            // Float the same way as the app's other controls: an X circle button
-            // and a white pill (fill + thin stroke + shadow) for Save.
-            Button { onClose() } label: {
-                AppIcon(glyph: .xmark, size: 14, color: AppPalette.iconPrimary)
-                    .frame(width: 36, height: 36)
-                    .appCircle()
+        // Same header pattern as the app's other sheets (e.g. the
+        // Closet page): title centered ON the control row, X left,
+        // action right.
+        return ZStack {
+            if isFull {
+                Text("Edit item")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(AppPalette.textStrong)
+                    .transition(.opacity)
             }
-            .buttonStyle(SolidPressButtonStyle())
-            Spacer()
-            Button { Task { await save() } } label: {
-                Text("Save")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(canSave ? AppPalette.textStrong : AppPalette.textFaint)
-                    .padding(.horizontal, 18)
-                    .frame(height: 36)
-                    .appCapsule()
+            HStack(spacing: 0) {
+                // Float the same way as the app's other controls: an X circle button
+                // and a white pill (fill + thin stroke + shadow) for Save.
+                Button { onClose() } label: {
+                    AppIcon(glyph: .xmark, size: 14, color: AppPalette.iconPrimary)
+                        .frame(width: 36, height: 36)
+                        .appCircle()
+                }
+                .buttonStyle(SolidPressButtonStyle())
+                Spacer()
+                // Save only exists in the full editor — the compact card
+                // is a read-only preview with nothing to save.
+                if isFull {
+                    Button { Task { await save() } } label: {
+                        Text("Save")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(canSave ? AppPalette.textStrong : AppPalette.textFaint)
+                            .padding(.horizontal, 18)
+                            .frame(height: 36)
+                            .appCapsule()
+                    }
+                    .buttonStyle(SolidPressButtonStyle())
+                    .disabled(!canSave)
+                }
             }
-            .buttonStyle(SolidPressButtonStyle())
-            .disabled(!canSave)
         }
         .padding(.horizontal, LayoutMetrics.screenPadding)
         // Same breathing room above the buttons as the side padding.
@@ -1334,17 +1540,293 @@ private struct ProductLightbox: View {
         .frame(maxWidth: .infinity, alignment: .top)
     }
 
-    /// The product image at the top of the lightbox card.
-    private var heroImage: some View {
-        TrimmedRemoteImage(url: item.resolvedImageURL)
-            .frame(height: 220)
-            .frame(maxWidth: .infinity)
-            .padding(.top, LayoutMetrics.xSmall)
+    // MARK: - Compact card mode (read-only preview)
+
+    /// PublishSheet-style section label — identical to CAPTION /
+    /// PRODUCTS so the two sheets read as one design system.
+    private func sectionLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 9, weight: .bold, design: .monospaced))
+            .tracking(2)
+            .foregroundStyle(AppPalette.textFaint)
+    }
+
+    /// Name (primary) + brand · price (muted) + category/status chips.
+    private var compactIdentity: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(item.name)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(AppPalette.textStrong)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            let sub = [item.brand ?? "", item.price ?? ""]
+                .filter { !$0.isEmpty }
+                .joined(separator: " · ")
+            if !sub.isEmpty {
+                Text(sub)
+                    .font(.system(size: 13))
+                    .foregroundStyle(AppPalette.textMuted)
+            }
+            HStack(spacing: 6) {
+                metaChip(item.category.label.uppercased())
+                metaChip(item.status == .wishlist ? "WISHLIST" : "OWNED")
+            }
+            .padding(.top, 2)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func metaChip(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 9, weight: .bold, design: .monospaced))
+            .tracking(1.2)
+            .foregroundStyle(AppPalette.textMuted)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Capsule().fill(Color.white))
+            .overlay(Capsule().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
+    }
+
+    /// THE action of the preview: link out to the product. Mirrors
+    /// the PublishSheet's shop-link row (link icon + URL text), read-
+    /// only with a link-out arrow. Hidden when there's no link.
+    @ViewBuilder
+    private var compactShopSection: some View {
+        if !sourceURL.isEmpty, let linkURL = URL(string: sourceURL) {
+            VStack(alignment: .leading, spacing: LayoutMetrics.xxSmall) {
+                sectionLabel("SHOP")
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    openURL(linkURL)
+                } label: {
+                    HStack(spacing: LayoutMetrics.xSmall) {
+                        Image(systemName: "link")
+                            .font(.system(size: 12))
+                            .foregroundStyle(AppPalette.textSecondary)
+                        Text(linkURL.host?.replacingOccurrences(of: "www.", with: "") ?? sourceURL)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(AppPalette.textPrimary)
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                        Image(systemName: "arrow.up.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(AppPalette.textMuted)
+                    }
+                    .padding(LayoutMetrics.medium)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(SolidPressButtonStyle())
+                .appCard(cornerRadius: LayoutMetrics.cardCornerRadius)
+            }
+        }
+    }
+
+    /// Same-category neighbours, most-similar first. For a WISHLIST
+    /// item the pool is what the user already OWNS — "do I already
+    /// have something like this?" is the whole point of the row. For
+    /// an owned item it's the rest of the closet. Similarity = same
+    /// category, ranked by brand match + name-word overlap.
+    private var similarItems: [WardrobeDisplayItem] {
+        let mySubType = Self.inferredSubType(of: item.name)
+        let pool = similarCandidates.filter { candidate in
+            candidate.id != item.id
+                && candidate.category == item.category
+                // Category alone is too coarse ("accessories" holds
+                // bags AND hats) — when both names reveal a sub-type,
+                // they must agree. Unknown sub-types pass through and
+                // let the visual ranking decide.
+                && Self.subTypesCompatible(mySubType, Self.inferredSubType(of: candidate.name))
+                && (item.status != .wishlist || candidate.status == .owned)
+        }
+        guard !pool.isEmpty else { return [] }
+
+        let itemBrand = (item.brand ?? "").trimmingCharacters(in: .whitespaces).lowercased()
+        let itemWords = Self.significantWords(item.name)
+        func score(_ candidate: WardrobeDisplayItem) -> Int {
+            var s = 0
+            if !itemBrand.isEmpty,
+               (candidate.brand ?? "").trimmingCharacters(in: .whitespaces).lowercased() == itemBrand {
+                s += 3
+            }
+            s += Self.significantWords(candidate.name).intersection(itemWords).count
+            return s
+        }
+        return Array(pool.sorted { score($0) > score($1) }.prefix(8))
+    }
+
+    /// Re-ranks the (category/status-filtered) candidates by how the
+    /// items LOOK: Vision feature-print distance + dominant-color
+    /// distance against this item's image. Runs off-main; signatures
+    /// are cached per image, so revisits are instant. The row is only
+    /// published ONCE, in its final order — never shown-then-reordered.
+    /// If the visual pass can't run (offline, bad image), it falls
+    /// back to the heuristic (brand/name) order rather than no row.
+    private func rankSimilarVisually() async {
+        let pool = similarItems
+        guard !pool.isEmpty else { return }
+
+        func publish(_ list: [WardrobeDisplayItem]) async {
+            await MainActor.run {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                    visuallyRankedSimilar = list
+                }
+            }
+        }
+
+        guard pool.count > 1,
+              let myURL = item.resolvedImageURL,
+              let mySig = await ProductSimilarityService.shared.signature(for: myURL) else {
+            await publish(pool)
+            return
+        }
+
+        var scored: [(item: WardrobeDisplayItem, distance: Float)] = []
+        for candidate in pool {
+            guard let url = candidate.resolvedImageURL,
+                  let sig = await ProductSimilarityService.shared.signature(for: url) else { continue }
+            scored.append((candidate, ProductSimilarityService.distance(mySig, sig)))
+        }
+        guard !scored.isEmpty else {
+            await publish(pool)
+            return
+        }
+        // "Similar" means SIMILAR: anything past the cutoff is dropped,
+        // not just ranked last. Two gates — an absolute ceiling, and a
+        // relative band around the best match (if your closet has a
+        // near-twin, distant items don't get to tag along). An empty
+        // result hides the row — better no suggestions than a bucket
+        // hat next to a suede bag.
+        let sorted = scored.sorted { $0.distance < $1.distance }
+        let best = sorted[0].distance
+        let ranked = sorted
+            .filter {
+                $0.distance < ProductSimilarityService.similarityCutoff
+                    && $0.distance < best + ProductSimilarityService.similarityBand
+            }
+            .map(\.item)
+        await publish(ranked)
+    }
+
+    /// Lowercased name words worth matching on (drops 1–2 letter
+    /// filler like "a"/"of").
+    private static func significantWords(_ name: String) -> Set<String> {
+        Set(
+            name.lowercased()
+                .components(separatedBy: CharacterSet.alphanumerics.inverted)
+                .filter { $0.count > 2 }
+        )
+    }
+
+    /// Item-type lexicon: names usually say what a thing IS ("Brown
+    /// Suede Bag", "Bucket Hat", "Ruffled Lace Bralette"). Used to
+    /// keep types apart inside coarse categories — especially OTHER,
+    /// which lumps everything unclassified together.
+    private static let subTypeLexicon: [(type: String, words: Set<String>)] = [
+        ("bag", ["bag", "purse", "tote", "clutch", "crossbody", "handbag", "satchel", "hobo", "baguette", "backpack"]),
+        ("hat", ["hat", "cap", "beanie", "bucket", "beret", "fedora"]),
+        ("belt", ["belt"]),
+        ("scarf", ["scarf", "bandana", "shawl"]),
+        ("glasses", ["sunglasses", "glasses", "shades"]),
+        ("jewelry", ["necklace", "ring", "bracelet", "earring", "earrings", "chain", "pendant", "brooch"]),
+        ("boot", ["boot", "boots"]),
+        ("heel", ["heel", "heels", "pump", "pumps", "stiletto", "stilettos"]),
+        ("sneaker", ["sneaker", "sneakers", "trainer", "trainers", "runner", "runners"]),
+        ("sandal", ["sandal", "sandals", "slide", "slides", "mule", "mules"]),
+        ("flat", ["loafer", "loafers", "flat", "flats", "ballerina", "mary", "janes"]),
+        ("swim", ["bikini", "swimsuit", "swim", "swimwear", "trunks", "onepiece"]),
+        ("underwear", ["bra", "bralette", "brief", "briefs", "panty", "panties", "thong", "lingerie", "boxer", "boxers"]),
+        ("top", ["shirt", "tee", "tshirt", "top", "jersey", "blouse", "sweater", "knit", "hoodie", "cardigan", "tank", "cami", "camisole", "polo", "turtleneck", "vest", "bodysuit"]),
+        ("outerwear", ["jacket", "coat", "blazer", "parka", "trench", "puffer", "windbreaker"]),
+        ("bottom", ["pants", "jeans", "trousers", "shorts", "skirt", "leggings", "joggers", "sweatpants", "culottes"]),
+        ("dress", ["dress", "gown", "jumpsuit", "romper"]),
+        ("socks", ["sock", "socks", "tights", "stockings"]),
+    ]
+
+    private static func inferredSubType(of name: String) -> String? {
+        let words = significantWords(name)
+        return subTypeLexicon.first { !words.isDisjoint(with: $0.words) }?.type
+    }
+
+    /// Both known → must match; either unknown → compatible (visual
+    /// ranking sorts it out).
+    private static func subTypesCompatible(_ a: String?, _ b: String?) -> Bool {
+        guard let a, let b else { return true }
+        return a == b
+    }
+
+    /// "You already own something like this" — the compact card's
+    /// discovery row. Tapping a tile swaps the lightbox to that item.
+    @ViewBuilder
+    private var compactSimilarSection: some View {
+        let similar = visuallyRankedSimilar ?? []
+        if !similar.isEmpty {
+            VStack(alignment: .leading, spacing: LayoutMetrics.xxSmall) {
+                sectionLabel(item.status == .wishlist ? "SIMILAR — ALREADY IN YOUR CLOSET" : "SIMILAR IN YOUR CLOSET")
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(similar) { candidate in
+                            Button {
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                onSelectSimilar(candidate)
+                            } label: {
+                                VStack(spacing: 6) {
+                                    TrimmedRemoteImage(url: candidate.resolvedImageURL)
+                                        .frame(width: 74, height: 74)
+                                        .padding(6)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                                .fill(Color.white)
+                                        )
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                                .strokeBorder(AppPalette.cardBorder, lineWidth: 0.75)
+                                        )
+                                    Text(candidate.name)
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundStyle(AppPalette.textMuted)
+                                        .lineLimit(1)
+                                        .frame(width: 86)
+                                }
+                            }
+                            .buttonStyle(SolidPressButtonStyle())
+                        }
+                    }
+                    .padding(.horizontal, LayoutMetrics.screenPadding)
+                }
+                .padding(.horizontal, -LayoutMetrics.screenPadding)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .transition(.opacity)
+        }
+    }
+
+    /// Compact TAGGED ON strip — smaller thumbnails than the full
+    /// editor's carousel, same edge-bleed scroll.
+    @ViewBuilder
+    private var compactTaggedOnSection: some View {
+        let outfits = taggedOutfits
+        if !outfits.isEmpty {
+            VStack(alignment: .leading, spacing: LayoutMetrics.xxSmall) {
+                sectionLabel("TAGGED ON")
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(outfits) { outfit in
+                            RotatableOutfitImage(outfit: outfit, height: 96, draggable: false, eagerLoad: true)
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        }
+                    }
+                    .padding(.horizontal, LayoutMetrics.screenPadding)
+                }
+                .padding(.horizontal, -LayoutMetrics.screenPadding)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 
     private var canSave: Bool {
         !isSaving && !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
+
 
     private var deleteButton: some View {
         Button(role: .destructive) {
@@ -1451,10 +1933,7 @@ private struct ProductLightbox: View {
 
     private var statusSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("STATUS")
-                .font(.system(size: 10, weight: .semibold))
-                .tracking(1.2)
-                .foregroundStyle(AppPalette.textFaint)
+            sectionLabel("STATUS")
             Picker("", selection: $status) {
                 Text("Owned").tag(WardrobeStatus.owned)
                 Text("Wishlist").tag(WardrobeStatus.wishlist)
@@ -1487,10 +1966,7 @@ private struct ProductLightbox: View {
         let outfits = taggedOutfits
         if !outfits.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
-                Text("TAGGED ON")
-                    .font(.system(size: 10, weight: .semibold))
-                    .tracking(1.2)
-                    .foregroundStyle(AppPalette.textFaint)
+                sectionLabel("TAGGED ON")
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
                         ForEach(outfits) { outfit in
@@ -1569,7 +2045,7 @@ private struct ProductLightbox: View {
 /// scrolling, taps, or the pinch gesture. Used to disable the ScrollView's
 /// scroll the instant a second finger lands, so a pinch can never be read as
 /// a scroll. One finger still scrolls normally.
-private struct TouchCountReporter: UIViewRepresentable {
+struct TouchCountReporter: UIViewRepresentable {
     let onChange: (Int) -> Void
 
     func makeUIView(context: Context) -> TouchCountView {
@@ -1583,7 +2059,7 @@ private struct TouchCountReporter: UIViewRepresentable {
     }
 }
 
-private final class TouchCountView: UIView {
+final class TouchCountView: UIView {
     var onChange: (Int) -> Void = { _ in }
     private weak var recognizer: TouchCountGestureRecognizer?
 
@@ -1608,8 +2084,18 @@ private final class TouchCountView: UIView {
 
 /// Passive recognizer: it never transitions out of `.possible`, so it
 /// observes touches without ever cancelling the scroll / tap / pinch.
-private final class TouchCountGestureRecognizer: UIGestureRecognizer {
+final class TouchCountGestureRecognizer: UIGestureRecognizer {
     var onCountChange: (Int) -> Void = { _ in }
+
+    /// Live window-wide touch count, readable SYNCHRONOUSLY from any
+    /// UIKit gesture callback. The SwiftUI mirror (`twoFingersDown`
+    /// state via `onCountChange`) needs a state-write → re-render →
+    /// updateUIView roundtrip before it can disable a competing
+    /// recognizer — under main-thread load that roundtrip loses the
+    /// race against a beginning pan, and the pinch goes dead. This
+    /// static lets `gestureRecognizerShouldBegin` ask "how many
+    /// fingers are on the screen RIGHT NOW" with no roundtrip.
+    private(set) static var liveTouchCount = 0
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
         super.touchesBegan(touches, with: event)
@@ -1625,6 +2111,7 @@ private final class TouchCountGestureRecognizer: UIGestureRecognizer {
     }
     override func reset() {
         super.reset()
+        Self.liveTouchCount = 0
         onCountChange(0)
     }
 
@@ -1632,11 +2119,12 @@ private final class TouchCountGestureRecognizer: UIGestureRecognizer {
         let active = (event.allTouches ?? []).filter {
             $0.phase != .ended && $0.phase != .cancelled
         }.count
+        Self.liveTouchCount = active
         onCountChange(active)
     }
 }
 
-private final class SimultaneousGestureDelegate: NSObject, UIGestureRecognizerDelegate {
+final class SimultaneousGestureDelegate: NSObject, UIGestureRecognizerDelegate {
     static let shared = SimultaneousGestureDelegate()
     func gestureRecognizer(
         _ gestureRecognizer: UIGestureRecognizer,
@@ -1787,3 +2275,103 @@ struct GetExtensionSheet: View {
         }
     }
 }
+
+// MARK: - Visual similarity
+
+/// On-device visual similarity for closet items. Two signals, computed
+/// once per image and cached for the session:
+///   1. Vision feature print — Apple's image embedding; captures
+///      shape, texture, and overall look in one distance metric.
+///   2. Dominant color over NON-TRANSPARENT pixels — product images
+///      are background-removed cutouts, so this is the product's
+///      actual color. Added explicitly so a brown bag ranks brown
+///      bags above black bags of the same silhouette.
+/// No server round-trips, no cost — everything runs locally.
+private actor ProductSimilarityService {
+    static let shared = ProductSimilarityService()
+
+    struct Signature {
+        let featurePrint: VNFeaturePrintObservation
+        let color: SIMD3<Float>
+    }
+
+    private var cache: [String: Signature] = [:]
+    private var failed: Set<String> = []
+
+    func signature(for url: URL) async -> Signature? {
+        let key = url.absoluteString
+        if let hit = cache[key] { return hit }
+        if failed.contains(key) { return nil }
+
+        guard let (data, _) = try? await URLSession.shared.data(from: url),
+              let cg = UIImage(data: data)?.cgImage else {
+            failed.insert(key)
+            return nil
+        }
+        let request = VNGenerateImageFeaturePrintRequest()
+        let handler = VNImageRequestHandler(cgImage: cg, options: [:])
+        guard (try? handler.perform([request])) != nil,
+              let observation = request.results?.first else {
+            failed.insert(key)
+            return nil
+        }
+        let sig = Signature(
+            featurePrint: observation,
+            color: Self.averageOpaqueColor(cg) ?? SIMD3(0.5, 0.5, 0.5)
+        )
+        cache[key] = sig
+        return sig
+    }
+
+    /// 0 = identical, larger = more different. Feature-print distance
+    /// carries the look; the color term is weighted high enough that a
+    /// black top ranks black tops above white ones of the same shape.
+    static func distance(_ a: Signature, _ b: Signature) -> Float {
+        var d: Float = .greatestFiniteMagnitude
+        try? a.featurePrint.computeDistance(&d, to: b.featurePrint)
+        let colorDistance = simd_length(a.color - b.color) / 1.732  // normalize to 0…1
+        return d + colorDistance * 1.0
+    }
+
+    /// Combined-distance ceiling for calling two items "similar".
+    /// Feature-print distances for same-class items typically land
+    /// well under 1.0; unrelated items push past ~1.3 even before the
+    /// color term. Tune against the real closet if the row feels too
+    /// strict or too loose.
+    static let similarityCutoff: Float = 1.2
+    /// Relative band: only items within this margin of the BEST match
+    /// survive — a near-twin in the closet raises the bar for the rest.
+    static let similarityBand: Float = 0.35
+
+    /// Mean RGB over pixels with meaningful alpha, sampled on a 32×32
+    /// downscale. Premultiplied-alpha aware: dividing the channel sums
+    /// by the alpha sum recovers the true average color.
+    private static func averageOpaqueColor(_ cg: CGImage) -> SIMD3<Float>? {
+        let w = 32, h = 32
+        var pixels = [UInt8](repeating: 0, count: w * h * 4)
+        guard let ctx = CGContext(
+            data: &pixels, width: w, height: h,
+            bitsPerComponent: 8, bytesPerRow: w * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+        ctx.interpolationQuality = .low
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+
+        var r: Float = 0, g: Float = 0, b: Float = 0, aSum: Float = 0
+        for i in stride(from: 0, to: pixels.count, by: 4) {
+            let a = Float(pixels[i + 3]) / 255
+            guard a > 0.1 else { continue }
+            r += Float(pixels[i]) / 255
+            g += Float(pixels[i + 1]) / 255
+            b += Float(pixels[i + 2]) / 255
+            aSum += a
+        }
+        guard aSum > 1 else { return nil }
+        return SIMD3(r / aSum, g / aSum, b / aSum)
+    }
+}
+
+// (DragCardShape, ContainerViewRef, ContainerViewGrabber and
+// SnapshotDragCard live in AppModifiers.swift — shared with every
+// full-screen sheet that uses the snapshot-driven drag dismissal.)

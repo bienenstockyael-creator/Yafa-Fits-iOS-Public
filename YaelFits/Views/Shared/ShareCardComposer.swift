@@ -463,6 +463,7 @@ struct ShareCardComposer: View {
             )
             .presentationDetents([.height(440)])
             .presentationDragIndicator(.visible)
+            .roundedSheetBackground()
         }
         .onAppear {
             storyHaptic.prepare()

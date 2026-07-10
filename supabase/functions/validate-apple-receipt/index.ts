@@ -191,6 +191,25 @@ serve(async (req) => {
     return jsonError(500, "apple_no_txn_id", "Apple response missing transactionId");
   }
 
+  // ── 6.5 Sandbox purchases grant NOTHING ────────────────────
+  //    TestFlight (and Xcode) builds run StoreKit in Apple's sandbox:
+  //    testers are never charged, but this function used to grant them
+  //    REAL credits — an infinite free-generation loophole that burns
+  //    FAL tokens. Sandbox transactions are acknowledged (200, so the
+  //    client finishes the transaction cleanly) but grant 0 credits.
+  //    Escape hatch for deliberate testing: set the ALLOW_SANDBOX_GRANTS
+  //    secret to "true" while testing, remove it afterwards.
+  if (
+    verifiedEnv === "Sandbox" &&
+    Deno.env.get("ALLOW_SANDBOX_GRANTS") !== "true"
+  ) {
+    console.log(`sandbox purchase acknowledged, no grant: ${verifiedTxn.transactionId}`);
+    return new Response(
+      JSON.stringify({ granted: 0, environment: "Sandbox" }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
   // ── 7. Grant via service-role RPC ─────────────────────────
   const serviceClient = createClient(supabaseUrl, serviceRoleKey);
   const { data, error: rpcError } = await serviceClient.rpc("grant_paid_credits", {

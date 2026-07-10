@@ -26,6 +26,13 @@ struct HorizontalPanRelease {
 struct InteractiveTouchSurface: UIViewRepresentable {
     var onTap: (() -> Void)? = nil
     var panEnabled = false
+    /// Whether the pan cancels touch delivery to the SwiftUI hierarchy
+    /// once it begins (UIKit default). Grid cells pass FALSE: if a
+    /// scrub grabs the first finger of a forming pinch, cancelling
+    /// kills SwiftUI's touch tracking and the parent MagnifyGesture
+    /// can never engage — with delivery intact, the pinch takes over
+    /// and the scrub is disabled a beat later via `panEnabled`.
+    var panCancelsTouches = true
     var onHorizontalPanBegan: (() -> Void)? = nil
     var onHorizontalPanChanged: ((CGFloat) -> Void)? = nil
     var onHorizontalPanEnded: ((HorizontalPanRelease) -> Void)? = nil
@@ -47,7 +54,7 @@ struct InteractiveTouchSurface: UIViewRepresentable {
         let panRecognizer = UIPanGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handlePan(_:)))
         panRecognizer.delegate = context.coordinator
         panRecognizer.maximumNumberOfTouches = 1
-        panRecognizer.cancelsTouchesInView = true
+        panRecognizer.cancelsTouchesInView = panCancelsTouches
         panRecognizer.isEnabled = panEnabled
         view.addGestureRecognizer(panRecognizer)
         context.coordinator.panRecognizer = panRecognizer
@@ -140,6 +147,17 @@ struct InteractiveTouchSurface: UIViewRepresentable {
         func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
             guard let panRecognizer = gestureRecognizer as? UIPanGestureRecognizer else {
                 return true
+            }
+
+            // A scrub is one finger by definition. When two fingers
+            // are on the screen the user is pinching — refuse to
+            // begin so the parent's MagnifyGesture gets both touches.
+            // Checked synchronously via the window-level touch
+            // counter: the SwiftUI `draggable`/`panEnabled` disable
+            // path needs a state roundtrip and loses this race under
+            // main-thread load (pinch read as a scrub → "pinch dead").
+            guard TouchCountGestureRecognizer.liveTouchCount < 2 else {
+                return false
             }
 
             let velocity = panRecognizer.velocity(in: panRecognizer.view)
