@@ -102,7 +102,10 @@ struct CarouselDetailCard: View {
             if isEditing {
                 editableProductRow
             } else if let products = outfit.products, !products.isEmpty {
-                productRow(products)
+                // Owners get an always-present + at the head of the
+                // row — adding a product is the everyday action, so it
+                // must not require the edit-mode round trip.
+                productRow(products, showsAdd: !viewOnly)
             } else if !viewOnly {
                 // View-only mode omits the "+ add product" CTA
                 // since the viewer can't tag products on someone
@@ -112,34 +115,13 @@ struct CarouselDetailCard: View {
 
             if isEditing {
                 editableTagRow
-            } else if !viewOnly, let tags = outfit.tags, !tags.isEmpty {
+            } else if !viewOnly {
                 // Tags only render on the owner's own carousel — they
                 // were exposing the author's organisational scheme on
-                // other users' outfits, which felt like leaking
-                // private metadata into someone else's surface.
-                FlowLayout(spacing: 6) {
-                    ForEach(tags, id: \.self) { tag in
-                        Button {
-                            let impact = UIImpactFeedbackGenerator(style: .light)
-                            impact.impactOccurred()
-                            selectedLinkedTag = LinkedTagSelection(id: tag)
-                        } label: {
-                            Text(tag.uppercased())
-                                .font(.system(size: 9, weight: .semibold))
-                                .tracking(0.8)
-                                .foregroundStyle(AppPalette.textMuted)
-                                .padding(.horizontal, 10)
-                                .frame(height: 26)
-                                .appCapsule(shadowRadius: 0, shadowY: 0)
-                        }
-                        .buttonStyle(SolidPressButtonStyle())
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            } else if !viewOnly {
-                // Same rationale as emptyProductRow above — hide
-                // the "+ add tag" CTA when viewing.
-                emptyTagRow
+                // other users' outfits. The + is ALWAYS present:
+                // adding a tag is one tap → inline input → return
+                // commits and saves instantly. No edit mode needed.
+                viewTagRow
             }
 
             // Bottom row: Make 3D only (2D outfits only — 3D outfits
@@ -240,7 +222,7 @@ struct CarouselDetailCard: View {
         }
     }
 
-    private func productRow(_ products: [Product]) -> some View {
+    private func productRow(_ products: [Product], showsAdd: Bool = false) -> some View {
         // `ViewThatFits` picks the first subview whose natural
         // size fits in the available space. Few products → the
         // centered HStack wins and the row looks identical on
@@ -248,8 +230,13 @@ struct CarouselDetailCard: View {
         // back to a horizontal ScrollView so the card width stays
         // consistent and content scrolls instead of pushing the
         // card frame past the viewport.
+        // `showsAdd` (owner view mode) leads the row with the same
+        // + that lives in edit mode — straight into Quick Add.
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .top, spacing: 24) {
+                if showsAdd {
+                    addProductButton.frame(minHeight: 100)
+                }
                 ForEach(products) { product in
                     productCell(product)
                 }
@@ -258,6 +245,9 @@ struct CarouselDetailCard: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 24) {
+                    if showsAdd {
+                        addProductButton.frame(minHeight: 100)
+                    }
                     ForEach(products) { product in
                         productCell(product)
                     }
@@ -284,29 +274,6 @@ struct CarouselDetailCard: View {
         .buttonStyle(SolidPressButtonStyle())
     }
 
-    private var emptyTagRow: some View {
-        // Pre-Phase-4 visual: small "+ ADD A TAG" capsule, centered.
-        // Tap enters edit mode.
-        Button {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            withAnimation(.easeInOut(duration: 0.2)) {
-                editCoordinator.startEditing(outfit)
-            }
-        } label: {
-            HStack(spacing: 4) {
-                AppIcon(glyph: .plusCircle, size: 9, color: AppPalette.textFaint)
-                Text("ADD A TAG")
-                    .font(.system(size: 9, weight: .semibold))
-                    .tracking(0.8)
-                    .foregroundStyle(AppPalette.textFaint)
-            }
-            .padding(.horizontal, 10)
-            .frame(height: 26)
-            .appCapsule(shadowRadius: 0, shadowY: 0)
-        }
-        .buttonStyle(SolidPressButtonStyle())
-        .frame(maxWidth: .infinity, alignment: .center)
-    }
 
     // MARK: - Editable product row
 
@@ -397,57 +364,179 @@ struct CarouselDetailCard: View {
             .padding(.horizontal, -LayoutMetrics.medium)
 
             if showingTagInput {
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack(spacing: 8) {
-                        TextField("", text: $newTagText, prompt:
-                            Text("New tag…").foregroundColor(AppPalette.textSecondary)
-                        )
-                        .font(.system(size: 13))
-                        .foregroundStyle(AppPalette.textPrimary)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                        .focused($isTagFieldFocused)
-                        .onSubmit { commitNewTag() }
-                        if !newTagText.isEmpty {
-                            Button("Add") { commitNewTag() }
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(AppPalette.textSecondary)
-                        }
-                    }
-                    .padding(LayoutMetrics.xSmall)
-                    .background(AppPalette.pageBackground)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(AppPalette.cardBorder, lineWidth: 1))
-
-                    // Suggestions dropdown
-                    if !tagSuggestions.isEmpty {
-                        VStack(spacing: 0) {
-                            ForEach(tagSuggestions, id: \.self) { suggestion in
-                                Button {
-                                    newTagText = suggestion
-                                    commitNewTag()
-                                } label: {
-                                    Text(suggestion)
-                                        .font(.system(size: 13))
-                                        .foregroundStyle(AppPalette.textPrimary)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .padding(.horizontal, LayoutMetrics.xSmall)
-                                        .padding(.vertical, 9)
-                                }
-                                .buttonStyle(SolidPressButtonStyle())
-                                if suggestion != tagSuggestions.last {
-                                    Divider().opacity(0.5)
-                                }
-                            }
-                        }
-                        .background(AppPalette.pageBackground)
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        .shadow(color: AppPalette.cardShadow, radius: 6, y: 3)
-                    }
-                }
+                tagInputField(commit: commitNewTag)
             }
         }
+    }
+
+    /// The tag text field + suggestions dropdown, shared between the
+    /// edit-mode row (pending commit into the edit session) and the
+    /// view-mode row (instant commit + save).
+    private func tagInputField(commit: @escaping () -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                TextField("", text: $newTagText, prompt:
+                    Text("New tag…").foregroundColor(AppPalette.textSecondary)
+                )
+                .font(.system(size: 13))
+                .foregroundStyle(AppPalette.textPrimary)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .focused($isTagFieldFocused)
+                .onSubmit { commit() }
+                if !newTagText.isEmpty {
+                    Button("Add") { commit() }
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppPalette.textSecondary)
+                }
+            }
+            .padding(LayoutMetrics.xSmall)
+            .background(AppPalette.pageBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(AppPalette.cardBorder, lineWidth: 1))
+
+            // Suggestions dropdown
+            if !tagSuggestions.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(tagSuggestions, id: \.self) { suggestion in
+                        Button {
+                            newTagText = suggestion
+                            commit()
+                        } label: {
+                            Text(suggestion)
+                                .font(.system(size: 13))
+                                .foregroundStyle(AppPalette.textPrimary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, LayoutMetrics.xSmall)
+                                .padding(.vertical, 9)
+                        }
+                        .buttonStyle(SolidPressButtonStyle())
+                        if suggestion != tagSuggestions.last {
+                            Divider().opacity(0.5)
+                        }
+                    }
+                }
+                .background(AppPalette.pageBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .shadow(color: AppPalette.cardShadow, radius: 6, y: 3)
+            }
+        }
+    }
+
+    // MARK: - View-mode tag row (inline add, instant save)
+
+    /// Tags the card CURRENTLY has — store copy first so instant
+    /// commits echo back immediately.
+    private var currentTags: [String] {
+        store.outfitById[outfit.id]?.tags ?? outfit.tags ?? []
+    }
+
+    /// The everyday tag row: the + is always present, tapping it opens
+    /// the inline input right here (no edit mode), return commits AND
+    /// saves. While the input is open the pills grow ×'s for one-tap
+    /// removal; when the keyboard drops they're tappable tag links
+    /// again.
+    private var viewTagRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    Button {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        withAnimation(.easeInOut(duration: 0.15)) { showingTagInput = true }
+                        isTagFieldFocused = true
+                    } label: {
+                        AppIcon(glyph: .plusCircle, size: 12, color: AppPalette.iconPrimary)
+                            .frame(width: 30, height: 30)
+                            .appCircle(shadowRadius: 0, shadowY: 0)
+                    }
+                    .buttonStyle(SolidPressButtonStyle())
+
+                    if currentTags.isEmpty && !showingTagInput {
+                        Text("Add a tag")
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundStyle(AppPalette.textFaint)
+                    }
+
+                    ForEach(currentTags, id: \.self) { tag in
+                        if showingTagInput {
+                            HStack(spacing: 4) {
+                                Text(tag.uppercased())
+                                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                    .tracking(1.2)
+                                    .foregroundStyle(AppPalette.textSecondary)
+                                Button {
+                                    removeTagInstantly(tag)
+                                } label: {
+                                    Image(systemName: "xmark")
+                                        .font(.system(size: 8, weight: .bold))
+                                        .foregroundStyle(AppPalette.textFaint)
+                                }
+                                .buttonStyle(SolidPressButtonStyle())
+                            }
+                            .padding(.horizontal, 10)
+                            .frame(height: 30)
+                            .appCapsule(shadowRadius: 0, shadowY: 0)
+                        } else {
+                            Button {
+                                let impact = UIImpactFeedbackGenerator(style: .light)
+                                impact.impactOccurred()
+                                selectedLinkedTag = LinkedTagSelection(id: tag)
+                            } label: {
+                                Text(tag.uppercased())
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .tracking(0.8)
+                                    .foregroundStyle(AppPalette.textMuted)
+                                    .padding(.horizontal, 10)
+                                    .frame(height: 26)
+                                    .appCapsule(shadowRadius: 0, shadowY: 0)
+                            }
+                            .buttonStyle(SolidPressButtonStyle())
+                        }
+                    }
+                }
+                .padding(.horizontal, LayoutMetrics.medium)
+            }
+            .padding(.horizontal, -LayoutMetrics.medium)
+
+            if showingTagInput {
+                tagInputField(commit: commitInlineTag)
+            }
+        }
+        .onChange(of: isTagFieldFocused) { _, focused in
+            // Keyboard dropped (tap-out, Done) → leave the inline
+            // micro-state; pills go back to tappable tag links.
+            if !focused, !isEditing {
+                withAnimation(.easeInOut(duration: 0.15)) { showingTagInput = false }
+            }
+        }
+    }
+
+    private func commitInlineTag() {
+        let trimmed = newTagText.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else {
+            // Return on an empty field = done tagging.
+            isTagFieldFocused = false
+            withAnimation(.easeInOut(duration: 0.15)) { showingTagInput = false }
+            return
+        }
+        newTagText = ""
+        var tags = currentTags
+        guard !tags.contains(trimmed) else { return }
+        tags.append(trimmed)
+        persistTagsInstantly(tags)
+    }
+
+    private func removeTagInstantly(_ tag: String) {
+        var tags = currentTags
+        tags.removeAll { $0 == tag }
+        persistTagsInstantly(tags)
+    }
+
+    /// Inline adds save immediately — no pending state, no Save step.
+    private func persistTagsInstantly(_ tags: [String]) {
+        store.updateOutfitTags(outfitId: outfit.id, tags: tags)
+        Task { try? await ProductLibraryService.updateOutfitTags(outfitId: outfit.id, tags: tags) }
     }
 
     // MARK: - Tag suggestions
@@ -455,8 +544,10 @@ struct CarouselDetailCard: View {
     private var tagSuggestions: [String] {
         let trimmed = newTagText.trimmingCharacters(in: .whitespaces).lowercased()
         guard !trimmed.isEmpty else { return [] }
+        // Exclude whichever tag set the active row is editing against.
+        let existing = isEditing ? editCoordinator.editableTags : currentTags
         return store.allOutfitTags
-            .filter { $0.lowercased().hasPrefix(trimmed) && !editCoordinator.editableTags.contains($0) }
+            .filter { $0.lowercased().hasPrefix(trimmed) && !existing.contains($0) }
             .prefix(5)
             .map { $0 }
     }

@@ -128,6 +128,10 @@ struct CalendarDetailSheet: View {
     @State private var editableTags: [String] = []
     @State private var showingTagInput = false
     @State private var newTagText = ""
+    /// View-mode inline tag input (distinct from the edit-session
+    /// `showingTagInput` so the two flows can't cross wires).
+    @State private var showingViewTagInput = false
+    @FocusState private var calTagFieldFocused: Bool
     @State private var keyboardHeight: CGFloat = 0
     @State private var isExpanded = false
     @State private var editableDate: Date = Date()
@@ -334,19 +338,12 @@ struct CalendarDetailSheet: View {
 
                 if isEditing {
                     calEditableTagRow
-                } else if let tags = outfit.tags, !tags.isEmpty {
-                    FlowLayout(spacing: 8) {
-                        ForEach(tags, id: \.self) { tag in
-                            TagPill(tag: tag) {
-                                let impact = UIImpactFeedbackGenerator(style: .light)
-                                impact.impactOccurred()
-                                selectedLinkedTag = LinkedTagSelection(id: tag)
-                            }
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
-                    calEmptyTagRow
+                    // The + is ALWAYS present: one tap → inline input →
+                    // return commits and saves instantly. No edit-mode
+                    // round trip for the everyday action. (Mirrors the
+                    // carousel card.)
+                    calViewTagRow
                 }
             }
 
@@ -441,22 +438,162 @@ struct CalendarDetailSheet: View {
         }
     }
 
-    private var calEmptyTagRow: some View {
-        Button {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            withAnimation { editableTags = outfit.tags ?? []; isEditing = true }
-        } label: {
-            HStack(spacing: 6) {
-                AppIcon(glyph: .plusCircle, size: 14, color: AppPalette.textFaint)
-                Text("Add a tag")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(AppPalette.textMuted)
+    // MARK: - View-mode tag row (inline add, instant save)
+
+    /// Tags the card CURRENTLY has — store copy first so instant
+    /// commits echo back immediately.
+    private var calCurrentTags: [String] {
+        store.outfitById[outfit.id]?.tags ?? outfit.tags ?? []
+    }
+
+    /// The everyday tag row: the + is always present, tapping it opens
+    /// the inline input right here (no edit mode), return commits AND
+    /// saves. While the input is open the pills grow ×'s for one-tap
+    /// removal; when the keyboard drops they're tappable tag links
+    /// again. Mirrors the carousel card.
+    private var calViewTagRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    Button {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        withAnimation(.easeInOut(duration: 0.15)) { showingViewTagInput = true }
+                        calTagFieldFocused = true
+                    } label: {
+                        AppIcon(glyph: .plusCircle, size: 12, color: AppPalette.iconPrimary)
+                            .frame(width: 30, height: 30)
+                            .appCircle(shadowRadius: 0, shadowY: 0)
+                    }
+                    .buttonStyle(SolidPressButtonStyle())
+
+                    if calCurrentTags.isEmpty && !showingViewTagInput {
+                        Text("Add a tag")
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundStyle(AppPalette.textFaint)
+                    }
+
+                    ForEach(calCurrentTags, id: \.self) { tag in
+                        if showingViewTagInput {
+                            HStack(spacing: 4) {
+                                Text(tag.uppercased())
+                                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                    .tracking(1.2)
+                                    .foregroundStyle(AppPalette.textSecondary)
+                                Button {
+                                    calRemoveTagInstantly(tag)
+                                } label: {
+                                    Image(systemName: "xmark")
+                                        .font(.system(size: 8, weight: .bold))
+                                        .foregroundStyle(AppPalette.textFaint)
+                                }
+                                .buttonStyle(SolidPressButtonStyle())
+                            }
+                            .padding(.horizontal, 10)
+                            .frame(height: 30)
+                            .appCapsule(shadowRadius: 0, shadowY: 0)
+                        } else {
+                            TagPill(tag: tag) {
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                selectedLinkedTag = LinkedTagSelection(id: tag)
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, LayoutMetrics.medium)
             }
-            .frame(height: 36)
-            .padding(.horizontal, LayoutMetrics.xSmall)
-            .appCapsule(shadowRadius: 0, shadowY: 0)
+            .padding(.horizontal, -LayoutMetrics.medium)
+
+            if showingViewTagInput {
+                calInlineTagInput
+            }
         }
-        .buttonStyle(SolidPressButtonStyle())
+        .onChange(of: calTagFieldFocused) { _, focused in
+            // Keyboard dropped (tap-out, Done) → leave the inline
+            // micro-state; pills go back to tappable tag links.
+            if !focused {
+                withAnimation(.easeInOut(duration: 0.15)) { showingViewTagInput = false }
+            }
+        }
+    }
+
+    private var calInlineTagInput: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                TextField("", text: $newTagText, prompt:
+                    Text("New tag…").foregroundColor(AppPalette.textSecondary)
+                )
+                .font(.system(size: 13))
+                .foregroundStyle(AppPalette.textPrimary)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .focused($calTagFieldFocused)
+                .onSubmit { calCommitInlineTag() }
+                if !newTagText.isEmpty {
+                    Button("Add") { calCommitInlineTag() }
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppPalette.textSecondary)
+                }
+            }
+            .padding(LayoutMetrics.xSmall)
+            .background(AppPalette.pageBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(AppPalette.cardBorder, lineWidth: 1))
+
+            let suggestions = store.allOutfitTags
+                .filter { $0.lowercased().hasPrefix(newTagText.lowercased()) && !calCurrentTags.contains($0) }
+                .prefix(5)
+                .map { $0 }
+            if !suggestions.isEmpty && !newTagText.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(suggestions, id: \.self) { s in
+                        Button {
+                            newTagText = s
+                            calCommitInlineTag()
+                        } label: {
+                            Text(s)
+                                .font(.system(size: 13))
+                                .foregroundStyle(AppPalette.textPrimary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, LayoutMetrics.xSmall)
+                                .padding(.vertical, 9)
+                        }
+                        .buttonStyle(SolidPressButtonStyle())
+                        if s != suggestions.last { Divider().opacity(0.5) }
+                    }
+                }
+                .background(AppPalette.pageBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .shadow(color: AppPalette.cardShadow, radius: 6, y: 3)
+            }
+        }
+    }
+
+    private func calCommitInlineTag() {
+        let trimmed = newTagText.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else {
+            // Return on an empty field = done tagging.
+            calTagFieldFocused = false
+            withAnimation(.easeInOut(duration: 0.15)) { showingViewTagInput = false }
+            return
+        }
+        newTagText = ""
+        var tags = calCurrentTags
+        guard !tags.contains(trimmed) else { return }
+        tags.append(trimmed)
+        calPersistTagsInstantly(tags)
+    }
+
+    private func calRemoveTagInstantly(_ tag: String) {
+        var tags = calCurrentTags
+        tags.removeAll { $0 == tag }
+        calPersistTagsInstantly(tags)
+    }
+
+    /// Inline adds save immediately — no pending state, no Save step.
+    private func calPersistTagsInstantly(_ tags: [String]) {
+        store.updateOutfitTags(outfitId: outfit.id, tags: tags)
+        Task { try? await ProductLibraryService.updateOutfitTags(outfitId: outfit.id, tags: tags) }
     }
 
     private var calEditableProductRow: some View {
@@ -721,9 +858,12 @@ struct CalendarDetailSheet: View {
     private func productRow(_ products: [Product]) -> some View {
         let visibleProducts = Array(products.prefix(4))
 
+        // Always leads with + (straight into Quick Add) — adding a
+        // product is the everyday action, no edit-mode round trip.
         return Group {
-            if visibleProducts.count <= 3 {
+            if visibleProducts.count <= 2 {
                 HStack(alignment: .top, spacing: 24) {
+                    calAddProductChip
                     ForEach(visibleProducts) { product in
                         productCell(product)
                     }
@@ -732,6 +872,7 @@ struct CalendarDetailSheet: View {
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(alignment: .top, spacing: 24) {
+                        calAddProductChip
                         ForEach(visibleProducts) { product in
                             productCell(product)
                         }
@@ -741,6 +882,28 @@ struct CalendarDetailSheet: View {
                 .padding(.horizontal, -LayoutMetrics.medium)
             }
         }
+    }
+
+    /// Same 48pt + circle as the edit row / carousel card — opens
+    /// Quick Add (manual entry lives inside as "Add manually").
+    private var calAddProductChip: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Task { await openAutoDetect() }
+        } label: {
+            Group {
+                if isLoadingAutoDetect {
+                    ProgressView().controlSize(.small).tint(AppPalette.iconPrimary)
+                } else {
+                    AppIcon(glyph: .plusCircle, size: 16, color: AppPalette.iconPrimary)
+                }
+            }
+            .frame(width: 48, height: 48)
+            .appCircle(shadowRadius: 0, shadowY: 0)
+        }
+        .buttonStyle(SolidPressButtonStyle())
+        .disabled(isLoadingAutoDetect)
+        .frame(minHeight: 72)
     }
 
     private var emptyProductRow: some View {
