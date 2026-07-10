@@ -189,16 +189,18 @@ struct CalendarDetailSheet: View {
                         .strokeBorder(AppPalette.cardBorder, lineWidth: 0.85)
                 )
                 .shadow(color: AppPalette.cardShadow.opacity(0.72), radius: 26, y: 12)
-                // Keep the card clear of the floating tab bar: the tab
-                // bar lives in a `safeAreaInset`, which hit-tests ABOVE
-                // this overlay — when the expanded card's footer grew
-                // into that strip, SHOW LESS / dismiss stopped receiving
-                // touches, the card couldn't be closed, and its
-                // selection kept the calendar's scroll disabled (the
-                // "app randomly freezes until I tap a tab" bug).
-                .padding(.bottom, 96)
+                // Tab-bar clearance ONLY while expanded: the tab bar
+                // lives in a `safeAreaInset`, which hit-tests ABOVE
+                // this overlay — the tall expanded card's footer slid
+                // under that strip and its buttons went dead (the
+                // "freezes until I tap a tab" bug). The collapsed card
+                // fits centered with room to spare, so it stays truly
+                // viewport-centered; expanding lifts it just enough,
+                // on the same spring as the expansion itself.
+                .padding(.bottom, isExpanded ? 96 : 0)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                 .offset(y: -keyboardHeight * 0.5)
+                .animation(.spring(response: 0.4, dampingFraction: 0.78), value: isExpanded)
                 .scaleEffect(isVisible ? 1 : 0.985)
                 .offset(y: isVisible ? 0 : 22)
                 .opacity(isVisible ? 1 : 0)
@@ -403,7 +405,16 @@ struct CalendarDetailSheet: View {
             if let userId = store.userId {
                 AutoDetectProductsView(
                     sourceImage: source.image,
-                    userId: userId
+                    userId: userId,
+                    onAddManually: {
+                        // Same handoff as the carousel card: AutoDetect
+                        // dismisses itself; defer the manual sheet one
+                        // beat so SwiftUI doesn't present back-to-back.
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(350))
+                            showAddProduct = true
+                        }
+                    }
                 ) { newProduct in
                     let existing = store.outfitById[outfit.id]?.products ?? outfit.products ?? []
                     guard !existing.contains(where: { $0.name == newProduct.name }) else { return }
