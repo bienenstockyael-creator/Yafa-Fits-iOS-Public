@@ -63,6 +63,15 @@ struct CalendarDetailOverlayHost: View {
             return
         }
 
+        if let selectedId, store.outfitById[selectedId] == nil {
+            // Ghost selection: an id with no resolvable outfit renders
+            // NO card, but a non-nil selection still disables the
+            // calendar's scroll — an invisible "freeze" only a tab tap
+            // cleared. Self-heal by dropping the selection.
+            store.selectedOutfitId = nil
+            return
+        }
+
         if let selectedId, store.outfitById[selectedId] != nil {
             detailOutfitId = selectedId
             detailMounted = true
@@ -163,6 +172,14 @@ struct CalendarDetailSheet: View {
                         .strokeBorder(AppPalette.cardBorder, lineWidth: 0.85)
                 )
                 .shadow(color: AppPalette.cardShadow.opacity(0.72), radius: 26, y: 12)
+                // Keep the card clear of the floating tab bar: the tab
+                // bar lives in a `safeAreaInset`, which hit-tests ABOVE
+                // this overlay — when the expanded card's footer grew
+                // into that strip, SHOW LESS / dismiss stopped receiving
+                // touches, the card couldn't be closed, and its
+                // selection kept the calendar's scroll disabled (the
+                // "app randomly freezes until I tap a tab" bug).
+                .padding(.bottom, 96)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                 .offset(y: -keyboardHeight * 0.5)
                 .scaleEffect(isVisible ? 1 : 0.985)

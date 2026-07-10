@@ -1182,8 +1182,12 @@ struct CarouselView: View {
                             size: 22,   // match the editor base size for WYSIWYG
                             wrapWidth: max(120, geo.size.width * 0.88)
                         )
-                        .frame(maxWidth: max(120, geo.size.width * 0.88))
-                        .fixedSize(horizontal: false, vertical: true)
+                        // HARD width — under `.position()` the proposal is
+                        // unspecified, so maxWidth never constrained and
+                        // long notes never auto-wrapped (same fix as the
+                        // editor). Matches the editor's wrap budget for
+                        // WYSIWYG line breaks.
+                        .frame(width: max(120, geo.size.width * 0.88))
                         .scaleEffect(CGFloat(outfit.noteScale ?? 1))
                         .rotationEffect(.radians(outfit.noteRotation ?? 0))
                         .position(

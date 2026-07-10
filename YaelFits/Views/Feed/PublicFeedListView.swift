@@ -935,10 +935,13 @@ struct FeedPostCard: View {
                             color: DiaryInk.palette.indices.contains(outfit.noteColorIndex ?? 0)
                                 ? DiaryInk.palette[outfit.noteColorIndex ?? 0] : .white,
                             size: 14,   // 22pt editor base × card/slide height ratio
-                            wrapWidth: geo.size.width * 0.7
+                            wrapWidth: max(76, geo.size.width * 0.88)
                         )
-                        .frame(maxWidth: geo.size.width * 0.7)
-                        .fixedSize(horizontal: false, vertical: true)
+                        // HARD width (unspecified proposal under .position —
+                        // maxWidth never constrained; see editor). 0.88 of
+                        // the card matches the editor's 0.88-of-slide budget
+                        // so line breaks scale with the font for WYSIWYG.
+                        .frame(width: max(76, geo.size.width * 0.88))
                         .scaleEffect(CGFloat(outfit.noteScale ?? 1))
                         .rotationEffect(.radians(outfit.noteRotation ?? 0))
                         .position(

@@ -235,29 +235,34 @@ struct HighlighterBlobShape: Shape {
             let curR = rightX(i)
             let nextR = rightX(i + 1)
             let joinY = botY(i)
+            // Per-join fillet radius clamped to HALF the width step:
+            // with nearly-equal rows the two fillets otherwise overlap
+            // and the segment between them runs BACKWARD, drawing a
+            // little tab that sticks out of the silhouette.
+            let jr = min(r, abs(nextR - curR) / 2)
 
             if curR < nextR {
                 // Step OUT to the right (next wider).
-                p.addLine(to: CGPoint(x: curR, y: joinY - r))
+                p.addLine(to: CGPoint(x: curR, y: joinY - jr))
                 p.addQuadCurve(
-                    to: CGPoint(x: curR + r, y: joinY),
+                    to: CGPoint(x: curR + jr, y: joinY),
                     control: CGPoint(x: curR, y: joinY)
                 )
-                p.addLine(to: CGPoint(x: nextR - r, y: joinY))
+                p.addLine(to: CGPoint(x: nextR - jr, y: joinY))
                 p.addQuadCurve(
-                    to: CGPoint(x: nextR, y: joinY + r),
+                    to: CGPoint(x: nextR, y: joinY + jr),
                     control: CGPoint(x: nextR, y: joinY)
                 )
             } else if curR > nextR {
                 // Step IN to the left (next narrower).
-                p.addLine(to: CGPoint(x: curR, y: joinY - r))
+                p.addLine(to: CGPoint(x: curR, y: joinY - jr))
                 p.addQuadCurve(
-                    to: CGPoint(x: curR - r, y: joinY),
+                    to: CGPoint(x: curR - jr, y: joinY),
                     control: CGPoint(x: curR, y: joinY)
                 )
-                p.addLine(to: CGPoint(x: nextR + r, y: joinY))
+                p.addLine(to: CGPoint(x: nextR + jr, y: joinY))
                 p.addQuadCurve(
-                    to: CGPoint(x: nextR, y: joinY + r),
+                    to: CGPoint(x: nextR, y: joinY + jr),
                     control: CGPoint(x: nextR, y: joinY)
                 )
             } else {
@@ -287,31 +292,33 @@ struct HighlighterBlobShape: Shape {
             let curL = leftX(i)
             let prevL = leftX(i - 1)
             let joinY = topY(i)
+            // Same near-equal-width clamp as the right wall.
+            let jr = min(r, abs(prevL - curL) / 2)
 
             if curL < prevL {
                 // Lower line (cur) wider than upper (prev) —
                 // going UP, step IN to the right.
-                p.addLine(to: CGPoint(x: curL, y: joinY + r))
+                p.addLine(to: CGPoint(x: curL, y: joinY + jr))
                 p.addQuadCurve(
-                    to: CGPoint(x: curL + r, y: joinY),
+                    to: CGPoint(x: curL + jr, y: joinY),
                     control: CGPoint(x: curL, y: joinY)
                 )
-                p.addLine(to: CGPoint(x: prevL - r, y: joinY))
+                p.addLine(to: CGPoint(x: prevL - jr, y: joinY))
                 p.addQuadCurve(
-                    to: CGPoint(x: prevL, y: joinY - r),
+                    to: CGPoint(x: prevL, y: joinY - jr),
                     control: CGPoint(x: prevL, y: joinY)
                 )
             } else if curL > prevL {
                 // Lower line (cur) narrower than upper (prev) —
                 // going UP, step OUT to the left.
-                p.addLine(to: CGPoint(x: curL, y: joinY + r))
+                p.addLine(to: CGPoint(x: curL, y: joinY + jr))
                 p.addQuadCurve(
-                    to: CGPoint(x: curL - r, y: joinY),
+                    to: CGPoint(x: curL - jr, y: joinY),
                     control: CGPoint(x: curL, y: joinY)
                 )
-                p.addLine(to: CGPoint(x: prevL + r, y: joinY))
+                p.addLine(to: CGPoint(x: prevL + jr, y: joinY))
                 p.addQuadCurve(
-                    to: CGPoint(x: prevL, y: joinY - r),
+                    to: CGPoint(x: prevL, y: joinY - jr),
                     control: CGPoint(x: prevL, y: joinY)
                 )
             } else {
@@ -340,6 +347,9 @@ enum DiaryNoteStyle: String, CaseIterable, Sendable, Identifiable {
     case highlighter
     case yafaMono
     case clean
+    // Appended LAST — notes store the rawValue, so insertion order is
+    // part of the on-disk contract (like DiaryInk's palette).
+    case boldItalic
 
     var id: String { rawValue }
 
@@ -356,6 +366,7 @@ enum DiaryNoteStyle: String, CaseIterable, Sendable, Identifiable {
         case .highlighter: return "Highlighter"
         case .yafaMono:    return "Yafa mono"
         case .clean:       return "Clean"
+        case .boldItalic:  return "Bold italic"
         }
     }
 
@@ -363,16 +374,23 @@ enum DiaryNoteStyle: String, CaseIterable, Sendable, Identifiable {
     var isUppercased: Bool { self == .yafaMono }
     var tracking: CGFloat { self == .yafaMono ? 1.5 : 0 }
 
+    /// Caveat renders visually smaller than system faces at the same
+    /// point size (short caps, tall ascenders) — bump it so the five
+    /// styles feel the same scale when flipping through chips.
+    private static let caveatScale: CGFloat = 1.18
+
     func font(size: CGFloat) -> Font {
         switch self {
-        // Snell Roundhand — elegant flowing cursive, editorial rather
-        // than casual. (Bradley Hand read too "school note"; Noteworthy
-        // before it read like lined-notebook print.)
-        case .handwritten: return .custom("SnellRoundhand-Bold", size: size)
+        // Caveat (bundled, OFL) — genuinely imperfect marker
+        // handwriting. Every built-in was tried and rejected: Bradley
+        // Hand too "school note", Noteworthy lined-notebook, Snell
+        // Roundhand too formal-calligraphy.
+        case .handwritten: return .custom("Caveat-Regular", size: size * Self.caveatScale)
         case .typewriter:  return .custom("AmericanTypewriter", size: size)
         case .highlighter: return .system(size: size, weight: .semibold)
         case .yafaMono:    return .system(size: size, weight: .bold, design: .monospaced)
         case .clean:       return .system(size: size, weight: .medium)
+        case .boldItalic:  return .system(size: size, weight: .bold).italic()
         }
     }
 
@@ -380,7 +398,7 @@ enum DiaryNoteStyle: String, CaseIterable, Sendable, Identifiable {
     func uiFont(size: CGFloat) -> UIFont {
         switch self {
         case .handwritten:
-            return UIFont(name: "SnellRoundhand-Bold", size: size)
+            return UIFont(name: "Caveat-Regular", size: size * Self.caveatScale)
                 ?? .systemFont(ofSize: size, weight: .bold)
         case .typewriter:
             return UIFont(name: "AmericanTypewriter", size: size)
@@ -388,6 +406,13 @@ enum DiaryNoteStyle: String, CaseIterable, Sendable, Identifiable {
         case .highlighter: return .systemFont(ofSize: size, weight: .semibold)
         case .yafaMono:    return .monospacedSystemFont(ofSize: size, weight: .bold)
         case .clean:       return .systemFont(ofSize: size, weight: .medium)
+        case .boldItalic:
+            let base = UIFont.systemFont(ofSize: size, weight: .bold)
+            if let descriptor = base.fontDescriptor
+                .withSymbolicTraits([.traitBold, .traitItalic]) {
+                return UIFont(descriptor: descriptor, size: size)
+            }
+            return base
         }
     }
 }
@@ -764,6 +789,13 @@ struct DiaryNoteEditOverlay: View {
         text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    /// The note's wrap budget — clamped by the SCREEN as well as the
+    /// slide so a wider-than-screen slide frame can't push the wrap
+    /// point past the visible area.
+    private var noteWrapBudget: CGFloat {
+        max(120, min(slideFrame.width, UIScreen.main.bounds.width) * 0.88)
+    }
+
     /// True while any manipulation gesture is live. Used to strip inherited
     /// animations off the note so it tracks the finger instead of easing.
     private var isGesturing: Bool {
@@ -1066,7 +1098,7 @@ struct DiaryNoteEditOverlay: View {
                                     text: text,
                                     ink: ink,
                                     fontSize: 22,
-                                    textWrapWidth: max(120, f.width * 0.88) - 20,
+                                    textWrapWidth: noteWrapBudget - 20,
                                     drawsText: false
                                 )
                             }
@@ -1090,13 +1122,19 @@ struct DiaryNoteEditOverlay: View {
                 } else {
                     DiaryNoteView(text: text,
                                   style: style, color: ink, size: 22, showShadow: false,
-                                  wrapWidth: max(120, f.width * 0.88))
+                                  wrapWidth: noteWrapBudget)
                         .drawingGroup()
                 }
             }
         }
-        .frame(maxWidth: max(120, f.width * 0.88))
-        .fixedSize(horizontal: false, vertical: true)
+        // HARD width, not maxWidth: this whole element sits under
+        // `.position()`, which offers its child an UNSPECIFIED size
+        // proposal — `frame(maxWidth:)` therefore never constrained
+        // anything, Text laid out at its ideal single-line width, and
+        // notes NEVER auto-wrapped (they ran straight off the screen).
+        // A fixed frame proposes its width authoritatively. Short text
+        // still hugs: the Text sizes to itself inside this frame.
+        .frame(width: noteWrapBudget)
         .background {
             GeometryReader { g in
                 Color.clear.preference(key: DiaryNoteSizeKey.self, value: g.size)
