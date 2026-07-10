@@ -120,6 +120,12 @@ struct RootView: View {
     @State private var displayedTopBarTrailing: TopBarTrailing = .shareSettings
     @State private var topBarTrailingVisible = true
 
+    /// In-flight switch target (duplicate-tap guard) + a generation
+    /// counter so a superseded transition's cleanup can't clobber its
+    /// successor's state.
+    @State private var pendingSwitchTarget: AppView?
+    @State private var transitionGeneration = 0
+
     var body: some View {
         @Bindable var store = store
 
@@ -1031,6 +1037,21 @@ struct RootView: View {
 
     private func switchView(to target: AppView) {
         guard target == .list || target == .calendar else { return }
+
+        // DUPLICATE-TAP GUARD. Re-tapping the toggle while a switch to
+        // the same target is in flight used to cancel + restart the
+        // whole pipeline (density re-layout, anchor polling, scroll
+        // jumps) — each impatient tap added ~400ms of main-thread
+        // churn, and a fast toggle-spam session compounded into a
+        // seconds-long pile-up that read as "the whole app froze".
+        if pendingSwitchTarget == target {
+            if store.currentView == target { pendingSwitchTarget = nil }
+            return
+        }
+        // Already there and nothing in flight → nothing to do.
+        if store.currentView == target, pendingSwitchTarget == nil { return }
+        pendingSwitchTarget = target
+
         let goingToCalendar = target == .calendar
 
         // The zoom level TRAVELS across the switch — but each surface
@@ -1057,7 +1078,22 @@ struct RootView: View {
         store.selectedOutfitId = nil
 
         transitionTask?.cancel()
+        transitionGeneration += 1
+        let generation = transitionGeneration
         transitionTask = Task { @MainActor in
+            // Cancellation-proof cleanup: whatever way this task exits
+            // (completed, cancelled, superseded), the LATEST generation
+            // clears the in-flight flag and the anchor state — an
+            // abandoned transition can no longer leave a stuck anchor
+            // (locked scrub frames, matched-geometry ghosts) or block
+            // future toggles behind a stale pending flag.
+            defer {
+                if transitionGeneration == generation {
+                    pendingSwitchTarget = nil
+                    store.transitionAnchorOutfitId = nil
+                    store.transitionAnchorFrameIndex = nil
+                }
+            }
             if densityChanged {
                 // Give the hidden destination one beat to re-layout at
                 // its new density before the anchor scroll + frame
@@ -1388,6 +1424,7 @@ struct RootView: View {
                         listOpacity = 1
                         calendarOpacity = 0
                         store.currentView = .list
+                        pendingSwitchTarget = nil
                     }
                     // Re-tap = "take me home": the STANDARD archive —
                     // default densities and per-day outfit picks
@@ -1440,6 +1477,7 @@ struct RootView: View {
                     calendarOpacity = 1
                 }
                 store.currentView = targetTab
+                pendingSwitchTarget = nil
             }
         } label: {
             VStack(spacing: LayoutMetrics.xxxSmall) {
