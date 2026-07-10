@@ -450,6 +450,14 @@ struct OutfitGridView: View {
         }
         .padding(.top, LayoutMetrics.xSmall)
         .padding(.bottom, LayoutMetrics.xSmall)
+        // POSITION-driven fade, independent of the pinned flag: the
+        // binary pin threshold can fire late (or the header can hover
+        // right at the boundary), letting the in-page toggle scroll
+        // crisp underneath the top bar's share/settings — the ghost
+        // capsule "overlap". Fading by the row's own proximity to the
+        // chrome makes that visually impossible: by the time it
+        // reaches the buttons it has already dissolved.
+        .headerProximityFade(headerBottom: 64, fadeZone: 60)
     }
 
     private var outfitsGrid: some View {
@@ -1032,7 +1040,11 @@ struct OutfitGridView: View {
         }
         lastObservedScrollOffset = offsetY
 
-        let pinThreshold = profileHeaderHeight > 0 ? profileHeaderHeight : 200
+        // Fire ~40pt EARLY: the in-page toggle now dissolves by
+        // proximity as it nears the chrome (see sectionHeader), so the
+        // top-bar copy should already be in place when it fades — the
+        // handoff reads as one pill pinning instead of two swapping.
+        let pinThreshold = (profileHeaderHeight > 0 ? profileHeaderHeight : 200) - 40
         let shouldPin = offsetY > pinThreshold
         guard store.archiveTogglePinned != shouldPin else { return }
         withAnimation(.easeInOut(duration: 0.18)) {
