@@ -200,29 +200,7 @@ struct CalendarMonthView: View {
                 pinch.startColumns = nil
                 pinch.isPinching = false
                 pinch.scale = 1
-            }
-            #if DEBUG
-            // TEMP freeze forensics: every state that can lock this
-            // surface. Screenshot when frozen — the stuck flag is the
-            // culprit. Strip once the freeze is closed.
-            .overlay(alignment: .bottom) {
-                if store.currentView == .calendar {
-                    Text("sel=\(store.selectedOutfitId == nil ? 0 : 1)"
-                        + " scrub=\(isScrubbing ? 1 : 0)"
-                        + " 2f=\(twoFingersDown ? 1 : 0)"
-                        + " pin=\(pinch.isPinching ? 1 : 0)"
-                        + " pg=\(dbgPageTaps)"
-                        + " w=\(TouchCountGestureRecognizer.totalTouchesBegan)")
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(.white)
-                        .padding(5)
-                        .background(Color.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 5))
-                        .padding(.bottom, 118)
-                        .allowsHitTesting(false)
-                }
-            }
-            #endif
-        }
+            }        }
     }
 
     // MARK: - Generation placeholders
@@ -486,11 +464,6 @@ struct CalendarMonthView: View {
     /// Direction of the last page action — drives which edge the
     /// incoming/outgoing outfit nudges toward.
     @State private var dayPageForward = true
-    #if DEBUG
-    /// TEMP freeze forensics — pill taps that fired pageDay.
-    @State private var dbgPageTaps = 0
-    #endif
-
     /// Nudge+fade rather than a full edge slide: the day cell isn't
     /// clipped (clipping would carve the archive↔calendar morph as it
     /// passes through), so the outgoing outfit must not travel into
@@ -554,9 +527,6 @@ struct CalendarMonthView: View {
               let current = displayedOutfit(for: day),
               let index = day.outfits.firstIndex(where: { $0.id == current.id })
         else { return }
-        #if DEBUG
-        dbgPageTaps += 1
-        #endif
         let count = day.outfits.count
         let next = (index + (forward ? 1 : -1) + count) % count
         dayPageForward = forward

@@ -345,29 +345,7 @@ struct OutfitGridView: View {
                 pinch.startColumns = nil
                 pinch.isPinching = false
                 pinch.scale = 1
-            }
-            #if DEBUG
-            // TEMP freeze forensics — archive twin of the calendar
-            // chip. `car` stuck at 1 with no carousel visible = the
-            // dismiss-task orphan the watchdog now covers. Strip once
-            // the freeze saga closes.
-            .overlay(alignment: .bottom) {
-                if store.currentView == .list {
-                    Text("car=\(showCarousel ? 1 : 0)"
-                        + " scrub=\(isScrubbing ? 1 : 0)"
-                        + " 2f=\(twoFingersDown ? 1 : 0)"
-                        + " pin=\(pinch.isPinching ? 1 : 0)"
-                        + " w=\(TouchCountGestureRecognizer.totalTouchesBegan)")
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(.white)
-                        .padding(5)
-                        .background(Color.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 5))
-                        .padding(.bottom, 118)
-                        .allowsHitTesting(false)
-                }
-            }
-            #endif
-            .onChange(of: store.carouselDismissTrigger) { _, _ in
+            }            .onChange(of: store.carouselDismissTrigger) { _, _ in
                 // Fired by the global X button in the top bar when
                 // the carousel is open. Only acts if we're the host
                 // currently showing the carousel.

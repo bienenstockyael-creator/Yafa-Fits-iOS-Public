@@ -229,33 +229,6 @@ struct RootView: View {
                     .zIndex(999)
             }
 
-            #if DEBUG
-            // TEMP freeze forensics: main-thread heartbeat + blocker
-            // flags. During a "whole app frozen" moment:
-            //   heart ticking -> main thread ALIVE -> an invisible
-            //     layer is eating touches (ld = loader mounted, chip =
-            //     the generation-card backdrop, pnd = wedged switch)
-            //   heart stopped -> main thread HUNG -> pause in Xcode
-            //     and screenshot the stack.
-            // Strip once the freeze saga closes.
-            TimelineView(.periodic(from: .now, by: 0.5)) { context in
-                let beat = Int(context.date.timeIntervalSince1970 * 2) % 10
-                Text("♥\(beat)"
-                    + " ld=\(loaderMounted ? 1 : 0)"
-                    + " chip=\((isChipExpanded || isCardExpanded) ? 1 : 0)"
-                    + " pnd=\(pendingSwitchTarget == nil ? 0 : 1)")
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(.white)
-                    .padding(4)
-                    .background(Color.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 5))
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .padding(.top, 64)
-            .padding(.leading, 8)
-            .allowsHitTesting(false)
-            .zIndex(1200)
-            #endif
-
             // Floating camera-roll / camera picker — sits above the
             // tab bar with a tap-outside scrim.
             if showGenerationPicker {

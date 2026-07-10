@@ -58,18 +58,9 @@ final class TouchCountGestureRecognizer: UIGestureRecognizer {
     /// static lets `gestureRecognizerShouldBegin` ask "how many
     /// fingers are on the screen RIGHT NOW" with no roundtrip.
     private(set) static var liveTouchCount = 0
-    #if DEBUG
-    /// TEMP freeze forensics: every touch the WINDOW has ever seen.
-    /// Compared against view-level tap counters to locate which layer
-    /// eats touches during a freeze. Strip once the freeze is closed.
-    private(set) static var totalTouchesBegan = 0
-    #endif
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
         super.touchesBegan(touches, with: event)
-        #if DEBUG
-        Self.totalTouchesBegan += touches.count
-        #endif
         report(event)
     }
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
