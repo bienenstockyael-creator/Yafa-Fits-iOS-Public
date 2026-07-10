@@ -635,6 +635,14 @@ private struct NoteInputField: UIViewRepresentable {
         tv.keyboardAppearance = .dark
         tv.delegate = context.coordinator
         tv.text = text
+        // The field must ADOPT the proposed width, not its intrinsic
+        // one: a non-scrolling UITextView's intrinsic width is the
+        // ideal SINGLE-LINE width, and an `.overlay` child may exceed
+        // its base — so the field silently took its one-line width and
+        // notes never auto-wrapped (text ran off both screen edges
+        // while the mirror + highlighter blob wrapped correctly).
+        tv.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        tv.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         // Kick focus on the next tick instead of waiting for an updateUIView
         // pass — the window attaches a beat after make.
         DispatchQueue.main.async { [weak tv] in
@@ -642,6 +650,21 @@ private struct NoteInputField: UIViewRepresentable {
             context.coordinator.focusWhenReady(tv)
         }
         return tv
+    }
+
+    /// Pin the field to the PROPOSED width (the sizing mirror's box)
+    /// with the height its wrapped content needs — the deterministic
+    /// half of the wrap fix; the priority tweaks in makeUIView are the
+    /// belt to this suspender.
+    func sizeThatFits(
+        _ proposal: ProposedViewSize,
+        uiView: UITextView,
+        context: Context
+    ) -> CGSize? {
+        guard let width = proposal.width, width.isFinite, width > 0 else { return nil }
+        let fitting = uiView.sizeThatFits(
+            CGSize(width: width, height: .greatestFiniteMagnitude))
+        return CGSize(width: width, height: max(fitting.height, 24))
     }
 
     func updateUIView(_ tv: UITextView, context: Context) {
