@@ -3,6 +3,7 @@ import UIKit
 
 struct OutfitGridView: View {
     @Environment(OutfitStore.self) private var store
+    @Environment(\.scenePhase) private var scenePhase
 
     /// Cross-view transition namespace passed in from RootView.
     var transitionNamespace: Namespace.ID
@@ -316,6 +317,19 @@ struct OutfitGridView: View {
                 // (the "scroll freezes after a few back-and-forths").
                 isScrubbing = false
                 twoFingersDown = false
+            }
+            .onChange(of: scenePhase) { _, phase in
+                // Backgrounding cancels all touches system-wide and
+                // can drop in-flight gesture END callbacks — returning
+                // from the app switcher then read as "frozen until a
+                // tab tap". Foregrounding = no fingers down: clear all
+                // transient gesture latches. (Mirrors the calendar.)
+                guard phase == .active else { return }
+                isScrubbing = false
+                twoFingersDown = false
+                pinch.startColumns = nil
+                pinch.isPinching = false
+                pinch.scale = 1
             }
             .onChange(of: store.carouselDismissTrigger) { _, _ in
                 // Fired by the global X button in the top bar when

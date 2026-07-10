@@ -2,6 +2,7 @@ import SwiftUI
 
 struct CalendarMonthView: View {
     @Environment(OutfitStore.self) private var store
+    @Environment(\.scenePhase) private var scenePhase
 
     /// Cross-view transition namespace passed in from RootView.
     var transitionNamespace: Namespace.ID
@@ -185,6 +186,20 @@ struct CalendarMonthView: View {
                 // latches true and scroll is permanently disabled.
                 isScrubbing = false
                 twoFingersDown = false
+            }
+            .onChange(of: scenePhase) { _, phase in
+                // Backgrounding the app cancels all touches system-
+                // wide; in-flight gesture END callbacks can be dropped
+                // (especially with a sheet open), so returning from
+                // the app switcher read as "frozen until a tab tap".
+                // Foregrounding = no fingers can be down: clear every
+                // transient gesture latch.
+                guard phase == .active else { return }
+                isScrubbing = false
+                twoFingersDown = false
+                pinch.startColumns = nil
+                pinch.isPinching = false
+                pinch.scale = 1
             }
         }
     }
