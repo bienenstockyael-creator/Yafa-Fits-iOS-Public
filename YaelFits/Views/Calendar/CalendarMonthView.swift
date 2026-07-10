@@ -45,6 +45,10 @@ struct CalendarMonthView: View {
     private var columnCount: Int { store.calendarColumnCount }
     @State private var pinch = GridPinchZoomState()
     @State private var twoFingersDown = false
+    /// Direct handle to the calendar's UIScrollView — scrub/pinch
+    /// locks go through the pan RECOGNIZER (wedge-proof) instead of
+    /// flapping SwiftUI's scrollDisabled mid-touch.
+    @State private var scrollBox = WeakScrollViewBox()
     private static let minColumns = 2
     private static let maxColumns = 4
 
@@ -87,12 +91,17 @@ struct CalendarMonthView: View {
                     // dismisses an open card / picker via the same
                     // morph animation (instead of a hard cut on
                     // tab-switch / scroll).
-                    ScrollOffsetObserver { offsetY in
+                    ScrollOffsetObserver(onScroll: { offsetY in
                         if abs(offsetY - lastObservedScrollOffset) > 4 {
                             onScrollBegan()
                         }
                         lastObservedScrollOffset = offsetY
-                    }
+                    }, onScrollViewAttach: { scrollView in
+                        // Two-finger touches can never scroll — set
+                        // ONCE, no toggling to wedge.
+                        scrollView.panGestureRecognizer.maximumNumberOfTouches = 1
+                        scrollBox.scrollView = scrollView
+                    })
                     .frame(width: 0, height: 0)
 
                     // No in-page section header here — on calendar,
@@ -124,10 +133,11 @@ struct CalendarMonthView: View {
                     setColumnCount: { store.calendarColumnCount = $0 }
                 )
             }
-            // Disable scrolling the moment a second finger lands, so a
-            // pinch is never read as a scroll. One-finger scrolling is
-            // unaffected. (Same setup as the closet grid.)
-            .scrollDisabled(isScrubbing || store.selectedOutfitId != nil || twoFingersDown)
+            // Modal state only — transient scrub/pinch locks go
+            // through the pan recognizer (syncScrollLock); flapping
+            // scrollDisabled mid-touch wedged the pan (frozen scroll
+            // with every flag clear).
+            .scrollDisabled(store.selectedOutfitId != nil)
             // Chrome cover ABOVE the per-cell fade band. The fade's
             // stale-geometry guard skips cells whose top has scrolled
             // past ~the screen top — their lower halves otherwise hang
@@ -160,6 +170,7 @@ struct CalendarMonthView: View {
                     guard store.currentView == .calendar || count == 0 else { return }
                     let down = count >= 2
                     if down != twoFingersDown { twoFingersDown = down }
+                    syncScrollLock()
                     if count == 0 { scheduleGestureLatchSelfHeal() }
                 }
             )
@@ -186,6 +197,7 @@ struct CalendarMonthView: View {
                 // latches true and scroll is permanently disabled.
                 isScrubbing = false
                 twoFingersDown = false
+                syncScrollLock()
             }
             .onChange(of: scenePhase) { _, phase in
                 // Backgrounding the app cancels all touches system-
@@ -405,6 +417,7 @@ struct CalendarMonthView: View {
             },
             onHorizontalDragChange: { isDragging in
                 isScrubbing = isDragging
+                syncScrollLock()
             },
             onFrameChange: { newFrame in
                 // Broadcast for the transition-frame
@@ -519,7 +532,14 @@ struct CalendarMonthView: View {
                 }
             }
             if isScrubbing { isScrubbing = false }
+            syncScrollLock()
         }
+    }
+
+    /// Push the transient lock state into the scroll view's pan
+    /// recognizer — see the archive's twin for rationale.
+    private func syncScrollLock() {
+        scrollBox.setScrollLocked(isScrubbing || twoFingersDown)
     }
 
     private func pageDay(_ day: CalendarDay, forward: Bool) {

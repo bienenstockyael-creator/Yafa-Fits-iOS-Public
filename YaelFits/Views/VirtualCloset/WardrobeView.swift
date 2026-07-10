@@ -105,6 +105,11 @@ struct WardrobeView: View {
     /// so a two-finger pinch can never be hijacked into a scroll (one finger
     /// still scrolls normally).
     @State private var twoFingersDown = false
+    /// Direct handle to the closet's UIScrollView — the pinch lock
+    /// goes through the pan RECOGNIZER (wedge-proof) instead of
+    /// flapping SwiftUI's scrollDisabled mid-touch.
+    @State private var scrollBox = WeakScrollViewBox()
+    @Environment(\.scenePhase) private var closetScenePhase
 
     private static let minColumns = 2
     private static let maxColumns = 4
@@ -492,6 +497,13 @@ struct WardrobeView: View {
 
     private var grid: some View {
         ScrollView {
+            ScrollOffsetObserver(onScroll: { _ in }, onScrollViewAttach: { scrollView in
+                // Two-finger touches can never scroll — set ONCE.
+                scrollView.panGestureRecognizer.maximumNumberOfTouches = 1
+                scrollBox.scrollView = scrollView
+            })
+            .frame(width: 0, height: 0)
+
             // The whole page (grid or empty state) is ONE animated unit, keyed
             // by the active filter. On a filter change the entire layer
             // transitions together — a directional slide on swipe, a scale+fade
@@ -574,7 +586,9 @@ struct WardrobeView: View {
         }
         // Disable scrolling the moment a second finger lands, so a pinch is
         // never read as a scroll. One-finger scrolling is unaffected.
-        .scrollDisabled(twoFingersDown)
+        // Transient pinch lock goes through the pan recognizer
+        // (see syncScrollLock) — flapping scrollDisabled mid-touch
+        // wedged the pan.
         // Horizontal flick walks the category pills, simultaneously with the
         // vertical scroll (only horizontal-dominant swipes act).
         .simultaneousGesture(categorySwipe)
@@ -586,8 +600,19 @@ struct WardrobeView: View {
             TouchCountReporter { count in
                 let down = count >= 2
                 if down != twoFingersDown { twoFingersDown = down }
+                scrollBox.setScrollLocked(down)
             }
         )
+        .onChange(of: closetScenePhase) { _, phase in
+            // Backgrounding cancels touches system-wide; if the app
+            // resigns mid-pinch the recognizer-level lock can be left
+            // engaged with no flag showing it — the "leave the app,
+            // come back, it's a bit frozen" report. Foregrounding =
+            // no fingers down: unlock unconditionally.
+            guard phase == .active else { return }
+            twoFingersDown = false
+            scrollBox.setScrollLocked(false)
+        }
     }
 
     /// Pinch out → fewer/bigger tiles; pinch in → more/smaller. Mirrors the

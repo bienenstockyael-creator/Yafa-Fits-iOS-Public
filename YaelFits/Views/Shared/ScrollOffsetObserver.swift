@@ -20,14 +20,24 @@ import UIKit
 /// `.frame(width: 0, height: 0)` so it costs no layout space.
 struct ScrollOffsetObserver: UIViewRepresentable {
     let onScroll: (CGFloat) -> Void
+    /// Optional hook with the enclosing UIScrollView — used by the
+    /// pinchable grids to configure the scroll's pan recognizer
+    /// directly (max touches, live enable/disable). Direct recognizer
+    /// control replaced `.scrollDisabled(twoFingersDown)`: flapping
+    /// scrollDisabled mid-touch could WEDGE the scroll view's pan in a
+    /// dead state (frozen scrolling with every flag clear, healed only
+    /// by a tab-switch remount).
+    var onScrollViewAttach: ((UIScrollView) -> Void)? = nil
 
     func makeUIView(context: Context) -> ScrollProbeView {
         let view = ScrollProbeView()
         // Capture the coordinator weakly so the view → closure →
         // coordinator chain can't keep the coordinator alive past
         // SwiftUI's intended lifecycle.
+        let attach = onScrollViewAttach
         view.onAttachedToScroll = { [weak coordinator = context.coordinator] scrollView in
             coordinator?.bind(to: scrollView)
+            attach?(scrollView)
         }
         return view
     }
@@ -88,5 +98,20 @@ struct ScrollOffsetObserver: UIViewRepresentable {
         deinit {
             observation?.invalidate()
         }
+    }
+}
+
+
+/// Weak handle to a grid's enclosing UIScrollView, captured via
+/// `ScrollOffsetObserver.onScrollViewAttach`. Reference type on
+/// purpose — assigning the scroll view must not re-render.
+final class WeakScrollViewBox {
+    weak var scrollView: UIScrollView?
+
+    /// Gate scrolling at the RECOGNIZER level. Disabling a recognizer
+    /// mid-gesture cancels it cleanly and re-enabling restores it —
+    /// unlike SwiftUI's scrollDisabled, this cannot wedge.
+    func setScrollLocked(_ locked: Bool) {
+        scrollView?.panGestureRecognizer.isEnabled = !locked
     }
 }

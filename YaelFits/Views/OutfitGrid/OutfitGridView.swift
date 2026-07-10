@@ -106,6 +106,10 @@ struct OutfitGridView: View {
 
     @State private var pinch = GridPinchZoomState()
     @State private var twoFingersDown = false
+    /// Direct handle to the grid's UIScrollView — scrub/pinch locks go
+    /// through the pan RECOGNIZER (wedge-proof) instead of flapping
+    /// SwiftUI's scrollDisabled mid-touch.
+    @State private var scrollBox = WeakScrollViewBox()
     private static let minColumns = 2
     private static let maxColumns = 4
 
@@ -168,9 +172,14 @@ struct OutfitGridView: View {
                             // Also carries the "archiveTop" anchor
                             // ID so re-tapping the Profile tab can
                             // scroll back to it.
-                            ScrollOffsetObserver { offsetY in
+                            ScrollOffsetObserver(onScroll: { offsetY in
                                 handleScrollOffset(offsetY)
-                            }
+                            }, onScrollViewAttach: { scrollView in
+                                // Two-finger touches can never scroll —
+                                // set ONCE, no toggling to wedge.
+                                scrollView.panGestureRecognizer.maximumNumberOfTouches = 1
+                                scrollBox.scrollView = scrollView
+                            })
                             .frame(width: 0, height: 0)
                             .id("archiveTop")
 
@@ -208,9 +217,11 @@ struct OutfitGridView: View {
                         .padding(.horizontal, LayoutMetrics.small)
                     }
                     .compositingGroup()
-                    // Two fingers down = pinch, never a scroll (same
-                    // setup as the closet grid + calendar).
-                    .scrollDisabled(isScrubbing || showCarousel || twoFingersDown)
+                    // Modal state only — transient scrub/pinch locks
+                    // go through the pan recognizer (syncScrollLock);
+                    // flapping scrollDisabled mid-touch wedged the pan
+                    // (frozen scroll with every flag clear).
+                    .scrollDisabled(showCarousel)
                     // Chrome cover, fading in WITH scroll: the profile
                     // header's stats/°F-°C toggle and the "outfits"
                     // section title scroll under the fixed top bar
@@ -233,6 +244,7 @@ struct OutfitGridView: View {
                             guard store.currentView == .list || count == 0 else { return }
                             let down = count >= 2
                             if down != twoFingersDown { twoFingersDown = down }
+                            syncScrollLock()
                             if count == 0 { scheduleGestureLatchSelfHeal() }
                         }
                     )
@@ -332,6 +344,7 @@ struct OutfitGridView: View {
                 // (the "scroll freezes after a few back-and-forths").
                 isScrubbing = false
                 twoFingersDown = false
+                syncScrollLock()
             }
             .onChange(of: scenePhase) { _, phase in
                 // Backgrounding cancels all touches system-wide and
@@ -345,7 +358,9 @@ struct OutfitGridView: View {
                 pinch.startColumns = nil
                 pinch.isPinching = false
                 pinch.scale = 1
-            }            .onChange(of: store.carouselDismissTrigger) { _, _ in
+                syncScrollLock()
+            }
+            .onChange(of: store.carouselDismissTrigger) { _, _ in
                 // Fired by the global X button in the top bar when
                 // the carousel is open. Only acts if we're the host
                 // currently showing the carousel.
@@ -580,6 +595,7 @@ struct OutfitGridView: View {
             },
             onHorizontalDragChange: { isDragging in
                 isScrubbing = isDragging
+                syncScrollLock()
                 if isDragging {
                     dragHintVisible = false
                 } else {
@@ -1003,6 +1019,13 @@ struct OutfitGridView: View {
     /// right below it) is at the top of the visible area. Falls back
     /// to `200` (a reasonable default for the typical layout) until
     /// the first height measurement lands.
+    /// Push the transient lock state into the scroll view's pan
+    /// recognizer. Disable-mid-gesture cancels cleanly; re-enable
+    /// restores — unlike scrollDisabled, this cannot wedge.
+    private func syncScrollLock() {
+        scrollBox.setScrollLocked(isScrubbing || twoFingersDown)
+    }
+
     /// Self-heal for latched gesture state — mirrors the calendar.
     /// SwiftUI can DROP a gesture's `.onEnded` mid-interruption; the
     /// pinch then leaves `isPinching` true forever and every card tap
@@ -1019,6 +1042,7 @@ struct OutfitGridView: View {
                 }
             }
             if isScrubbing { isScrubbing = false }
+            syncScrollLock()
         }
     }
 
