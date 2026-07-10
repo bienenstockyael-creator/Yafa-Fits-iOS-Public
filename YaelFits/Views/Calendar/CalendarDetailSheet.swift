@@ -144,15 +144,24 @@ struct CalendarDetailSheet: View {
             GeometryReader { geometry in
                 let width = min(max(geometry.size.width - (LayoutMetrics.screenPadding * 2), 0), 600)
                 let stageHeight: CGFloat = min(geometry.size.height * 0.51, 480)
+                // Hero shrinks as the card's lower half grows, so the
+                // card's TOTAL height stays inside the tab-bar-safe
+                // zone. Edit mode adds the editable product + tag rows
+                // (~150pt) on top of the expanded footer — at 0.90 the
+                // footer buttons (SAVE / SHOW LESS) slid under the
+                // safeAreaInset tab strip, which hit-tests above this
+                // overlay and ate their taps ("the buttons freeze").
+                let heroFactor: CGFloat = isEditing ? 0.58 : (isExpanded ? 0.90 : 1.0)
 
                 VStack(spacing: 0) {
                     header
                     heroStage(stageHeight: stageHeight)
-                        .scaleEffect(isExpanded ? 0.90 : 1.0, anchor: .top)
-                        .frame(height: isExpanded ? stageHeight * 0.90 : stageHeight)
+                        .scaleEffect(heroFactor, anchor: .top)
+                        .frame(height: stageHeight * heroFactor)
                         .scaleEffect(keyboardHeight > 0 ? 0.78 : 1.0, anchor: .top)
                         .padding(.bottom, keyboardHeight > 0 ? -66 : 0)
                         .animation(.spring(response: 0.4, dampingFraction: 0.78), value: isExpanded)
+                        .animation(.spring(response: 0.4, dampingFraction: 0.78), value: isEditing)
                     footer
                 }
                 .padding(.horizontal, LayoutMetrics.medium)
