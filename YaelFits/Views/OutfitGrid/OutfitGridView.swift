@@ -34,7 +34,22 @@ struct OutfitGridView: View {
     /// observes @State value identity; class-internal mutations are
     /// invisible to it. We only commit to the store on drag-end.
     @State private var scrubTracker = ScrubFrameTracker()
+    /// Exit/entry frame images so grid cells show the exact frame a
+    /// carousel visit left on. CAPPED: uncapped, a long browse session
+    /// accumulated a decoded UIImage per visited outfit — memory
+    /// pressure that read as "scroll gets janky after a while".
     @State private var outfitFrameImages: [String: UIImage] = [:]
+    @State private var outfitFrameImageOrder: [String] = []
+
+    private func storeFrameImage(_ image: UIImage, for outfitId: String) {
+        outfitFrameImages[outfitId] = image
+        outfitFrameImageOrder.removeAll { $0 == outfitId }
+        outfitFrameImageOrder.append(outfitId)
+        while outfitFrameImageOrder.count > 12 {
+            let evicted = outfitFrameImageOrder.removeFirst()
+            outfitFrameImages[evicted] = nil
+        }
+    }
     @State private var showCarousel = false
     @State private var carouselBackdropVisible = false
     @State private var carouselChromeVisible = false
@@ -790,7 +805,7 @@ struct OutfitGridView: View {
             revealGridOutfitIdDuringHero = nil
             outfitFrameIndices[outfit.id] = entryFrameIndex
             if let entryImage {
-                outfitFrameImages[outfit.id] = entryImage
+                storeFrameImage(entryImage, for: outfit.id)
             }
             carouselEntryFrame = CarouselEntryFrame(outfitId: outfit.id, frameIndex: entryFrameIndex)
             carouselEntryImage = entryImage
@@ -928,7 +943,7 @@ struct OutfitGridView: View {
             revealGridOutfitIdDuringHero = nil
             outfitFrameIndices[currentOutfit.id] = exitFrameIndex
             if let exitImage {
-                outfitFrameImages[currentOutfit.id] = exitImage
+                storeFrameImage(exitImage, for: currentOutfit.id)
             }
 
             showCurrentCarouselLiveSlide = false
