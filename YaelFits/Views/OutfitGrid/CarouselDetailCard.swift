@@ -99,13 +99,17 @@ struct CarouselDetailCard: View {
                 }
             }
 
-            if isEditing {
-                editableProductRow
-            } else if let products = outfit.products, !products.isEmpty {
-                // Owners get an always-present + at the head of the
-                // row — adding a product is the everyday action, so it
-                // must not require the edit-mode round trip.
-                productRow(products, showsAdd: !viewOnly)
+            // ONE row for both modes — entering EDIT must not reflow
+            // anything: products and tags stay exactly where they are
+            // and simply grow their ×'s. Owners get an always-present
+            // + at the head of each row (adding is the everyday
+            // action, no edit-mode round trip).
+            if let products = outfit.products, !products.isEmpty {
+                productRow(
+                    products,
+                    showsAdd: !viewOnly,
+                    showsRemove: isEditing && !viewOnly
+                )
             } else if !viewOnly {
                 // View-only mode omits the "+ add product" CTA
                 // since the viewer can't tag products on someone
@@ -113,14 +117,11 @@ struct CarouselDetailCard: View {
                 emptyProductRow
             }
 
-            if isEditing {
-                editableTagRow
-            } else if !viewOnly {
+            if !viewOnly {
                 // Tags only render on the owner's own carousel — they
                 // were exposing the author's organisational scheme on
-                // other users' outfits. The + is ALWAYS present:
-                // adding a tag is one tap → inline input → return
-                // commits and saves instantly. No edit mode needed.
+                // other users' outfits. Adding: one tap → inline
+                // input → return commits and saves instantly.
                 viewTagRow
             }
 
@@ -222,7 +223,11 @@ struct CarouselDetailCard: View {
         }
     }
 
-    private func productRow(_ products: [Product], showsAdd: Bool = false) -> some View {
+    private func productRow(
+        _ products: [Product],
+        showsAdd: Bool = false,
+        showsRemove: Bool = false
+    ) -> some View {
         // `ViewThatFits` picks the first subview whose natural
         // size fits in the available space. Few products → the
         // centered HStack wins and the row looks identical on
@@ -230,31 +235,52 @@ struct CarouselDetailCard: View {
         // back to a horizontal ScrollView so the card width stays
         // consistent and content scrolls instead of pushing the
         // card frame past the viewport.
-        // `showsAdd` (owner view mode) leads the row with the same
-        // + that lives in edit mode — straight into Quick Add.
+        // `showsAdd` leads the row with the + (straight into Quick
+        // Add); `showsRemove` (edit mode) overlays × badges on the
+        // SAME cells — no reflow when EDIT toggles.
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .top, spacing: 24) {
-                if showsAdd {
-                    addProductButton.frame(minHeight: 100)
-                }
-                ForEach(products) { product in
-                    productCell(product)
-                }
+                productRowCells(products, showsAdd: showsAdd, showsRemove: showsRemove)
             }
             .frame(maxWidth: .infinity, alignment: .center)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 24) {
-                    if showsAdd {
-                        addProductButton.frame(minHeight: 100)
-                    }
-                    ForEach(products) { product in
-                        productCell(product)
-                    }
+                    productRowCells(products, showsAdd: showsAdd, showsRemove: showsRemove)
                 }
                 .padding(.horizontal, LayoutMetrics.medium)
             }
             .padding(.horizontal, -LayoutMetrics.medium)
+        }
+    }
+
+    @ViewBuilder
+    private func productRowCells(
+        _ products: [Product],
+        showsAdd: Bool,
+        showsRemove: Bool
+    ) -> some View {
+        if showsAdd {
+            addProductButton.frame(minHeight: 100)
+        }
+        ForEach(products) { product in
+            if showsRemove {
+                ZStack(alignment: .topTrailing) {
+                    productCell(product)
+                    Button {
+                        removeProduct(product)
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 18))
+                            .foregroundStyle(.white)
+                            .background(Color(red: 0.85, green: 0.25, blue: 0.25).clipShape(Circle()))
+                    }
+                    .buttonStyle(SolidPressButtonStyle())
+                    .offset(x: 6, y: -6)
+                }
+            } else {
+                productCell(product)
+            }
         }
     }
 
@@ -275,99 +301,9 @@ struct CarouselDetailCard: View {
     }
 
 
-    // MARK: - Editable product row
-
-    private var editableProductRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                // Single product-entry path — Quick Add. The manual
-                // entry option (AddProductSheet) lives as an "Add
-                // manually" affordance inside the AutoDetect sheet.
-                addProductButton
-
-                if (outfit.products ?? []).isEmpty {
-                    // Mirrors the "Add a tag" hint label on the tag
-                    // row — only shown until the first product is
-                    // added, then the row swaps to product chips.
-                    Text("Add a product")
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundStyle(AppPalette.textFaint)
-                }
-
-                ForEach(outfit.products ?? [], id: \.id) { product in
-                    ZStack(alignment: .topTrailing) {
-                        VStack(spacing: 6) {
-                            ProductThumbnail(product: product, side: 100, cornerRadius: 18)
-                            Text(product.displayName)
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(AppPalette.textMuted)
-                                .lineLimit(1)
-                                .frame(width: 100)
-                        }
-
-                        Button {
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            removeProduct(product)
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 18))
-                                .foregroundStyle(.white)
-                                .background(Color(red: 0.85, green: 0.25, blue: 0.25).clipShape(Circle()))
-                        }
-                        .buttonStyle(SolidPressButtonStyle())
-                        .offset(x: 6, y: -6)
-                    }
-                }
-            }
-            .padding(.horizontal, LayoutMetrics.medium)
-            .padding(.vertical, 8)
-        }
-        .padding(.horizontal, -LayoutMetrics.medium)
-    }
 
     // MARK: - Editable tag row
 
-    private var editableTagRow: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    addTagButton
-
-                    if editCoordinator.editableTags.isEmpty && !showingTagInput {
-                        Text("Add a tag")
-                            .font(.system(size: 12, weight: .regular))
-                            .foregroundStyle(AppPalette.textFaint)
-                    }
-
-                    ForEach(editCoordinator.editableTags, id: \.self) { tag in
-                        HStack(spacing: 4) {
-                            Text(tag.uppercased())
-                                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                .tracking(1.2)
-                                .foregroundStyle(AppPalette.textSecondary)
-                            Button {
-                                removeTag(tag)
-                            } label: {
-                                Image(systemName: "xmark")
-                                    .font(.system(size: 8, weight: .bold))
-                                    .foregroundStyle(AppPalette.textFaint)
-                            }
-                            .buttonStyle(SolidPressButtonStyle())
-                        }
-                        .padding(.horizontal, 10)
-                        .frame(height: 30)
-                        .appCapsule(shadowRadius: 0, shadowY: 0)
-                    }
-                }
-                .padding(.horizontal, LayoutMetrics.medium)
-            }
-            .padding(.horizontal, -LayoutMetrics.medium)
-
-            if showingTagInput {
-                tagInputField(commit: commitNewTag)
-            }
-        }
-    }
 
     /// The tag text field + suggestions dropdown, shared between the
     /// edit-mode row (pending commit into the edit session) and the
@@ -439,65 +375,19 @@ struct CarouselDetailCard: View {
     /// again.
     private var viewTagRow: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    Button {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        withAnimation(.easeInOut(duration: 0.15)) { showingTagInput = true }
-                        isTagFieldFocused = true
-                    } label: {
-                        AppIcon(glyph: .plusCircle, size: 12, color: AppPalette.iconPrimary)
-                            .frame(width: 30, height: 30)
-                            .appCircle(shadowRadius: 0, shadowY: 0)
-                    }
-                    .buttonStyle(SolidPressButtonStyle())
+            // Centered while it fits (like the product row); once the
+            // tags overflow, falls back to a leading-aligned scroll
+            // with the + first — never clipped at the left edge.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) { viewTagRowContent }
+                    .frame(maxWidth: .infinity, alignment: .center)
 
-                    if currentTags.isEmpty && !showingTagInput {
-                        Text("Add a tag")
-                            .font(.system(size: 12, weight: .regular))
-                            .foregroundStyle(AppPalette.textFaint)
-                    }
-
-                    ForEach(currentTags, id: \.self) { tag in
-                        if showingTagInput {
-                            HStack(spacing: 4) {
-                                Text(tag.uppercased())
-                                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                    .tracking(1.2)
-                                    .foregroundStyle(AppPalette.textSecondary)
-                                Button {
-                                    removeTagInstantly(tag)
-                                } label: {
-                                    Image(systemName: "xmark")
-                                        .font(.system(size: 8, weight: .bold))
-                                        .foregroundStyle(AppPalette.textFaint)
-                                }
-                                .buttonStyle(SolidPressButtonStyle())
-                            }
-                            .padding(.horizontal, 10)
-                            .frame(height: 30)
-                            .appCapsule(shadowRadius: 0, shadowY: 0)
-                        } else {
-                            Button {
-                                let impact = UIImpactFeedbackGenerator(style: .light)
-                                impact.impactOccurred()
-                                selectedLinkedTag = LinkedTagSelection(id: tag)
-                            } label: {
-                                Text(tag.uppercased())
-                                    .font(.system(size: 9, weight: .semibold))
-                                    .tracking(0.8)
-                                    .foregroundStyle(AppPalette.textMuted)
-                                    .padding(.horizontal, 10)
-                                    .frame(height: 26)
-                                    .appCapsule(shadowRadius: 0, shadowY: 0)
-                            }
-                            .buttonStyle(SolidPressButtonStyle())
-                        }
-                    }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) { viewTagRowContent }
+                        .padding(.horizontal, LayoutMetrics.medium)
                 }
-                .padding(.horizontal, LayoutMetrics.medium)
+                .padding(.horizontal, -LayoutMetrics.medium)
             }
-            .padding(.horizontal, -LayoutMetrics.medium)
 
             if showingTagInput {
                 tagInputField(commit: commitInlineTag)
@@ -506,8 +396,65 @@ struct CarouselDetailCard: View {
         .onChange(of: isTagFieldFocused) { _, focused in
             // Keyboard dropped (tap-out, Done) → leave the inline
             // micro-state; pills go back to tappable tag links.
-            if !focused, !isEditing {
+            if !focused {
                 withAnimation(.easeInOut(duration: 0.15)) { showingTagInput = false }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var viewTagRowContent: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            withAnimation(.easeInOut(duration: 0.15)) { showingTagInput = true }
+            isTagFieldFocused = true
+        } label: {
+            AppIcon(glyph: .plusCircle, size: 12, color: AppPalette.iconPrimary)
+                .frame(width: 30, height: 30)
+                .appCircle(shadowRadius: 0, shadowY: 0)
+        }
+        .buttonStyle(SolidPressButtonStyle())
+
+        if currentTags.isEmpty && !showingTagInput {
+            Text("Add a tag")
+                .font(.system(size: 12, weight: .regular))
+                .foregroundStyle(AppPalette.textFaint)
+        }
+
+        ForEach(currentTags, id: \.self) { tag in
+            if showingTagInput || isEditing {
+                HStack(spacing: 4) {
+                    Text(tag.uppercased())
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .tracking(1.2)
+                        .foregroundStyle(AppPalette.textSecondary)
+                    Button {
+                        removeTagInstantly(tag)
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(AppPalette.textFaint)
+                    }
+                    .buttonStyle(SolidPressButtonStyle())
+                }
+                .padding(.horizontal, 10)
+                .frame(height: 30)
+                .appCapsule(shadowRadius: 0, shadowY: 0)
+            } else {
+                Button {
+                    let impact = UIImpactFeedbackGenerator(style: .light)
+                    impact.impactOccurred()
+                    selectedLinkedTag = LinkedTagSelection(id: tag)
+                } label: {
+                    Text(tag.uppercased())
+                        .font(.system(size: 9, weight: .semibold))
+                        .tracking(0.8)
+                        .foregroundStyle(AppPalette.textMuted)
+                        .padding(.horizontal, 10)
+                        .frame(height: 26)
+                        .appCapsule(shadowRadius: 0, shadowY: 0)
+                }
+                .buttonStyle(SolidPressButtonStyle())
             }
         }
     }
@@ -535,6 +482,9 @@ struct CarouselDetailCard: View {
 
     /// Inline adds save immediately — no pending state, no Save step.
     private func persistTagsInstantly(_ tags: [String]) {
+        // Keep the edit session's copy in step so a later Save can't
+        // rewrite stale tags over an instant change.
+        if isEditing { editCoordinator.editableTags = tags }
         store.updateOutfitTags(outfitId: outfit.id, tags: tags)
         Task { try? await ProductLibraryService.updateOutfitTags(outfitId: outfit.id, tags: tags) }
     }
@@ -544,10 +494,8 @@ struct CarouselDetailCard: View {
     private var tagSuggestions: [String] {
         let trimmed = newTagText.trimmingCharacters(in: .whitespaces).lowercased()
         guard !trimmed.isEmpty else { return [] }
-        // Exclude whichever tag set the active row is editing against.
-        let existing = isEditing ? editCoordinator.editableTags : currentTags
         return store.allOutfitTags
-            .filter { $0.lowercased().hasPrefix(trimmed) && !existing.contains($0) }
+            .filter { $0.lowercased().hasPrefix(trimmed) && !currentTags.contains($0) }
             .prefix(5)
             .map { $0 }
     }
@@ -574,16 +522,7 @@ struct CarouselDetailCard: View {
         await MainActor.run { autoDetectSource = QuickAddSource(image: image) }
     }
 
-    private func removeTag(_ tag: String) {
-        editCoordinator.editableTags.removeAll { $0 == tag }
-    }
 
-    private func commitNewTag() {
-        let trimmed = newTagText.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty, !editCoordinator.editableTags.contains(trimmed) else { return }
-        editCoordinator.editableTags.append(trimmed)
-        newTagText = ""
-    }
 
     private func productCell(_ product: Product) -> some View {
         VStack(spacing: 16) {
@@ -737,7 +676,7 @@ struct CarouselDetailCard: View {
 
     /// + button that triggers the Quick Add (auto-detect) flow.
     /// Same visual size as the rest of the card's action buttons so
-    /// it reads as a peer. Paired with `addTagButton` so the two
+    /// it reads as a peer. Paired with the tag row's + so the two
     /// "+ add" affordances are visually identical. Shadowless — see
     /// the same note on `editSaveButton`.
     private var addProductButton: some View {
@@ -761,25 +700,6 @@ struct CarouselDetailCard: View {
         .disabled(isLoadingAutoDetect)
     }
 
-    /// + button that drops the card into edit mode and opens the
-    /// tag-input field. Matches `addProductButton` so the two
-    /// affordances look like a pair. Shadowless.
-    private var addTagButton: some View {
-        Button {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            withAnimation(.easeInOut(duration: 0.2)) {
-                if !isEditing {
-                    editCoordinator.startEditing(outfit)
-                }
-                showingTagInput = true
-            }
-        } label: {
-            AppIcon(glyph: .plusCircle, size: 16, color: AppPalette.iconPrimary)
-                .frame(width: 48, height: 48)
-                .appCircle(shadowRadius: 0, shadowY: 0)
-        }
-        .buttonStyle(SolidPressButtonStyle())
-    }
 
     /// Save any in-flight edits, then dismiss the card. Used by the
     /// in-card drag-down gesture; the carousel's tap-outside and

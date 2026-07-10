@@ -148,14 +148,14 @@ struct CalendarDetailSheet: View {
             GeometryReader { geometry in
                 let width = min(max(geometry.size.width - (LayoutMetrics.screenPadding * 2), 0), 600)
                 let stageHeight: CGFloat = min(geometry.size.height * 0.51, 480)
-                // Hero shrinks as the card's lower half grows, so the
-                // card's TOTAL height stays inside the tab-bar-safe
-                // zone. Edit mode adds the editable product + tag rows
-                // (~150pt) on top of the expanded footer — at 0.90 the
-                // footer buttons (SAVE / SHOW LESS) slid under the
-                // safeAreaInset tab strip, which hit-tests above this
-                // overlay and ate their taps ("the buttons freeze").
-                let heroFactor: CGFloat = isEditing ? 0.58 : (isExpanded ? 0.90 : 1.0)
+                // Hero shrinks when the card's lower half grows, so
+                // the card's TOTAL height stays inside the tab-bar-
+                // safe zone (the safeAreaInset tab strip hit-tests
+                // above this overlay and eats any control under it).
+                // Edit mode reuses the SAME rows as view mode (they
+                // just grow ×'s), so it needs no extra shrink —
+                // entering EDIT moves nothing.
+                let heroFactor: CGFloat = isExpanded ? 0.90 : 1.0
 
                 VStack(spacing: 0) {
                     header
@@ -328,23 +328,19 @@ struct CalendarDetailSheet: View {
             }
 
             if isExpanded {
-                if isEditing {
-                    calEditableProductRow
-                } else if let products = outfit.products, !products.isEmpty {
-                    productRow(products)
+                // ONE row for both modes — entering EDIT must not
+                // reflow anything: products stay exactly where they
+                // are and simply grow their ×'s.
+                if let products = outfit.products, !products.isEmpty {
+                    productRow(products, showsRemove: isEditing)
                 } else {
                     emptyProductRow
                 }
 
-                if isEditing {
-                    calEditableTagRow
-                } else {
-                    // The + is ALWAYS present: one tap → inline input →
-                    // return commits and saves instantly. No edit-mode
-                    // round trip for the everyday action. (Mirrors the
-                    // carousel card.)
-                    calViewTagRow
-                }
+                // ONE tag row for both modes (edit just shows the
+                // ×'s persistently). The + is ALWAYS present: one tap
+                // → inline input → return commits and saves instantly.
+                calViewTagRow
             }
 
             HStack(spacing: 8) {
@@ -453,55 +449,19 @@ struct CalendarDetailSheet: View {
     /// again. Mirrors the carousel card.
     private var calViewTagRow: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    Button {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        withAnimation(.easeInOut(duration: 0.15)) { showingViewTagInput = true }
-                        calTagFieldFocused = true
-                    } label: {
-                        AppIcon(glyph: .plusCircle, size: 12, color: AppPalette.iconPrimary)
-                            .frame(width: 30, height: 30)
-                            .appCircle(shadowRadius: 0, shadowY: 0)
-                    }
-                    .buttonStyle(SolidPressButtonStyle())
+            // Centered while it fits (like the product row); once the
+            // tags overflow, falls back to a leading-aligned scroll
+            // with the + first — never clipped at the left edge.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) { calViewTagRowContent }
+                    .frame(maxWidth: .infinity, alignment: .center)
 
-                    if calCurrentTags.isEmpty && !showingViewTagInput {
-                        Text("Add a tag")
-                            .font(.system(size: 12, weight: .regular))
-                            .foregroundStyle(AppPalette.textFaint)
-                    }
-
-                    ForEach(calCurrentTags, id: \.self) { tag in
-                        if showingViewTagInput {
-                            HStack(spacing: 4) {
-                                Text(tag.uppercased())
-                                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                    .tracking(1.2)
-                                    .foregroundStyle(AppPalette.textSecondary)
-                                Button {
-                                    calRemoveTagInstantly(tag)
-                                } label: {
-                                    Image(systemName: "xmark")
-                                        .font(.system(size: 8, weight: .bold))
-                                        .foregroundStyle(AppPalette.textFaint)
-                                }
-                                .buttonStyle(SolidPressButtonStyle())
-                            }
-                            .padding(.horizontal, 10)
-                            .frame(height: 30)
-                            .appCapsule(shadowRadius: 0, shadowY: 0)
-                        } else {
-                            TagPill(tag: tag) {
-                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                selectedLinkedTag = LinkedTagSelection(id: tag)
-                            }
-                        }
-                    }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) { calViewTagRowContent }
+                        .padding(.horizontal, LayoutMetrics.medium)
                 }
-                .padding(.horizontal, LayoutMetrics.medium)
+                .padding(.horizontal, -LayoutMetrics.medium)
             }
-            .padding(.horizontal, -LayoutMetrics.medium)
 
             if showingViewTagInput {
                 calInlineTagInput
@@ -512,6 +472,53 @@ struct CalendarDetailSheet: View {
             // micro-state; pills go back to tappable tag links.
             if !focused {
                 withAnimation(.easeInOut(duration: 0.15)) { showingViewTagInput = false }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var calViewTagRowContent: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            withAnimation(.easeInOut(duration: 0.15)) { showingViewTagInput = true }
+            calTagFieldFocused = true
+        } label: {
+            AppIcon(glyph: .plusCircle, size: 12, color: AppPalette.iconPrimary)
+                .frame(width: 30, height: 30)
+                .appCircle(shadowRadius: 0, shadowY: 0)
+        }
+        .buttonStyle(SolidPressButtonStyle())
+
+        if calCurrentTags.isEmpty && !showingViewTagInput {
+            Text("Add a tag")
+                .font(.system(size: 12, weight: .regular))
+                .foregroundStyle(AppPalette.textFaint)
+        }
+
+        ForEach(calCurrentTags, id: \.self) { tag in
+            if showingViewTagInput || isEditing {
+                HStack(spacing: 4) {
+                    Text(tag.uppercased())
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .tracking(1.2)
+                        .foregroundStyle(AppPalette.textSecondary)
+                    Button {
+                        calRemoveTagInstantly(tag)
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(AppPalette.textFaint)
+                    }
+                    .buttonStyle(SolidPressButtonStyle())
+                }
+                .padding(.horizontal, 10)
+                .frame(height: 30)
+                .appCapsule(shadowRadius: 0, shadowY: 0)
+            } else {
+                TagPill(tag: tag) {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    selectedLinkedTag = LinkedTagSelection(id: tag)
+                }
             }
         }
     }
@@ -592,158 +599,14 @@ struct CalendarDetailSheet: View {
 
     /// Inline adds save immediately — no pending state, no Save step.
     private func calPersistTagsInstantly(_ tags: [String]) {
+        // Keep the edit session's copy in step so SAVE can't rewrite
+        // stale tags over an instant change.
+        if isEditing { editableTags = tags }
         store.updateOutfitTags(outfitId: outfit.id, tags: tags)
         Task { try? await ProductLibraryService.updateOutfitTags(outfitId: outfit.id, tags: tags) }
     }
 
-    private var calEditableProductRow: some View {
-        // Mirrors the carousel card's editable product row 1:1 —
-        // single product-entry path (the + opens Quick Add; manual
-        // entry lives INSIDE that sheet as "Add manually"), an
-        // "Add a product" hint until the first product exists, and
-        // 100pt product chips.
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                Button {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    Task { await openAutoDetect() }
-                } label: {
-                    Group {
-                        if isLoadingAutoDetect {
-                            ProgressView().controlSize(.small).tint(AppPalette.iconPrimary)
-                        } else {
-                            AppIcon(glyph: .plusCircle, size: 16, color: AppPalette.iconPrimary)
-                        }
-                    }
-                    .frame(width: 48, height: 48)
-                    .appCircle(shadowRadius: 0, shadowY: 0)
-                }
-                .buttonStyle(SolidPressButtonStyle())
-                .disabled(isLoadingAutoDetect)
 
-                if (outfit.products ?? []).isEmpty {
-                    Text("Add a product")
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundStyle(AppPalette.textFaint)
-                }
-
-                ForEach(outfit.products ?? [], id: \.id) { product in
-                    ZStack(alignment: .topTrailing) {
-                        VStack(spacing: 6) {
-                            ProductThumbnail(product: product, side: 100, cornerRadius: 18)
-                            Text(product.displayName)
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(AppPalette.textMuted)
-                                .lineLimit(1)
-                                .frame(width: 100)
-                        }
-                        Button {
-                            store.removeProduct(product, fromOutfitId: outfit.id)
-                            Task { try? await ProductLibraryService.removeProductFromOutfit(outfitId: outfit.id, product: product) }
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 18))
-                                .foregroundStyle(.white)
-                                .background(Color(red: 0.85, green: 0.25, blue: 0.25).clipShape(Circle()))
-                        }
-                        .buttonStyle(SolidPressButtonStyle())
-                        .offset(x: 6, y: -6)
-                    }
-                }
-            }
-            .padding(.horizontal, LayoutMetrics.medium).padding(.vertical, 8)
-        }
-        .padding(.horizontal, -LayoutMetrics.medium)
-    }
-
-    private var calEditableTagRow: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    Button {
-                        withAnimation { showingTagInput.toggle() }
-                    } label: {
-                        AppIcon(glyph: .plusCircle, size: 14, color: AppPalette.iconPrimary)
-                        .frame(width: 36, height: 36)
-                        .appCircle(shadowRadius: 0, shadowY: 0)
-                    }
-                    .buttonStyle(SolidPressButtonStyle())
-
-                    ForEach(editableTags, id: \.self) { tag in
-                        HStack(spacing: 4) {
-                            Text(tag.uppercased())
-                                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                .tracking(1.2)
-                                .foregroundStyle(AppPalette.textSecondary)
-                            Button {
-                                editableTags.removeAll { $0 == tag }
-                            } label: {
-                                Image(systemName: "xmark")
-                                    .font(.system(size: 8, weight: .bold))
-                                    .foregroundStyle(AppPalette.textFaint)
-                            }
-                            .buttonStyle(SolidPressButtonStyle())
-                        }
-                        .padding(.horizontal, 10)
-                        .frame(height: 30)
-                        .appCapsule(shadowRadius: 0, shadowY: 0)
-                    }
-                }
-                .padding(.horizontal, LayoutMetrics.medium)
-            }
-            .padding(.horizontal, -LayoutMetrics.medium)
-
-            if showingTagInput {
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack(spacing: 8) {
-                        TextField("", text: $newTagText, prompt:
-                            Text("New tag…").foregroundColor(AppPalette.textSecondary)
-                        )
-                        .font(.system(size: 13))
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                        .onSubmit { commitCalTag() }
-                        if !newTagText.isEmpty {
-                            Button("Add") { commitCalTag() }
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(AppPalette.textSecondary)
-                        }
-                    }
-                    .padding(LayoutMetrics.xSmall)
-                    .background(AppPalette.pageBackground)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(AppPalette.cardBorder, lineWidth: 1))
-
-                    let suggestions = store.allOutfitTags
-                        .filter { $0.lowercased().hasPrefix(newTagText.lowercased()) && !editableTags.contains($0) }
-                        .prefix(5)
-                        .map { $0 }
-                    if !suggestions.isEmpty && !newTagText.isEmpty {
-                        VStack(spacing: 0) {
-                            ForEach(suggestions, id: \.self) { s in
-                                Button {
-                                    newTagText = s; commitCalTag()
-                                } label: {
-                                    Text(s)
-                                        .font(.system(size: 13))
-                                        .foregroundStyle(AppPalette.textPrimary)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .padding(.horizontal, LayoutMetrics.xSmall)
-                                        .padding(.vertical, 9)
-                                }
-                                .buttonStyle(SolidPressButtonStyle())
-                                if s != suggestions.last { Divider().opacity(0.5) }
-                            }
-                        }
-                        .background(AppPalette.pageBackground)
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        .shadow(color: AppPalette.cardShadow, radius: 6, y: 3)
-                    }
-                }
-            }
-        }
-    }
 
     private func saveCalendarEdits() {
         showingTagInput = false
@@ -762,11 +625,6 @@ struct CalendarDetailSheet: View {
         }
     }
 
-    private func commitCalTag() {
-        let t = newTagText.trimmingCharacters(in: .whitespaces)
-        guard !t.isEmpty, !editableTags.contains(t) else { return }
-        editableTags.append(t); newTagText = ""
-    }
 
     private func openAutoDetect() async {
         guard !isLoadingAutoDetect else { return }
@@ -855,31 +713,50 @@ struct CalendarDetailSheet: View {
         .buttonStyle(SolidPressButtonStyle())
     }
 
-    private func productRow(_ products: [Product]) -> some View {
-        let visibleProducts = Array(products.prefix(4))
-
+    private func productRow(_ products: [Product], showsRemove: Bool = false) -> some View {
         // Always leads with + (straight into Quick Add) — adding a
         // product is the everyday action, no edit-mode round trip.
-        return Group {
-            if visibleProducts.count <= 2 {
+        // Centered while it fits; overflow falls back to a leading
+        // scroll with the + first, never clipped at the left edge.
+        // `showsRemove` (edit mode) overlays ×'s on the SAME cells —
+        // no reflow when EDIT toggles.
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 24) {
+                calProductRowCells(products, showsRemove: showsRemove)
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+
+            ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 24) {
-                    calAddProductChip
-                    ForEach(visibleProducts) { product in
-                        productCell(product)
-                    }
+                    calProductRowCells(products, showsRemove: showsRemove)
                 }
-                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.horizontal, LayoutMetrics.medium)
+            }
+            .padding(.horizontal, -LayoutMetrics.medium)
+        }
+    }
+
+    @ViewBuilder
+    private func calProductRowCells(_ products: [Product], showsRemove: Bool) -> some View {
+        calAddProductChip
+        ForEach(products) { product in
+            if showsRemove {
+                ZStack(alignment: .topTrailing) {
+                    productCell(product)
+                    Button {
+                        store.removeProduct(product, fromOutfitId: outfit.id)
+                        Task { try? await ProductLibraryService.removeProductFromOutfit(outfitId: outfit.id, product: product) }
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 18))
+                            .foregroundStyle(.white)
+                            .background(Color(red: 0.85, green: 0.25, blue: 0.25).clipShape(Circle()))
+                    }
+                    .buttonStyle(SolidPressButtonStyle())
+                    .offset(x: 6, y: -6)
+                }
             } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(alignment: .top, spacing: 24) {
-                        calAddProductChip
-                        ForEach(visibleProducts) { product in
-                            productCell(product)
-                        }
-                    }
-                    .padding(.horizontal, LayoutMetrics.medium)
-                }
-                .padding(.horizontal, -LayoutMetrics.medium)
+                productCell(product)
             }
         }
     }
