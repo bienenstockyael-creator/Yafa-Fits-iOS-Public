@@ -179,6 +179,9 @@ struct OutfitGridView: View {
                                 // set ONCE, no toggling to wedge.
                                 scrollView.panGestureRecognizer.maximumNumberOfTouches = 1
                                 scrollBox.scrollView = scrollView
+                                #if DEBUG
+                                scrollBox.attachPanDiagnostics()
+                                #endif
                             })
                             .frame(width: 0, height: 0)
                             .id("archiveTop")
@@ -379,6 +382,8 @@ struct OutfitGridView: View {
                                 + " 2f=\(twoFingersDown ? 1 : 0)"
                                 + " live=\(TouchCountGestureRecognizer.liveTouchCount)")
                             Text("stuck: \(Self.stuckRecognizerSummary(near: sv))")
+                            Text("touch \(Self.secondsAgo(TouchCountGestureRecognizer.lastTouchAt))"
+                                + " · panEvt s\(scrollBox.lastPanState) \(Self.secondsAgo(scrollBox.lastPanEventAt))")
                         }
                         .font(.system(size: 10, weight: .semibold, design: .monospaced))
                         .foregroundStyle(.white)
@@ -1050,6 +1055,11 @@ struct OutfitGridView: View {
     /// to `200` (a reasonable default for the typical layout) until
     /// the first height measurement lands.
     #if DEBUG
+    static func secondsAgo(_ date: Date?) -> String {
+        guard let date else { return "never" }
+        return String(format: "%.0fs", Date().timeIntervalSince(date))
+    }
+
     /// TEMP pan-wedge forensics: every recognizer in the window tree
     /// stranded in .began/.changed. Strip with the chip.
     static func stuckRecognizerSummary(near view: UIView?) -> String {
