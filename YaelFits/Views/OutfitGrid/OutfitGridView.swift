@@ -1134,7 +1134,7 @@ struct OutfitGridView: View {
         pendingScrollTask = Task { @MainActor in
             await Task.yield()
             await Task.yield()
-            try? await Task.sleep(for: .milliseconds(30))
+            try? await Task.sleep(for: .milliseconds(15))
             if Task.isCancelled { return }
             // Three nudges. For long-jump scrolls (calendar-bottom →
             // archive-bottom), the LazyVGrid hasn't mounted the target
@@ -1142,7 +1142,7 @@ struct OutfitGridView: View {
             // refines the position as more rows get laid out.
             var transaction = Transaction()
             transaction.disablesAnimations = true
-            for waitMs in [40, 50] {
+            for waitMs in [25, 30] {
                 // Authority check — abort if a newer pending target
                 // has taken over (or the flag was cleared). Stronger
                 // than `Task.isCancelled` because a cancelled-but-
@@ -1159,7 +1159,7 @@ struct OutfitGridView: View {
             withTransaction(transaction) {
                 reader.scrollTo(targetOutfitId, anchor: .center)
             }
-            try? await Task.sleep(for: .milliseconds(60))
+            try? await Task.sleep(for: .milliseconds(35))
             // Only null the flag if it still points at OUR target.
             guard store.pendingListScrollOutfitId == targetOutfitId else { return }
             store.pendingListScrollOutfitId = nil

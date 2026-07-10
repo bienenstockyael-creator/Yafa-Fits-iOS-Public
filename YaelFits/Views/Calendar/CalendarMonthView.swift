@@ -687,7 +687,7 @@ struct CalendarMonthView: View {
         pendingScrollTask = Task { @MainActor in
             await Task.yield()
             await Task.yield()
-            try? await Task.sleep(for: .milliseconds(30))
+            try? await Task.sleep(for: .milliseconds(15))
             if Task.isCancelled { return }
 
             // Always non-animated — the destination view should appear
@@ -702,7 +702,7 @@ struct CalendarMonthView: View {
             // archive-bottom → calendar-bottom.
             var transaction = Transaction()
             transaction.disablesAnimations = true
-            for waitMs in [40, 50] {
+            for waitMs in [25, 30] {
                 // Authority check — abort if our targetOutfitId is no
                 // longer the pending one (i.e., a newer task has taken
                 // over, or the pending state has been cleared
@@ -723,7 +723,7 @@ struct CalendarMonthView: View {
                 reader.scrollTo(targetOutfitId, anchor: .center)
             }
 
-            try? await Task.sleep(for: .milliseconds(60))
+            try? await Task.sleep(for: .milliseconds(35))
             // Only null out the flag if it's still pointing at OUR
             // target — never clobber a newer task's pending value.
             guard store.pendingCalendarScrollOutfitId == targetOutfitId else { return }

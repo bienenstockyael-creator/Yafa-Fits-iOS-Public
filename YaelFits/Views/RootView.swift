@@ -1041,7 +1041,7 @@ struct RootView: View {
 
     private enum Transition {
         /// `withAnimation` curve. Subtle settle, no overshoot.
-        static let spring = Animation.spring(response: 0.42, dampingFraction: 0.86)
+        static let spring = Animation.spring(response: 0.34, dampingFraction: 0.86)
         /// Phase 1 — wait this long for the destination's scroll task
         /// to clear its `pendingScrollOutfitId` flag.
         static let scrollWaitTimeout: TimeInterval = 0.4
@@ -1052,14 +1052,14 @@ struct RootView: View {
         static let pollInterval = Duration.milliseconds(16)
         /// One extra render cycle after Phase 2 succeeds, so the
         /// final layout commit makes it through before withAnimation.
-        static let postPollSettle = Duration.milliseconds(32)
+        static let postPollSettle = Duration.milliseconds(16)
         /// Fallback wait when there's no anchor (no visible outfit).
         /// Gives the destination a beat to lay out initial content.
-        static let noAnchorSettle = Duration.milliseconds(80)
+        static let noAnchorSettle = Duration.milliseconds(50)
         /// Tail wait after the spring kicks off, before clearing
         /// `transitionAnchorOutfitId`. Lets the spring fully settle
         /// so matchedGeometryEffect doesn't get yanked mid-morph.
-        static let postSpringSettle = Duration.milliseconds(550)
+        static let postSpringSettle = Duration.milliseconds(450)
     }
 
     private func switchView(to target: AppView) {
