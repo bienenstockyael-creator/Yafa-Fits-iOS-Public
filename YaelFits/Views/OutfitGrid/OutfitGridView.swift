@@ -359,7 +359,32 @@ struct OutfitGridView: View {
                 pinch.isPinching = false
                 pinch.scale = 1
                 syncScrollLock()
+                scrollBox.resetPanRecognizer()
             }
+            #if DEBUG
+            // TEMP pan-wedge forensics: the actual UIKit gesture state.
+            // If pans die again, this names the stuck property in one
+            // screenshot. Strip when the app-switch freeze closes.
+            .overlay(alignment: .bottom) {
+                if store.currentView == .list {
+                    TimelineView(.periodic(from: .now, by: 0.5)) { _ in
+                        let sv = scrollBox.scrollView
+                        Text("pan=\(sv?.panGestureRecognizer.isEnabled == true ? 1 : 0)"
+                            + " en=\(sv?.isScrollEnabled == true ? 1 : 0)"
+                            + " drg=\(sv?.isDragging == true ? 1 : 0)"
+                            + " trk=\(sv?.isTracking == true ? 1 : 0)"
+                            + " 2f=\(twoFingersDown ? 1 : 0)"
+                            + " live=\(TouchCountGestureRecognizer.liveTouchCount)")
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(.white)
+                            .padding(5)
+                            .background(Color.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 5))
+                            .padding(.bottom, 118)
+                            .allowsHitTesting(false)
+                    }
+                }
+            }
+            #endif
             .onChange(of: store.carouselDismissTrigger) { _, _ in
                 // Fired by the global X button in the top bar when
                 // the carousel is open. Only acts if we're the host

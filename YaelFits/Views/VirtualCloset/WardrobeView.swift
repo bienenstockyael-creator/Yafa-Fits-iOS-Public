@@ -611,7 +611,7 @@ struct WardrobeView: View {
             // no fingers down: unlock unconditionally.
             guard phase == .active else { return }
             twoFingersDown = false
-            scrollBox.setScrollLocked(false)
+            scrollBox.resetPanRecognizer()
         }
     }
 

@@ -114,4 +114,16 @@ final class WeakScrollViewBox {
     func setScrollLocked(_ locked: Bool) {
         scrollView?.panGestureRecognizer.isEnabled = !locked
     }
+
+    /// Hard state flush: toggling a recognizer off/on resets its
+    /// internal tracking — the strongest reset short of remounting
+    /// the view (which is why tab-switching always healed frozen
+    /// pans). Called on foregrounding: backgrounding can strand the
+    /// pan mid-track with no event ever closing it.
+    func resetPanRecognizer() {
+        guard let scroll = scrollView else { return }
+        scroll.panGestureRecognizer.isEnabled = false
+        scroll.panGestureRecognizer.isEnabled = true
+        scroll.isScrollEnabled = true
+    }
 }
