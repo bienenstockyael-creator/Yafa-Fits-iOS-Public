@@ -168,6 +168,9 @@ struct CalendarDetailSheet: View {
     #if DEBUG
     /// TEMP freeze forensics — see header chip.
     @State private var dbgButtonTaps = 0
+    /// Any tap landing ANYWHERE in the card subtree (simultaneous, so
+    /// it never competes with the buttons).
+    @State private var dbgCardTaps = 0
     #endif
 
     var body: some View {
@@ -222,6 +225,12 @@ struct CalendarDetailSheet: View {
                         .strokeBorder(AppPalette.cardBorder, lineWidth: 0.85)
                 )
                 .shadow(color: AppPalette.cardShadow.opacity(0.72), radius: 26, y: 12)
+                #if DEBUG
+                // TEMP freeze forensics: counts ANY tap that reaches
+                // the card's subtree. Simultaneous -> never competes
+                // with the real buttons. Strip once the freeze closes.
+                .simultaneousGesture(TapGesture().onEnded { dbgCardTaps += 1 })
+                #endif
                 // Tab-bar clearance ONLY while expanded: the tab bar
                 // lives in a `safeAreaInset`, which hit-tests ABOVE
                 // this overlay — the tall expanded card's footer slid
@@ -275,7 +284,9 @@ struct CalendarDetailSheet: View {
             // touch is arriving and the state machine is stuck; if t
             // doesn't move, something is eating the touch. Strip once
             // the freeze is closed.
-            Text("t\(dbgButtonTaps) e\(isEditing ? 1 : 0) x\(isExpanded ? 1 : 0)"
+            Text("t\(dbgButtonTaps) c\(dbgCardTaps)"
+                + " w\(TouchCountGestureRecognizer.totalTouchesBegan)"
+                + " e\(isEditing ? 1 : 0) x\(isExpanded ? 1 : 0)"
                 + " in\(showingViewTagInput ? 1 : 0) kb\(Int(keyboardHeight))")
                 .font(.system(size: 9, weight: .semibold, design: .monospaced))
                 .foregroundStyle(.white)
