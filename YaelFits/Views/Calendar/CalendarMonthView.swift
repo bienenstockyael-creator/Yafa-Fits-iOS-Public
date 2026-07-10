@@ -201,6 +201,25 @@ struct CalendarMonthView: View {
                 pinch.isPinching = false
                 pinch.scale = 1
             }
+            #if DEBUG
+            // TEMP freeze forensics: every state that can lock this
+            // surface. Screenshot when frozen — the stuck flag is the
+            // culprit. Strip once the freeze is closed.
+            .overlay(alignment: .bottom) {
+                if store.currentView == .calendar {
+                    Text("sel=\(store.selectedOutfitId == nil ? 0 : 1)"
+                        + " scrub=\(isScrubbing ? 1 : 0)"
+                        + " 2f=\(twoFingersDown ? 1 : 0)"
+                        + " pin=\(pinch.isPinching ? 1 : 0)")
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(.white)
+                        .padding(5)
+                        .background(Color.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 5))
+                        .padding(.bottom, 118)
+                        .allowsHitTesting(false)
+                }
+            }
+            #endif
         }
     }
 

@@ -45,6 +45,13 @@ struct CarouselDetailCard: View {
 
     /// Convenience: card reads `isEditing` from the coordinator.
     private var isEditing: Bool { editCoordinator.isEditing }
+
+    /// Snapshots captured on entering EDIT. Tag/product changes
+    /// persist INSTANTLY (the inline model), so Cancel can't rely on
+    /// pending state — it restores these instead. SAVE discards them.
+    @State private var preEditTags: [String]?
+    @State private var preEditProducts: [Product]?
+
     var body: some View {
         // Card content with scale-in transition. The floating INFO
         // toggle that used to live here was lifted into the carousel's
@@ -624,7 +631,13 @@ struct CarouselDetailCard: View {
             withAnimation(.easeInOut(duration: 0.2)) {
                 if isEditing {
                     editCoordinator.save(into: store)
+                    preEditTags = nil
+                    preEditProducts = nil
                 } else {
+                    // Snapshot for Cancel — inline edits save
+                    // instantly, so Cancel restores these.
+                    preEditTags = currentTags
+                    preEditProducts = store.outfitById[outfit.id]?.products ?? outfit.products ?? []
                     editCoordinator.startEditing(outfit)
                 }
             }
@@ -655,11 +668,21 @@ struct CarouselDetailCard: View {
         .buttonStyle(SolidPressButtonStyle())
     }
 
-    /// Top-left Cancel button visible only in edit mode. Discards
-    /// in-flight changes — the coordinator just drops the working
-    /// values, nothing is written to the store.
+    /// Top-left Cancel button visible only in edit mode. Inline tag /
+    /// product edits persisted INSTANTLY during the session, so Cancel
+    /// means "as it was when I tapped EDIT" — the pre-edit snapshots
+    /// are written back before the session drops.
     private var cancelButton: some View {
         Button {
+            if let preTags = preEditTags, preTags != currentTags {
+                persistTagsInstantly(preTags)
+            }
+            let liveProducts = store.outfitById[outfit.id]?.products ?? outfit.products ?? []
+            if let preProducts = preEditProducts, preProducts != liveProducts {
+                store.updateOutfit(outfit.id, caption: outfit.caption, products: preProducts)
+            }
+            preEditTags = nil
+            preEditProducts = nil
             withAnimation(.easeInOut(duration: 0.2)) {
                 editCoordinator.cancel()
             }

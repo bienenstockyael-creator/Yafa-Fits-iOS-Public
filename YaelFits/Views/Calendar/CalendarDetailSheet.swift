@@ -52,9 +52,20 @@ struct CalendarDetailOverlayHost: View {
         }
     }
 
+    /// Last successfully-resolved outfit. If a store mutation (save,
+    /// product add, refresh) makes the id unresolvable for a moment,
+    /// the card KEEPS RENDERING this copy instead of unmounting —
+    /// unmounting a view while one of its sheets is presented strands
+    /// the app in a dead modal state (screen frozen, only tab taps
+    /// respond).
+    @State private var cachedOutfit: Outfit?
+
     private var selectedOutfit: Outfit? {
         guard let detailOutfitId else { return nil }
-        return store.outfitById[detailOutfitId]
+        if let live = store.outfitById[detailOutfitId] {
+            return live
+        }
+        return cachedOutfit?.id == detailOutfitId ? cachedOutfit : nil
     }
 
     private func syncDetailState(selectedId: String?) {
@@ -63,16 +74,29 @@ struct CalendarDetailOverlayHost: View {
             return
         }
 
-        if let selectedId, store.outfitById[selectedId] == nil {
+        if let selectedId, store.outfitById[selectedId] == nil,
+           cachedOutfit?.id != selectedId {
             // Ghost selection: an id with no resolvable outfit renders
             // NO card, but a non-nil selection still disables the
             // calendar's scroll — an invisible "freeze" only a tab tap
-            // cleared. Self-heal by dropping the selection.
-            store.selectedOutfitId = nil
+            // cleared. DEBOUNCED self-heal: a store mutation can make
+            // the id unresolvable for a tick; clearing instantly would
+            // rip the card (and any presented sheet) out from under
+            // the user.
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(400))
+                if store.selectedOutfitId == selectedId,
+                   store.outfitById[selectedId] == nil {
+                    store.selectedOutfitId = nil
+                }
+            }
             return
         }
 
-        if let selectedId, store.outfitById[selectedId] != nil {
+        if let selectedId,
+           let outfit = store.outfitById[selectedId]
+               ?? (cachedOutfit?.id == selectedId ? cachedOutfit : nil) {
+            cachedOutfit = outfit
             detailOutfitId = selectedId
             detailMounted = true
 
@@ -136,6 +160,15 @@ struct CalendarDetailSheet: View {
     @State private var isExpanded = false
     @State private var editableDate: Date = Date()
     @State private var showDatePicker = false
+    /// Snapshots captured on entering EDIT. Tag/product changes
+    /// persist INSTANTLY (the inline model), so Cancel can't rely on
+    /// pending state — it restores these instead. SAVE discards them.
+    @State private var preEditTags: [String]?
+    @State private var preEditProducts: [Product]?
+    #if DEBUG
+    /// TEMP freeze forensics — see header chip.
+    @State private var dbgButtonTaps = 0
+    #endif
 
     var body: some View {
         ZStack {
@@ -235,6 +268,20 @@ struct CalendarDetailSheet: View {
 
     private var header: some View {
         HStack(alignment: .top) {
+            #if DEBUG
+            // TEMP freeze forensics: card-side state + a tap counter
+            // (t increments in the SHOW INFO/LESS and EDIT/SAVE button
+            // actions). If a "dead" button's tap still bumps t, the
+            // touch is arriving and the state machine is stuck; if t
+            // doesn't move, something is eating the touch. Strip once
+            // the freeze is closed.
+            Text("t\(dbgButtonTaps) e\(isEditing ? 1 : 0) x\(isExpanded ? 1 : 0)"
+                + " in\(showingViewTagInput ? 1 : 0) kb\(Int(keyboardHeight))")
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .foregroundStyle(.white)
+                .padding(3)
+                .background(Color.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 4))
+            #endif
             if isEditing {
                 Button { showDatePicker.toggle() } label: {
                     HStack(spacing: 4) {
@@ -307,6 +354,9 @@ struct CalendarDetailSheet: View {
                 Spacer(minLength: 0)
 
                 Button {
+                    #if DEBUG
+                    dbgButtonTaps += 1
+                    #endif
                     let impact = UIImpactFeedbackGenerator(style: .light)
                     impact.impactOccurred()
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.78)) {
@@ -352,10 +402,44 @@ struct CalendarDetailSheet: View {
                 likeButton
                 calShareButton
                 if isExpanded {
+                    if isEditing {
+                        // Cancel restores the pre-EDIT snapshots —
+                        // inline edits saved instantly during the
+                        // session, so "cancel" = write them back.
+                        Button {
+                            #if DEBUG
+                            dbgButtonTaps += 1
+                            #endif
+                            cancelCalendarEdits()
+                        } label: {
+                            Text("CANCEL")
+                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                .tracking(1.5)
+                                .foregroundStyle(AppPalette.textFaint)
+                                .padding(.horizontal, 12)
+                                .frame(height: 36)
+                                .appCapsule(shadowRadius: 0, shadowY: 0)
+                        }
+                        .buttonStyle(SolidPressButtonStyle())
+                        .transition(.scale.combined(with: .opacity))
+                    }
                     Button {
+                        #if DEBUG
+                        dbgButtonTaps += 1
+                        #endif
                         withAnimation(.easeInOut(duration: 0.2)) {
-                            if isEditing { saveCalendarEdits() }
-                            else { editableTags = outfit.tags ?? []; editableDate = outfit.parsedDate ?? Date() }
+                            if isEditing {
+                                saveCalendarEdits()
+                                preEditTags = nil
+                                preEditProducts = nil
+                            } else {
+                                // Snapshot for Cancel — inline edits
+                                // save instantly.
+                                preEditTags = calCurrentTags
+                                preEditProducts = store.outfitById[outfit.id]?.products ?? outfit.products ?? []
+                                editableTags = outfit.tags ?? []
+                                editableDate = outfit.parsedDate ?? Date()
+                            }
                             isEditing.toggle()
                         }
                     } label: {
@@ -619,6 +703,23 @@ struct CalendarDetailSheet: View {
 
 
 
+    /// Cancel = "as it was when I tapped EDIT": inline tag/product
+    /// changes persisted instantly, so the snapshots get written back.
+    private func cancelCalendarEdits() {
+        if let preTags = preEditTags, preTags != calCurrentTags {
+            calPersistTagsInstantly(preTags)
+        }
+        let liveProducts = store.outfitById[outfit.id]?.products ?? outfit.products ?? []
+        if let preProducts = preEditProducts, preProducts != liveProducts {
+            store.updateOutfit(outfit.id, caption: outfit.caption, products: preProducts)
+        }
+        preEditTags = nil
+        preEditProducts = nil
+        showingTagInput = false
+        showDatePicker = false
+        withAnimation(.easeInOut(duration: 0.2)) { isEditing = false }
+    }
+
     private func saveCalendarEdits() {
         showingTagInput = false
         showDatePicker = false
@@ -673,27 +774,31 @@ struct CalendarDetailSheet: View {
         .buttonStyle(SolidPressButtonStyle())
     }
 
+    /// Publish toggle — the same globe as the carousel's action row:
+    /// filled solid-black circle + white globe when the fit is live,
+    /// passive circle otherwise.
     private var publishButton: some View {
-        Button {
+        let live = isPublished == true
+        return Button {
             let impact = UIImpactFeedbackGenerator(style: .light)
             impact.impactOccurred()
             togglePublish()
         } label: {
-            if isTogglingPublish {
-                ProgressView()
-                    .tint(AppPalette.textMuted)
-                    .frame(height: 36)
-                    .padding(.horizontal, 12)
-                    .appCapsule(shadowRadius: 0, shadowY: 0)
-            } else {
-                Text(isPublished == true ? "UNPUBLISH" : "PUBLISH")
-                    .font(.system(size: 10, weight: .semibold))
-                    .tracking(1)
-                    .foregroundStyle(isPublished == true ? AppPalette.textMuted : AppPalette.textPrimary)
-                    .padding(.horizontal, 14)
-                    .frame(height: 36)
-                    .appCapsule(shadowRadius: 0, shadowY: 0)
+            Group {
+                if isTogglingPublish {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(live ? .white : AppPalette.textMuted)
+                } else {
+                    AppIcon(glyph: .globe, size: 14, color: live ? .white : AppPalette.iconPrimary)
+                }
             }
+            .frame(width: 36, height: 36)
+            .if(live) {
+                $0.background(Circle().fill(Color.black))
+                    .shadow(color: AppPalette.cardShadow, radius: 10, y: 5)
+            }
+            .if(!live) { $0.appCircle(shadowRadius: 0, shadowY: 0) }
         }
         .buttonStyle(SolidPressButtonStyle())
         .disabled(isTogglingPublish || isPublished == nil)
