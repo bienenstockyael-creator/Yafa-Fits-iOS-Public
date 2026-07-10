@@ -362,25 +362,30 @@ struct OutfitGridView: View {
                 scrollBox.resetPanRecognizer()
             }
             #if DEBUG
-            // TEMP pan-wedge forensics: the actual UIKit gesture state.
-            // If pans die again, this names the stuck property in one
-            // screenshot. Strip when the app-switch freeze closes.
+            // TEMP pan-wedge forensics v2. Line 1: the scroll view's
+            // own state. Line 2: any recognizer ANYWHERE in the window
+            // stranded mid-recognition (.began/.changed) — a stuck
+            // recognizer blocks every non-simultaneous pan while taps
+            // pass. Screenshot when frozen = the culprit's class name.
             .overlay(alignment: .bottom) {
                 if store.currentView == .list {
                     TimelineView(.periodic(from: .now, by: 0.5)) { _ in
                         let sv = scrollBox.scrollView
-                        Text("pan=\(sv?.panGestureRecognizer.isEnabled == true ? 1 : 0)"
-                            + " en=\(sv?.isScrollEnabled == true ? 1 : 0)"
-                            + " drg=\(sv?.isDragging == true ? 1 : 0)"
-                            + " trk=\(sv?.isTracking == true ? 1 : 0)"
-                            + " 2f=\(twoFingersDown ? 1 : 0)"
-                            + " live=\(TouchCountGestureRecognizer.liveTouchCount)")
-                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                            .foregroundStyle(.white)
-                            .padding(5)
-                            .background(Color.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 5))
-                            .padding(.bottom, 118)
-                            .allowsHitTesting(false)
+                        VStack(spacing: 2) {
+                            Text("pan=\(sv?.panGestureRecognizer.isEnabled == true ? 1 : 0)"
+                                + " en=\(sv?.isScrollEnabled == true ? 1 : 0)"
+                                + " drg=\(sv?.isDragging == true ? 1 : 0)"
+                                + " trk=\(sv?.isTracking == true ? 1 : 0)"
+                                + " 2f=\(twoFingersDown ? 1 : 0)"
+                                + " live=\(TouchCountGestureRecognizer.liveTouchCount)")
+                            Text("stuck: \(Self.stuckRecognizerSummary(near: sv))")
+                        }
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(.white)
+                        .padding(5)
+                        .background(Color.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 5))
+                        .padding(.bottom, 118)
+                        .allowsHitTesting(false)
                     }
                 }
             }
@@ -1044,6 +1049,25 @@ struct OutfitGridView: View {
     /// right below it) is at the top of the visible area. Falls back
     /// to `200` (a reasonable default for the typical layout) until
     /// the first height measurement lands.
+    #if DEBUG
+    /// TEMP pan-wedge forensics: every recognizer in the window tree
+    /// stranded in .began/.changed. Strip with the chip.
+    static func stuckRecognizerSummary(near view: UIView?) -> String {
+        guard let window = view?.window else { return "no-window" }
+        var found: [String] = []
+        func scan(_ v: UIView, depth: Int) {
+            for recognizer in v.gestureRecognizers ?? []
+            where recognizer.state == .began || recognizer.state == .changed {
+                found.append("\(type(of: recognizer))#\(recognizer.state.rawValue)")
+            }
+            guard depth < 14 else { return }
+            for sub in v.subviews { scan(sub, depth: depth + 1) }
+        }
+        scan(window, depth: 0)
+        return found.isEmpty ? "none" : found.prefix(2).joined(separator: " ")
+    }
+    #endif
+
     /// Push the transient lock state into the scroll view's pan
     /// recognizer. Disable-mid-gesture cancels cleanly; re-enable
     /// restores — unlike scrollDisabled, this cannot wedge.
