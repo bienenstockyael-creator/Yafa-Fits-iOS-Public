@@ -149,8 +149,19 @@ static half3 streakColor(float t) {
     bandFalloff = sqrt(bandFalloff);
 
     float lifetime = sin(progress * 3.14159);
-    float rings = fluidRingWave(position, dist, progress, size);
     float amp = lifetime * intensity * upwardBias * bandFalloff;
+
+    // Fast path: outside the wave band (or below the tap, or at
+    // the burst's endpoints) the displacement rounds to zero —
+    // the pixel samples itself. Skip the 3 noise reads + trig of
+    // fluidRingWave entirely. Max skipped offset at this
+    // threshold is ~0.06pt: an order of magnitude under a pixel.
+    if (amp <= 0.0015) {
+        half4 passthrough = layer.sample(position);
+        return half4(passthrough.rgb, 1.0h);
+    }
+
+    float rings = fluidRingWave(position, dist, progress, size);
 
     // Subtle displacement — ~2% of view height. Single sign;
     // all pixels shift in the same direction, eliminating the
@@ -210,11 +221,20 @@ static half3 streakColor(float t) {
                      * (1.0 - smoothstep(bandWidth * 0.50, bandWidth, bandPosition));
     bandFalloff = sqrt(bandFalloff);
 
-    // Turbulent modulation.
-    float turb = valueNoise(position * 0.006 + progress * 1.2);
-
     // Lifetime envelope.
     float lifetime = sin(progress * 3.14159);
+
+    // Fast path: outside the band the amplitude gate zeroes both
+    // ring and halo alphas — the pixel is transparent no matter
+    // what the noise says. Bail before the 4 noise reads. The
+    // cut only drops output alphas below ~2/255 at the band's
+    // outermost smoothstep tail, which is invisible.
+    if (lifetime * upwardBias * bandFalloff <= 0.001) {
+        return half4(0.0h);
+    }
+
+    // Turbulent modulation.
+    float turb = valueNoise(position * 0.006 + progress * 1.2);
 
     // Fluid water-ripple wave (multi-octave + non-circular).
     float rings = fluidRingWave(position, dist, progress, size);

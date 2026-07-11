@@ -619,7 +619,10 @@ struct VibeBurstView: View {
     }
 
     var body: some View {
-        TimelineView(.animation) { ctx in
+        // 60 Hz cap — matches the wave shader's cap; 120 Hz on
+        // ProMotion doubles the per-frame work for a burst too
+        // fast for the difference to register.
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { ctx in
             let t = ctx.date.timeIntervalSince(startDate)
             Canvas { gc, _ in
                 guard let flame = gc.resolveSymbol(id: "flame") else { return }
@@ -843,14 +846,16 @@ private struct MorphFlameView: View {
     private static let duration: TimeInterval = 0.62
 
     var body: some View {
-        TimelineView(.animation) { ctx in
+        // 60 Hz cap — matches the wave shader's cap; 120 Hz on
+        // ProMotion doubles the per-frame work for a burst too
+        // fast for the difference to register.
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { ctx in
             let elapsed = ctx.date.timeIntervalSince(startDate)
             let progress = max(0, min(1.0, elapsed / Self.duration))
 
             ZStack {
                 outlineFlame.opacity(outlineOpacity(progress))
                 gradientFlame.opacity(gradientOpacity(progress))
-                filledFlame.opacity(filledOpacity(progress))
             }
             .scaleEffect(scaleFor(progress: progress), anchor: .center)
         }
@@ -888,19 +893,15 @@ private struct MorphFlameView: View {
         return 0
     }
 
-    /// Gradient visible 0.15 → 0.55, with quick fade-in + fade-out.
+    /// Gradient fades in at 0.15 and STAYS to the end of the
+    /// morph. It used to hand off to a dark filled flame at 0.50,
+    /// which read as the colorful "emoji" turning black; the
+    /// gradient is the final resting identity now, matching the
+    /// vibed button pixel-for-pixel so the morph→live hand-off
+    /// is invisible.
     private func gradientOpacity(_ p: Double) -> Double {
         if p < 0.15 { return 0 }
         if p < 0.20 { return (p - 0.15) / 0.05 }
-        if p < 0.50 { return 1 }
-        if p < 0.55 { return 1 - (p - 0.50) / 0.05 }
-        return 0
-    }
-
-    /// Filled visible from 0.50 onward; quick fade-in 0.50 → 0.55.
-    private func filledOpacity(_ p: Double) -> Double {
-        if p < 0.50 { return 0 }
-        if p < 0.55 { return (p - 0.50) / 0.05 }
         return 1
     }
 
@@ -916,31 +917,11 @@ private struct MorphFlameView: View {
         )
     }
 
+    /// The EXACT view the settled vibed button renders
+    /// (`VibeButton.flameView`, vibed branch) — same type, same
+    /// parameters — so when the morph clears and the live button
+    /// fades in, the pixels don't change.
     private var gradientFlame: some View {
-        RadialGradient(
-            gradient: Gradient(stops: [
-                .init(color: Color(red: 1.00, green: 0.93, blue: 0.55), location: 0.0),
-                .init(color: Color(red: 1.00, green: 0.97, blue: 0.78), location: 0.07),
-                .init(color: Color(red: 0.96, green: 0.98, blue: 0.95), location: 0.22),
-                .init(color: Color(red: 0.85, green: 0.95, blue: 1.00), location: 0.42),
-                .init(color: Color(red: 0.65, green: 0.88, blue: 1.00), location: 0.68),
-                .init(color: Color(red: 0.50, green: 0.82, blue: 1.00), location: 0.86),
-                .init(color: AppPalette.uploadGlow, location: 1.0)
-            ]),
-            center: UnitPoint(x: 0.5, y: 0.65),
-            startRadius: 0,
-            endRadius: 11
-        )
-        .frame(width: 18, height: 18)
-        .mask(AppIcon(glyph: .flame, size: 18, color: .white, filled: true))
-    }
-
-    private var filledFlame: some View {
-        AppIcon(
-            glyph: .flame,
-            size: 18,
-            color: AppPalette.iconActive,
-            filled: true
-        )
+        GradientFlameIcon(size: 18, stroked: true)
     }
 }
