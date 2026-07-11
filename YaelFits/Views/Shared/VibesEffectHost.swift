@@ -864,9 +864,14 @@ private struct MorphFlameView: View {
 
     // MARK: - Animation curves
 
-    /// Bloom (1.0 → 3.2) then damped-spring settle to 1.0 via
-    /// `1.0 + 2.2 × e^(−3.2t) × cos(1.5πt)` — one clean
-    /// undershoot at ~26% below target, fully settled by t=1.0.
+    /// Scale the morph settles at. The settled vibed button now
+    /// renders the flame at 26pt; the morph's base icon is 18pt,
+    /// so resting on 26/18 makes the hand-off frame identical.
+    private static let restScale: Double = 26.0 / 18.0
+
+    /// Bloom (1.0 → 3.2) then damped-spring settle to `restScale`
+    /// via `rest + (3.2 − rest) × e^(−3.2t) × cos(1.5πt)` — one
+    /// clean undershoot, fully settled by t=1.0.
     private func scaleFor(progress p: Double) -> CGFloat {
         if p < 0.33 {
             // Bloom: 1.0 → 3.2 over first 33%.
@@ -875,7 +880,7 @@ private struct MorphFlameView: View {
             return 1.0 + eased * 2.2
         }
         // Damped spring oscillation in [0.33, 1.0]:
-        //   amplitude = 2.2 (initial delta from rest = 3.2 - 1.0)
+        //   amplitude = 3.2 − restScale (delta from rest at t=0)
         //   decay e^(−3.2t)  — controls how quickly oscillation dies
         //   cos(1.5πt)        — 3/4-cycle: peaks at t=0, zeros at
         //                        t=1/3 (passes through rest),
@@ -883,7 +888,7 @@ private struct MorphFlameView: View {
         let t = (p - 0.33) / 0.67
         let decay = exp(-3.2 * t)
         let oscillation = cos(1.5 * .pi * t)
-        return CGFloat(1.0 + 2.2 * decay * oscillation)
+        return CGFloat(Self.restScale + (3.2 - Self.restScale) * decay * oscillation)
     }
 
     /// Outline visible 0 → 0.20; quick fade 0.15 → 0.20.

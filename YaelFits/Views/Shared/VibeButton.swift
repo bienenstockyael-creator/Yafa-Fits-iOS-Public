@@ -58,25 +58,9 @@ struct VibeButton: View {
 
     var body: some View {
         Button(action: handleTap) {
-            HStack(spacing: 4) {
-                flameContainer
-                if showInlineCount {
-                    inlineCount
-                        // Hidden during the morph (snapshot would
-                        // otherwise catch the count mid-fade).
-                        // When the morph ends, fades in gently —
-                        // direction-conditional animation: nil
-                        // when hiding, easeIn(0.32s) when revealing.
-                        .opacity(isMorphActive ? 0 : 1)
-                        .animation(
-                            isMorphActive ? nil : .easeIn(duration: 0.12),
-                            value: isMorphActive
-                        )
-                        .transition(.opacity)
-                }
-            }
-            .contentShape(Rectangle())
-            .offset(x: shakeOffset)
+            flameContainer
+                .contentShape(Rectangle())
+                .offset(x: shakeOffset)
         }
         .buttonStyle(SolidPressButtonStyle())
         .frame(minHeight: LayoutMetrics.touchTarget)
@@ -157,7 +141,7 @@ struct VibeButton: View {
             // the icon's global position to shift on tap, which
             // the morph layer follows via `updateMorphCenter`.
             flameView
-                .frame(width: isVibedByMe ? 18 : 40, height: 40)
+                .frame(width: isVibedByMe ? 26 : 40, height: 40)
 
             // Layer 3: small count badge in the upper-right when
             // unvibed + count > 0.
@@ -231,7 +215,7 @@ struct VibeButton: View {
             // vibe count on a profile — one shared visual identity,
             // not a flat-blue lookalike. `stroked` keeps the
             // silhouette legible at this smaller size.
-            GradientFlameIcon(size: 18, stroked: true)
+            GradientFlameIcon(size: 26, stroked: true)
         } else {
             let color = state == .locked
                 ? AppPalette.textFaint
@@ -260,20 +244,13 @@ struct VibeButton: View {
             .overlay(Circle().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
     }
 
-    /// Inline count to the right of the flame, vibed only.
-    private var inlineCount: some View {
-        Text("\(vibeCount)")
-            .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(AppPalette.textPrimary)
-            .monospacedDigit()
-    }
-
+    /// Badge shows in BOTH states — same top-right treatment as
+    /// the heart/comment buttons, so counts read consistently
+    /// across the action row. (The vibed state used to put the
+    /// count inline beside the flame, which was both a different
+    /// visual language AND a layout reflow the morph had to chase.)
     private var showBadge: Bool {
-        !isVibedByMe && vibeCount > 0
-    }
-
-    private var showInlineCount: Bool {
-        isVibedByMe && vibeCount > 0
+        vibeCount > 0
     }
 
     /// True when THIS button's morph is in flight. Read from the
@@ -415,3 +392,37 @@ struct VibeButton: View {
         )
     }
 }
+
+/// Read-only vibes display for the author's OWN posts. You can't
+/// vibe yourself (the RPC blocks it), so this is not a button —
+/// but you should still see what your post received. Mirrors the
+/// settled-vibed VibeButton exactly (26pt gradient flame +
+/// top-right count badge) so vibes read identically everywhere;
+/// wire a long-press at the call site to open the vibers list,
+/// matching the other action icons.
+struct VibeCountDisplay: View {
+    let count: Int
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            GradientFlameIcon(size: 26, stroked: true)
+                .frame(width: 26, height: 40)
+
+            // Same badge treatment as VibeButton.badgeView / the
+            // heart button's count.
+            Text("\(count)")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(AppPalette.textMuted)
+                .frame(minWidth: 16, minHeight: 16)
+                .background {
+                    LightBlurView(style: .systemThinMaterialLight)
+                        .clipShape(Circle())
+                        .overlay(Circle().fill(Color.white.opacity(0.96)))
+                }
+                .overlay(Circle().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
+                .offset(x: 4, y: -2)
+        }
+        .frame(height: 40)
+    }
+}
+

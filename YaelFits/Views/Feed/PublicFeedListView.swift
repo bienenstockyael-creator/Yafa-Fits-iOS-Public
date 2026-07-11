@@ -1109,12 +1109,19 @@ struct FeedPostCard: View {
 
                 Spacer()
 
-                // Vibes — bottom-right reaction. Hidden on the
-                // user's own posts (you can't vibe yourself —
-                // the server blocks it, and showing a tappable
-                // button that always errors would be confusing).
+                // Vibes — bottom-right reaction. On the user's
+                // own posts the tappable button is replaced by a
+                // read-only count display (you can't vibe yourself
+                // — the server blocks it, and a button that always
+                // errors would be confusing) with the same
+                // long-press-for-vibers as everywhere else.
                 if !isOwnPost {
                     vibeButtonInline
+                } else if vibeCountBinding.wrappedValue > 0 {
+                    VibeCountDisplay(count: vibeCountBinding.wrappedValue)
+                        .onLongPressGesture(minimumDuration: 0.4) {
+                            showVibers = true
+                        }
                 }
             }
             .padding(.top, LayoutMetrics.xxxSmall)
