@@ -386,6 +386,10 @@ struct OutfitGridView: View {
                                 + " · panEvt s\(scrollBox.lastPanState) \(Self.secondsAgo(scrollBox.lastPanEventAt))")
                             Text("hit: \(Self.hitProbe(sv))")
                                 .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                            Text("cs=\(Int(sv?.contentSize.width ?? -1))x\(Int(sv?.contentSize.height ?? -1))"
+                                + " b=\(Int(sv?.bounds.height ?? -1))"
+                                + " off=\(Int(sv?.contentOffset.y ?? -1))"
+                                + " · ask \(Self.scrubAskSummary())")
                         }
                         .font(.system(size: 10, weight: .semibold, design: .monospaced))
                         .foregroundStyle(.white)
@@ -1060,6 +1064,12 @@ struct OutfitGridView: View {
     static func secondsAgo(_ date: Date?) -> String {
         guard let date else { return "never" }
         return String(format: "%.0fs", Date().timeIntervalSince(date))
+    }
+
+    /// TEMP: last scrub-pan begin-ask + verdict. Strip with chip.
+    static func scrubAskSummary() -> String {
+        guard let ask = InteractiveTouchSurface.Coordinator.lastScrubAsk else { return "never" }
+        return "\(ask.verdict ? "Y" : "N")\(secondsAgo(ask.at))"
     }
 
     /// TEMP: who WINS the hit-test at the center of the grid right

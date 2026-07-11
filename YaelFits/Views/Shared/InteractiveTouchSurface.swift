@@ -144,6 +144,12 @@ struct InteractiveTouchSurface: UIViewRepresentable {
             }
         }
 
+        #if DEBUG
+        /// TEMP freeze forensics: last time ANY scrub pan asked to
+        /// begin, and the verdict. Strip with the archive chip.
+        static var lastScrubAsk: (at: Date, verdict: Bool)?
+        #endif
+
         func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
             guard let panRecognizer = gestureRecognizer as? UIPanGestureRecognizer else {
                 return true
@@ -157,11 +163,18 @@ struct InteractiveTouchSurface: UIViewRepresentable {
             // path needs a state roundtrip and loses this race under
             // main-thread load (pinch read as a scrub → "pinch dead").
             guard TouchCountGestureRecognizer.liveTouchCount < 2 else {
+                #if DEBUG
+                Self.lastScrubAsk = (Date(), false)
+                #endif
                 return false
             }
 
             let velocity = panRecognizer.velocity(in: panRecognizer.view)
-            return abs(velocity.x) > abs(velocity.y) && abs(velocity.x) > 40
+            let verdict = abs(velocity.x) > abs(velocity.y) && abs(velocity.x) > 40
+            #if DEBUG
+            Self.lastScrubAsk = (Date(), verdict)
+            #endif
+            return verdict
         }
 
         func gestureRecognizer(
