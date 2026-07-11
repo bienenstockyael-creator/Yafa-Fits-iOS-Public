@@ -182,10 +182,16 @@ struct VibeButton: View {
                     .onAppear { updateIconCenter(geo) }
                     .onChange(of: geo.frame(in: .global)) { old, new in
                         updateIconCenter(geo)
-                        // Feed scrolled / layout shifted: dismiss
-                        // any anchored pill so it doesn't trail
-                        // behind the scrolling content.
-                        if old != new, burstHost.anchoredPill != nil {
+                        // Feed scrolled: dismiss any anchored pill
+                        // so it doesn't trail behind the scrolling
+                        // content. VERTICAL movement only — the
+                        // out-of-vibes shake offsets this very
+                        // button horizontally, and dismissing on
+                        // any frame change killed that pill the
+                        // same frame it appeared (haptic + shake
+                        // played, pill never seen).
+                        if abs(old.midY - new.midY) > 0.5,
+                           burstHost.anchoredPill != nil {
                             burstHost.anchoredPill = nil
                         }
                     }
