@@ -337,7 +337,7 @@ final class VibesEffectHost {
     func showAnchoredPill(
         _ text: String,
         at anchor: CGPoint,
-        duration: TimeInterval = 2.0
+        duration: TimeInterval = 1.4
     ) {
         let pill = AnchoredPill(text: text, anchor: anchor)
         anchoredPill = pill
