@@ -435,34 +435,17 @@ struct VibesBannerLayer: View {
             halfWidth + Self.edgeMargin,
             min(pill.anchor.x, screenWidth - halfWidth - Self.edgeMargin)
         )
+        // Styled via the shared `.appCapsule()` so it speaks the
+        // same pill language as the weather pill / +N calendar
+        // pill — capsule shape, cardFill + hairline border, 12pt
+        // semibold secondary text — rather than a bespoke rounded
+        // rect.
         return Text(pill.text)
-            .font(.system(size: 12, weight: .medium))
-            .foregroundStyle(AppPalette.textPrimary)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background {
-                ZStack {
-                    LightBlurView(style: .systemThinMaterialLight)
-                        .clipShape(
-                            RoundedRectangle(
-                                cornerRadius: Self.cornerRadius,
-                                style: .continuous
-                            )
-                        )
-                    RoundedRectangle(
-                        cornerRadius: Self.cornerRadius,
-                        style: .continuous
-                    )
-                    .fill(AppPalette.cardFill)
-                }
-            }
-            .overlay(
-                RoundedRectangle(
-                    cornerRadius: Self.cornerRadius,
-                    style: .continuous
-                )
-                .strokeBorder(AppPalette.cardBorder, lineWidth: 0.75)
-            )
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(AppPalette.textSecondary)
+            .padding(.horizontal, LayoutMetrics.xSmall)
+            .padding(.vertical, 7)
+            .appCapsule(shadowRadius: 0, shadowY: 0)
             .shadow(color: Color.black.opacity(0.1), radius: 12, y: 6)
             .fixedSize()
             // Measure ourselves and feed our width upstream so
