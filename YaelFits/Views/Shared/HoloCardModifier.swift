@@ -91,7 +91,14 @@ private struct HoloOverlay: View {
                             .float(Float(geo.size.height)),
                             .float(Float(motion.roll)),
                             .float(Float(motion.pitch)),
-                            .float(Float(cornerRadius))
+                            // The shader's edge band uses a CIRCULAR-corner
+                            // SDF, but the visible clip is Apple's CONTINUOUS
+                            // squircle, which bulges past the circular arc on
+                            // the diagonal — the mismatch left an untinted
+                            // white sliver at each corner. A tighter SDF
+                            // radius tucks the band's arc into the squircle
+                            // corner so the shimmer reaches the true edge.
+                            .float(Float(cornerRadius * 0.55))
                         )
                     )
                     .blendMode(.multiply)

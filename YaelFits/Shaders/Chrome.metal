@@ -32,11 +32,16 @@ static float3 chromeEnv(float y, float x) {
     // the horizon, color at the extremes — that white/dark/gold sandwich is
     // the signature that reads instantly as chrome. (A gradient that is
     // palest at the extremes averages out to "white plastic".)
-    const float3 skyDeep     = float3(0.20, 0.42, 0.90); // top: saturated blue
+    // Palette is deliberately ALL-COOL silver/blue/white (plus a barely-warm
+    // champagne kiss below the horizon). Warm bronze tones down there looked
+    // right on paper, but on thin outline letterforms a downward tilt turned
+    // the whole wordmark flat BROWN — polished chrome may flash gold, it
+    // never sits brown.
+    const float3 skyDeep     = float3(0.34, 0.52, 0.92); // top: chrome blue
     const float3 skyPale     = float3(0.94, 0.98, 1.00); // hot band above horizon
-    const float3 horizonD    = float3(0.20, 0.24, 0.34); // thin dark steel line
-    const float3 groundHot   = float3(1.00, 0.93, 0.76); // hot gold below horizon
-    const float3 groundDeep  = float3(0.56, 0.44, 0.32); // bottom: bronze
+    const float3 horizonD    = float3(0.24, 0.28, 0.38); // thin dark steel line
+    const float3 groundHot   = float3(1.00, 0.97, 0.89); // champagne-white below
+    const float3 groundDeep  = float3(0.64, 0.67, 0.74); // bottom: cool steel
 
     float3 sky    = mix(skyPale, skyDeep, smoothstep(0.04, 0.78, y));
     float3 ground = mix(groundHot, groundDeep, smoothstep(-0.06, -0.85, y));
