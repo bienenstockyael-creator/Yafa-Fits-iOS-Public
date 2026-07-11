@@ -179,9 +179,6 @@ struct OutfitGridView: View {
                                 // set ONCE, no toggling to wedge.
                                 scrollView.panGestureRecognizer.maximumNumberOfTouches = 1
                                 scrollBox.scrollView = scrollView
-                                #if DEBUG
-                                scrollBox.attachPanDiagnostics()
-                                #endif
                             })
                             .frame(width: 0, height: 0)
                             .id("archiveTop")
@@ -364,45 +361,6 @@ struct OutfitGridView: View {
                 syncScrollLock()
                 scrollBox.resetPanRecognizer()
             }
-            #if DEBUG
-            // TEMP pan-wedge forensics v2. Line 1: the scroll view's
-            // own state. Line 2: any recognizer ANYWHERE in the window
-            // stranded mid-recognition (.began/.changed) — a stuck
-            // recognizer blocks every non-simultaneous pan while taps
-            // pass. Screenshot when frozen = the culprit's class name.
-            .overlay(alignment: .bottom) {
-                if store.currentView == .list {
-                    TimelineView(.periodic(from: .now, by: 0.5)) { _ in
-                        let sv = scrollBox.scrollView
-                        VStack(spacing: 2) {
-                            Text("pan=\(sv?.panGestureRecognizer.isEnabled == true ? 1 : 0)"
-                                + " en=\(sv?.isScrollEnabled == true ? 1 : 0)"
-                                + " drg=\(sv?.isDragging == true ? 1 : 0)"
-                                + " trk=\(sv?.isTracking == true ? 1 : 0)"
-                                + " 2f=\(twoFingersDown ? 1 : 0)"
-                                + " live=\(TouchCountGestureRecognizer.liveTouchCount)")
-                            Text("stuck: \(Self.stuckRecognizerSummary(near: sv))")
-                            Text("touch \(Self.secondsAgo(TouchCountGestureRecognizer.lastTouchAt))"
-                                + " mv \(Self.secondsAgo(TouchCountGestureRecognizer.lastMoveAt))"
-                                + " · panEvt s\(scrollBox.lastPanState) \(Self.secondsAgo(scrollBox.lastPanEventAt))")
-                            Text("hit: \(Self.hitProbe(sv))")
-                                .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                            Text("cs=\(Int(sv?.contentSize.width ?? -1))x\(Int(sv?.contentSize.height ?? -1))"
-                                + " b=\(Int(sv?.bounds.height ?? -1))"
-                                + " off=\(Int(sv?.contentOffset.y ?? -1))"
-                                + " · ask \(Self.scrubAskSummary())"
-                                + " · heal \(Self.secondsAgo(GestureRouteHealer.lastHealAt)) n\(GestureRouteHealer.lastHealCount)")
-                        }
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(.white)
-                        .padding(5)
-                        .background(Color.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 5))
-                        .padding(.bottom, 118)
-                        .allowsHitTesting(false)
-                    }
-                }
-            }
-            #endif
             .onChange(of: store.carouselDismissTrigger) { _, _ in
                 // Fired by the global X button in the top bar when
                 // the carousel is open. Only acts if we're the host
@@ -1062,54 +1020,6 @@ struct OutfitGridView: View {
     /// right below it) is at the top of the visible area. Falls back
     /// to `200` (a reasonable default for the typical layout) until
     /// the first height measurement lands.
-    #if DEBUG
-    static func secondsAgo(_ date: Date?) -> String {
-        guard let date else { return "never" }
-        return String(format: "%.0fs", Date().timeIntervalSince(date))
-    }
-
-    /// TEMP: last scrub-pan begin-ask + verdict. Strip with chip.
-    static func scrubAskSummary() -> String {
-        guard let ask = InteractiveTouchSurface.Coordinator.lastScrubAsk else { return "never" }
-        return "\(ask.verdict ? "Y" : "N")\(secondsAgo(ask.at))"
-    }
-
-    /// TEMP: who WINS the hit-test at the center of the grid right
-    /// now. `in=0` = the winner is NOT inside the scroll view — the
-    /// class chain names the invisible eater. Strip with the chip.
-    static func hitProbe(_ scrollView: UIScrollView?) -> String {
-        guard let scrollView, let window = scrollView.window else { return "no-window" }
-        let point = CGPoint(x: window.bounds.midX, y: window.bounds.midY)
-        guard let winner = window.hitTest(point, with: nil) else { return "nil" }
-        let inScroll = winner.isDescendant(of: scrollView) ? 1 : 0
-        var chain = ["\(type(of: winner))"]
-        var current: UIView? = winner.superview
-        var hops = 0
-        while let view = current, hops < 2 {
-            chain.append("\(type(of: view))")
-            current = view.superview
-            hops += 1
-        }
-        return "in=\(inScroll) " + chain.joined(separator: "<")
-    }
-
-    /// TEMP pan-wedge forensics: every recognizer in the window tree
-    /// stranded in .began/.changed. Strip with the chip.
-    static func stuckRecognizerSummary(near view: UIView?) -> String {
-        guard let window = view?.window else { return "no-window" }
-        var found: [String] = []
-        func scan(_ v: UIView, depth: Int) {
-            for recognizer in v.gestureRecognizers ?? []
-            where recognizer.state == .began || recognizer.state == .changed {
-                found.append("\(type(of: recognizer))#\(recognizer.state.rawValue)")
-            }
-            guard depth < 14 else { return }
-            for sub in v.subviews { scan(sub, depth: depth + 1) }
-        }
-        scan(window, depth: 0)
-        return found.isEmpty ? "none" : found.prefix(2).joined(separator: " ")
-    }
-    #endif
 
     /// Push the transient lock state into the scroll view's pan
     /// recognizer. Disable-mid-gesture cancels cleanly; re-enable

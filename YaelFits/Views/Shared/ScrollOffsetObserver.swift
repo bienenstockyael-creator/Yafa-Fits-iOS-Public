@@ -108,25 +108,6 @@ struct ScrollOffsetObserver: UIViewRepresentable {
 final class WeakScrollViewBox: NSObject {
     weak var scrollView: UIScrollView?
 
-    #if DEBUG
-    /// TEMP delivery forensics: last state the pan recognizer reported
-    /// + when. If a frozen drag never fires this, touches are dying
-    /// BEFORE the recognizer; if it fires but the scroll view never
-    /// tracks, they die between recognition and the scroll view.
-    private(set) var lastPanState: Int = -1
-    private(set) var lastPanEventAt: Date?
-
-    func attachPanDiagnostics() {
-        scrollView?.panGestureRecognizer.addTarget(
-            self, action: #selector(panDiagnostic(_:)))
-    }
-
-    @objc private func panDiagnostic(_ recognizer: UIGestureRecognizer) {
-        lastPanState = recognizer.state.rawValue
-        lastPanEventAt = Date()
-    }
-    #endif
-
     /// Gate scrolling at the RECOGNIZER level. Disabling a recognizer
     /// mid-gesture cancels it cleanly and re-enabling restores it —
     /// unlike SwiftUI's scrollDisabled, this cannot wedge.

@@ -13,37 +13,25 @@ import UIKit
 /// targets and delegates. Run on every return to foreground; on a
 /// healthy foreground it is a cheap no-op re-registration.
 enum GestureRouteHealer {
-    #if DEBUG
-    /// TEMP freeze forensics: last heal time + recognizers re-attached.
-    private(set) static var lastHealAt: Date?
-    private(set) static var lastHealCount = 0
-    #endif
-
     static func healAllWindows() {
-        var reattached = 0
         for scene in UIApplication.shared.connectedScenes {
             guard let windowScene = scene as? UIWindowScene else { continue }
             for window in windowScene.windows {
-                heal(window, reattached: &reattached)
+                heal(window)
             }
         }
-        #if DEBUG
-        lastHealAt = Date()
-        lastHealCount = reattached
-        #endif
     }
 
-    private static func heal(_ view: UIView, reattached: inout Int) {
+    private static func heal(_ view: UIView) {
         if let recognizers = view.gestureRecognizers, !recognizers.isEmpty {
             // Only idle recognizers: never rip one that is mid-gesture.
             for recognizer in recognizers where recognizer.state == .possible {
                 view.removeGestureRecognizer(recognizer)
                 view.addGestureRecognizer(recognizer)
-                reattached += 1
             }
         }
         for subview in view.subviews {
-            heal(subview, reattached: &reattached)
+            heal(subview)
         }
     }
 }
