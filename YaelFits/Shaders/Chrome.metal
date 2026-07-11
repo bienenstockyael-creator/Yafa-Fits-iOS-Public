@@ -25,27 +25,33 @@ using namespace metal;
 // of chrome is the SHARP near-black horizon band splitting a bright cool sky
 // from a darker warmer ground.
 static float3 chromeEnv(float y, float x) {
-    // BRIGHT-SILVER chrome gradient: real chrome is mostly light — thin,
-    // SHARP dark lines and hot glints on a silver body, never big dark
-    // masses (wide darks read as gunmetal/tarnish, not mirror polish).
-    // Cool silver-blue sky above, a crisp steel horizon LINE, warm champagne
-    // bounce below: the cool/warm split still makes a tube sweep
-    // blue-silver -> gold-silver as you tilt.
-    const float3 skyTop      = float3(0.97, 0.99, 1.00); // high sky, near white
-    const float3 skyBlue     = float3(0.62, 0.74, 0.94); // silver-blue, desaturated
-    const float3 horizonD    = float3(0.30, 0.34, 0.44); // steel line, NOT near-black
-    const float3 groundWarm  = float3(0.72, 0.66, 0.56); // light warm under horizon
-    const float3 groundBright= float3(1.00, 0.94, 0.82); // bright champagne bounce
+    // CLASSIC CHROME-TEXT gradient (the Y2K airbrush-lettering anatomy):
+    // deep saturated blue at the top of the sky falling to a HOT near-white
+    // band just above the horizon, a thin sharp dark line, a hot gold band
+    // just below it, deepening to bronze at the bottom. Brightness lives AT
+    // the horizon, color at the extremes — that white/dark/gold sandwich is
+    // the signature that reads instantly as chrome. (A gradient that is
+    // palest at the extremes averages out to "white plastic".)
+    const float3 skyDeep     = float3(0.20, 0.42, 0.90); // top: saturated blue
+    const float3 skyPale     = float3(0.94, 0.98, 1.00); // hot band above horizon
+    const float3 horizonD    = float3(0.20, 0.24, 0.34); // thin dark steel line
+    const float3 groundHot   = float3(1.00, 0.93, 0.76); // hot gold below horizon
+    const float3 groundDeep  = float3(0.56, 0.44, 0.32); // bottom: bronze
 
-    float3 sky    = mix(skyBlue, skyTop, smoothstep(0.06, 0.6, y));
-    float3 ground = mix(groundWarm, groundBright, smoothstep(-0.1, -0.6, y));
+    float3 sky    = mix(skyPale, skyDeep, smoothstep(0.04, 0.78, y));
+    float3 ground = mix(groundHot, groundDeep, smoothstep(-0.06, -0.85, y));
     float3 env    = y >= 0.0 ? sky : ground;
 
-    // THIN crisp horizon line straddling y = 0 — the signature dark stripe
-    // of chrome, kept narrow so it draws a line across the letters instead
-    // of flooding them dark.
-    float band = smoothstep(0.055, 0.0, abs(y));
+    // THIN crisp horizon line straddling y = 0. It can afford to be dark
+    // because it is narrow and sandwiched between the two hottest bands —
+    // maximum LOCAL contrast with zero dark mass.
+    float band = smoothstep(0.05, 0.0, abs(y));
     env = mix(env, horizonD, band);
+
+    // Secondary thin steel streak up in the sky — a second reflected line
+    // gives the surface believable structure instead of one lonely stripe.
+    float streak2 = smoothstep(0.04, 0.0, abs(y - 0.42));
+    env = mix(env, float3(0.48, 0.58, 0.80), streak2 * 0.65);
 
     // Faint vertical streaks (distant reflected verticals) for busy realism.
     float streak = 0.5 + 0.5 * sin(x * 9.0);
@@ -100,15 +106,16 @@ static float3 chromeEnv(float y, float x) {
 
     // Grazing-angle sparkle: real chrome flares white at its edges when it
     // catches the sky (Fresnel). Only where the reflected ray points up, so
-    // the bottom edge keeps its dark line and the top edge ignites.
+    // the bottom edge keeps its dark line and the top edge ignites. Kept
+    // modest — the hot horizon bands now carry the brightness.
     float fresnel = 1.0 - rim;
-    env += float3(0.9, 0.95, 1.0) * fresnel * smoothstep(0.05, 0.7, ry) * 0.55;
+    env += float3(0.9, 0.95, 1.0) * fresnel * smoothstep(0.05, 0.7, ry) * 0.35;
 
-    // S-curve for metallic punch.
-    env = (env - 0.5) * 1.30 + 0.5;
-    // High floor: no tilt angle ever drives the chrome past dark steel —
-    // dark masses read as tarnish, and thin lines don't need help.
-    env = max(env, float3(0.30));
+    // Strong S-curve: the tonal SNAP between adjacent bands is what makes
+    // the surface read as polished metal rather than a soft gradient.
+    env = (env - 0.5) * 1.55 + 0.5;
+    // Floor: thin lines may go dark steel, never black.
+    env = max(env, float3(0.22));
     env = clamp(env, 0.0, 1.0);
 
     return half4(half3(env), a);
