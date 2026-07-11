@@ -148,7 +148,7 @@ struct VibeButton: View {
             if showBadge {
                 badgeView
                     .offset(x: isVibedByMe ? 10 : 4, y: -2)
-                    .transition(.opacity)
+                    .transition(.opacity.animation(.easeIn(duration: 0.28)))
             }
         }
         // Hide the entire flame container (chrome + icon + badge)
@@ -241,7 +241,10 @@ struct VibeButton: View {
     /// count inline beside the flame, which was both a different
     /// visual language AND a layout reflow the morph had to chase.)
     private var showBadge: Bool {
-        vibeCount > 0
+        // Held back while the morph is in flight so the number
+        // FADES IN once the flame has settled, instead of being
+        // baked into the reveal frame.
+        vibeCount > 0 && !isMorphActive
     }
 
     /// True when THIS button's morph is in flight. Read from the

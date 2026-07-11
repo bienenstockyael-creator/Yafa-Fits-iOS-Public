@@ -1122,6 +1122,7 @@ struct FeedPostCard: View {
                         .onLongPressGesture(minimumDuration: 0.4) {
                             showVibers = true
                         }
+                        .transition(.opacity.animation(.easeIn(duration: 0.28)))
                 }
             }
             .padding(.top, LayoutMetrics.xxxSmall)
