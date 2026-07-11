@@ -71,6 +71,14 @@ struct ProCardTiltModifier: ViewModifier {
 
 private struct HoloOverlay: View {
     let cornerRadius: CGFloat
+    /// Extend the shimmer rect this many points past its bounds. Used
+    /// by surfaces that clip the whole card stack to one rounded-rect
+    /// mask (the profile share card): bleeding the overlay past the
+    /// clip guarantees its own anti-aliased edge falls OUTSIDE the
+    /// mask, so the card shows exactly one edge — stacking two
+    /// separately-AA'd rounded rects always leaves a hairline sliver
+    /// at the corners.
+    var edgeBleed: CGFloat = 0
 
     @State private var startDate = Date()
 
@@ -101,6 +109,7 @@ private struct HoloOverlay: View {
                             .float(Float(cornerRadius * 0.55))
                         )
                     )
+                    .padding(-edgeBleed)
                     .blendMode(.multiply)
             }
         }
@@ -118,10 +127,14 @@ extension View {
     /// fill), where the background variant would be hidden. The
     /// shader's `.multiply` blend keeps the content readable while the
     /// chromatic shimmer rides over it.
-    func holoOverlay(active: Bool, cornerRadius: CGFloat = LayoutMetrics.cardCornerRadius) -> some View {
+    func holoOverlay(
+        active: Bool,
+        cornerRadius: CGFloat = LayoutMetrics.cardCornerRadius,
+        edgeBleed: CGFloat = 0
+    ) -> some View {
         overlay {
             if active {
-                HoloOverlay(cornerRadius: cornerRadius)
+                HoloOverlay(cornerRadius: cornerRadius, edgeBleed: edgeBleed)
                     .allowsHitTesting(false)
             }
         }

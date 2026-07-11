@@ -599,36 +599,48 @@ struct ProfileShareSheet: View {
                 // itself carries the pro-card holo shimmer — on every
                 // share card (outfit or empty state), so the card
                 // always reads as a designed, holographic piece.
-                RoundedRectangle(cornerRadius: 24 * scale, style: .continuous)
-                    .fill(cardGray)
-                    .frame(width: cardWidth, height: cardHeight)
-                    .shadow(color: .black.opacity(0.14), radius: 16, y: 10)
-                    // Yafa brand mark, bottom-LEFT — the shared MADE ON YAFA
-                    // mark reused from the export/share cards.
-                    .overlay(alignment: .bottomLeading) {
-                        MadeOnYafaMark(width: cardWidth * 0.20, color: .white)
-                            .padding(.leading, 16 * scale)
-                            .padding(.bottom, 14 * scale)
-                            .allowsHitTesting(false)
+                // Card fill + chrome wordmark + holo shimmer flattened into
+                // ONE unit and clipped by a SINGLE rounded-rect mask. The
+                // fill and the shimmer used to be two separately
+                // anti-aliased rounded rects stacked on each other — their
+                // edges can never match pixel-perfectly, which left a
+                // hairline light arc at every corner. The shimmer now
+                // bleeds 2pt past the edge and the one clip cuts everything
+                // together; the shadow is applied AFTER the clip so it
+                // still renders outside the card.
+                ZStack {
+                    Rectangle()
+                        .fill(cardGray)
+                        // Yafa brand mark, bottom-LEFT — the shared MADE ON
+                        // YAFA mark reused from the export/share cards.
+                        .overlay(alignment: .bottomLeading) {
+                            MadeOnYafaMark(width: cardWidth * 0.20, color: .white)
+                                .padding(.leading, 16 * scale)
+                                .padding(.bottom, 14 * scale)
+                        }
+
+                    // Live chrome "add me on yafa" wordmark, behind the
+                    // outfit (replaces the old plain top label). Reflects
+                    // with device tilt. Loaded async on appear (see .task)
+                    // and freed on dismiss.
+                    if let chrome = chromeNormalMap {
+                        ChromeWordmark(image: chrome)
+                            .frame(height: cardHeight * 0.9)
+                            .transition(.opacity)
                     }
 
-                // Live chrome "add me on yafa" wordmark, behind the outfit
-                // (replaces the old plain top label). Reflects with device tilt.
-                // Loaded async on appear (see .task) and freed on dismiss.
-                if let chrome = chromeNormalMap {
-                    ChromeWordmark(image: chrome)
-                        .frame(height: cardHeight * 0.9)
-                        .allowsHitTesting(false)
-                        .transition(.opacity)
+                    // Holographic shimmer ABOVE the chrome wordmark — a
+                    // clear card-sized layer carrying the holo shader, so
+                    // the iridescence rides over the chrome text (not just
+                    // the bare card).
+                    Color.clear
+                        .holoOverlay(active: true, cornerRadius: 24 * scale, edgeBleed: 2)
                 }
-
-                // Holographic shimmer ABOVE the chrome wordmark — a clear
-                // card-sized layer carrying the holo shader, so the iridescence
-                // rides over the chrome text (not just the bare card).
-                Color.clear
-                    .frame(width: cardWidth, height: cardHeight)
-                    .holoOverlay(active: true, cornerRadius: 24 * scale)
-                    .allowsHitTesting(false)
+                .frame(width: cardWidth, height: cardHeight)
+                .compositingGroup()
+                .clipShape(RoundedRectangle(cornerRadius: 24 * scale, style: .continuous))
+                .shadow(color: .black.opacity(0.14), radius: 16, y: 10)
+                .allowsHitTesting(false)
 
                 if outfits.isEmpty {
                     if hasProfilePhoto {

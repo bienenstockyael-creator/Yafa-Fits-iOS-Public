@@ -39,7 +39,7 @@ static float3 chromeEnv(float y, float x) {
     // never sits brown.
     const float3 skyDeep     = float3(0.34, 0.52, 0.92); // top: chrome blue
     const float3 skyPale     = float3(0.94, 0.98, 1.00); // hot band above horizon
-    const float3 horizonD    = float3(0.24, 0.28, 0.38); // thin dark steel line
+    const float3 horizonD    = float3(0.44, 0.48, 0.58); // thin MID-steel line — never near-black
     const float3 groundHot   = float3(1.00, 0.97, 0.89); // champagne-white below
     const float3 groundDeep  = float3(0.64, 0.67, 0.74); // bottom: cool steel
 
@@ -107,7 +107,7 @@ static float3 chromeEnv(float y, float x) {
     // the viewer — enough to draw the letterform against the white card,
     // shallow enough that the face of the metal stays bright silver.
     float rim = smoothstep(0.20, 0.46, N.z);            // 0 at edge -> 1 facing us
-    env *= mix(0.52, 1.0, rim);                         // pencil edge, not shadow
+    env *= mix(0.70, 1.0, rim);                         // whisper of an edge, no shadow
 
     // Grazing-angle sparkle: real chrome flares white at its edges when it
     // catches the sky (Fresnel). Only where the reflected ray points up, so
@@ -116,11 +116,12 @@ static float3 chromeEnv(float y, float x) {
     float fresnel = 1.0 - rim;
     env += float3(0.9, 0.95, 1.0) * fresnel * smoothstep(0.05, 0.7, ry) * 0.35;
 
-    // Strong S-curve: the tonal SNAP between adjacent bands is what makes
-    // the surface read as polished metal rather than a soft gradient.
-    env = (env - 0.5) * 1.55 + 0.5;
-    // Floor: thin lines may go dark steel, never black.
-    env = max(env, float3(0.22));
+    // Gentle S-curve: enough snap between bands to read as metal, soft
+    // enough that the darks stay steel — a strong curve crushed the
+    // horizon line to near-black (0.24 in -> 0.10 out).
+    env = (env - 0.5) * 1.20 + 0.5;
+    // High floor: the darkest any pixel may go is medium steel.
+    env = max(env, float3(0.42));
     env = clamp(env, 0.0, 1.0);
 
     return half4(half3(env), a);
