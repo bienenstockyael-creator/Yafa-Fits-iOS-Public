@@ -390,7 +390,8 @@ struct OutfitGridView: View {
                             Text("cs=\(Int(sv?.contentSize.width ?? -1))x\(Int(sv?.contentSize.height ?? -1))"
                                 + " b=\(Int(sv?.bounds.height ?? -1))"
                                 + " off=\(Int(sv?.contentOffset.y ?? -1))"
-                                + " · ask \(Self.scrubAskSummary())")
+                                + " · ask \(Self.scrubAskSummary())"
+                                + " · heal \(Self.secondsAgo(GestureRouteHealer.lastHealAt)) n\(GestureRouteHealer.lastHealCount)")
                         }
                         .font(.system(size: 10, weight: .semibold, design: .monospaced))
                         .foregroundStyle(.white)

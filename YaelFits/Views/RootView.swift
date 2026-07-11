@@ -436,6 +436,18 @@ struct RootView: View {
                 await PushNotificationCoordinator.shared.requestAuthorization()
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            // App-switch touch-routing wedge: after backgrounding, iOS can
+            // stop delivering touches to view-attached recognizers (all
+            // scrolls/drags/scrubs dead, taps alive) while window-attached
+            // recognizers still see the full stream. Re-registering every
+            // idle recognizer on foreground rebuilds the routing the same
+            // way a tab-switch remount does. Async: let UIKit finish its
+            // own activation work first.
+            DispatchQueue.main.async {
+                GestureRouteHealer.healAllWindows()
+            }
+        }
         .onChange(of: store.userId) { _, _ in
             hydrateClosetAvatarIfNeeded()
         }
