@@ -147,7 +147,7 @@ struct VibeButton: View {
             // unvibed + count > 0.
             if showBadge {
                 badgeView
-                    .offset(x: 4, y: -2)
+                    .offset(x: isVibedByMe ? 10 : 4, y: -2)
                     .transition(.opacity)
             }
         }
@@ -230,18 +230,9 @@ struct VibeButton: View {
         }
     }
 
-    /// Small "unvibed" count badge in the upper-right corner.
+    /// Small count badge in the upper-right corner.
     private var badgeView: some View {
-        Text("\(vibeCount)")
-            .font(.system(size: 9, weight: .bold))
-            .foregroundStyle(AppPalette.textMuted)
-            .frame(minWidth: 16, minHeight: 16)
-            .background {
-                LightBlurView(style: .systemThinMaterialLight)
-                    .clipShape(Circle())
-                    .overlay(Circle().fill(Color.white.opacity(0.96)))
-            }
-            .overlay(Circle().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
+        VibeCountBadge(count: vibeCount)
     }
 
     /// Badge shows in BOTH states — same top-right treatment as
@@ -408,21 +399,38 @@ struct VibeCountDisplay: View {
             GradientFlameIcon(size: 26, stroked: true)
                 .frame(width: 26, height: 40)
 
-            // Same badge treatment as VibeButton.badgeView / the
-            // heart button's count.
-            Text("\(count)")
-                .font(.system(size: 9, weight: .bold))
-                .foregroundStyle(AppPalette.textMuted)
-                .frame(minWidth: 16, minHeight: 16)
-                .background {
-                    LightBlurView(style: .systemThinMaterialLight)
-                        .clipShape(Circle())
-                        .overlay(Circle().fill(Color.white.opacity(0.96)))
-                }
-                .overlay(Circle().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
-                .offset(x: 4, y: -2)
+            VibeCountBadge(count: count)
+                .offset(x: 10, y: -2)
         }
         .frame(height: 40)
     }
 }
 
+/// Count bubble for vibe icons, styled to match the generation
+/// tab's in-flight badge: 18pt circle, uploadGlow numeral on a
+/// white blur fill with a soft uploadGlow halo, hairline border.
+struct VibeCountBadge: View {
+    let count: Int
+
+    var body: some View {
+        Text("\(count)")
+            .font(.system(size: 9, weight: .bold))
+            .foregroundStyle(AppPalette.uploadGlow)
+            .frame(width: 18, height: 18)
+            .background {
+                LightBlurView(style: .systemThinMaterialLight)
+                    .clipShape(Circle())
+                    .overlay(
+                        Circle()
+                            .fill(Color.white.opacity(0.96))
+                            .shadow(
+                                color: AppPalette.uploadGlow.opacity(0.55),
+                                radius: 8,
+                                y: 0
+                            )
+                    )
+            }
+            .overlay(Circle().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
+            .contentTransition(.numericText(value: Double(count)))
+    }
+}
