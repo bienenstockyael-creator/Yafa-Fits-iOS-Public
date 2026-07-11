@@ -70,18 +70,23 @@ static float3 chromeEnv(float y, float x) {
     float2 R = float2(2.0 * ndv * N.x, 2.0 * ndv * N.y);
 
     // Tilt shifts the reflection so it SWEEPS as the phone turns — the core
-    // chrome illusion. Gain is deliberately LOW (0.35): a phone is held
-    // pitched toward the face, and a high gain would shove the whole
-    // reflection up into the white sky at rest (the "it's just white" bug).
-    // Low gain keeps the chrome centered on the letters at any hold angle,
-    // with tilt nudging it for liveliness. A tiny idle drift keeps it alive.
-    float rx = R.x + roll * 0.85 + sin(time * 0.5) * 0.03;
-    float ry = R.y + pitch * 0.85 + cos(time * 0.4) * 0.03;
+    // chrome illusion. roll/pitch arrive BASELINE-CALIBRATED (delta from the
+    // attitude at card-open, ±1 over ~a wrist turn), so the reflection is
+    // guaranteed centered on the letters at rest for any hold angle. That's
+    // what buys the high gain here: a small deliberate tilt drives the
+    // horizon clear across the letterforms — the old absolute-tilt feed had
+    // to run timid gain or the hold angle shoved everything into the white
+    // sky. A tiny idle drift keeps it alive when the phone is still.
+    float rx = R.x + roll * 1.60 + sin(time * 0.5) * 0.04;
+    float ry = R.y + pitch * 1.60 + cos(time * 0.4) * 0.04;
 
     float3 env = chromeEnv(clamp(ry, -1.5, 1.5), rx);
 
-    // Moving hot spot (sparkle) — tight so it glints rather than washing white.
-    float2 sun = float2(0.20 + roll * 0.7, 0.40 + pitch * 0.7);
+    // Moving hot spot (sparkle) — tight so it glints rather than washing
+    // white. Counter-travels against the tilt (negative gain) so it sweeps
+    // ACROSS the letters as the environment slides the other way — the
+    // two opposing motions are what sell the mirror.
+    float2 sun = float2(0.20 - roll * 0.9, 0.40 - pitch * 0.9);
     float hot = smoothstep(0.22, 0.0, distance(float2(rx, ry), sun));
     env += float3(hot) * 1.0;
 

@@ -19,6 +19,21 @@ final class HoloMotionTracker {
     /// Pitch in [-1, 1]. -1 = tilted toward user, +1 = away.
     private(set) var pitch: Double = 0
 
+    /// Smoothed attitude in RADIANS, unclamped and unnormalized — for
+    /// consumers that calibrate against a captured baseline (the chrome
+    /// wordmark) instead of using the absolute gravity-referenced tilt.
+    /// Absolute tilt bakes the user's hold angle into the effect: a
+    /// phone is always pitched toward the face, so the reflection
+    /// starts pre-shifted for everyone. Baseline-relative tilt starts
+    /// the effect centered at whatever angle the card was opened.
+    private(set) var rollRadians: Double = 0
+    private(set) var pitchRadians: Double = 0
+
+    /// False until the first CoreMotion sample lands after `start()` —
+    /// baseline capture must wait for a real reading, or it calibrates
+    /// against the zero placeholder.
+    private(set) var hasSample = false
+
     private let manager = CMMotionManager()
     private let queue: OperationQueue = {
         let q = OperationQueue()
@@ -49,9 +64,22 @@ final class HoloMotionTracker {
             guard let self, let motion else { return }
             let rawRoll = max(-1, min(1, motion.attitude.roll / Self.tiltRange))
             let rawPitch = max(-1, min(1, motion.attitude.pitch / Self.tiltRange))
+            let radRoll = motion.attitude.roll
+            let radPitch = motion.attitude.pitch
             Task { @MainActor in
                 self.roll = self.roll * (1 - Self.smoothingAlpha) + rawRoll * Self.smoothingAlpha
                 self.pitch = self.pitch * (1 - Self.smoothingAlpha) + rawPitch * Self.smoothingAlpha
+                if self.hasSample {
+                    self.rollRadians = self.rollRadians * (1 - Self.smoothingAlpha) + radRoll * Self.smoothingAlpha
+                    self.pitchRadians = self.pitchRadians * (1 - Self.smoothingAlpha) + radPitch * Self.smoothingAlpha
+                } else {
+                    // Seed the lowpass with the first real reading so a
+                    // baseline captured moments later isn't polluted by
+                    // the filter converging up from zero.
+                    self.rollRadians = radRoll
+                    self.pitchRadians = radPitch
+                    self.hasSample = true
+                }
             }
         }
     }
@@ -60,6 +88,7 @@ final class HoloMotionTracker {
         startCount = max(0, startCount - 1)
         if startCount == 0 {
             manager.stopDeviceMotionUpdates()
+            hasSample = false
         }
     }
 }

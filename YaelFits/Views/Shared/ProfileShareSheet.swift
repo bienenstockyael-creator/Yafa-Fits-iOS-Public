@@ -300,12 +300,28 @@ struct ProfileShareSheet: View {
     private struct ChromeWordmark: View {
         let image: UIImage
         @State private var start = Date()
+        /// Attitude (radians) captured on the first CoreMotion sample
+        /// after the card opens. The shader gets the DELTA from this
+        /// baseline, so the reflection starts dead-centered on the
+        /// letters at whatever angle the phone is actually held —
+        /// absolute tilt used to pre-shift it by the hold angle, which
+        /// forced a timid sweep gain to keep the chrome from washing
+        /// into the sky at rest.
+        @State private var baseline: (roll: Double, pitch: Double)?
+
+        /// Hand-tilt range (radians) mapped to ±1 AROUND THE BASELINE.
+        /// Tighter than the tracker's absolute 0.7 — calibration means
+        /// a small deliberate wrist turn should traverse the whole
+        /// environment.
+        private static let sweepRange: Double = 0.45
 
         var body: some View {
             TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { tl in
                 let t = Float(tl.date.timeIntervalSince(start))
-                let roll = Float(HoloMotionTracker.shared.roll)
-                let pitch = Float(HoloMotionTracker.shared.pitch)
+                let tracker = HoloMotionTracker.shared
+                let base = baseline ?? (tracker.rollRadians, tracker.pitchRadians)
+                let roll = Float(max(-1, min(1, (tracker.rollRadians - base.roll) / Self.sweepRange)))
+                let pitch = Float(max(-1, min(1, (tracker.pitchRadians - base.pitch) / Self.sweepRange)))
                 Image(uiImage: image)
                     .interpolation(.high)
                     .antialiased(true)
@@ -320,8 +336,23 @@ struct ProfileShareSheet: View {
                     )
             }
             // Drive CoreMotion while the card is visible (ref-counted singleton).
-            .onAppear { HoloMotionTracker.shared.start() }
+            .onAppear {
+                HoloMotionTracker.shared.start()
+                // Tracker already warm (a holo card is driving it):
+                // hasSample never flips, so calibrate right here.
+                if HoloMotionTracker.shared.hasSample, baseline == nil {
+                    baseline = (HoloMotionTracker.shared.rollRadians,
+                                HoloMotionTracker.shared.pitchRadians)
+                }
+            }
             .onDisappear { HoloMotionTracker.shared.stop() }
+            .onChange(of: HoloMotionTracker.shared.hasSample) { _, has in
+                // Calibrate once, on the first real sensor reading of
+                // this presentation.
+                guard has, baseline == nil else { return }
+                baseline = (HoloMotionTracker.shared.rollRadians,
+                            HoloMotionTracker.shared.pitchRadians)
+            }
         }
     }
 
