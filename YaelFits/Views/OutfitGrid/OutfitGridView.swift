@@ -384,6 +384,8 @@ struct OutfitGridView: View {
                             Text("stuck: \(Self.stuckRecognizerSummary(near: sv))")
                             Text("touch \(Self.secondsAgo(TouchCountGestureRecognizer.lastTouchAt))"
                                 + " · panEvt s\(scrollBox.lastPanState) \(Self.secondsAgo(scrollBox.lastPanEventAt))")
+                            Text("hit: \(Self.hitProbe(sv))")
+                                .font(.system(size: 8, weight: .semibold, design: .monospaced))
                         }
                         .font(.system(size: 10, weight: .semibold, design: .monospaced))
                         .foregroundStyle(.white)
@@ -1058,6 +1060,25 @@ struct OutfitGridView: View {
     static func secondsAgo(_ date: Date?) -> String {
         guard let date else { return "never" }
         return String(format: "%.0fs", Date().timeIntervalSince(date))
+    }
+
+    /// TEMP: who WINS the hit-test at the center of the grid right
+    /// now. `in=0` = the winner is NOT inside the scroll view — the
+    /// class chain names the invisible eater. Strip with the chip.
+    static func hitProbe(_ scrollView: UIScrollView?) -> String {
+        guard let scrollView, let window = scrollView.window else { return "no-window" }
+        let point = CGPoint(x: window.bounds.midX, y: window.bounds.midY)
+        guard let winner = window.hitTest(point, with: nil) else { return "nil" }
+        let inScroll = winner.isDescendant(of: scrollView) ? 1 : 0
+        var chain = ["\(type(of: winner))"]
+        var current: UIView? = winner.superview
+        var hops = 0
+        while let view = current, hops < 2 {
+            chain.append("\(type(of: view))")
+            current = view.superview
+            hops += 1
+        }
+        return "in=\(inScroll) " + chain.joined(separator: "<")
     }
 
     /// TEMP pan-wedge forensics: every recognizer in the window tree
