@@ -37,9 +37,9 @@ static float3 chromeEnv(float y, float x) {
     // right on paper, but on thin outline letterforms a downward tilt turned
     // the whole wordmark flat BROWN — polished chrome may flash gold, it
     // never sits brown.
-    const float3 skyDeep     = float3(0.34, 0.52, 0.92); // top: chrome blue
+    const float3 skyDeep     = float3(0.52, 0.66, 0.95); // top: light chrome blue
     const float3 skyPale     = float3(0.94, 0.98, 1.00); // hot band above horizon
-    const float3 horizonD    = float3(0.44, 0.48, 0.58); // thin MID-steel line — never near-black
+    const float3 horizonD    = float3(0.62, 0.66, 0.74); // thin LIGHT-steel line — a shade, not a shadow
     const float3 groundHot   = float3(1.00, 0.97, 0.89); // champagne-white below
     const float3 groundDeep  = float3(0.64, 0.67, 0.74); // bottom: cool steel
 
@@ -107,7 +107,7 @@ static float3 chromeEnv(float y, float x) {
     // the viewer — enough to draw the letterform against the white card,
     // shallow enough that the face of the metal stays bright silver.
     float rim = smoothstep(0.20, 0.46, N.z);            // 0 at edge -> 1 facing us
-    env *= mix(0.70, 1.0, rim);                         // whisper of an edge, no shadow
+    env *= mix(0.82, 1.0, rim);                         // barely-there edge
 
     // Grazing-angle sparkle: real chrome flares white at its edges when it
     // catches the sky (Fresnel). Only where the reflected ray points up, so
@@ -120,8 +120,9 @@ static float3 chromeEnv(float y, float x) {
     // enough that the darks stay steel — a strong curve crushed the
     // horizon line to near-black (0.24 in -> 0.10 out).
     env = (env - 0.5) * 1.20 + 0.5;
-    // High floor: the darkest any pixel may go is medium steel.
-    env = max(env, float3(0.42));
+    // High floor: the darkest any pixel may go is LIGHT steel — the
+    // effect works entirely in the bright register, zero dark accents.
+    env = max(env, float3(0.58));
     env = clamp(env, 0.0, 1.0);
 
     return half4(half3(env), a);
