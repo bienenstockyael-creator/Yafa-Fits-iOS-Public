@@ -383,6 +383,7 @@ struct OutfitGridView: View {
                                 + " live=\(TouchCountGestureRecognizer.liveTouchCount)")
                             Text("stuck: \(Self.stuckRecognizerSummary(near: sv))")
                             Text("touch \(Self.secondsAgo(TouchCountGestureRecognizer.lastTouchAt))"
+                                + " mv \(Self.secondsAgo(TouchCountGestureRecognizer.lastMoveAt))"
                                 + " · panEvt s\(scrollBox.lastPanState) \(Self.secondsAgo(scrollBox.lastPanEventAt))")
                             Text("hit: \(Self.hitProbe(sv))")
                                 .font(.system(size: 8, weight: .semibold, design: .monospaced))

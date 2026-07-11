@@ -61,7 +61,18 @@ final class TouchCountGestureRecognizer: UIGestureRecognizer {
     #if DEBUG
     /// TEMP delivery forensics: when the window last saw any touch.
     private(set) static var lastTouchAt: Date?
+    /// TEMP: when the window last saw touch MOVEMENT. Pans engage only
+    /// on movement; if began arrives but moved never does, every
+    /// scroll/drag/scrub is dead while taps stay alive.
+    private(set) static var lastMoveAt: Date?
     #endif
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
+        super.touchesMoved(touches, with: event)
+        #if DEBUG
+        Self.lastMoveAt = Date()
+        #endif
+    }
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
         super.touchesBegan(touches, with: event)
