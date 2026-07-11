@@ -25,24 +25,26 @@ using namespace metal;
 // of chrome is the SHARP near-black horizon band splitting a bright cool sky
 // from a darker warmer ground.
 static float3 chromeEnv(float y, float x) {
-    // MID-TONE chrome gradient: steel-blue sky on top, a WIDE near-black
-    // horizon band, then a warm tan floor bounce below. Kept mostly darker
-    // than the white share card (with only small bright glints added later)
-    // so the metal stays visible instead of washing out — and the cool/warm
-    // split makes a tube sweep blue-silver -> gold-silver as you tilt.
-    const float3 skyTop      = float3(0.95, 0.98, 1.00); // high sky, bright
-    const float3 skyBlue     = float3(0.30, 0.50, 0.85); // steel blue
-    const float3 horizonD    = float3(0.16, 0.20, 0.30); // horizon: dark but NOT black
-    const float3 groundWarm  = float3(0.50, 0.44, 0.36); // mid warm under horizon
-    const float3 groundBright= float3(1.00, 0.92, 0.78); // bright warm floor bounce
+    // BRIGHT-SILVER chrome gradient: real chrome is mostly light — thin,
+    // SHARP dark lines and hot glints on a silver body, never big dark
+    // masses (wide darks read as gunmetal/tarnish, not mirror polish).
+    // Cool silver-blue sky above, a crisp steel horizon LINE, warm champagne
+    // bounce below: the cool/warm split still makes a tube sweep
+    // blue-silver -> gold-silver as you tilt.
+    const float3 skyTop      = float3(0.97, 0.99, 1.00); // high sky, near white
+    const float3 skyBlue     = float3(0.62, 0.74, 0.94); // silver-blue, desaturated
+    const float3 horizonD    = float3(0.30, 0.34, 0.44); // steel line, NOT near-black
+    const float3 groundWarm  = float3(0.72, 0.66, 0.56); // light warm under horizon
+    const float3 groundBright= float3(1.00, 0.94, 0.82); // bright champagne bounce
 
     float3 sky    = mix(skyBlue, skyTop, smoothstep(0.06, 0.6, y));
     float3 ground = mix(groundWarm, groundBright, smoothstep(-0.1, -0.6, y));
     float3 env    = y >= 0.0 ? sky : ground;
 
-    // Crisp dark horizon band straddling y = 0 (gives each tube a dark
-    // reflection core that reads even over a white background).
-    float band = smoothstep(0.14, 0.0, abs(y));
+    // THIN crisp horizon line straddling y = 0 — the signature dark stripe
+    // of chrome, kept narrow so it draws a line across the letters instead
+    // of flooding them dark.
+    float band = smoothstep(0.055, 0.0, abs(y));
     env = mix(env, horizonD, band);
 
     // Faint vertical streaks (distant reflected verticals) for busy realism.
@@ -90,15 +92,23 @@ static float3 chromeEnv(float y, float x) {
     float hot = smoothstep(0.22, 0.0, distance(float2(rx, ry), sun));
     env += float3(hot) * 1.0;
 
-    // Crisp dark contour: the grazing rim (normal facing away from viewer)
-    // goes near-black so the metal pops against the light card.
-    float rim = smoothstep(0.26, 0.58, N.z);            // 0 at edge -> 1 facing us
-    env *= mix(0.30, 1.0, rim);                         // softer (not black) edges
+    // Crisp contour: a THIN steel edge where the surface grazes away from
+    // the viewer — enough to draw the letterform against the white card,
+    // shallow enough that the face of the metal stays bright silver.
+    float rim = smoothstep(0.20, 0.46, N.z);            // 0 at edge -> 1 facing us
+    env *= mix(0.52, 1.0, rim);                         // pencil edge, not shadow
+
+    // Grazing-angle sparkle: real chrome flares white at its edges when it
+    // catches the sky (Fresnel). Only where the reflected ray points up, so
+    // the bottom edge keeps its dark line and the top edge ignites.
+    float fresnel = 1.0 - rim;
+    env += float3(0.9, 0.95, 1.0) * fresnel * smoothstep(0.05, 0.7, ry) * 0.55;
 
     // S-curve for metallic punch.
     env = (env - 0.5) * 1.30 + 0.5;
-    // Hard floor so no tilt angle ever drives the chrome near-black.
-    env = max(env, float3(0.16));
+    // High floor: no tilt angle ever drives the chrome past dark steel —
+    // dark masses read as tarnish, and thin lines don't need help.
+    env = max(env, float3(0.30));
     env = clamp(env, 0.0, 1.0);
 
     return half4(half3(env), a);
