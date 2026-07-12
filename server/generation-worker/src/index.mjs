@@ -491,16 +491,25 @@ async function extractAndProcessFrames(videoPath, tmpDir, outfitId, onProgress) 
   // Bumped from 92% to 100% to roughly match scale of legacy hand-processed outfits.
   const TARGET_SUBJECT_H = FRAME_HEIGHT * 1.00;  // 550px
   const BOTTOM_MARGIN    = FRAME_HEIGHT * 0.00;  // 0px
-  let layoutScale = 1, cropLeft = 0, cropTop = 0;
+  // Output frames are FRAME_WIDTH wide unless the subject at layout
+  // scale needs more room (crouch/sprawl poses): then the frame WIDENS
+  // to hold the full subject plus a small side margin. The subject's
+  // SCALE never changes with pose width — wide poses used to get
+  // sliced at the fixed frame edge (hard straight cut through the
+  // outfit) because the extract window ignored subject width.
+  const SIDE_MARGIN = Math.round(FRAME_WIDTH * 0.02); // ~6px each side
+  let layoutScale = 1, cropLeft = 0, cropTop = 0, outWidth = FRAME_WIDTH;
 
   if (unionMaxX >= unionMinX) {
     const personH   = unionMaxY - unionMinY + 1;
+    const personW   = unionMaxX - unionMinX + 1;
     const personMidX = (unionMinX + unionMaxX) / 2;
     layoutScale = TARGET_SUBJECT_H / personH;
+    outWidth = Math.max(FRAME_WIDTH, Math.ceil(personW * layoutScale) + SIDE_MARGIN * 2);
 
-    cropLeft = personMidX * layoutScale - FRAME_WIDTH / 2;
+    cropLeft = personMidX * layoutScale - outWidth / 2;
     cropTop  = unionMaxY * layoutScale - (FRAME_HEIGHT - BOTTOM_MARGIN);
-    console.log(`Subject ${personH}px tall → scale ${layoutScale.toFixed(3)}, crop (${Math.round(cropLeft)}, ${Math.round(cropTop)})`);
+    console.log(`Subject ${personH}px tall, ${personW}px wide → scale ${layoutScale.toFixed(3)}, crop (${Math.round(cropLeft)}, ${Math.round(cropTop)}), outWidth ${outWidth}`);
   } else {
     console.warn('Could not detect subject bounds — using default scale');
   }
@@ -514,14 +523,17 @@ async function extractAndProcessFrames(videoPath, tmpDir, outfitId, onProgress) 
 
     const scaledW = Math.max(FRAME_WIDTH,  Math.round(FRAME_WIDTH  * layoutScale));
     const scaledH = Math.max(FRAME_HEIGHT, Math.round(FRAME_HEIGHT * layoutScale));
-    const left    = Math.max(0, Math.min(Math.round(cropLeft), scaledW - FRAME_WIDTH));
+    // Extract window: dynamic width (never narrower than standard,
+    // never wider than the upscaled source), clamped inside it.
+    const width   = Math.min(outWidth, scaledW);
+    const left    = Math.max(0, Math.min(Math.round(cropLeft), scaledW - width));
     const top     = Math.max(0, Math.min(Math.round(cropTop),  scaledH - FRAME_HEIGHT));
 
     let pipeline = sharp(pngPath).ensureAlpha();
     if (layoutScale > 1.05) {
       pipeline = pipeline
         .resize(scaledW, scaledH, { kernel: 'lanczos3' })
-        .extract({ left, top, width: FRAME_WIDTH, height: FRAME_HEIGHT });
+        .extract({ left, top, width, height: FRAME_HEIGHT });
     }
     await pipeline.webp({ quality: WEBP_QUALITY }).toFile(webpPath);
 
