@@ -239,8 +239,7 @@ actor ImageMaskingService {
     }
 
     private func composeForKling(_ image: CIImage, sourceCanvasSize: CGSize) -> CIImage {
-        let canvasRect = CGRect(origin: .zero, size: UploadConfig.compositionDimensions)
-        let background = CIImage(color: greenScreenColor).cropped(to: canvasRect)
+        let standardSize = UploadConfig.compositionDimensions
         let sourceCanvasImage = compositeMaskedImage(
             image,
             canvasSize: sourceCanvasSize,
@@ -249,15 +248,36 @@ actor ImageMaskingService {
 
         let boundsImage = expandedBoundsImage(from: sourceCanvasImage)
         guard let subjectBounds = nonTransparentBounds(in: boundsImage) else {
+            let canvasRect = CGRect(origin: .zero, size: standardSize)
             return sourceCanvasImage
-                .composited(over: background)
+                .composited(over: CIImage(color: greenScreenColor).cropped(to: canvasRect))
                 .cropped(to: canvasRect)
         }
 
+        // Subject scale is computed against the STANDARD canvas and never
+        // changes — quality to Kling is identical for every outfit.
         let scale = min(
-            (canvasRect.width * compositionWidthRatio) / (subjectBounds.width * compositionWidthSafetyRatio),
-            (canvasRect.height * compositionHeightRatio) / (subjectBounds.height * compositionHeightSafetyRatio)
+            (standardSize.width * compositionWidthRatio) / (subjectBounds.width * compositionWidthSafetyRatio),
+            (standardSize.height * compositionHeightRatio) / (subjectBounds.height * compositionHeightSafetyRatio)
         )
+
+        // WIDE poses (crouch, sprawl): Kling's orbit sweeps the pose
+        // horizontally, and on the standard canvas the rotation can exit
+        // the frame — Kling bakes that crop into the video itself,
+        // unrecoverable downstream. Instead of shrinking the subject
+        // (quality loss), WIDEN the canvas around it so the subject at
+        // full scale never exceeds 50% of the width. Kling mirrors the
+        // input ratio, so the video gets the same headroom; standing
+        // outfits stay under 50% already and keep the standard canvas
+        // byte-for-byte. Width is even-rounded for the video encoder.
+        let subjectScaledWidth = subjectBounds.width * scale
+        let neededWidth = ceil(subjectScaledWidth / 0.50 / 2) * 2
+        let canvasRect = CGRect(
+            origin: .zero,
+            size: CGSize(width: max(standardSize.width, neededWidth), height: standardSize.height)
+        )
+        let background = CIImage(color: greenScreenColor).cropped(to: canvasRect)
+
         let xOffset = (canvasRect.midX) - (subjectBounds.midX * scale)
         // nonTransparentBounds returns CGImage coords (y-down) but CIImage
         // transforms use y-up coords. Convert midY before centering.

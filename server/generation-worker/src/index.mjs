@@ -441,10 +441,16 @@ async function extractAndProcessFrames(videoPath, tmpDir, outfitId, onProgress) 
     `geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='min(min(alpha(X,Y),alpha(X-1,Y)),min(alpha(X+1,Y),min(alpha(X,Y-1),alpha(X,Y+1))))'`,
     `geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='min(min(alpha(X,Y),alpha(X-1,Y)),min(alpha(X+1,Y),min(alpha(X,Y-1),alpha(X,Y+1))))'`,
     `geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='min(min(alpha(X,Y),alpha(X-1,Y)),min(alpha(X+1,Y),min(alpha(X,Y-1),alpha(X,Y+1))))'`,
-    // Scale to fit within 323x550 preserving aspect ratio
-    `scale=w=${FRAME_WIDTH}:h=${FRAME_HEIGHT}:force_original_aspect_ratio=decrease`,
-    // Pad to exactly 323x550 with transparent background, centered
-    `pad=w=${FRAME_WIDTH}:h=${FRAME_HEIGHT}:x=(ow-iw)/2:y=(oh-ih)/2:color=0x00000000`,
+    // Height-anchored scale: always FRAME_HEIGHT tall, width follows
+    // the video's aspect ratio. Standard 646x1100 videos produce the
+    // same 323x550 raws as before, byte-for-byte; WIDER videos (the
+    // app widens the green-screen canvas for wide poses so Kling's
+    // orbit has room) keep their full width instead of being squeezed
+    // into 323 and losing subject resolution.
+    `scale=w=-1:h=${FRAME_HEIGHT}`,
+    // Pad up to the standard width for narrower-than-standard videos,
+    // centered; wider raws pass through unpadded.
+    `pad=w='max(iw,${FRAME_WIDTH})':h=${FRAME_HEIGHT}:x=(ow-iw)/2:y=(oh-ih)/2:color=0x00000000`,
     `format=rgba`,
   ].join(',');
 
@@ -468,14 +474,18 @@ async function extractAndProcessFrames(videoPath, tmpDir, outfitId, onProgress) 
   // Detect subject bounds across sampled frames using Sharp on the RGBA PNGs.
   // Sharp CAN read these (proven: WebP conversion works). JPEG was the problem, not PNG.
   let unionMinX = Infinity, unionMinY = Infinity, unionMaxX = -Infinity, unionMaxY = -Infinity;
+  // Raw width varies with the source video's aspect (height is always
+  // FRAME_HEIGHT) — read it from the first frame.
+  const rawMeta = await sharp(path.join(framesDir, rawFiles[0])).metadata();
+  const RAW_WIDTH = rawMeta.width;
   const sampleStep = 8;
   for (let i = 0; i < rawFiles.length; i += sampleStep) {
     try {
       const pngPath = path.join(framesDir, rawFiles[i]);
       const { data } = await sharp(pngPath).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
       for (let y = 0; y < FRAME_HEIGHT; y++) {
-        for (let x = 0; x < FRAME_WIDTH; x++) {
-          const alpha = data[(y * FRAME_WIDTH + x) * 4 + 3];
+        for (let x = 0; x < RAW_WIDTH; x++) {
+          const alpha = data[(y * RAW_WIDTH + x) * 4 + 3];
           if (alpha > 40) {
             if (x < unionMinX) unionMinX = x;
             if (y < unionMinY) unionMinY = y;
@@ -521,7 +531,7 @@ async function extractAndProcessFrames(videoPath, tmpDir, outfitId, onProgress) 
     const webpName = `${outfitId}_${String(i).padStart(5, '0')}.webp`;
     const webpPath = path.join(framesDir, webpName);
 
-    const scaledW = Math.max(FRAME_WIDTH,  Math.round(FRAME_WIDTH  * layoutScale));
+    const scaledW = Math.max(RAW_WIDTH,    Math.round(RAW_WIDTH    * layoutScale));
     const scaledH = Math.max(FRAME_HEIGHT, Math.round(FRAME_HEIGHT * layoutScale));
     // Extract window: dynamic width (never narrower than standard,
     // never wider than the upscaled source), clamped inside it.
