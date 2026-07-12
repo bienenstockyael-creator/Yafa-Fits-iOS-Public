@@ -106,10 +106,21 @@ actor VideoFrameSequenceExporter {
             throw UploadPipelineError.emptyExport
         }
 
-        let targetSize = FrameConfig.dimensions
-
-        // Scale so the subject height matches existing outfits (~92% of frame).
+        // Scale so the subject height matches existing outfits (~92% of
+        // frame). The scale NEVER changes with pose width — a wide pose
+        // renders at exactly the size it would anyway.
         let scale = targetSubjectHeight / max(sizingBounds.height, 1)
+
+        // Canvas: standard width unless the subject (at that scale)
+        // needs more room, in which case the canvas widens to hold it
+        // plus a small margin. Wide poses used to get sliced by the
+        // final crop at the standard canvas edge.
+        let sideMargin = FrameConfig.dimensions.width * 0.02
+        let requiredWidth = ceil(sizingBounds.width * scale + sideMargin * 2)
+        let targetSize = CGSize(
+            width: max(FrameConfig.dimensions.width, requiredWidth),
+            height: FrameConfig.dimensions.height
+        )
 
         // Horizontally center the subject. X axis is the same in both
         // CGImage and CIImage coordinate systems.
@@ -123,14 +134,19 @@ actor VideoFrameSequenceExporter {
         let feetCIY = (sourceRect.height - sizingBounds.maxY) * scale
         let yOffset = bottomMargin - feetCIY
 
-        return StableFrameLayout(sourceRect: sourceRect, scale: scale, xOffset: xOffset, yOffset: yOffset)
+        return StableFrameLayout(
+            sourceRect: sourceRect,
+            scale: scale,
+            xOffset: xOffset,
+            yOffset: yOffset,
+            targetSize: targetSize
+        )
     }
 
     private func renderFrame(_ cgImage: CGImage, layout: StableFrameLayout) throws -> Data {
         let sourceImage = CIImage(cgImage: cgImage)
         let keyedImage = removeGreenBackground(from: sourceImage).cropped(to: sourceImage.extent)
-        let targetSize = FrameConfig.dimensions
-        let targetRect = CGRect(origin: .zero, size: targetSize)
+        let targetRect = CGRect(origin: .zero, size: layout.targetSize)
         let normalizedImage = keyedImage
             .cropped(to: layout.sourceRect)
             .transformed(
@@ -257,8 +273,7 @@ actor VideoFrameSequenceExporter {
     private func makePreviewData(from cgImage: CGImage, layout: StableFrameLayout) throws -> Data {
         let sourceImage = CIImage(cgImage: cgImage)
         let keyedImage = removeGreenBackground(from: sourceImage).cropped(to: sourceImage.extent)
-        let targetSize = FrameConfig.dimensions
-        let targetRect = CGRect(origin: .zero, size: targetSize)
+        let targetRect = CGRect(origin: .zero, size: layout.targetSize)
         let normalizedImage = keyedImage
             .cropped(to: layout.sourceRect)
             .transformed(
@@ -335,4 +350,11 @@ private struct StableFrameLayout {
     let scale: CGFloat
     let xOffset: CGFloat
     let yOffset: CGFloat
+    /// Output canvas for every frame of this outfit. Standard
+    /// dimensions for normal poses; WIDER (never taller) when the
+    /// subject at standard scale wouldn't fit horizontally — wide
+    /// poses (crouch, sprawl) used to overflow the fixed canvas and
+    /// get sliced by the final crop. The subject's rendered scale is
+    /// the same either way; only the canvas grows.
+    let targetSize: CGSize
 }
