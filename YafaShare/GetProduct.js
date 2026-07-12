@@ -7,6 +7,19 @@ var ExtensionPreprocessingJS = function () {};
 
 ExtensionPreprocessingJS.prototype = {
   run: function (args) {
+    // BELT-AND-SUSPENDERS: in Safari's JS-preprocessing mode the page
+    // URL reaches the extension ONLY through this script's completion
+    // call — if anything below throws uncaught, the share sheet gets
+    // nothing and shows "No link to save". Whatever happens, complete
+    // with at least the URL; the server-side scrape covers the rest.
+    try {
+      this.runUnsafe(args);
+    } catch (e) {
+      try { args.completionFunction({ url: document.URL }); } catch (e2) {}
+    }
+  },
+
+  runUnsafe: function (args) {
     function meta(prop) {
       var el =
         document.querySelector('meta[property="' + prop + '"]') ||
@@ -48,14 +61,19 @@ ExtensionPreprocessingJS.prototype = {
     if (!price) price = meta("product:price:amount") || meta("og:price:amount");
     if (!brand) brand = meta("og:site_name");
 
+    // Coerce to strings — JSON-LD in the wild puts objects where
+    // strings belong, and a non-string field poisons the plist the
+    // extension decodes (fields silently read as nil at best).
+    function str(v) { return typeof v === "string" && v ? v : null; }
+
     function done(imageData) {
       args.completionFunction({
         url: document.URL,
-        name: name || null,
-        image: image || null,
-        imageData: imageData || null,
-        price: price || null,
-        brand: brand || null,
+        name: str(name),
+        image: str(image),
+        imageData: str(imageData),
+        price: str(price) || (typeof price === "number" ? String(price) : null),
+        brand: str(brand),
       });
     }
 
