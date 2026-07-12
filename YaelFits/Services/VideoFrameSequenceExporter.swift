@@ -17,6 +17,12 @@ actor VideoFrameSequenceExporter {
     // Existing outfits fill ~92% of the 550px frame height (median across all outfits).
     private let targetSubjectHeight: CGFloat = FrameConfig.dimensions.height * 0.92
     private let bottomMarginRatio: CGFloat = 0.02
+    /// Widest the subject may render, as a fraction of canvas width.
+    /// Wide poses (crouch, sprawl) scaled purely by height overflow the
+    /// canvas horizontally and the final crop slices them off with a
+    /// hard straight edge. Standing outfits are far taller than wide,
+    /// so this cap never binds for them.
+    private let maxSubjectWidthRatio: CGFloat = 0.96
     private let webPCompressionQuality: Float = 82
     private let previewCompressionQuality: Float = 70
     private let previewWidth: CGFloat = 180
@@ -108,8 +114,15 @@ actor VideoFrameSequenceExporter {
 
         let targetSize = FrameConfig.dimensions
 
-        // Scale so the subject height matches existing outfits (~92% of frame).
-        let scale = targetSubjectHeight / max(sizingBounds.height, 1)
+        // Scale so the subject height matches existing outfits (~92% of
+        // frame) UNLESS the pose is wide: then width becomes the binding
+        // constraint so the subject can never overflow the canvas and get
+        // clipped by the final crop. min() keeps standing outfits exactly
+        // as before (their width scale is far larger than their height
+        // scale) and only shrinks genuinely wide poses until they fit.
+        let heightScale = targetSubjectHeight / max(sizingBounds.height, 1)
+        let widthScale = (targetSize.width * maxSubjectWidthRatio) / max(sizingBounds.width, 1)
+        let scale = min(heightScale, widthScale)
 
         // Horizontally center the subject. X axis is the same in both
         // CGImage and CIImage coordinate systems.
