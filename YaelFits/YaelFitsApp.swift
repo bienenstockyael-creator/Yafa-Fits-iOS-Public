@@ -230,6 +230,22 @@ struct YaelFitsApp: App {
             .onAppear {
                 // App-wide tap-outside-to-dismiss-keyboard (every window/sheet).
                 GlobalKeyboardDismiss.shared.start()
+                // Paint the bare window in the app's page color. A
+                // fullScreenCover presented from inside a sheet unloads
+                // the sheet's view behind it, exposing the raw UIWindow
+                // during the cover's dismissal — which is BLACK by
+                // default (the "black flash" when closing a profile
+                // opened from Find Your People / follow lists). App-
+                // colored, the same exposure reads as part of the
+                // slide animation.
+                DispatchQueue.main.async {
+                    for scene in UIApplication.shared.connectedScenes {
+                        guard let windowScene = scene as? UIWindowScene else { continue }
+                        for window in windowScene.windows {
+                            window.backgroundColor = UIColor(AppPalette.pageBackground)
+                        }
+                    }
+                }
             }
             .task(id: authManager.userId) {
                 await PushNotificationCoordinator.shared.setUserId(authManager.userId)

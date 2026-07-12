@@ -49,6 +49,10 @@ struct AutoDetectProductsView: View {
 
     @State private var slots: [GarmentSlot] = []
     @State private var saveError: String?
+    /// Slots whose upload+persist is in flight — guards the accept
+    /// auto-save and the sheet's global Save from double-saving the
+    /// same slot.
+    @State private var savingSlotIDs: Set<UUID> = []
     @State private var isSaving = false
     @State private var subjectExtents: SubjectExtents?
     /// "Already in your closet?" matches for the slot currently being
@@ -724,6 +728,9 @@ struct AutoDetectProductsView: View {
                 slots[i].state = .readyForReview(thumbnail)
             }
         } catch {
+            #if DEBUG
+            print("[ProductThumbnail] generation failed: \(error.localizedDescription)")
+            #endif
             await MainActor.run {
                 guard let i = slots.firstIndex(where: { $0.id == slotID }) else { return }
                 slots[i].state = .failed(error.localizedDescription)
@@ -749,6 +756,17 @@ struct AutoDetectProductsView: View {
         guard case let .readyForReview(thumb) = slots[i].state else { return }
         slots[i].state = .accepted(thumb)
         UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+        // Accepting IS saving. The two-step flow (checkmark to accept,
+        // then the sheet's Save to persist) lost tags constantly —
+        // users accepted a thumbnail, dismissed the sheet, and the tag
+        // silently evaporated. Let the "added" card linger a beat
+        // (same rhythm as reusing a closet item), then upload +
+        // persist + remove. The global Save still covers anything
+        // still mid-review at dismiss time.
+        Task {
+            try? await Task.sleep(nanoseconds: 450_000_000)
+            await saveOne(slotID)
+        }
     }
 
     private func dismissSlot(_ slotID: UUID) {
@@ -791,8 +809,16 @@ struct AutoDetectProductsView: View {
 
     /// Uploads the thumbnail for a single accepted slot, reports it to
     /// the parent, and removes the slot from the canvas. Sheet stays
-    /// up. Wired to each card's corner checkmark.
+    /// up. Fired automatically on accept, and by the accepted card's
+    /// corner checkmark (retry path after a failed upload).
     private func saveOne(_ slotID: UUID) async {
+        let alreadySaving = await MainActor.run { () -> Bool in
+            if savingSlotIDs.contains(slotID) { return true }
+            savingSlotIDs.insert(slotID)
+            return false
+        }
+        guard !alreadySaving else { return }
+        defer { Task { @MainActor in savingSlotIDs.remove(slotID) } }
         guard let snapshot = await MainActor.run(body: { slots.first(where: { $0.id == slotID }) }) else { return }
         guard case let .accepted(thumb) = snapshot.state else { return }
         do {
@@ -818,6 +844,7 @@ struct AutoDetectProductsView: View {
 
         let acceptedIDs = await MainActor.run {
             slots.compactMap { slot -> UUID? in
+                guard !savingSlotIDs.contains(slot.id) else { return nil }
                 if case .accepted = slot.state { return slot.id }
                 return nil
             }
@@ -1025,7 +1052,7 @@ private struct SlotWidgetView: View {
         case .generating: return 200
         case .accepted: return 192
         case .readyForReview: return 220
-        case .failed: return 216
+        case .failed: return 244
         }
     }
 
@@ -1241,15 +1268,27 @@ private struct SlotWidgetView: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: 32)
         case .failed:
-            Button(action: onRetry) {
-                Text("Try again")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(AppPalette.textPrimary)
+            VStack(spacing: 8) {
+                // Friendly one-liner only — the technical reason
+                // (upstream status + body) goes to the debug console
+                // in `runGeneration`, not in front of users.
+                Text("Something hiccuped. Give it another try.")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(AppPalette.textMuted)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 40)
-                    .appCapsule()
+
+                Button(action: onRetry) {
+                    Text("Try again")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AppPalette.textPrimary)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 40)
+                        .appCapsule()
+                }
+                .buttonStyle(SolidPressButtonStyle())
             }
-            .buttonStyle(SolidPressButtonStyle())
         }
     }
 }

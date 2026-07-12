@@ -53,6 +53,15 @@ actor FrameLoader {
     static let shared = FrameLoader()
 
     private let cache = NSCache<NSString, UIImage>()
+    /// Dedicated cache for COVER frames (index 0 / previews) — the
+    /// images every grid and calendar cell paints on mount. They used
+    /// to share `cache` with full-sequence frames, and ONE scrubbed 3D
+    /// outfit (242 decoded bitmaps ≈ 170MB) blows past both cache
+    /// limits and evicts every cover in the app — after which any
+    /// month-crossing calendar scroll queues dozens of serialized
+    /// disk decodes and whole months render blank for seconds.
+    /// Sequence loads never touch this cache, so covers stay hot.
+    private let coverCache = NSCache<NSString, UIImage>()
     private var pendingTasks: [String: Task<UIImage?, Never>] = [:]
     private var pendingSequenceTasks: [String: Task<Bool, Never>] = [:]
     private var fullyLoadedSequences: Set<String> = []
@@ -61,6 +70,10 @@ actor FrameLoader {
     private init() {
         cache.countLimit = AppConfig.cacheLimitCount
         cache.totalCostLimit = AppConfig.cacheLimitBytes
+        // ~400 covers at grid resolution comfortably covers a year of
+        // calendar cells plus the archive; cost cap keeps it honest.
+        coverCache.countLimit = 400
+        coverCache.totalCostLimit = 80 * 1024 * 1024
 
         let config = URLSessionConfiguration.default
         // URLCache provides a secondary HTTP-level disk cache layer
@@ -76,7 +89,11 @@ actor FrameLoader {
     func frame(for outfit: Outfit, index: Int) async -> UIImage? {
         let cacheKey = outfit.uniqueFrameKey(index: index) as NSString
 
+        if index == 0, let cover = coverCache.object(forKey: cacheKey) {
+            return cover
+        }
         if let cached = cache.object(forKey: cacheKey) {
+            if index == 0 { coverCache.setObject(cached, forKey: cacheKey) }
             return cached
         }
         if let pending = pendingTasks[cacheKey as String] { return await pending.value }
@@ -85,15 +102,30 @@ actor FrameLoader {
             // Local storage — user-generated outfits saved to device Documents
             if index == 0,
                let preview = LocalOutfitStore.shared.previewImage(for: outfit) {
-                cache.setObject(preview, forKey: cacheKey)
+                coverCache.setObject(preview, forKey: cacheKey)
                 return preview
             }
 
             let localURL = LocalOutfitStore.shared.frameURL(for: outfit, index: index)
-            if FileManager.default.fileExists(atPath: localURL.path),
-               let data = try? Data(contentsOf: localURL),
-               let image = UIImage(data: data) {
-                cache.setObject(image, forKey: cacheKey, cost: data.count)
+            // Disk read + decode happen OFF the actor: synchronous IO
+            // here blocks the actor's executor, and the launch-time
+            // full-sequence preloads (9 outfits x 242 frames, all
+            // disk-resident) starved every cover load for ~45s after
+            // launch — whole calendar months rendered blank while
+            // scrolling. Detached, the actor suspends and covers
+            // interleave with sequence work.
+            let localImage: (UIImage, Int)? = await Task.detached(priority: .utility) {
+                guard FileManager.default.fileExists(atPath: localURL.path),
+                      let data = try? Data(contentsOf: localURL),
+                      let image = UIImage(data: data) else { return nil }
+                return (image, data.count)
+            }.value
+            if let (image, cost) = localImage {
+                if index == 0 {
+                    coverCache.setObject(image, forKey: cacheKey, cost: cost)
+                } else {
+                    cache.setObject(image, forKey: cacheKey, cost: cost)
+                }
                 return image
             }
 
@@ -105,15 +137,22 @@ actor FrameLoader {
                     if let url = Bundle.main.url(forResource: name, withExtension: ext),
                        let data = try? Data(contentsOf: url),
                        let image = UIImage(data: data) {
-                        cache.setObject(image, forKey: cacheKey, cost: data.count)
+                        coverCache.setObject(image, forKey: cacheKey, cost: data.count)
                         return image
                     }
                 }
             }
 
             // Disk frame cache — frames saved from previous CDN downloads
-            if let diskImage = DiskFrameCache.shared.image(for: outfit, index: index) {
-                cache.setObject(diskImage, forKey: cacheKey)
+            let diskImage = await Task.detached(priority: .utility) {
+                DiskFrameCache.shared.image(for: outfit, index: index)
+            }.value
+            if let diskImage {
+                if index == 0 {
+                    coverCache.setObject(diskImage, forKey: cacheKey)
+                } else {
+                    cache.setObject(diskImage, forKey: cacheKey)
+                }
                 return diskImage
             }
 
@@ -122,12 +161,16 @@ actor FrameLoader {
                 return nil
             }
             let remoteURL = outfit.frameURL(index: index, baseURL: remoteBaseURL)
-            guard let (data, _) = try? await session.data(from: remoteURL),
-                  let image = UIImage(data: data) else {
+            guard let (data, _) = try? await session.data(from: remoteURL) else { return nil }
+            guard let image = await Task.detached(priority: .utility, operation: { UIImage(data: data) }).value else {
                 return nil
             }
 
-            cache.setObject(image, forKey: cacheKey, cost: data.count)
+            if index == 0 {
+                coverCache.setObject(image, forKey: cacheKey, cost: data.count)
+            } else {
+                cache.setObject(image, forKey: cacheKey, cost: data.count)
+            }
             DiskFrameCache.shared.save(data, for: outfit, index: index)
             return image
         }
@@ -190,6 +233,7 @@ actor FrameLoader {
         for index in 0..<outfit.frameCount {
             let key = outfit.uniqueFrameKey(index: index) as NSString
             cache.removeObject(forKey: key)
+            if index == 0 { coverCache.removeObject(forKey: key) }
             pendingTasks[key as String]?.cancel()
             pendingTasks.removeValue(forKey: key as String)
         }

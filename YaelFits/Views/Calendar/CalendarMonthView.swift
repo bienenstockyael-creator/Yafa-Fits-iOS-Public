@@ -254,7 +254,26 @@ struct CalendarMonthView: View {
                     calendarDay(day)
                 }
             }
+            // EXACT height, declared up front. A LazyVGrid whose cells
+            // aren't mounted yet reports an ESTIMATED height; the real
+            // height replaces the estimate as the user scrolls into the
+            // month, shifting all content under the finger — the
+            // "calendar jumps to another month mid-scroll" bug (the
+            // burst of freshly-mounted cells loading covers is what
+            // read as "all the outfits disappearing"). Every month's
+            // height is fully deterministic, so pin it and the
+            // estimate is never wrong.
+            .frame(height: monthGridHeight(dayCount: section.days.count), alignment: .top)
         }
+    }
+
+    /// Deterministic LazyVGrid height for a month: rows of fixed-height
+    /// day cells (18pt date row + 10pt spacing + thumbnail) plus the
+    /// inter-row spacing. Must mirror `calendarDay`'s layout exactly.
+    private func monthGridHeight(dayCount: Int) -> CGFloat {
+        let rows = CGFloat((dayCount + columnCount - 1) / columnCount)
+        let cellHeight = 18 + 10 + dayThumbHeight
+        return rows * cellHeight + max(0, rows - 1) * rowSpacing
     }
 
     private func calendarDay(_ day: CalendarDay) -> some View {

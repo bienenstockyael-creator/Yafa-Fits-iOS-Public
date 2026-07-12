@@ -32,6 +32,15 @@ struct DiscoverView: View {
             .fullScreenCover(item: $selectedProfile) { profile in
                 UserProfileView(userId: profile.id, onDismiss: { selectedProfile = nil })
                     .environment(store)
+                    // Clear container so the rounded card slides over
+                    // the presenting screen, not a black void — the
+                    // EXACT configuration the public feed's profile
+                    // cover uses (its comment names this very bug).
+                    // This was the one modifier missing here: the
+                    // default fullScreenCover container is opaque
+                    // black, and with .clear UIKit also keeps the
+                    // underlying sheet rendered during transitions.
+                    .presentationBackground(.clear)
             }
         }
     }

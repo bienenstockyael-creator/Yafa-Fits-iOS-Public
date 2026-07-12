@@ -178,15 +178,24 @@ struct PublicFeedListView: View {
         }
         .onChange(of: store.currentView) { _, newView in
             // Re-arm the per-visit evaluation guard so the next
-            // `.onAppear` re-checks `followingIds.isEmpty` for a
-            // first-load scenario. We intentionally do NOT reset
-            // `everShownDiscovery` — once the user has landed on
-            // the discovery surface in this app session, it stays
-            // their feed for the whole session. No auto-transition
-            // to the friends feed after they follow someone, even
-            // across tab cycles. Clears only on app restart.
+            // `.onAppear` re-checks `followingIds.isEmpty`. The
+            // discovery surface stays pinned only WHILE the user is
+            // on the tab (mid-session follows never yank the screen
+            // out from under them) — but leaving the tab with
+            // follows re-arms everything, so coming back lands on
+            // the real friends feed. Kick a refresh so their new
+            // follows' posts are already there when they return.
             if newView != .feed {
                 hasEvaluatedEntry = false
+                // Only when discovery WAS showing this visit — that is
+                // the one case where the next feed visit needs fresh
+                // content (the new follows' posts). Refreshing on every
+                // tab-leave would be a wasted network call for every
+                // user with follows.
+                if everShownDiscovery && !store.followingIds.isEmpty {
+                    everShownDiscovery = false
+                    Task { await store.refreshFeed() }
+                }
             }
         }
         .sheet(isPresented: $showDiscover) {

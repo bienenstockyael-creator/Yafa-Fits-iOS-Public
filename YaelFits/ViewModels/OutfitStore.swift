@@ -481,7 +481,12 @@ class OutfitStore {
                 guard self.userId == userId else { return }
                 // First frames first so cells aren't blank, then full sequences.
                 await FrameLoader.shared.preloadFirstFrames(outfits: Array(sorted.prefix(12)))
-                await FrameLoader.shared.preloadFullSequences(for: Array(sorted.prefix(9)))
+                // 3, not 9: nine parallel 242-frame preloads saturate
+                // the decode pool for the first minute after launch and
+                // compete with grid/calendar cover loads while the user
+                // is already scrolling. Three warms the top of the
+                // archive; the rest lazy-load on first interaction.
+                await FrameLoader.shared.preloadFullSequences(for: Array(sorted.prefix(3)))
             }
         }
 

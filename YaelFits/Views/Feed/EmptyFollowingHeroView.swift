@@ -673,6 +673,10 @@ private struct AvatarBubble: View {
                     shadowRadius: 12,
                     shadowY: 6
                 )
+                // Hit shape = the visible circle. The default is the
+                // label's square frame, whose transparent corners can
+                // overlap a neighbouring bubble's "+" badge.
+                .contentShape(Circle())
             }
             .buttonStyle(SolidPressButtonStyle())
 
@@ -691,8 +695,15 @@ private struct AvatarBubble: View {
                 avatarRadius: diameter / 2
             )
             .drawingGroup()
-            .onTapGesture { onAvatarTap() }
-            .allowsHitTesting(true)
+            // NO hit-testing: a Canvas's tap area is its full RECT —
+            // this one is (pillOuterRadius+12)*2 ≈ 176pt square, an
+            // invisible zone extending ~38pt past the avatar on every
+            // side. Wired to onAvatarTap, a LATER bubble's pill rect
+            // silently swallowed taps on an earlier bubble's "+" badge
+            // (bottom-left bubble's + sat inside bottom-center's rect,
+            // opening the wrong profile every time). The avatar circle
+            // is the profile tap target; the pill is decoration.
+            .allowsHitTesting(false)
 
             Button(action: onFollowTap) {
                 Image(systemName: "plus")
@@ -700,6 +711,11 @@ private struct AvatarBubble: View {
                     .foregroundStyle(AppPalette.iconActive)
                     .frame(width: 28, height: 28)
                     .appCircle(shadowRadius: 4, shadowY: 2)
+                    // 44pt hit circle around the 28pt visual — Apple's
+                    // minimum target size. The follow affordance must
+                    // be the EASIEST thing to hit on the bubble.
+                    .frame(width: 44, height: 44)
+                    .contentShape(Circle())
             }
             .buttonStyle(SolidPressButtonStyle())
             // Pull the badge inward so it overlaps the avatar's
