@@ -57,6 +57,9 @@ struct ProfileShareSheet: View {
     @State private var cardDragMode: CardDragMode? = nil
     /// flipAngle at the moment the flip drag began.
     @State private var flipDragBase: Double = 0
+    /// Vertical finger-follow tilt (degrees, x-axis) while dragging
+    /// the card — the web card's pointer-tilt, translated to touch.
+    @State private var cardTiltX: Double = 0
     /// Fractional dot position while the user is scrubbing the
     /// dot picker. nil at rest.
     @State private var dotScrubPosition: CGFloat? = nil
@@ -391,12 +394,17 @@ struct ProfileShareSheet: View {
                 .foregroundStyle(AppPalette.textSecondary)
                 .padding(.horizontal, 11 * scale)
                 .padding(.vertical, 7 * scale)
-                // SOLID fill (no UIVisualEffectView and no SwiftUI material) —
-                // both sample the backdrop and render transparent for a frame
-                // during the card's 3D entry, causing the flash. FULLY opaque
-                // white (not the 48% cardFill): on the busy chrome card the
-                // translucent fill read as faded and hurt legibility.
-                .background(Capsule().fill(Color.white))
+                // Frosted glass, second attempt. The old flash (materials
+                // sample the backdrop and render transparent for a frame
+                // during the card's 3D entry) is masked by the white wash
+                // OVER the material: on the bad frame you see a soft white
+                // capsule instead of raw card — imperceptible — and the
+                // wash doubles as a legibility floor on the busy chrome art.
+                .background {
+                    Capsule()
+                        .fill(.ultraThinMaterial)
+                        .overlay(Capsule().fill(Color.white.opacity(0.38)))
+                }
                 .overlay(Capsule().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
                 // Light-blue glow under the pill — gentle bloom.
                 .shadow(
@@ -574,6 +582,41 @@ struct ProfileShareSheet: View {
         }
     }
 
+    /// Light sweep that glances across the card while it turns — the
+    /// metal-catches-the-light cue. Invisible at rest on either face
+    /// (strength is sin of the turn), peaks edge-on, and shifts with
+    /// the finger tilt so it reads as a real reflection.
+    private struct FlipSheen: View, Animatable {
+        var angle: Double
+        var tilt: Double
+        let width: CGFloat
+        var animatableData: AnimatablePair<Double, Double> {
+            get { AnimatablePair(angle, tilt) }
+            set { angle = newValue.first; tilt = newValue.second }
+        }
+        var body: some View {
+            var n = angle.truncatingRemainder(dividingBy: 360)
+            if n > 180 { n -= 360 }
+            if n < -180 { n += 360 }
+            let progress = n / 180
+            let strength = sin(min(abs(n), 180) * .pi / 180)
+            return LinearGradient(
+                stops: [
+                    .init(color: .clear, location: 0),
+                    .init(color: .white.opacity(0.55), location: 0.5),
+                    .init(color: .clear, location: 1),
+                ],
+                startPoint: .leading, endPoint: .trailing
+            )
+            .frame(width: width * 0.6)
+            .rotationEffect(.degrees(18))
+            .offset(x: CGFloat(progress) * width * 0.9 + CGFloat(tilt) * 4)
+            .opacity(strength * 0.8)
+            .blendMode(.plusLighter)
+            .allowsHitTesting(false)
+        }
+    }
+
     /// The card's extruded side: a darker slab behind the face,
     /// offset by the flip angle so the edge swings around as the
     /// card turns — and stays a hairline at rest so the card reads
@@ -607,9 +650,13 @@ struct ProfileShareSheet: View {
                 .foregroundStyle(AppPalette.textSecondary)
                 .padding(.horizontal, 11 * scale)
                 .padding(.vertical, 7 * scale)
-                // Fully opaque like the username pill — the 48% cardFill
-                // reads as faded over the chrome card.
-                .background(Capsule().fill(Color.white))
+                // Same frosted-glass recipe as the username pill (material
+                // + white wash; see the note there about the entry flash).
+                .background {
+                    Capsule()
+                        .fill(.ultraThinMaterial)
+                        .overlay(Capsule().fill(Color.white.opacity(0.38)))
+                }
                 .overlay(Capsule().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
                 .shadow(
                     color: Color(red: 0.58, green: 0.81, blue: 1.0).opacity(0.55),
@@ -868,6 +915,9 @@ struct ProfileShareSheet: View {
                     // the bare card). Rides both faces.
                     Color.clear
                         .holoOverlay(active: true, cornerRadius: 24 * scale, edgeBleed: 2)
+
+                    // Metallic shine while the card turns.
+                    FlipSheen(angle: flipAngle, tilt: cardTiltX, width: cardWidth)
                 }
                 .frame(width: cardWidth, height: cardHeight)
                 .compositingGroup()
@@ -901,6 +951,10 @@ struct ProfileShareSheet: View {
                     }
                 }
                 .modifier(CardDepth(angle: flipAngle, cornerRadius: 24 * scale))
+                // Finger-follow tilt (x) under the flip (y) — the card
+                // leans toward the finger like the web card's pointer
+                // tilt, then springs flat on release.
+                .rotation3DEffect(.degrees(cardTiltX), axis: (x: 1, y: 0, z: 0), perspective: 0.35)
                 .rotation3DEffect(.degrees(flipAngle), axis: (x: 0, y: 1, z: 0), perspective: 0.35)
                 .shadow(color: .black.opacity(0.14), radius: 16, y: 10)
                 .allowsHitTesting(false)
@@ -1003,9 +1057,11 @@ struct ProfileShareSheet: View {
                         case .flip:
                             // The card follows the finger 1:1 — a full
                             // card-width of travel is a full half-turn,
-                            // in either direction.
+                            // in either direction. Vertical travel leans
+                            // the card toward the finger (clamped ±9°).
                             let delta = Double(value.translation.width / cardWidth) * 180
                             flipAngle = min(flipDragBase + 180, max(flipDragBase - 180, flipDragBase + delta))
+                            cardTiltX = min(9, max(-9, Double(-value.translation.height / cardHeight) * 14))
                         case nil:
                             break
                         }
@@ -1043,6 +1099,7 @@ struct ProfileShareSheet: View {
                             UIImpactFeedbackGenerator(style: .light).impactOccurred()
                             withAnimation(.spring(response: 0.55, dampingFraction: 0.68)) {
                                 flipAngle = target
+                                cardTiltX = 0
                             }
                         case nil:
                             break
