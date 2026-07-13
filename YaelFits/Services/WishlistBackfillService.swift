@@ -299,7 +299,15 @@ final class WishlistBackfillService: NSObject {
       }
       if (best) {
         best.setAttribute('data-yafa-hero', '1');
-        try { best.scrollIntoView({ block: 'center' }); } catch (e) {}
+        // Scroll the hero's TOP to a fixed 140px from the viewport
+        // top — below any mobile site header. Centering tall product
+        // images pushed their top edge underneath fixed logo bars,
+        // which then appeared inside the capture (FARFETCH's bar and
+        // breadcrumbs shipped inside saved item photos).
+        try {
+          var hr = best.getBoundingClientRect();
+          window.scrollTo(0, Math.max(0, hr.top + window.pageYOffset - 140));
+        } catch (e) {}
       }
       return JSON.stringify({
         name: typeof name === 'string' ? name : null,
