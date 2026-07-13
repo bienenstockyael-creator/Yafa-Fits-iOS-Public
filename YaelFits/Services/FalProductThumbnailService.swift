@@ -33,10 +33,42 @@ actor FalProductThumbnailService {
         guard let jpegData = outfit.jpegData(compressionQuality: 0.9) else {
             throw UploadPipelineError.requestFailed("Could not encode outfit image.")
         }
-        let apiKey = try loadFalAPIKey()
-
         let item = label.isEmpty ? "garment" : label
-        let prompt = [
+        let prompt = Self.wornGarmentPrompt(item: item)
+        return try await generate(prompt: prompt, jpegData: jpegData, onUpdate: onUpdate)
+    }
+
+    /// Same nano → Bria → tight-crop pipeline, but for a PRODUCT photo
+    /// (retailer page snapshot) rather than a garment worn in an outfit.
+    /// Used by the wishlist backfill so bot-walled shops' items end up
+    /// visually identical to every other product thumbnail.
+    func generateCatalogThumbnail(
+        fromProduct product: UIImage,
+        label: String,
+        onUpdate: @escaping @Sendable (FalProductThumbnailProgress) async -> Void = { _ in }
+    ) async throws -> UIImage {
+        guard let jpegData = product.jpegData(compressionQuality: 0.9) else {
+            throw UploadPipelineError.requestFailed("Could not encode product image.")
+        }
+        let item = label.isEmpty ? "item" : label
+        let prompt = Self.catalogProductPrompt(item: item)
+        return try await generate(prompt: prompt, jpegData: jpegData, onUpdate: onUpdate)
+    }
+
+    private static func catalogProductPrompt(item: String) -> String {
+        [
+            "Generate a professional flat-lay e-commerce product photograph of the \(item) shown in the input image.",
+            "Isolate just that single item — the \(item) — as a clean catalog product shot.",
+            "Remove any model, body, skin, hair, hands, background, props, text, logos, watermarks, and any other item that is not the \(item).",
+            "Lay the item flat or place it on an invisible mannequin. Studio lighting, clean white background.",
+            "Reproduce the exact \(item) from the input — same colour, fabric, cut, length, silhouette, and visible details.",
+            "Do not add features that are not clearly visible on the \(item) in the input image.",
+            "Orient the item right-side-up: the top at the top, the bottom at the bottom. Never output a rotated, upside-down, or sideways image.",
+        ].joined(separator: " ")
+    }
+
+    private static func wornGarmentPrompt(item: String) -> String {
+        [
             "Generate a professional flat-lay product photograph of just the \(item) worn by the subject in the input image.",
             "Isolate that single garment — the \(item) — and show it as a clean e-commerce catalog product shot.",
             "Remove the model, body, skin, hair, hands, phone, mirror, background, and every other garment that is not the \(item).",
@@ -47,7 +79,14 @@ actor FalProductThumbnailService {
             "Do not change the garment's colour, length, sleeve length, neckline, or silhouette.",
             "Orient the garment right-side-up: the top of the garment (collar, neckline, opening, or top edge) at the top of the image; the bottom (hem, cuffs, or sole) at the bottom. Never output a rotated, upside-down, or sideways image.",
         ].joined(separator: " ")
+    }
 
+    private func generate(
+        prompt: String,
+        jpegData: Data,
+        onUpdate: @escaping @Sendable (FalProductThumbnailProgress) async -> Void
+    ) async throws -> UIImage {
+        let apiKey = try loadFalAPIKey()
         await onUpdate(FalProductThumbnailProgress(title: "Generating thumbnail", detail: "Asking nano-banana for a clean product shot."))
 
         let request = NanoRequest(

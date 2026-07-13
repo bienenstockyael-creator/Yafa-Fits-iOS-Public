@@ -123,6 +123,7 @@ final class WishlistBackfillService: NSObject {
         #endif
 
         var uploadedImageURL: String?
+        var capturedImage: UIImage?
         if meta.hasImage {
             // Pass 2: after the scroll settles, read the tagged
             // element's on-screen rect and snapshot exactly that.
@@ -153,6 +154,7 @@ final class WishlistBackfillService: NSObject {
                 // flagged and retried next session — only a page with
                 // genuinely no hero image gets marked failed below.
                 uploadedImageURL = try await ProductThumbnailUploadService.upload(image, userId: userId)
+                capturedImage = image
                 #if DEBUG
                 print("[Backfill] cropped=\(Int(image.size.width))x\(Int(image.size.height)) uploaded=\(uploadedImageURL ?? "nil")")
                 #endif
@@ -166,14 +168,41 @@ final class WishlistBackfillService: NSObject {
         let pageName = meta.name?
             .components(separatedBy: " | ").first?
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanName = (pageName?.isEmpty == false && pageName!.count > 2)
+            ? String(pageName!.prefix(120)) : nil
+        // Raw snapshot lands first with 'generating' so the closet
+        // shows the same sparkles as every other polishing item; the
+        // catalog cutout swaps in below and the closet's existing
+        // polish-polling animates the change.
         try await WardrobeService.updateItem(
             id: stub.id,
-            name: (pageName?.isEmpty == false && pageName!.count > 2) ? String(pageName!.prefix(120)) : nil,
+            name: cleanName,
             brand: meta.brand.map { String($0.prefix(60)) },
             price: meta.price.map { String($0.prefix(40)) },
             imageURL: uploadedImageURL,
-            thumbStatus: uploadedImageURL != nil ? "ready" : "client_scrape_failed"
+            thumbStatus: uploadedImageURL != nil ? "generating" : "client_scrape_failed"
         )
+
+        guard let snapshotImage = capturedImage else { return }
+        // Polish: same nano -> Bria -> tight-crop pipeline as tagged
+        // products, so backfilled items are visually identical to
+        // every other thumbnail. Raw snapshot stays if polish fails.
+        do {
+            let polished = try await FalProductThumbnailService.shared.generateCatalogThumbnail(
+                fromProduct: snapshotImage,
+                label: cleanName ?? stub.name
+            )
+            let polishedURL = try await ProductThumbnailUploadService.upload(polished, userId: userId)
+            try await WardrobeService.updateItem(id: stub.id, imageURL: polishedURL, thumbStatus: "ready")
+            #if DEBUG
+            print("[Backfill] polished=\(polishedURL)")
+            #endif
+        } catch {
+            try? await WardrobeService.updateItem(id: stub.id, thumbStatus: "ready")
+            #if DEBUG
+            print("[Backfill] polish failed, keeping raw: \(error.localizedDescription)")
+            #endif
+        }
     }
 
     /// Crop a full-viewport snapshot to a CSS-point rect. The
