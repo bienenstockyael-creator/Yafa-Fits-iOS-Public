@@ -140,6 +140,10 @@ final class WishlistBackfillService: NSObject {
                 // the crop is done deterministically in Swift from
                 // the same numbers.
                 let full = try await webView.takeSnapshot(configuration: nil)
+                #if DEBUG
+                let sv = webView.scrollView
+                print("[Backfill] snap=\(Int(full.size.width))x\(Int(full.size.height))@\(full.scale) bounds=\(Int(webView.bounds.width))x\(Int(webView.bounds.height)) offset=\(Int(sv.contentOffset.y)) inset=\(Int(sv.adjustedContentInset.top))")
+                #endif
                 let image = Self.crop(
                     full,
                     to: CGRect(x: rect.x, y: rect.y, width: rect.w, height: rect.h),
@@ -205,6 +209,13 @@ final class WishlistBackfillService: NSObject {
         )
         view.navigationDelegate = self
         view.isUserInteractionEnabled = false
+        // Kill safe-area content-inset adjustment: with it on, the
+        // page renders shifted down inside the view, so page (CSS)
+        // coordinates and view coordinates disagree by the inset —
+        // our crops landed higher than requested and captured the
+        // site header despite correct page-space rects.
+        view.scrollView.contentInsetAdjustmentBehavior = .never
+        view.scrollView.contentOffset = .zero
         // FULL alpha, inserted at the very back of the window: the
         // app's opaque root covers it completely, so it's invisible —
         // but unlike alpha = 0 (which iOS may skip compositing
