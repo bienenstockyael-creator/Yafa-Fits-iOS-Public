@@ -726,18 +726,23 @@ struct ProfileShareSheet: View {
                     .rotation3DEffect(.degrees(roll * 4), axis: (x: 0, y: 1, z: 0), perspective: 0.35)
                     .rotation3DEffect(.degrees(pitch * 4), axis: (x: 1, y: 0, z: 0), perspective: 0.35)
             }
-            .onAppear {
-                HoloMotionTracker.shared.start()
-                if HoloMotionTracker.shared.hasSample, baseline == nil {
-                    baseline = (HoloMotionTracker.shared.rollRadians,
-                                HoloMotionTracker.shared.pitchRadians)
-                }
-            }
+            .onAppear { HoloMotionTracker.shared.start() }
             .onDisappear { HoloMotionTracker.shared.stop() }
-            .onChange(of: HoloMotionTracker.shared.hasSample) { _, has in
-                guard has, baseline == nil else { return }
-                baseline = (HoloMotionTracker.shared.rollRadians,
-                            HoloMotionTracker.shared.pitchRadians)
+            .task {
+                // Calibrate to the user's INITIAL hold angle — the lean
+                // is a delta from however they're actually holding the
+                // phone, never from flat. Polling (vs onChange) makes
+                // the calibration independent of observation timing:
+                // it lands on the first real sample no matter when the
+                // tracker warmed up.
+                while baseline == nil, !Task.isCancelled {
+                    if HoloMotionTracker.shared.hasSample {
+                        baseline = (HoloMotionTracker.shared.rollRadians,
+                                    HoloMotionTracker.shared.pitchRadians)
+                        break
+                    }
+                    try? await Task.sleep(nanoseconds: 50_000_000)
+                }
             }
         }
     }
@@ -760,7 +765,7 @@ struct ProfileShareSheet: View {
         }
         var body: some View {
             let sine = sin(angle * .pi / 180)
-            let w = abs(sine) * 7
+            let w = abs(sine) * 5
             // The side is the card's OWN rounded-rect shape, offset
             // sideways by the edge width: the visible crescent then
             // wraps the rounded corners exactly (a straight capsule
@@ -769,7 +774,7 @@ struct ProfileShareSheet: View {
             RoundedRectangle(cornerRadius: 24 * scale, style: .continuous)
                 .fill(
                     LinearGradient(
-                        colors: [Color(white: 0.72), Color(white: 0.56)],
+                        colors: [Color(white: 0.66), Color(white: 0.50)],
                         startPoint: sine > 0 ? .trailing : .leading,
                         endPoint: sine > 0 ? .leading : .trailing
                     )
