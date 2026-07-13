@@ -1359,7 +1359,11 @@ private struct ProductLightbox: View {
         VStack(spacing: 0) {
             // (The "Edit item" title lives in `pinnedControls`, centered
             // on the X/Save row like the app's other sheet headers.)
+            // Cap the hero's width as well as its height: with only a
+            // fixed height, wide products (sandals, glasses) render at
+            // full card width and dwarf tall/square ones.
             TrimmedRemoteImage(url: item.resolvedImageURL)
+                .frame(maxWidth: 250)
                 .frame(height: isFull ? 200 : 170)
                 .frame(maxWidth: .infinity)
                 .padding(.top, isFull ? insetTop + LayoutMetrics.screenPadding + 44 + LayoutMetrics.small : 32)
