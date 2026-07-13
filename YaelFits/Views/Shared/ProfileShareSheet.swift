@@ -825,10 +825,9 @@ struct ProfileShareSheet: View {
                 Text(code)
                     .font(.system(size: 36 * scale, weight: .semibold, design: .monospaced))
                     .tracking(2)
-                    // Same mono voice as the labels around it, in the
-                    // app's DARKEST text color — the hero should land,
-                    // not whisper in faint like its neighbors.
-                    .foregroundStyle(AppPalette.textPrimary)
+                    // One color for the whole face: the app's mono-label
+                    // grey. Size alone carries the hierarchy.
+                    .foregroundStyle(AppPalette.textFaint)
                     .padding(.top, 14 * scale)
                     .contentShape(Rectangle())
                     .onTapGesture {
