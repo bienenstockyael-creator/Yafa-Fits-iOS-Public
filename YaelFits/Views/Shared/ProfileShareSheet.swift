@@ -394,16 +394,29 @@ struct ProfileShareSheet: View {
                 .foregroundStyle(AppPalette.textSecondary)
                 .padding(.horizontal, 11 * scale)
                 .padding(.vertical, 7 * scale)
-                // Frosted glass, second attempt. The old flash (materials
-                // sample the backdrop and render transparent for a frame
-                // during the card's 3D entry) is masked by the white wash
-                // OVER the material: on the bad frame you see a soft white
-                // capsule instead of raw card — imperceptible — and the
-                // wash doubles as a legibility floor on the busy chrome art.
+                // Crafted glass, NOT a sampling material: the card's 3D
+                // flip flattens this layer offscreen, so ultraThinMaterial
+                // has no backdrop to read and renders solid white. A
+                // translucent gradient + top edge-light reads as glass
+                // (the card art still ghosts through the 45–65%% fill)
+                // and can't break under the rotation.
                 .background {
                     Capsule()
-                        .fill(.ultraThinMaterial)
-                        .overlay(Capsule().fill(Color.white.opacity(0.38)))
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.white.opacity(0.66), Color.white.opacity(0.42)],
+                                startPoint: .top, endPoint: .bottom
+                            )
+                        )
+                        .overlay(
+                            Capsule().strokeBorder(
+                                LinearGradient(
+                                    colors: [Color.white, Color.white.opacity(0.2)],
+                                    startPoint: .top, endPoint: .bottom
+                                ),
+                                lineWidth: 1
+                            )
+                        )
                 }
                 .overlay(Capsule().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
                 // Light-blue glow under the pill — gentle bloom.
@@ -599,20 +612,27 @@ struct ProfileShareSheet: View {
             if n > 180 { n -= 360 }
             if n < -180 { n += 360 }
             let progress = n / 180
-            let strength = sin(min(abs(n), 180) * .pi / 180)
+            // Squared so the glare only appears once the card is
+            // genuinely turning — a hint of motion shouldn't flash.
+            let strength = pow(sin(min(abs(n), 180) * .pi / 180), 2)
+            // On a near-white card, additive light just clips to white
+            // and reads fake. Gloss on a light surface is a NARROW
+            // bright core with faint darker flanks — the flanks are
+            // what make it read as a reflection.
             return LinearGradient(
                 stops: [
                     .init(color: .clear, location: 0),
-                    .init(color: .white.opacity(0.55), location: 0.5),
+                    .init(color: .black.opacity(0.07), location: 0.32),
+                    .init(color: .white.opacity(0.5), location: 0.5),
+                    .init(color: .black.opacity(0.07), location: 0.68),
                     .init(color: .clear, location: 1),
                 ],
                 startPoint: .leading, endPoint: .trailing
             )
-            .frame(width: width * 0.6)
-            .rotationEffect(.degrees(18))
-            .offset(x: CGFloat(progress) * width * 0.9 + CGFloat(tilt) * 4)
-            .opacity(strength * 0.8)
-            .blendMode(.plusLighter)
+            .frame(width: width * 0.3)
+            .rotationEffect(.degrees(16))
+            .offset(x: CGFloat(progress) * width * 0.95 + CGFloat(tilt) * 4)
+            .opacity(strength)
             .allowsHitTesting(false)
         }
     }
@@ -650,12 +670,29 @@ struct ProfileShareSheet: View {
                 .foregroundStyle(AppPalette.textSecondary)
                 .padding(.horizontal, 11 * scale)
                 .padding(.vertical, 7 * scale)
-                // Same frosted-glass recipe as the username pill (material
-                // + white wash; see the note there about the entry flash).
+                // Crafted glass, NOT a sampling material: the card's 3D
+                // flip flattens this layer offscreen, so ultraThinMaterial
+                // has no backdrop to read and renders solid white. A
+                // translucent gradient + top edge-light reads as glass
+                // (the card art still ghosts through the 45–65%% fill)
+                // and can't break under the rotation.
                 .background {
                     Capsule()
-                        .fill(.ultraThinMaterial)
-                        .overlay(Capsule().fill(Color.white.opacity(0.38)))
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.white.opacity(0.66), Color.white.opacity(0.42)],
+                                startPoint: .top, endPoint: .bottom
+                            )
+                        )
+                        .overlay(
+                            Capsule().strokeBorder(
+                                LinearGradient(
+                                    colors: [Color.white, Color.white.opacity(0.2)],
+                                    startPoint: .top, endPoint: .bottom
+                                ),
+                                lineWidth: 1
+                            )
+                        )
                 }
                 .overlay(Capsule().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
                 .shadow(
