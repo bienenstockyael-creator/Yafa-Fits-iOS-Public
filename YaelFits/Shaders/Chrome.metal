@@ -74,9 +74,21 @@ static float3 chromeEnv(float y, float x) {
     half a = color.a;
     if (a < 0.003h) return half4(0.0h, 0.0h, 0.0h, 0.0h);
 
-    // Un-premultiply, then decode the surface normal.
-    float3 enc = float3(color.rgb / a);
+    // Un-premultiply, then decode the surface normal. The max() guard
+    // matters: dividing by a near-zero alpha amplifies 8-bit
+    // quantization into garbage normals along the anti-aliased fringe.
+    float3 enc = float3(color.rgb) / max(float(a), 0.02);
     float3 N = normalize(enc * 2.0 - 1.0);
+
+    // Fringe stabilization. The glyph's anti-aliased border pixels
+    // (partial alpha) carry normals blended with the empty background
+    // — effectively random directions. Each such pixel reflects a
+    // random spot in the environment, which reads as a ROUGH, broken
+    // stroke whenever the dark horizon band sweeps under it. Pull
+    // low-alpha normals toward face-on so the fringe reflects the
+    // same region as the face; full-alpha bevel pixels are untouched.
+    float soften = smoothstep(0.10, 0.75, float(a));
+    N = normalize(mix(float3(0.0, 0.0, 1.0), N, soften));
 
     // Reflect the head-on view direction (0,0,1) about the normal.
     float ndv = N.z;
@@ -123,6 +135,12 @@ static float3 chromeEnv(float y, float x) {
     // High floor: the darkest any pixel may go is LIGHT steel — the
     // effect works entirely in the bright register, zero dark accents.
     env = max(env, float3(0.58));
+
+    // Fringe pixels take a CONSTANT light steel instead of the live
+    // reflection: the outline then anti-aliases exactly like a solid-
+    // color stroke — clean at any shimmer position — while the glyph
+    // interior keeps the full moving chrome.
+    env = mix(float3(0.86, 0.89, 0.94), env, soften);
     env = clamp(env, 0.0, 1.0);
 
     return half4(half3(env), a);
