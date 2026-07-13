@@ -779,10 +779,10 @@ struct ProfileShareSheet: View {
                         endPoint: sine > 0 ? .leading : .trailing
                     )
                 )
-                // 3pt resting lip — 1.5 was getting swallowed by the
-                // drop shadow, leaving the bottom edge intermittently
-                // invisible.
-                .offset(x: (sine > 0 ? -1 : 1) * w, y: 3)
+                // No resting lip — the side exists only while the card
+                // is actually turning; at rest the edge shape hides
+                // perfectly behind the face.
+                .offset(x: (sine > 0 ? -1 : 1) * w)
         }
     }
 

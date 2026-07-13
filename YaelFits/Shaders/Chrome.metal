@@ -39,7 +39,7 @@ static float3 chromeEnv(float y, float x) {
     // never sits brown.
     const float3 skyDeep     = float3(0.52, 0.66, 0.95); // top: light chrome blue
     const float3 skyPale     = float3(0.94, 0.98, 1.00); // hot band above horizon
-    const float3 horizonD    = float3(0.62, 0.66, 0.74); // thin LIGHT-steel line — a shade, not a shadow
+    const float3 horizonD    = float3(0.70, 0.73, 0.80); // thin LIGHT-steel line — a shade, not a shadow
     const float3 groundHot   = float3(1.00, 0.97, 0.89); // champagne-white below
     const float3 groundDeep  = float3(0.64, 0.67, 0.74); // bottom: cool steel
 
@@ -91,6 +91,13 @@ static float3 chromeEnv(float y, float x) {
     // same region as the face; full-alpha bevel pixels are untouched.
     float soften = smoothstep(0.10, 0.75, float(a));
     N = normalize(mix(float3(0.0, 0.0, 1.0), N, soften));
+
+    // Flatten the relief slightly: the baked outline has seam pixels
+    // (path-segment joints) whose normals are sharp outliers — they
+    // catch the dark horizon no matter how soft the environment is.
+    // Scaling N.xy narrows every ray's reach into the env, which
+    // pulls those outliers back toward their neighbors' reflection.
+    N = normalize(float3(N.x * 0.78, N.y * 0.78, N.z));
 
     // Reflect the head-on view direction (0,0,1) about the normal.
     float ndv = N.z;
