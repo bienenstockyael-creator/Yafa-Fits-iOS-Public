@@ -133,15 +133,24 @@ final class WishlistBackfillService: NSObject {
             print("[Backfill] hero rect=(\(rect.x), \(rect.y), \(rect.w), \(rect.h))")
             #endif
             if rect.w > 40, rect.h > 40 {
-                let config = WKSnapshotConfiguration()
-                config.rect = CGRect(x: rect.x, y: rect.y, width: rect.w, height: rect.h)
-                let image = try await webView.takeSnapshot(configuration: config)
+                // Full-viewport snapshot, cropped OURSELVES. Handing
+                // the rect to WKSnapshotConfiguration silently
+                // captured the whole viewport on-device (a y=105 crop
+                // came back containing the page's y=0 logo bar), so
+                // the crop is done deterministically in Swift from
+                // the same numbers.
+                let full = try await webView.takeSnapshot(configuration: nil)
+                let image = Self.crop(
+                    full,
+                    to: CGRect(x: rect.x, y: rect.y, width: rect.w, height: rect.h),
+                    viewportWidth: webView.bounds.width
+                ) ?? full
                 // A THROW here (snapshot or upload) leaves the stub
                 // flagged and retried next session — only a page with
                 // genuinely no hero image gets marked failed below.
                 uploadedImageURL = try await ProductThumbnailUploadService.upload(image, userId: userId)
                 #if DEBUG
-                print("[Backfill] uploaded=\(uploadedImageURL ?? "nil")")
+                print("[Backfill] cropped=\(Int(image.size.width))x\(Int(image.size.height)) uploaded=\(uploadedImageURL ?? "nil")")
                 #endif
             }
         }
@@ -161,6 +170,23 @@ final class WishlistBackfillService: NSObject {
             imageURL: uploadedImageURL,
             thumbStatus: uploadedImageURL != nil ? "ready" : "client_scrape_failed"
         )
+    }
+
+    /// Crop a full-viewport snapshot to a CSS-point rect. The
+    /// snapshot's pixel scale is derived from its width vs the web
+    /// view's point width, so the crop is exact on any screen scale.
+    private static func crop(_ image: UIImage, to rect: CGRect, viewportWidth: CGFloat) -> UIImage? {
+        guard let cg = image.cgImage, viewportWidth > 0 else { return nil }
+        let scale = CGFloat(cg.width) / viewportWidth
+        let pixelRect = CGRect(
+            x: rect.minX * scale,
+            y: rect.minY * scale,
+            width: rect.width * scale,
+            height: rect.height * scale
+        ).intersection(CGRect(x: 0, y: 0, width: CGFloat(cg.width), height: CGFloat(cg.height)))
+        guard pixelRect.width > 10, pixelRect.height > 10,
+              let cropped = cg.cropping(to: pixelRect) else { return nil }
+        return UIImage(cgImage: cropped, scale: image.scale, orientation: image.imageOrientation)
     }
 
     private func mark(_ id: UUID, status: String) async {
