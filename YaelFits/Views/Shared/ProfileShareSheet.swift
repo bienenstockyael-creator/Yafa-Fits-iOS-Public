@@ -709,12 +709,19 @@ struct ProfileShareSheet: View {
     /// edge genuinely swings around in perspective as the card turns.
     /// At rest the 1.5pt y-offset keeps a hairline lip.
     private func cardThickness(cardWidth: CGFloat, cardHeight: CGFloat, scale: CGFloat) -> some View {
+        // Dense slices (0.7pt apart in z) so the side reads as ONE
+        // solid surface — the earlier 2pt spacing separated into
+        // visible bands mid-flip. Shading darkens toward the back
+        // slice, which is the depth cue that sells it as a side and
+        // not a smear.
         ZStack {
-            ForEach([-8.0, -6.0, -4.0, -2.0], id: \.self) { (z: Double) in
+            ForEach(1...12, id: \.self) { (i: Int) in
+                let z = Double(i) * -0.7
+                let shade = 0.84 - Double(i) * 0.011
                 RoundedRectangle(cornerRadius: 24 * scale, style: .continuous)
-                    .fill(Color(white: 0.80))
+                    .fill(Color(white: shade))
                     .frame(width: cardWidth, height: cardHeight)
-                    .offset(y: 1.5)
+                    .offset(y: 1.2)
                     .rotation3DEffect(.degrees(cardTiltX), axis: (x: 1, y: 0, z: 0), anchorZ: z, perspective: 0.35)
                     .rotation3DEffect(.degrees(flipAngle), axis: (x: 0, y: 1, z: 0), anchorZ: z, perspective: 0.35)
             }
