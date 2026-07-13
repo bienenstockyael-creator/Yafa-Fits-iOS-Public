@@ -242,8 +242,8 @@ class ShareViewController: UIViewController {
             }
         }
 
-        // 2. Plain URL (the primary path now that JS preprocessing is
-        //    off) — server-side scrape fills the metadata.
+        // 2. Plain URL — server-side scrape fills the metadata, or
+        //    stubs the save for the in-app backfill on bot-walled shops.
         if let url = await extractURL() {
             return SharedProduct(url: unwrapGoogleRedirect(url), name: nil, image: nil, imageData: nil, price: nil, brand: nil)
         }
