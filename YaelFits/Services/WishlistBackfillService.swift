@@ -310,13 +310,31 @@ final class WishlistBackfillService: NSObject {
     })()
     """
 
-    /// On-screen rect of the tagged hero image, post-scroll.
+    /// On-screen rect of the tagged hero image, post-scroll — clamped
+    /// below any fixed header bar and to the viewport, so site chrome
+    /// (logo bars, breadcrumbs) doesn't end up inside the capture.
     private static let taggedRectJS = """
     (function () {
       var el = document.querySelector('[data-yafa-hero]');
       if (!el) return JSON.stringify({ x: 0, y: 0, w: 0, h: 0 });
       var r = el.getBoundingClientRect();
-      return JSON.stringify({ x: r.left, y: r.top, w: r.width, h: r.height });
+      var top = Math.max(r.top, 0), left = Math.max(r.left, 0);
+      var right = Math.min(r.right, window.innerWidth);
+      var bottom = Math.min(r.bottom, window.innerHeight);
+      // Push the top edge below fixed/sticky bars that overlap it.
+      var bars = document.querySelectorAll('header, nav, body > *');
+      for (var i = 0; i < bars.length; i++) {
+        var st = window.getComputedStyle(bars[i]);
+        if (st.position !== 'fixed' && st.position !== 'sticky') continue;
+        if (st.display === 'none') continue;
+        var b = bars[i].getBoundingClientRect();
+        // A top bar: full-ish width, short, overlapping our top edge.
+        if (b.width > window.innerWidth * 0.6 && b.height < window.innerHeight * 0.3 &&
+            b.top <= top && b.bottom > top) {
+          top = Math.max(top, b.bottom);
+        }
+      }
+      return JSON.stringify({ x: left, y: top, w: Math.max(0, right - left), h: Math.max(0, bottom - top) });
     })()
     """
 }
