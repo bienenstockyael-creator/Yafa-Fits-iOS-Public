@@ -805,23 +805,23 @@ struct ProfileShareSheet: View {
 
     @ViewBuilder
     private func inviteBackFace(cardWidth: CGFloat, cardHeight: CGFloat, scale: CGFloat) -> some View {
-        // The app's mono caps voice (the sheet-header font), EXACTLY
-        // two sizes: 40 for the code hero, 11 for everything else.
-        // No usage counter — the remaining-invites pill (moved here
-        // from the card front) already says it.
-        VStack(spacing: 0) {
+        // EXACTLY the app's mono voice — bold monospaced, tracking(2),
+        // textFaint (the recipe every mono label in the app uses) —
+        // at two sizes only: big for the code, 11 for everything
+        // else. Everything centered.
+        VStack(alignment: .center, spacing: 0) {
             Spacer()
 
             Text(invite?.state == "exhausted" ? "ALL INVITES USED" : "INVITE A FRIEND")
                 .font(.system(size: 11 * scale, weight: .bold, design: .monospaced))
                 .tracking(2)
-                .foregroundStyle(AppPalette.textMuted)
+                .foregroundStyle(AppPalette.textFaint)
 
             if let code = invite?.code {
                 Text(code)
-                    .font(.system(size: 40 * scale, weight: .bold, design: .monospaced))
-                    .tracking(1 * scale)
-                    .foregroundStyle(AppPalette.textPrimary)
+                    .font(.system(size: 36 * scale, weight: .bold, design: .monospaced))
+                    .tracking(2)
+                    .foregroundStyle(AppPalette.textFaint)
                     .padding(.top, 14 * scale)
                     .contentShape(Rectangle())
                     .onTapGesture {
@@ -836,7 +836,7 @@ struct ProfileShareSheet: View {
                 Text(showCopiedCode ? "COPIED!" : "ONE-TIME CODE · TAP TO COPY")
                     .font(.system(size: 11 * scale, weight: .bold, design: .monospaced))
                     .tracking(2)
-                    .foregroundStyle(AppPalette.textMuted)
+                    .foregroundStyle(AppPalette.textFaint)
                     .padding(.top, 10 * scale)
             }
 
@@ -844,8 +844,9 @@ struct ProfileShareSheet: View {
                 VStack(spacing: 5 * scale) {
                     ForEach(claimedInvites.prefix(3)) { claim in
                         Text("@\(claim.claimedByUsername ?? "someone") joined")
-                            .font(.system(size: 11 * scale, weight: .medium, design: .monospaced))
-                            .foregroundStyle(AppPalette.textSecondary)
+                            .font(.system(size: 11 * scale, weight: .bold, design: .monospaced))
+                            .tracking(2)
+                            .foregroundStyle(AppPalette.textFaint)
                     }
                 }
                 .padding(.top, 18 * scale)
@@ -853,6 +854,7 @@ struct ProfileShareSheet: View {
 
             Spacer()
         }
+        .multilineTextAlignment(.center)
         .frame(width: cardWidth, height: cardHeight)
         .overlay(alignment: .bottomLeading) {
             MadeOnYafaMark(width: cardWidth * 0.20, color: .white)
