@@ -595,48 +595,6 @@ struct ProfileShareSheet: View {
         }
     }
 
-    /// Light sweep that glances across the card while it turns — the
-    /// metal-catches-the-light cue. Invisible at rest on either face
-    /// (strength is sin of the turn), peaks edge-on, and shifts with
-    /// the finger tilt so it reads as a real reflection.
-    private struct FlipSheen: View, Animatable {
-        var angle: Double
-        var tilt: Double
-        let width: CGFloat
-        var animatableData: AnimatablePair<Double, Double> {
-            get { AnimatablePair(angle, tilt) }
-            set { angle = newValue.first; tilt = newValue.second }
-        }
-        var body: some View {
-            var n = angle.truncatingRemainder(dividingBy: 360)
-            if n > 180 { n -= 360 }
-            if n < -180 { n += 360 }
-            let progress = n / 180
-            // Squared so the glare only appears once the card is
-            // genuinely turning — a hint of motion shouldn't flash.
-            let strength = pow(sin(min(abs(n), 180) * .pi / 180), 2)
-            // On a near-white card, additive light just clips to white
-            // and reads fake. Gloss on a light surface is a NARROW
-            // bright core with faint darker flanks — the flanks are
-            // what make it read as a reflection.
-            return LinearGradient(
-                stops: [
-                    .init(color: .clear, location: 0),
-                    .init(color: .black.opacity(0.07), location: 0.32),
-                    .init(color: .white.opacity(0.5), location: 0.5),
-                    .init(color: .black.opacity(0.07), location: 0.68),
-                    .init(color: .clear, location: 1),
-                ],
-                startPoint: .leading, endPoint: .trailing
-            )
-            .frame(width: width * 0.3)
-            .rotationEffect(.degrees(16))
-            .offset(x: CGFloat(progress) * width * 0.95 + CGFloat(tilt) * 4)
-            .opacity(strength)
-            .allowsHitTesting(false)
-        }
-    }
-
     /// The card's extruded side: a darker slab behind the face,
     /// offset by the flip angle so the edge swings around as the
     /// card turns — and stays a hairline at rest so the card reads
@@ -952,9 +910,6 @@ struct ProfileShareSheet: View {
                     // the bare card). Rides both faces.
                     Color.clear
                         .holoOverlay(active: true, cornerRadius: 24 * scale, edgeBleed: 2)
-
-                    // Metallic shine while the card turns.
-                    FlipSheen(angle: flipAngle, tilt: cardTiltX, width: cardWidth)
                 }
                 .frame(width: cardWidth, height: cardHeight)
                 .compositingGroup()
