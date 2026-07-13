@@ -765,7 +765,7 @@ struct ProfileShareSheet: View {
         }
         var body: some View {
             let sine = sin(angle * .pi / 180)
-            let w = abs(sine) * 5
+            let w = abs(sine) * 3.5
             // The side is the card's OWN rounded-rect shape, offset
             // sideways by the edge width: the visible crescent then
             // wraps the rounded corners exactly (a straight capsule
@@ -774,12 +774,15 @@ struct ProfileShareSheet: View {
             RoundedRectangle(cornerRadius: 24 * scale, style: .continuous)
                 .fill(
                     LinearGradient(
-                        colors: [Color(white: 0.66), Color(white: 0.50)],
+                        colors: [Color(white: 0.78), Color(white: 0.66)],
                         startPoint: sine > 0 ? .trailing : .leading,
                         endPoint: sine > 0 ? .leading : .trailing
                     )
                 )
-                .offset(x: (sine > 0 ? -1 : 1) * w, y: 1.5)
+                // 3pt resting lip — 1.5 was getting swallowed by the
+                // drop shadow, leaving the bottom edge intermittently
+                // invisible.
+                .offset(x: (sine > 0 ? -1 : 1) * w, y: 3)
         }
     }
 

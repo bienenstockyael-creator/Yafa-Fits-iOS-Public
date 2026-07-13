@@ -47,16 +47,18 @@ static float3 chromeEnv(float y, float x) {
     float3 ground = mix(groundHot, groundDeep, smoothstep(-0.06, -0.85, y));
     float3 env    = y >= 0.0 ? sky : ground;
 
-    // THIN crisp horizon line straddling y = 0. It can afford to be dark
-    // because it is narrow and sandwiched between the two hottest bands —
-    // maximum LOCAL contrast with zero dark mass.
-    float band = smoothstep(0.05, 0.0, abs(y));
+    // Horizon line straddling y = 0 — WIDENED transitions. On the
+    // wordmark's 2-3px strokes the bevel normals swing fast, so a
+    // razor-sharp band means adjacent pixels land on opposite sides
+    // of the line and the stroke breaks into choppy segments. A
+    // softer band (optically: a slightly blurrier mirror) is what
+    // makes thin strokes render as continuous lines.
+    float band = smoothstep(0.11, 0.0, abs(y));
     env = mix(env, horizonD, band);
 
-    // Secondary thin steel streak up in the sky — a second reflected line
-    // gives the surface believable structure instead of one lonely stripe.
-    float streak2 = smoothstep(0.04, 0.0, abs(y - 0.42));
-    env = mix(env, float3(0.48, 0.58, 0.80), streak2 * 0.65);
+    // Secondary steel streak up in the sky — same widening.
+    float streak2 = smoothstep(0.09, 0.0, abs(y - 0.42));
+    env = mix(env, float3(0.48, 0.58, 0.80), streak2 * 0.5);
 
     // Faint vertical streaks (distant reflected verticals) for busy realism.
     float streak = 0.5 + 0.5 * sin(x * 9.0);
@@ -119,7 +121,9 @@ static float3 chromeEnv(float y, float x) {
     // the viewer — enough to draw the letterform against the white card,
     // shallow enough that the face of the metal stays bright silver.
     float rim = smoothstep(0.20, 0.46, N.z);            // 0 at edge -> 1 facing us
-    env *= mix(0.82, 1.0, rim);                         // barely-there edge
+    env *= mix(0.90, 1.0, rim);                         // barely-there edge (thin
+                                                        // strokes are ALL rim — a
+                                                        // deeper dip re-chops them)
 
     // Grazing-angle sparkle: real chrome flares white at its edges when it
     // catches the sky (Fresnel). Only where the reflected ray points up, so
@@ -131,10 +135,10 @@ static float3 chromeEnv(float y, float x) {
     // Gentle S-curve: enough snap between bands to read as metal, soft
     // enough that the darks stay steel — a strong curve crushed the
     // horizon line to near-black (0.24 in -> 0.10 out).
-    env = (env - 0.5) * 1.20 + 0.5;
+    env = (env - 0.5) * 1.12 + 0.5;
     // High floor: the darkest any pixel may go is LIGHT steel — the
     // effect works entirely in the bright register, zero dark accents.
-    env = max(env, float3(0.58));
+    env = max(env, float3(0.66));
 
     // Fringe pixels take a CONSTANT light steel instead of the live
     // reflection: the outline then anti-aliases exactly like a solid-
