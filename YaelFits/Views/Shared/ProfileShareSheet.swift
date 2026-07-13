@@ -828,7 +828,8 @@ struct ProfileShareSheet: View {
                     // One color for the whole face: the app's mono-label
                     // grey. Size alone carries the hierarchy.
                     .foregroundStyle(AppPalette.textFaint)
-                    .padding(.top, 14 * scale)
+                    // Wider gap lifts INVITE A FRIEND clear of the code.
+                    .padding(.top, 30 * scale)
                     .contentShape(Rectangle())
                     .onTapGesture {
                         UIPasteboard.general.string = code
@@ -840,7 +841,8 @@ struct ProfileShareSheet: View {
                         }
                     }
                 Text(showCopiedCode ? "COPIED!" : "ONE-TIME CODE · TAP TO COPY")
-                    .font(.system(size: 11 * scale, weight: .semibold, design: .monospaced))
+                    // Subtext: the app's exact label size (9pt mono).
+                    .font(.system(size: 9 * scale, weight: .semibold, design: .monospaced))
                     .tracking(2)
                     .foregroundStyle(AppPalette.textFaint)
                     .padding(.top, 10 * scale)
