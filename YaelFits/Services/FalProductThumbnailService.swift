@@ -35,9 +35,9 @@ actor FalProductThumbnailService {
         }
         let item = label.isEmpty ? "garment" : label
         let prompt = Self.wornGarmentPrompt(item: item)
-        // Tight framing: Quick Add garments live in small carousel
-        // slots and need to fill them.
-        return try await generate(prompt: prompt, jpegData: jpegData, paddingFraction: 0.04, onUpdate: onUpdate)
+        // Transparent cutout, tight framing: Quick Add garments live
+        // in small carousel slots and need to fill them.
+        return try await generate(prompt: prompt, jpegData: jpegData, transparentCutout: true, onUpdate: onUpdate)
     }
 
     /// Same nano → Bria → tight-crop pipeline, but for a PRODUCT photo
@@ -54,10 +54,14 @@ actor FalProductThumbnailService {
         }
         let item = label.isEmpty ? "item" : label
         let prompt = Self.catalogProductPrompt(item: item)
-        // Generous framing to match server-polished wishlist items —
-        // the tight 4% crop made backfilled products render huge on
-        // the closet detail card next to everything else.
-        return try await generate(prompt: prompt, jpegData: jpegData, paddingFraction: 0.18, onUpdate: onUpdate)
+        // Nano's raw output, white studio canvas and all — EXACTLY
+        // what the server's share-save polish produces. Transparent
+        // cutouts don't work here: TrimmedRemoteImage trims all
+        // transparent margins before fitting, so any transparent
+        // padding evaporates and the product renders oversized next
+        // to server-polished items (whose white canvas IS the
+        // breathing room).
+        return try await generate(prompt: prompt, jpegData: jpegData, transparentCutout: false, onUpdate: onUpdate)
     }
 
     private static func catalogProductPrompt(item: String) -> String {
@@ -89,7 +93,7 @@ actor FalProductThumbnailService {
     private func generate(
         prompt: String,
         jpegData: Data,
-        paddingFraction: CGFloat,
+        transparentCutout: Bool,
         onUpdate: @escaping @Sendable (FalProductThumbnailProgress) async -> Void
     ) async throws -> UIImage {
         let apiKey = try loadFalAPIKey()
@@ -122,6 +126,10 @@ actor FalProductThumbnailService {
                     throw UploadPipelineError.decodingFailed
                 }
 
+                // Catalog products keep nano's white studio canvas —
+                // identical to the server polish's output family.
+                guard transparentCutout else { return nanoImage }
+
                 // nano-banana returns the thumbnail with a white studio
                 // background. Pipe it through Bria so the saved product image
                 // has a transparent background — matches every other product
@@ -141,7 +149,7 @@ actor FalProductThumbnailService {
                 // matches the framing of bundled product images — otherwise
                 // the transparent margin around the garment makes Quick Add
                 // products look smaller than other products in the carousel.
-                return Self.tightCrop(cleanedImage, paddingFraction: paddingFraction)
+                return Self.tightCrop(cleanedImage, paddingFraction: 0.04)
             case "failed", "error":
                 throw UploadPipelineError.requestFailed(status.error?.message ?? "nano-banana failed.")
             default:
