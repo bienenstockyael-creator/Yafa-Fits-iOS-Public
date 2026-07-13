@@ -148,7 +148,11 @@ final class WishlistBackfillService: NSObject {
 
         // Keep the slug-derived stub name unless the page gave a
         // better one; never downgrade to a generic title.
-        let pageName = meta.name?.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Page titles carry site suffixes ("Oval Acetate Glasses for
+        // Woman in Havana/brown | Valentino US") — keep the product part.
+        let pageName = meta.name?
+            .components(separatedBy: " | ").first?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         try await WardrobeService.updateItem(
             id: stub.id,
             name: (pageName?.isEmpty == false && pageName!.count > 2) ? String(pageName!.prefix(120)) : nil,
@@ -253,6 +257,34 @@ final class WishlistBackfillService: NSObject {
       if (!name) name = meta('og:title') || document.title;
       if (!price) price = meta('product:price:amount') || meta('og:price:amount');
       if (!brand) brand = meta('og:site_name');
+
+      // Hide viewport-covering overlays (cookie walls, consent
+      // modals, app-download interstitials) BEFORE picking and
+      // snapshotting the hero — we capture what's DISPLAYED, and a
+      // consent banner over the product becomes the wishlist image
+      // (Valentino's cookie wall shipped as a saved item's photo).
+      // Hiding rather than clicking: nothing is consented to on the
+      // user's behalf.
+      try {
+        var candidates = document.querySelectorAll(
+          'body > *, body > * > *, [class*="cookie"], [id*="cookie"], ' +
+          '[class*="consent"], [id*="consent"], [class*="overlay"], ' +
+          '[class*="modal"], [aria-modal="true"], #onetrust-consent-sdk'
+        );
+        var vw = window.innerWidth, vh = window.innerHeight;
+        for (var q = 0; q < candidates.length; q++) {
+          var el2 = candidates[q];
+          var st = window.getComputedStyle(el2);
+          if (st.display === 'none') continue;
+          if (st.position !== 'fixed' && st.position !== 'sticky' && el2.getAttribute('aria-modal') !== 'true') continue;
+          var rr = el2.getBoundingClientRect();
+          if (rr.width * rr.height > vw * vh * 0.25) {
+            el2.style.setProperty('display', 'none', 'important');
+          }
+        }
+        document.documentElement.style.setProperty('overflow', 'auto', 'important');
+        document.body.style.setProperty('overflow', 'auto', 'important');
+      } catch (e) {}
 
       // Hero image: largest rendered <img> that is plausibly the
       // product shot (big, mostly square-ish, not a sprite).
