@@ -708,45 +708,41 @@ struct ProfileShareSheet: View {
     /// same angles as the face but displaced in z (anchorZ), so the
     /// edge genuinely swings around in perspective as the card turns.
     /// At rest the 1.5pt y-offset keeps a hairline lip.
-    /// Animatable so `presence` is computed per FRAME: anchorZ +
-    /// perspective slightly scales the slices even at rest, which
-    /// poked all 12 darker layers out around the card as a muddy
-    /// halo (and fattened the drop shadow around them). The slices
-    /// now exist only while the card is actually turning; at rest a
-    /// single hairline lip carries the thickness cue.
-    private struct CardThickness: View, Animatable {
-        var flip: Double
-        var tilt: Double
+    /// What an extruded card actually shows when it turns: a side
+    /// strip along the RECEDING edge that widens with the turn
+    /// (w = thickness·|sin θ|) and foreshortens with the face. Drawn
+    /// inside the card's own rotation, so card + edge move as one
+    /// object with one clean silhouette — the stacked-slice attempts
+    /// ballooned the outline and dragged the drop shadow with it.
+    /// Animatable: the width must track the LIVE angle every frame.
+    private struct CardEdge: View, Animatable {
+        var angle: Double
         let cardWidth: CGFloat
         let cardHeight: CGFloat
         let scale: CGFloat
-        var animatableData: AnimatablePair<Double, Double> {
-            get { AnimatablePair(flip, tilt) }
-            set { flip = newValue.first; tilt = newValue.second }
+        var animatableData: Double {
+            get { angle }
+            set { angle = newValue }
         }
         var body: some View {
-            let turn = abs(sin(flip * .pi / 180)) + abs(sin(tilt * .pi / 180))
-            let presence = min(1.0, turn * 2.2)
+            let sine = sin(angle * .pi / 180)
+            let w = abs(sine) * 7
             ZStack {
-                // Rest lip — fades out as the real 3D side takes over.
+                // Resting lip — the always-there hint of thickness.
                 RoundedRectangle(cornerRadius: 24 * scale, style: .continuous)
                     .fill(Color(white: 0.80))
-                    .frame(width: cardWidth, height: cardHeight)
                     .offset(y: 1.5)
-                    .opacity(1 - presence)
-                // Dense slices (0.7pt apart in z) so the side reads as
-                // ONE solid surface, shaded darker toward the back.
-                // Inset 1pt so residual perspective scale can't leak
-                // past the face at small angles.
-                ForEach(1...12, id: \.self) { (i: Int) in
-                    let z = Double(i) * -0.7
-                    let shade = 0.84 - Double(i) * 0.011
-                    RoundedRectangle(cornerRadius: 24 * scale, style: .continuous)
-                        .fill(Color(white: shade))
-                        .frame(width: cardWidth - 1, height: cardHeight - 1)
-                        .opacity(presence)
-                        .rotation3DEffect(.degrees(tilt), axis: (x: 1, y: 0, z: 0), anchorZ: z, perspective: 0.35)
-                        .rotation3DEffect(.degrees(flip), axis: (x: 0, y: 1, z: 0), anchorZ: z, perspective: 0.35)
+                if w > 0.3 {
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color(white: 0.84), Color(white: 0.70)],
+                                startPoint: sine > 0 ? .trailing : .leading,
+                                endPoint: sine > 0 ? .leading : .trailing
+                            )
+                        )
+                        .frame(width: w + 2, height: cardHeight - 44 * scale)
+                        .offset(x: (sine > 0 ? -1 : 1) * (cardWidth / 2 + w / 2 - 1))
                 }
             }
         }
@@ -1034,12 +1030,14 @@ struct ProfileShareSheet: View {
                         .modifier(FlipFace(angle: flipAngle, isBack: false))
                     }
                 }
+                // Edge strip BEFORE the rotations: it must rotate with
+                // the card so card + side read as one solid object.
+                .background(CardEdge(angle: flipAngle, cardWidth: cardWidth, cardHeight: cardHeight, scale: scale))
                 // Finger-follow tilt (x) under the flip (y) — the card
                 // leans toward the finger like the web card's pointer
                 // tilt, then springs flat on release.
                 .rotation3DEffect(.degrees(cardTiltX), axis: (x: 1, y: 0, z: 0), perspective: 0.35)
                 .rotation3DEffect(.degrees(flipAngle), axis: (x: 0, y: 1, z: 0), perspective: 0.35)
-                .background(CardThickness(flip: flipAngle, tilt: cardTiltX, cardWidth: cardWidth, cardHeight: cardHeight, scale: scale))
                 .shadow(color: .black.opacity(0.14), radius: 16, y: 10)
                 .allowsHitTesting(false)
 
