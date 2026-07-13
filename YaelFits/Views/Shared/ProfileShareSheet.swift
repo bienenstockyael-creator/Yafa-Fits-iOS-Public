@@ -311,9 +311,22 @@ struct ProfileShareSheet: View {
     /// the main thread on appear so the ~1.3MB decode never hitches sheet open.
     private static func loadChromeNormalMap() -> UIImage? {
         guard let url = Bundle.main.url(forResource: "share-chrome-normal", withExtension: "png"),
-              let data = try? Data(contentsOf: url)
+              let data = try? Data(contentsOf: url),
+              let raw = UIImage(data: data)
         else { return nil }
-        return UIImage(data: data)
+        // Gentle Gaussian over the baked normals BEFORE the shader
+        // ever sees them: the PNG carries 8-bit quantization steps and
+        // path-seam outliers that no amount of shader-side softening
+        // can fully hide (a colorEffect can't see neighboring pixels).
+        // Smoothing the map is smoothing the metal's surface itself —
+        // the strokes' bevels become continuous, so the reflection
+        // flows instead of stepping. One-time cost, already off-main.
+        guard let cg = raw.cgImage else { return raw }
+        let ci = CIImage(cgImage: cg)
+        let blurred = ci.applyingGaussianBlur(sigma: 1.1).cropped(to: ci.extent)
+        let ctx = CIContext()
+        guard let out = ctx.createCGImage(blurred, from: ci.extent) else { return raw }
+        return UIImage(cgImage: out, scale: raw.scale, orientation: .up)
     }
 
     /// Live chrome wordmark: the baked normal map driven through Chrome.metal,
@@ -788,24 +801,27 @@ struct ProfileShareSheet: View {
 
     @ViewBuilder
     private func inviteBackFace(cardWidth: CGFloat, cardHeight: CGFloat, scale: CGFloat) -> some View {
-        // App-consistent type on the light card: header-style tracked
-        // caps in textSecondary (the sheet header's voice), the code in
-        // the card family's SemiBold in textPrimary, captions in the
-        // card label's MediumItalic in textMuted.
+        // Tightened to the app's own hierarchy: sheet-header tracked
+        // caps in textMuted up top, the code as the single hero in the
+        // card family's SemiBold (tight tracking — wide tracking at
+        // display size read as spaced-out, not premium), the italic
+        // caption voice underneath, then a hairline rule and the meta
+        // line — the same header / hero / caption / rule rhythm the
+        // app's sheets use.
         VStack(spacing: 0) {
             Spacer()
 
             Text(invite?.state == "exhausted" ? "ALL INVITES USED" : "INVITE A FRIEND")
-                .font(.system(size: 12 * scale, weight: .semibold))
-                .tracking(3)
-                .foregroundStyle(AppPalette.textSecondary)
+                .font(.system(size: 11 * scale, weight: .semibold))
+                .tracking(3.5)
+                .foregroundStyle(AppPalette.textMuted)
 
             if let code = invite?.code {
                 Text(code)
-                    .font(.custom("Inter28pt-SemiBold", size: 38 * scale))
-                    .tracking(3 * scale)
+                    .font(.custom("Inter28pt-SemiBold", size: 40 * scale))
+                    .tracking(1.2 * scale)
                     .foregroundStyle(AppPalette.textPrimary)
-                    .padding(.top, 16 * scale)
+                    .padding(.top, 14 * scale)
                     .contentShape(Rectangle())
                     .onTapGesture {
                         UIPasteboard.general.string = code
@@ -817,17 +833,22 @@ struct ProfileShareSheet: View {
                         }
                     }
                 Text(showCopiedCode ? "copied!" : "one-time code · tap to copy")
-                    .font(.custom("Inter28pt-MediumItalic", size: 13 * scale))
+                    .font(.custom("Inter28pt-MediumItalic", size: 12 * scale))
                     .foregroundStyle(AppPalette.textMuted)
-                    .padding(.top, 10 * scale)
+                    .padding(.top, 8 * scale)
             }
+
+            Rectangle()
+                .fill(AppPalette.cardBorder)
+                .frame(width: 44 * scale, height: 1)
+                .padding(.top, 22 * scale)
 
             if let invite {
                 Text("\(invite.used) OF \(invite.quota) USED")
                     .font(.system(size: 10 * scale, weight: .semibold))
                     .tracking(2)
                     .foregroundStyle(AppPalette.textMuted)
-                    .padding(.top, 26 * scale)
+                    .padding(.top, 12 * scale)
             }
 
             if !claimedInvites.isEmpty {
@@ -838,7 +859,7 @@ struct ProfileShareSheet: View {
                             .foregroundStyle(AppPalette.textSecondary)
                     }
                 }
-                .padding(.top, 12 * scale)
+                .padding(.top, 10 * scale)
             }
 
             Spacer()
