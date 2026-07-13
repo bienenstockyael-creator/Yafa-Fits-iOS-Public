@@ -209,6 +209,15 @@ struct WardrobeView: View {
             }
         }
         .task { await load() }
+        .task {
+            // Complete any wishlist items the server couldn't scrape
+            // (bot-walled shops like Farfetch) — the app's WebKit
+            // backfill reads the page like Safari and fills them in.
+            // Reloads the closet if anything was completed.
+            if let userId = store.userId {
+                WishlistBackfillService.shared.backfillIfNeeded(userId: userId)
+            }
+        }
         .onAppear {
             // First-ever open: surface the explainer once the page has settled.
             guard !UserDefaults.standard.bool(forKey: closetIntroSeenKey) else { return }

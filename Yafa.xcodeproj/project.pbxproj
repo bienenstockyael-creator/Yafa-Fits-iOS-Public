@@ -58,6 +58,7 @@
 		202607090000000B000002 /* TouchCountReporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202607090000000A000002 /* TouchCountReporter.swift */; };
 		202607090000000B000001 /* GridPinchZoom.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202607090000000A000001 /* GridPinchZoom.swift */; };
 		202607110000000B000001 /* GestureRouteHealer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202607110000000A000001 /* GestureRouteHealer.swift */; };
+		202607120000000B000001 /* WishlistBackfillService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202607120000000A000001 /* WishlistBackfillService.swift */; };
 		202605302600000B000001 /* VibeHapticPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605302600000A000001 /* VibeHapticPlayer.swift */; };
 		202605302700000B000001 /* VibesFirstUseModal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605302700000A000001 /* VibesFirstUseModal.swift */; };
 		202605302800000B000001 /* InfoExplainerModal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605302800000A000001 /* InfoExplainerModal.swift */; };
@@ -284,6 +285,7 @@
 		202607090000000A000002 /* TouchCountReporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchCountReporter.swift; sourceTree = "<group>"; };
 		202607090000000A000001 /* GridPinchZoom.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GridPinchZoom.swift; sourceTree = "<group>"; };
 		202607110000000A000001 /* GestureRouteHealer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GestureRouteHealer.swift; sourceTree = "<group>"; };
+		202607120000000A000001 /* WishlistBackfillService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WishlistBackfillService.swift; sourceTree = "<group>"; };
 		202605302600000A000001 /* VibeHapticPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeHapticPlayer.swift; sourceTree = "<group>"; };
 		202605302700000A000001 /* VibesFirstUseModal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibesFirstUseModal.swift; sourceTree = "<group>"; };
 		202605302800000A000001 /* InfoExplainerModal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InfoExplainerModal.swift; sourceTree = "<group>"; };
@@ -776,6 +778,7 @@
 				AE0BE487007AB6D1CE6EC826 /* FalSegmentationService.swift */,
 				0EB8B4728A72D35257989791 /* FalVideoGenerationService.swift */,
 				4A3F4701E39853E7B869448A /* FrameLoader.swift */,
+				202607120000000A000001 /* WishlistBackfillService.swift */,
 				29E71BBBA1CFBB444044694A /* GenerationJobService.swift */,
 				F010F0010001000000000A01 /* HoloMotionTracker.swift */,
 				3120723AEF223E5E8F3E6FE5 /* ImageEnhancementService.swift */,
@@ -1176,6 +1179,7 @@
 				202607090000000B000002 /* TouchCountReporter.swift in Sources */,
 				202607090000000B000001 /* GridPinchZoom.swift in Sources */,
 				202607110000000B000001 /* GestureRouteHealer.swift in Sources */,
+				202607120000000B000001 /* WishlistBackfillService.swift in Sources */,
 				202605302600000B000001 /* VibeHapticPlayer.swift in Sources */,
 				202605302700000B000001 /* VibesFirstUseModal.swift in Sources */,
 				202605302800000B000001 /* InfoExplainerModal.swift in Sources */,

@@ -118,6 +118,23 @@ function fromJsonLd(html: string): Partial<Scraped> {
   return out;
 }
 
+/// Human-readable fallback name from the product URL's slug —
+/// "products/osa-shoulder-bag-natural" → "Osa Shoulder Bag Natural".
+function nameFromSlug(url: string): string {
+  try {
+    const path = new URL(url).pathname;
+    const slug = path.split("/").filter(Boolean).pop() ?? "";
+    const words = slug.replace(/\.[a-z0-9]+$/i, "").split(/[-_+]/).filter(Boolean);
+    if (!words.length) return "Saved item";
+    return words
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ")
+      .slice(0, 120);
+  } catch {
+    return "Saved item";
+  }
+}
+
 async function scrape(url: string): Promise<Scraped> {
   const r = await fetch(url, { headers: { "User-Agent": UA, "Accept": "text/html" } });
   if (!r.ok) throw new Error(`page_fetch_failed_${r.status}`);
@@ -327,16 +344,20 @@ serve(async (req) => {
     console.log("share-save: using in-page fields", JSON.stringify(scraped));
   } else {
     console.log("share-save: server-scraping", urlIn);
+    // Bot-walled shops (Farfetch 403s the page itself) used to make
+    // the save HARD-FAIL here. Save a stub instead: name derived
+    // from the URL slug, no image, flagged for the app's WebKit
+    // backfill (the app renders the page like Safari — past the
+    // wall — then fills in the real details and a snapshot image).
     try {
       scraped = await scrape(urlIn);
     } catch (e) {
-      console.error("share-save scrape_failed", String((e as Error)?.message ?? e));
-      return json(502, { error: "scrape_failed", detail: String((e as Error)?.message ?? e) });
+      console.error("share-save scrape_failed, saving stub", String((e as Error)?.message ?? e));
+      scraped = { name: nameFromSlug(urlIn), image: null, price: null, brand: null };
     }
     console.log("share-save: scraped", JSON.stringify(scraped));
-    if (!scraped.image) {
-      console.error("share-save no_image_found for", urlIn);
-      return json(422, { error: "no_image_found" });
+    if (!scraped.name || scraped.name === "Saved item") {
+      scraped.name = nameFromSlug(urlIn);
     }
   }
 
@@ -346,13 +367,17 @@ serve(async (req) => {
     .insert({
       user_id: user.id,
       name: scraped.name,
-      image_url: scraped.image,
+      // Empty string, NOT null: the app's WardrobeItem decodes
+      // image_url as a required String — a stub must stay decodable.
+      image_url: scraped.image ?? "",
       category: "unknown",
       brand: scraped.brand,
       price: scraped.price,
       source_url: urlIn,
       status: "wishlist",
-      thumb_status: "generating",
+      // No image = the shop blocked server scraping; the app's
+      // WebKit backfill picks these up on next launch.
+      thumb_status: scraped.image ? "generating" : "needs_client_scrape",
       tags: [],
     })
     .select("id")
@@ -364,12 +389,16 @@ serve(async (req) => {
   console.log("share-save: inserted row", inserted.id);
 
   // Polish the thumbnail in the background — the response returns now.
-  const work = polish(userClient, inserted.id, user.id, scraped.image, provided.imageData, urlIn, scraped.name, falKey);
-  if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
-    EdgeRuntime.waitUntil(work);
-  } else {
-    // Fallback if waitUntil is unavailable: await inline (slower response).
-    await work;
+  // Stub rows (no image) skip polish; the app's backfill supplies the
+  // image later.
+  if (scraped.image || provided.imageData) {
+    const work = polish(userClient, inserted.id, user.id, scraped.image ?? "", provided.imageData, urlIn, scraped.name, falKey);
+    if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
+      EdgeRuntime.waitUntil(work);
+    } else {
+      // Fallback if waitUntil is unavailable: await inline (slower response).
+      await work;
+    }
   }
 
   return json(200, {

@@ -123,7 +123,9 @@ enum WardrobeService {
         color: String? = nil,
         price: String? = nil,
         sourceURL: String? = nil,
-        status: WardrobeStatus? = nil
+        status: WardrobeStatus? = nil,
+        imageURL: String? = nil,
+        thumbStatus: String? = nil
     ) async throws {
         struct Update: Encodable {
             let name: String?
@@ -133,6 +135,8 @@ enum WardrobeService {
             let price: String?
             let source_url: String?
             let status: String?
+            let image_url: String?
+            let thumb_status: String?
         }
         try await supabase
             .from("products")
@@ -143,7 +147,9 @@ enum WardrobeService {
                 color: color,
                 price: price,
                 source_url: sourceURL,
-                status: status?.rawValue
+                status: status?.rawValue,
+                image_url: imageURL,
+                thumb_status: thumbStatus
             ))
             .eq("id", value: id.uuidString)
             .execute()
