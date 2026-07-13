@@ -433,14 +433,16 @@ struct ProfileShareSheet: View {
                 }
                 .overlay(Capsule().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
                 // Light-blue glow under the pill — gentle bloom.
+                // Soft blue bloom, dialed WAY back — at full strength it
+                // read as a glow sticker on the chrome card.
                 .shadow(
-                    color: Color(red: 0.58, green: 0.81, blue: 1.0).opacity(0.55),
-                    radius: 9 * scale,
+                    color: Color(red: 0.58, green: 0.81, blue: 1.0).opacity(0.28),
+                    radius: 7 * scale,
                     y: 2 * scale
                 )
                 .shadow(
-                    color: Color(red: 0.58, green: 0.81, blue: 1.0).opacity(0.35),
-                    radius: 16 * scale,
+                    color: Color(red: 0.58, green: 0.81, blue: 1.0).opacity(0.16),
+                    radius: 13 * scale,
                     y: 3 * scale
                 )
         }
@@ -708,14 +710,16 @@ struct ProfileShareSheet: View {
                 .overlay(
                     Capsule().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75)
                 )
+                // Soft blue bloom, dialed WAY back — at full strength it
+                // read as a glow sticker on the chrome card.
                 .shadow(
-                    color: Color(red: 0.58, green: 0.81, blue: 1.0).opacity(0.55),
-                    radius: 9 * scale,
+                    color: Color(red: 0.58, green: 0.81, blue: 1.0).opacity(0.28),
+                    radius: 7 * scale,
                     y: 2 * scale
                 )
                 .shadow(
-                    color: Color(red: 0.58, green: 0.81, blue: 1.0).opacity(0.35),
-                    radius: 16 * scale,
+                    color: Color(red: 0.58, green: 0.81, blue: 1.0).opacity(0.16),
+                    radius: 13 * scale,
                     y: 3 * scale
                 )
         }
