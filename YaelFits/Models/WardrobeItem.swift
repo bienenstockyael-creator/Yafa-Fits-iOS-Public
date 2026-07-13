@@ -76,7 +76,10 @@ struct WardrobeItem: Codable, Identifiable, Hashable, Sendable {
 
     /// True while the FAL cut-out is still being generated (shared from
     /// the iOS Share Extension). Drives the closet's sparkle overlay.
-    var isPolishing: Bool { thumbStatus == "generating" }
+    /// Sparkle from the moment a stub lands: `needs_client_scrape`
+    /// rows (bot-walled saves awaiting the on-device backfill) have no
+    /// image at all yet, and an empty silent slot reads as broken.
+    var isPolishing: Bool { thumbStatus == "generating" || thumbStatus == "needs_client_scrape" }
 }
 
 /// A fuzzy "already in your closet?" match returned by the
