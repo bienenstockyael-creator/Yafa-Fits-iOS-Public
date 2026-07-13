@@ -405,6 +405,7 @@ struct ProfileShareSheet: View {
                         normalMap: normalMap,
                         cardWidth: cardWidth,
                         cardHeight: cardHeight,
+                        cornerRadius: 24 * scale,
                         center: { size in
                             CGPoint(
                                 x: cardWidth - 14 * scale - size.width / 2,
@@ -610,6 +611,7 @@ struct ProfileShareSheet: View {
         let normalMap: UIImage?
         let cardWidth: CGFloat
         let cardHeight: CGFloat
+        let cornerRadius: CGFloat
         /// The pill's center in CARD coordinates, given the pill's size.
         let center: (CGSize) -> CGPoint
 
@@ -627,14 +629,22 @@ struct ProfileShareSheet: View {
                 }
                 .frame(width: cardWidth, height: cardHeight)
                 .blur(radius: 10)
+                // The holo shimmer is most of what actually sits under
+                // the corner pills (the wordmark art lives center-left),
+                // so the copy must carry it or the glass has nothing
+                // visible to show. Applied over the blur: the shimmer
+                // is already diffuse, and keeping it out of the blur
+                // input means the blurred layer stays static and cheap.
+                .holoOverlay(active: true, cornerRadius: cornerRadius, edgeBleed: 2)
                 .position(
                     x: g.size.width / 2 + (cardWidth / 2 - c.x),
                     y: g.size.height / 2 + (cardHeight / 2 - c.y)
                 )
             }
             .clipShape(Capsule())
-            // Frost + edge light over the blurred art.
-            .overlay(Capsule().fill(Color.white.opacity(0.30)))
+            // Light frost + edge light over the blurred art — thin
+            // enough that the art visibly reads through.
+            .overlay(Capsule().fill(Color.white.opacity(0.18)))
             .overlay(
                 Capsule().strokeBorder(
                     LinearGradient(
@@ -647,29 +657,8 @@ struct ProfileShareSheet: View {
         }
     }
 
-    /// The card's extruded side: a darker slab behind the face,
-    /// offset by the flip angle so the edge swings around as the
-    /// card turns — and stays a hairline at rest so the card reads
-    /// as a physical object with thickness, not printed paper.
-    private struct CardDepth: ViewModifier, Animatable {
-        var angle: Double
-        let cornerRadius: CGFloat
-        var animatableData: Double {
-            get { angle }
-            set { angle = newValue }
-        }
-        func body(content: Content) -> some View {
-            content.background(
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(Color(white: 0.78))
-                    .offset(x: sin(angle * .pi / 180) * 7, y: 3)
-            )
-        }
-    }
-
     /// Remaining-invites capsule, bottom-right of the card front.
-    /// Same recipe as `UsernamePill` (WeatherPill look: cardFill +
-    /// cardBorder + soft blue glow) so it reads on the light card.
+    /// Same glass treatment as the username pill.
     private struct InviteChip: View {
         let remaining: Int
         let scale: CGFloat
@@ -690,6 +679,7 @@ struct ProfileShareSheet: View {
                         normalMap: normalMap,
                         cardWidth: cardWidth,
                         cardHeight: cardHeight,
+                        cornerRadius: 24 * scale,
                         center: { size in
                             CGPoint(
                                 x: cardWidth - 14 * scale - size.width / 2,
@@ -698,7 +688,9 @@ struct ProfileShareSheet: View {
                         }
                     )
                 }
-                .overlay(Capsule().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
+                .overlay(
+                    Capsule().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75)
+                )
                 .shadow(
                     color: Color(red: 0.58, green: 0.81, blue: 1.0).opacity(0.55),
                     radius: 9 * scale,
@@ -709,6 +701,23 @@ struct ProfileShareSheet: View {
                     radius: 16 * scale,
                     y: 3 * scale
                 )
+        }
+    }
+
+    /// The card's physical thickness: side layers rotated with the
+    /// same angles as the face but displaced in z (anchorZ), so the
+    /// edge genuinely swings around in perspective as the card turns.
+    /// At rest the 1.5pt y-offset keeps a hairline lip.
+    private func cardThickness(cardWidth: CGFloat, cardHeight: CGFloat, scale: CGFloat) -> some View {
+        ZStack {
+            ForEach([-8.0, -6.0, -4.0, -2.0], id: \.self) { (z: Double) in
+                RoundedRectangle(cornerRadius: 24 * scale, style: .continuous)
+                    .fill(Color(white: 0.80))
+                    .frame(width: cardWidth, height: cardHeight)
+                    .offset(y: 1.5)
+                    .rotation3DEffect(.degrees(cardTiltX), axis: (x: 1, y: 0, z: 0), anchorZ: z, perspective: 0.35)
+                    .rotation3DEffect(.degrees(flipAngle), axis: (x: 0, y: 1, z: 0), anchorZ: z, perspective: 0.35)
+            }
         }
     }
 
@@ -994,12 +1003,12 @@ struct ProfileShareSheet: View {
                         .modifier(FlipFace(angle: flipAngle, isBack: false))
                     }
                 }
-                .modifier(CardDepth(angle: flipAngle, cornerRadius: 24 * scale))
                 // Finger-follow tilt (x) under the flip (y) — the card
                 // leans toward the finger like the web card's pointer
                 // tilt, then springs flat on release.
                 .rotation3DEffect(.degrees(cardTiltX), axis: (x: 1, y: 0, z: 0), perspective: 0.35)
                 .rotation3DEffect(.degrees(flipAngle), axis: (x: 0, y: 1, z: 0), perspective: 0.35)
+                .background(cardThickness(cardWidth: cardWidth, cardHeight: cardHeight, scale: scale))
                 .shadow(color: .black.opacity(0.14), radius: 16, y: 10)
                 .allowsHitTesting(false)
 
