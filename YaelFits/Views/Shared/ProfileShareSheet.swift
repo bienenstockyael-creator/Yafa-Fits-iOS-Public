@@ -567,7 +567,14 @@ struct ProfileShareSheet: View {
             set { angle = newValue }
         }
         func body(content: Content) -> some View {
-            content.opacity(max(0, 1 - FlipFace.frontDistance(angle) / 70))
+            content.opacity(Self.holdThenFade(angle))
+        }
+        /// Full opacity through the peek range (≤25°), then a fast
+        /// fade — so finger play never dims anything, and the fade
+        /// only plays once a flip has actually committed.
+        static func holdThenFade(_ angle: Double) -> Double {
+            let d = FlipFace.frontDistance(angle)
+            return 1 - min(1, max(0, (d - 25) / 55))
         }
     }
 
@@ -584,7 +591,7 @@ struct ProfileShareSheet: View {
         func body(content: Content) -> some View {
             let s = sin(angle * .pi / 180)
             content
-                .opacity(max(0, 1 - FlipFace.frontDistance(angle) / 70))
+                .opacity(FlipFade.holdThenFade(angle))
                 .offset(x: CGFloat(s) * 26)
                 .rotation3DEffect(.degrees(s * 14), axis: (x: 0, y: 1, z: 0), perspective: 0.3)
         }
@@ -1092,12 +1099,13 @@ struct ProfileShareSheet: View {
                             guard outfits.count > 1, !isFlipped else { return }
                             carouselDragOffset = value.translation.width
                         case .flip:
-                            // The card follows the finger 1:1 — a full
-                            // card-width of travel is a full half-turn,
-                            // in either direction. Vertical travel leans
-                            // the card toward the finger (clamped ±9°).
-                            let delta = Double(value.translation.width / cardWidth) * 180
-                            flipAngle = min(flipDragBase + 180, max(flipDragBase - 180, flipDragBase + delta))
+                            // Subtle peek only, like the web card's
+                            // pointer tilt — the card leans with the
+                            // finger (≤18°) but never turns with it.
+                            // The flip itself only COMMITS on release,
+                            // when the drag showed real intent.
+                            let peek = Double(value.translation.width / cardWidth) * 60
+                            flipAngle = flipDragBase + min(18, max(-18, peek))
                             cardTiltX = min(9, max(-9, Double(-value.translation.height / cardHeight) * 14))
                         case nil:
                             break
@@ -1123,20 +1131,28 @@ struct ProfileShareSheet: View {
                                 carouselDragOffset = 0
                             }
                         case .flip:
-                            // Velocity-aware settle: a quick flick flips
-                            // even if the travel was short (this was the
-                            // "buggy" feel — release before halfway always
-                            // snapped back). Project the flick forward,
-                            // then land on the nearest half-turn.
-                            let flick = Double((value.predictedEndTranslation.width - value.translation.width) / cardWidth) * 180
-                            let projected = min(flipDragBase + 180, max(flipDragBase - 180, flipAngle + flick * 0.6))
-                            let target = (projected / 180).rounded() * 180
-                            isFlipped = FlipFace.frontDistance(target) >= 90
-                            if isFlipped { showCopiedCode = false }
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            withAnimation(.spring(response: 0.55, dampingFraction: 0.68)) {
-                                flipAngle = target
-                                cardTiltX = 0
+                            // Intent gate: a real swipe (travel and/or
+                            // flick) commits a full spring-flip; anything
+                            // less relaxes back — so casual finger play
+                            // just tilts the card and never half-turns it.
+                            let travel = Double(value.translation.width / cardWidth)
+                            let flick = Double((value.predictedEndTranslation.width - value.translation.width) / cardWidth)
+                            let intent = travel + flick * 0.5
+                            if abs(intent) > 0.40 {
+                                let direction: Double = intent >= 0 ? 1 : -1
+                                let target = flipDragBase + direction * 180
+                                isFlipped = FlipFace.frontDistance(target) >= 90
+                                if isFlipped { showCopiedCode = false }
+                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                withAnimation(.spring(response: 0.55, dampingFraction: 0.68)) {
+                                    flipAngle = target
+                                    cardTiltX = 0
+                                }
+                            } else {
+                                withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+                                    flipAngle = flipDragBase
+                                    cardTiltX = 0
+                                }
                             }
                         case nil:
                             break
