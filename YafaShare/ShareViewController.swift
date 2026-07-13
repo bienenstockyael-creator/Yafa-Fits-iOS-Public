@@ -214,11 +214,19 @@ class ShareViewController: UIViewController {
         guard let items = extensionContext?.inputItems as? [NSExtensionItem] else { return nil }
 
         // 1. JavaScript preprocessing results (Safari) — the fields GetProduct.js
-        //    pulled straight from the live page, past any bot-wall.
+        //    pulled straight from the live page, past any bot-wall. One retry
+        //    after a beat: on slow anti-bot pages the script can complete
+        //    just after the sheet opens, and the first load throws
+        //    "Cannot load representation" while results aren't ready.
         for item in items {
             for provider in item.attachments ?? [] {
-                if provider.hasItemConformingToTypeIdentifier(UTType.propertyList.identifier),
-                   let dict = try? await loadPlist(provider),
+                guard provider.hasItemConformingToTypeIdentifier(UTType.propertyList.identifier) else { continue }
+                var dict = try? await loadPlist(provider)
+                if dict == nil {
+                    try? await Task.sleep(nanoseconds: 600_000_000)
+                    dict = try? await loadPlist(provider)
+                }
+                if let dict,
                    let results = dict[NSExtensionJavaScriptPreprocessingResultsKey] as? [String: Any],
                    let urlStr = results["url"] as? String,
                    let url = URL(string: urlStr) {
@@ -234,9 +242,10 @@ class ShareViewController: UIViewController {
             }
         }
 
-        // 2. Fallback: just a URL (non-Safari share) — server-side scrape attempt.
+        // 2. Plain URL (the primary path now that JS preprocessing is
+        //    off) — server-side scrape fills the metadata.
         if let url = await extractURL() {
-            return SharedProduct(url: url, name: nil, image: nil, imageData: nil, price: nil, brand: nil)
+            return SharedProduct(url: unwrapGoogleRedirect(url), name: nil, image: nil, imageData: nil, price: nil, brand: nil)
         }
         return nil
     }
@@ -251,6 +260,23 @@ class ShareViewController: UIViewController {
     }
 
     // MARK: URL extraction (fallback)
+
+    /// Google surfaces (Lens results, search redirects) wrap the real
+    /// retailer link in their own URL. Saving the wrapper makes a
+    /// useless wishlist item — unwrap the target when present.
+    private func unwrapGoogleRedirect(_ url: URL) -> URL {
+        guard let host = url.host, host.contains("google.") else { return url }
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
+        for key in ["url", "u", "q", "imgrefurl", "adurl"] {
+            if let value = components.queryItems?.first(where: { $0.name == key })?.value,
+               let target = URL(string: value),
+               let targetHost = target.host,
+               !targetHost.contains("google.") {
+                return target
+            }
+        }
+        return url
+    }
 
     private func extractURL() async -> URL? {
         guard let items = extensionContext?.inputItems as? [NSExtensionItem] else { return nil }

@@ -80,11 +80,19 @@ ExtensionPreprocessingJS.prototype = {
     // The browser can reach the (often bot-walled) retailer image even when
     // our server can't, so grab the bytes here, downscale, and hand them over
     // as a compact base64 JPEG. FAL then never has to fetch the protected URL.
-    if (!image) { done(null); return; }
+    //
+    // BUT: only when the page has fully settled. Anti-bot-heavy shops
+    // (Farfetch, Valentino) keep the page busy indefinitely; Safari
+    // kills preprocessing scripts that run too long, and a killed
+    // script can never complete — the share sheet then fails with
+    // "Cannot load representation" and the save dies. Completing
+    // promptly with the metadata URLs beats risking the whole save
+    // for inline image bytes.
+    if (!image || document.readyState !== "complete") { done(null); return; }
 
     var settled = false;
     function finishOnce(data) { if (!settled) { settled = true; done(data); } }
-    setTimeout(function () { finishOnce(null); }, 4500); // never hang the sheet
+    setTimeout(function () { finishOnce(null); }, 1500); // never hang the sheet
 
     try {
       var img = new Image();

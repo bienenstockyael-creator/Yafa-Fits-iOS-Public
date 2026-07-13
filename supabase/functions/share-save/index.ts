@@ -64,6 +64,13 @@ function metaContent(html: string, key: string): string | null {
 
 function absolutize(src: string | null, base: string): string | null {
   if (!src) return null;
+  // Reject scheme-without-authority values like "https:files/x.jpg" —
+  // Cult Gaia's JSON-LD ships exactly this (their Shopify template is
+  // broken). new URL() silently resolves it RELATIVE to the page,
+  // fabricating a dead same-site path (/products/files/x.jpg) that
+  // then gets saved as the wishlist image. Treat it as no value so
+  // the caller falls through to og:image, which is well-formed.
+  if (/^https?:(?!\/\/)/i.test(src.trim())) return null;
   try {
     return new URL(src, base).toString();
   } catch {
@@ -126,13 +133,12 @@ async function scrape(url: string): Promise<Scraped> {
     if (t) name = decodeEntities(t);
   }
 
-  const image = absolutize(
-    ld.image
-      ?? metaContent(html, "og:image:secure_url")
-      ?? metaContent(html, "og:image")
-      ?? metaContent(html, "twitter:image"),
-    url,
-  );
+  // Validate each candidate independently — a malformed value from a
+  // preferred source (JSON-LD) must not shadow a valid og:image.
+  const image = absolutize(ld.image ?? null, url)
+    ?? absolutize(metaContent(html, "og:image:secure_url"), url)
+    ?? absolutize(metaContent(html, "og:image"), url)
+    ?? absolutize(metaContent(html, "twitter:image"), url);
 
   const price = ld.price
     ?? metaContent(html, "product:price:amount")

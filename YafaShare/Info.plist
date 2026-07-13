@@ -6,15 +6,20 @@
 	<dict>
 		<key>NSExtensionAttributes</key>
 		<dict>
+			<!-- URL-only shares, NO JavaScript preprocessing. The
+			     GetProduct.js scraping route depended on Safari
+			     injecting the script into the shared page — anti-bot
+			     shops (Farfetch, Valentino, Cult Gaia) block or stall
+			     that injection, Safari then can't deliver the promised
+			     results plist, and the save hard-fails with "No link
+			     to save". A plain URL share works on every page in
+			     every load state; product metadata comes from the
+			     server-side scrape in `share-save` instead. -->
 			<key>NSExtensionActivationRule</key>
 			<dict>
 				<key>NSExtensionActivationSupportsWebURLWithMaxCount</key>
 				<integer>1</integer>
-				<key>NSExtensionActivationSupportsWebPageWithMaxCount</key>
-				<integer>1</integer>
 			</dict>
-			<key>NSExtensionJavaScriptPreprocessingFile</key>
-			<string>GetProduct</string>
 		</dict>
 		<key>NSExtensionPointIdentifier</key>
 		<string>com.apple.share-services</string>
