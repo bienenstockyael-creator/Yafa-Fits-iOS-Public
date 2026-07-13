@@ -105,9 +105,22 @@ final class WishlistBackfillService: NSObject {
         try await Task.sleep(nanoseconds: 2_500_000_000)
 
         // Pass 1: metadata + pick the hero image (largest rendered
-        // <img>), tag it, and scroll it into view.
-        let metaJSON = try await evaluate(Self.extractAndTagJS, in: webView)
-        let meta = try JSONDecoder().decode(PageMeta.self, from: Data(metaJSON.utf8))
+        // <img>), tag it, and scroll it into view. Lazy loaders on
+        // cellular can take several more seconds to materialize the
+        // hero — poll up to 4 extra rounds before giving up on the
+        // image (metadata is kept either way).
+        var metaJSON = try await evaluate(Self.extractAndTagJS, in: webView)
+        var meta = try JSONDecoder().decode(PageMeta.self, from: Data(metaJSON.utf8))
+        var rounds = 0
+        while !meta.hasImage && rounds < 4 {
+            rounds += 1
+            try await Task.sleep(nanoseconds: 1_500_000_000)
+            metaJSON = try await evaluate(Self.extractAndTagJS, in: webView)
+            meta = try JSONDecoder().decode(PageMeta.self, from: Data(metaJSON.utf8))
+        }
+        #if DEBUG
+        print("[Backfill] \(url.host ?? "") meta=\(metaJSON) rounds=\(rounds)")
+        #endif
 
         var uploadedImageURL: String?
         if meta.hasImage {
@@ -116,11 +129,20 @@ final class WishlistBackfillService: NSObject {
             try await Task.sleep(nanoseconds: 800_000_000)
             let rectJSON = try await evaluate(Self.taggedRectJS, in: webView)
             let rect = try JSONDecoder().decode(ImageRect.self, from: Data(rectJSON.utf8))
+            #if DEBUG
+            print("[Backfill] hero rect=(\(rect.x), \(rect.y), \(rect.w), \(rect.h))")
+            #endif
             if rect.w > 40, rect.h > 40 {
                 let config = WKSnapshotConfiguration()
                 config.rect = CGRect(x: rect.x, y: rect.y, width: rect.w, height: rect.h)
                 let image = try await webView.takeSnapshot(configuration: config)
-                uploadedImageURL = try? await ProductThumbnailUploadService.upload(image, userId: userId)
+                // A THROW here (snapshot or upload) leaves the stub
+                // flagged and retried next session — only a page with
+                // genuinely no hero image gets marked failed below.
+                uploadedImageURL = try await ProductThumbnailUploadService.upload(image, userId: userId)
+                #if DEBUG
+                print("[Backfill] uploaded=\(uploadedImageURL ?? "nil")")
+                #endif
             }
         }
 
@@ -153,10 +175,11 @@ final class WishlistBackfillService: NSObject {
         )
         view.navigationDelegate = self
         view.isUserInteractionEnabled = false
-        view.alpha = 0
-        // Must live in a window for WebKit to render (snapshots of a
-        // detached web view come back blank). Alpha 0 + behind
-        // everything + non-interactive = invisible to the user.
+        // FULL alpha, inserted at the very back of the window: the
+        // app's opaque root covers it completely, so it's invisible —
+        // but unlike alpha = 0 (which iOS may skip compositing
+        // entirely), WebKit keeps rendering and takeSnapshot returns
+        // real pixels.
         if let window = UIApplication.shared.connectedScenes
             .compactMap({ ($0 as? UIWindowScene)?.keyWindow })
             .first {
