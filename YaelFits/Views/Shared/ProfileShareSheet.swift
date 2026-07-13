@@ -49,6 +49,14 @@ struct ProfileShareSheet: View {
     @State private var activeInviteShareText: String? = nil
     /// Brief "copied!" confirmation after tapping the code.
     @State private var showCopiedCode = false
+    /// What the current drag is steering — decided ONCE at drag
+    /// start by where the finger landed (the outfit's vertical band
+    /// = carousel; the card's free space above/below it = flip) and
+    /// held for the whole gesture.
+    private enum CardDragMode { case carousel, flip }
+    @State private var cardDragMode: CardDragMode? = nil
+    /// flipAngle at the moment the flip drag began.
+    @State private var flipDragBase: Double = 0
     /// Fractional dot position while the user is scrubbing the
     /// dot picker. nil at rest.
     @State private var dotScrubPosition: CGFloat? = nil
@@ -482,7 +490,16 @@ struct ProfileShareSheet: View {
             // here: the RPC only mints for quota-holders, one active
             // code at a time.
             guard invite == nil else { return }
-            invite = try? await SocialService.currentInviteCode()
+            do {
+                invite = try await SocialService.currentInviteCode()
+                #if DEBUG
+                print("[Invite] state=\(invite?.state ?? "nil-row") code=\(invite?.code ?? "-") used=\(invite?.used ?? -1) quota=\(invite?.quota ?? -1)")
+                #endif
+            } catch {
+                #if DEBUG
+                print("[Invite] fetch failed: \(error)")
+                #endif
+            }
             if let invite, invite.quota > 0 {
                 claimedInvites = (try? await SocialService.myClaimedInvites()) ?? []
             }
@@ -512,41 +529,94 @@ struct ProfileShareSheet: View {
             set { angle = newValue }
         }
         func body(content: Content) -> some View {
-            content.opacity((angle >= 90) == isBack ? 1 : 0)
+            // abs(): drag-to-flip can rotate either direction, so
+            // ±180 are both "back".
+            content.opacity((abs(angle) >= 90) == isBack ? 1 : 0)
+        }
+    }
+
+    /// Proportional fade for the elements that float OVER the card
+    /// (outfit, pills) — they dissolve as the flip starts rather than
+    /// popping at the midpoint, since they don't rotate with the card.
+    private struct FlipFade: ViewModifier, Animatable {
+        var angle: Double
+        var animatableData: Double {
+            get { angle }
+            set { angle = newValue }
+        }
+        func body(content: Content) -> some View {
+            content.opacity(max(0, 1 - abs(angle) / 70))
+        }
+    }
+
+    /// The card's extruded side: a darker slab behind the face,
+    /// offset by the flip angle so the edge swings around as the
+    /// card turns — and stays a hairline at rest so the card reads
+    /// as a physical object with thickness, not printed paper.
+    private struct CardDepth: ViewModifier, Animatable {
+        var angle: Double
+        let cornerRadius: CGFloat
+        var animatableData: Double {
+            get { angle }
+            set { angle = newValue }
+        }
+        func body(content: Content) -> some View {
+            content.background(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(Color(white: 0.78))
+                    .offset(x: sin(angle * .pi / 180) * 7, y: 3)
+            )
         }
     }
 
     /// Remaining-invites capsule, bottom-right of the card front.
+    /// Same recipe as `UsernamePill` (WeatherPill look: cardFill +
+    /// cardBorder + soft blue glow) so it reads on the light card.
     private struct InviteChip: View {
         let remaining: Int
         let scale: CGFloat
         var body: some View {
             Text(remaining > 0 ? "\(remaining) INVITE\(remaining == 1 ? "" : "S")" : "INVITES")
-                .font(.system(size: 10 * scale, weight: .semibold))
-                .tracking(1.5)
-                .foregroundStyle(.white.opacity(0.85))
-                .padding(.horizontal, 10 * scale)
-                .padding(.vertical, 6 * scale)
-                .background(Capsule().fill(.white.opacity(0.16)))
+                .font(.system(size: 11 * scale, weight: .semibold))
+                .tracking(1.2)
+                .foregroundStyle(AppPalette.textSecondary)
+                .padding(.horizontal, 11 * scale)
+                .padding(.vertical, 7 * scale)
+                .background(Capsule().fill(AppPalette.cardFill))
+                .overlay(Capsule().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
+                .shadow(
+                    color: Color(red: 0.58, green: 0.81, blue: 1.0).opacity(0.55),
+                    radius: 9 * scale,
+                    y: 2 * scale
+                )
+                .shadow(
+                    color: Color(red: 0.58, green: 0.81, blue: 1.0).opacity(0.35),
+                    radius: 16 * scale,
+                    y: 3 * scale
+                )
         }
     }
 
     @ViewBuilder
     private func inviteBackFace(cardWidth: CGFloat, cardHeight: CGFloat, scale: CGFloat) -> some View {
+        // App-consistent type on the light card: header-style tracked
+        // caps in textSecondary (the sheet header's voice), the code in
+        // the card family's SemiBold in textPrimary, captions in the
+        // card label's MediumItalic in textMuted.
         VStack(spacing: 0) {
             Spacer()
 
             Text(invite?.state == "exhausted" ? "ALL INVITES USED" : "INVITE A FRIEND")
                 .font(.system(size: 12 * scale, weight: .semibold))
                 .tracking(3)
-                .foregroundStyle(.white.opacity(0.55))
+                .foregroundStyle(AppPalette.textSecondary)
 
             if let code = invite?.code {
                 Text(code)
                     .font(.custom("Inter28pt-SemiBold", size: 38 * scale))
                     .tracking(3 * scale)
-                    .foregroundStyle(.white)
-                    .padding(.top, 18 * scale)
+                    .foregroundStyle(AppPalette.textPrimary)
+                    .padding(.top, 16 * scale)
                     .contentShape(Rectangle())
                     .onTapGesture {
                         UIPasteboard.general.string = code
@@ -558,8 +628,8 @@ struct ProfileShareSheet: View {
                         }
                     }
                 Text(showCopiedCode ? "copied!" : "one-time code · tap to copy")
-                    .font(.custom("Inter28pt-MediumItalic", size: 12 * scale))
-                    .foregroundStyle(.white.opacity(0.45))
+                    .font(.custom("Inter28pt-MediumItalic", size: 13 * scale))
+                    .foregroundStyle(AppPalette.textMuted)
                     .padding(.top, 10 * scale)
             }
 
@@ -567,7 +637,7 @@ struct ProfileShareSheet: View {
                 Text("\(invite.used) OF \(invite.quota) USED")
                     .font(.system(size: 10 * scale, weight: .semibold))
                     .tracking(2)
-                    .foregroundStyle(.white.opacity(0.35))
+                    .foregroundStyle(AppPalette.textMuted)
                     .padding(.top, 26 * scale)
             }
 
@@ -576,7 +646,7 @@ struct ProfileShareSheet: View {
                     ForEach(claimedInvites.prefix(3)) { claim in
                         Text("@\(claim.claimedByUsername ?? "someone") joined")
                             .font(.system(size: 11 * scale, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.5))
+                            .foregroundStyle(AppPalette.textSecondary)
                     }
                 }
                 .padding(.top, 12 * scale)
@@ -775,6 +845,7 @@ struct ProfileShareSheet: View {
                 .frame(width: cardWidth, height: cardHeight)
                 .compositingGroup()
                 .clipShape(RoundedRectangle(cornerRadius: 24 * scale, style: .continuous))
+                .modifier(CardDepth(angle: flipAngle, cornerRadius: 24 * scale))
                 .rotation3DEffect(.degrees(flipAngle), axis: (x: 0, y: 1, z: 0), perspective: 0.35)
                 .shadow(color: .black.opacity(0.14), radius: 16, y: 10)
                 .allowsHitTesting(false)
@@ -800,12 +871,12 @@ struct ProfileShareSheet: View {
                                 .offset(y: -22 * scale * 0.5)
                             }
                             .allowsHitTesting(false)
-                            .opacity(isFlipped ? 0 : 1)
+                            .modifier(FlipFade(angle: flipAngle))
                     } else {
                         // No photo — logo silhouette placeholder.
                         emptyStateHero(height: cardHeight * 0.64)
                             .allowsHitTesting(false)
-                            .opacity(isFlipped ? 0 : 1)
+                            .modifier(FlipFade(angle: flipAngle))
                     }
                 } else {
                     // Outfit strip — floats over the card, unclipped.
@@ -832,7 +903,7 @@ struct ProfileShareSheet: View {
                         }
                     }
                     .frame(width: geo.size.width, height: cardHeight)
-                    .opacity(isFlipped ? 0 : 1)
+                    .modifier(FlipFade(angle: flipAngle))
                 }
 
                 // Username pill, top-right of the card — weather-pill style
@@ -851,7 +922,7 @@ struct ProfileShareSheet: View {
                             .padding(.top, 14 * scale)
                         }
                         .allowsHitTesting(false)
-                        .opacity(isFlipped ? 0 : 1)
+                        .modifier(FlipFade(angle: flipAngle))
                 }
 
                 // Invite chip, bottom-right — the flip's discoverability.
@@ -868,7 +939,7 @@ struct ProfileShareSheet: View {
                             .padding(.bottom, 14 * scale)
                         }
                         .allowsHitTesting(false)
-                        .opacity(isFlipped ? 0 : 1)
+                        .modifier(FlipFade(angle: flipAngle))
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
@@ -876,26 +947,71 @@ struct ProfileShareSheet: View {
             .gesture(
                 DragGesture()
                     .onChanged { value in
-                        // Nothing to swipe with 0 or 1 outfit (the
-                        // empty-state hero is fixed, not a carousel) —
-                        // and nothing while the invite back is up.
-                        guard outfits.count > 1, !isFlipped else { return }
-                        carouselDragOffset = value.translation.width
+                        // Route the drag once, by START position: the
+                        // outfit's vertical band swipes the carousel;
+                        // the card's free space above/below it flips.
+                        // While the back is up, everything flips back.
+                        if cardDragMode == nil {
+                            let canFlip = (invite?.quota ?? 0) > 0
+                            let cardTop = (geo.size.height - cardHeight) / 2
+                            let bandTop = cardTop + cardHeight * 0.18
+                            let bandBottom = cardTop + cardHeight * 0.82
+                            let inOutfitBand = (bandTop...bandBottom).contains(value.startLocation.y)
+                            if isFlipped {
+                                cardDragMode = canFlip ? .flip : .carousel
+                            } else {
+                                cardDragMode = (inOutfitBand || !canFlip) ? .carousel : .flip
+                            }
+                            flipDragBase = flipAngle
+                        }
+                        switch cardDragMode {
+                        case .carousel:
+                            // Nothing to swipe with 0 or 1 outfit (the
+                            // empty-state hero is fixed, not a carousel) —
+                            // and nothing while the invite back is up.
+                            guard outfits.count > 1, !isFlipped else { return }
+                            carouselDragOffset = value.translation.width
+                        case .flip:
+                            // The card follows the finger 1:1 — a full
+                            // card-width of travel is a full half-turn.
+                            let delta = Double(value.translation.width / cardWidth) * 180
+                            flipAngle = min(180, max(-180, flipDragBase + delta))
+                        case nil:
+                            break
+                        }
                     }
                     .onEnded { value in
-                        guard outfits.count > 1, !isFlipped else { return }
-                        let translation = value.translation.width
-                        let velocity = value.predictedEndTranslation.width
-                        var newIndex = selectedIndex
-                        if translation < -50 || velocity < -200 {
-                            newIndex = min(selectedIndex + 1, outfits.count - 1)
-                        } else if translation > 50 || velocity > 200 {
-                            newIndex = max(selectedIndex - 1, 0)
-                        }
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
-                            selectedIndex = newIndex
-                            carouselDragOffset = 0
+                        let mode = cardDragMode
+                        cardDragMode = nil
+                        switch mode {
+                        case .carousel:
+                            guard outfits.count > 1, !isFlipped else { return }
+                            let translation = value.translation.width
+                            let velocity = value.predictedEndTranslation.width
+                            var newIndex = selectedIndex
+                            if translation < -50 || velocity < -200 {
+                                newIndex = min(selectedIndex + 1, outfits.count - 1)
+                            } else if translation > 50 || velocity > 200 {
+                                newIndex = max(selectedIndex - 1, 0)
+                            }
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
+                                selectedIndex = newIndex
+                                carouselDragOffset = 0
+                            }
+                        case .flip:
+                            // Settle to whichever face the card is
+                            // showing more of.
+                            let target: Double = abs(flipAngle) > 90
+                                ? (flipAngle >= 0 ? 180 : -180) : 0
+                            isFlipped = target != 0
+                            if isFlipped { showCopiedCode = false }
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) {
+                                flipAngle = target
+                            }
+                        case nil:
+                            break
                         }
                     }
             )
