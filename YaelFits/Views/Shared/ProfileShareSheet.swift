@@ -680,7 +680,7 @@ struct ProfileShareSheet: View {
         let cardHeight: CGFloat
         var body: some View {
             Text(remaining > 0 ? "\(remaining) INVITE\(remaining == 1 ? "" : "S")" : "INVITES")
-                .font(.system(size: 11 * scale, weight: .semibold))
+                .font(.system(size: 11 * scale, weight: .semibold, design: .monospaced))
                 .tracking(1.2)
                 .foregroundStyle(AppPalette.textSecondary)
                 .padding(.horizontal, 11 * scale)
@@ -801,25 +801,22 @@ struct ProfileShareSheet: View {
 
     @ViewBuilder
     private func inviteBackFace(cardWidth: CGFloat, cardHeight: CGFloat, scale: CGFloat) -> some View {
-        // Tightened to the app's own hierarchy: sheet-header tracked
-        // caps in textMuted up top, the code as the single hero in the
-        // card family's SemiBold (tight tracking — wide tracking at
-        // display size read as spaced-out, not premium), the italic
-        // caption voice underneath, then a hairline rule and the meta
-        // line — the same header / hero / caption / rule rhythm the
-        // app's sheets use.
+        // The app's mono caps voice (the sheet-header font), EXACTLY
+        // two sizes: 40 for the code hero, 11 for everything else.
+        // No usage counter — the remaining-invites pill (moved here
+        // from the card front) already says it.
         VStack(spacing: 0) {
             Spacer()
 
             Text(invite?.state == "exhausted" ? "ALL INVITES USED" : "INVITE A FRIEND")
-                .font(.system(size: 11 * scale, weight: .semibold))
-                .tracking(3.5)
+                .font(.system(size: 11 * scale, weight: .bold, design: .monospaced))
+                .tracking(2)
                 .foregroundStyle(AppPalette.textMuted)
 
             if let code = invite?.code {
                 Text(code)
-                    .font(.custom("Inter28pt-SemiBold", size: 40 * scale))
-                    .tracking(1.2 * scale)
+                    .font(.system(size: 40 * scale, weight: .bold, design: .monospaced))
+                    .tracking(1 * scale)
                     .foregroundStyle(AppPalette.textPrimary)
                     .padding(.top, 14 * scale)
                     .contentShape(Rectangle())
@@ -832,34 +829,22 @@ struct ProfileShareSheet: View {
                             withAnimation(.easeOut(duration: 0.3)) { showCopiedCode = false }
                         }
                     }
-                Text(showCopiedCode ? "copied!" : "one-time code · tap to copy")
-                    .font(.custom("Inter28pt-MediumItalic", size: 12 * scale))
-                    .foregroundStyle(AppPalette.textMuted)
-                    .padding(.top, 8 * scale)
-            }
-
-            Rectangle()
-                .fill(AppPalette.cardBorder)
-                .frame(width: 44 * scale, height: 1)
-                .padding(.top, 22 * scale)
-
-            if let invite {
-                Text("\(invite.used) OF \(invite.quota) USED")
-                    .font(.system(size: 10 * scale, weight: .semibold))
+                Text(showCopiedCode ? "COPIED!" : "ONE-TIME CODE · TAP TO COPY")
+                    .font(.system(size: 11 * scale, weight: .bold, design: .monospaced))
                     .tracking(2)
                     .foregroundStyle(AppPalette.textMuted)
-                    .padding(.top, 12 * scale)
+                    .padding(.top, 10 * scale)
             }
 
             if !claimedInvites.isEmpty {
                 VStack(spacing: 5 * scale) {
                     ForEach(claimedInvites.prefix(3)) { claim in
                         Text("@\(claim.claimedByUsername ?? "someone") joined")
-                            .font(.system(size: 11 * scale, weight: .medium))
+                            .font(.system(size: 11 * scale, weight: .medium, design: .monospaced))
                             .foregroundStyle(AppPalette.textSecondary)
                     }
                 }
-                .padding(.top, 10 * scale)
+                .padding(.top, 18 * scale)
             }
 
             Spacer()
@@ -869,6 +854,21 @@ struct ProfileShareSheet: View {
             MadeOnYafaMark(width: cardWidth * 0.20, color: .white)
                 .padding(.leading, 16 * scale)
                 .padding(.bottom, 14 * scale)
+        }
+        // Remaining-invites pill lives on THIS side now (moved off
+        // the front) — right where the counter it replaces once was.
+        .overlay(alignment: .bottomTrailing) {
+            if let invite, invite.quota > 0 {
+                InviteChip(
+                    remaining: max(0, invite.quota - invite.used),
+                    scale: scale,
+                    normalMap: chromeNormalMap,
+                    cardWidth: cardWidth,
+                    cardHeight: cardHeight
+                )
+                .padding(.trailing, 14 * scale)
+                .padding(.bottom, 14 * scale)
+            }
         }
     }
 
@@ -1079,20 +1079,6 @@ struct ProfileShareSheet: View {
                         )
                         .padding(.trailing, 14 * scale)
                         .padding(.top, 14 * scale)
-                        .modifier(FlipFace(angle: flipAngle, isBack: false))
-                    }
-                }
-                .overlay(alignment: .bottomTrailing) {
-                    if let invite, invite.quota > 0 {
-                        InviteChip(
-                            remaining: max(0, invite.quota - invite.used),
-                            scale: scale,
-                            normalMap: chromeNormalMap,
-                            cardWidth: cardWidth,
-                            cardHeight: cardHeight
-                        )
-                        .padding(.trailing, 14 * scale)
-                        .padding(.bottom, 14 * scale)
                         .modifier(FlipFace(angle: flipAngle, isBack: false))
                     }
                 }
