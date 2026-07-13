@@ -54,11 +54,6 @@
 		202605302200000B000001 /* VibesWaveShader.metal in Sources */ = {isa = PBXBuildFile; fileRef = 202605302200000A000001 /* VibesWaveShader.metal */; };
 		202605302300000B000001 /* VibesWaveModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605302300000A000001 /* VibesWaveModifier.swift */; };
 		202605302500000B000001 /* WindowSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605302500000A000001 /* WindowSnapshot.swift */; };
-		202607090000000B000003 /* FlowLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202607090000000A000003 /* FlowLayout.swift */; };
-		202607090000000B000002 /* TouchCountReporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202607090000000A000002 /* TouchCountReporter.swift */; };
-		202607090000000B000001 /* GridPinchZoom.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202607090000000A000001 /* GridPinchZoom.swift */; };
-		202607110000000B000001 /* GestureRouteHealer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202607110000000A000001 /* GestureRouteHealer.swift */; };
-		202607120000000B000001 /* WishlistBackfillService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202607120000000A000001 /* WishlistBackfillService.swift */; };
 		202605302600000B000001 /* VibeHapticPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605302600000A000001 /* VibeHapticPlayer.swift */; };
 		202605302700000B000001 /* VibesFirstUseModal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605302700000A000001 /* VibesFirstUseModal.swift */; };
 		202605302800000B000001 /* InfoExplainerModal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202605302800000A000001 /* InfoExplainerModal.swift */; };
@@ -76,9 +71,15 @@
 		202606080000000B000001 /* OnboardingFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202606080000000A000001 /* OnboardingFlow.swift */; };
 		202606111200000B000001 /* ProfileShareSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202606111200000A000001 /* ProfileShareSheet.swift */; };
 		20260620000000990B000001 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 20260620000000990A000001 /* PrivacyInfo.xcprivacy */; };
+		202607090000000B000001 /* GridPinchZoom.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202607090000000A000001 /* GridPinchZoom.swift */; };
+		202607090000000B000002 /* TouchCountReporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202607090000000A000002 /* TouchCountReporter.swift */; };
+		202607090000000B000003 /* FlowLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202607090000000A000003 /* FlowLayout.swift */; };
+		202607090000000B000004 /* CalendarDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202607090000000A000004 /* CalendarDetailSheet.swift */; };
+		202607100000000B000001 /* Caveat-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 202607100000000A000001 /* Caveat-Variable.ttf */; };
+		202607110000000B000001 /* GestureRouteHealer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202607110000000A000001 /* GestureRouteHealer.swift */; };
+		202607120000000B000001 /* WishlistBackfillService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202607120000000A000001 /* WishlistBackfillService.swift */; };
 		22B301AC155311EC382BBED1 /* PasswordResetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9ACE0F1992CD1E1C592E84FE /* PasswordResetView.swift */; };
 		24CE8DD298136439F5078DFA /* PlayfairDisplay-Italic.otf in Resources */ = {isa = PBXBuildFile; fileRef = 60A31063DA222A97AF101191 /* PlayfairDisplay-Italic.otf */; };
-		202607100000000B000001 /* Caveat-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 202607100000000A000001 /* Caveat-Variable.ttf */; };
 		25CD0A57BA9A4449422B812F /* FrameSequenceViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8D5A078D13851433A0CF2C8 /* FrameSequenceViewModel.swift */; };
 		27BFFC0250801E7BA95DB9E9 /* Adieu-BlackSlanted.otf in Resources */ = {isa = PBXBuildFile; fileRef = FA749595F4514A6C52C3341B /* Adieu-BlackSlanted.otf */; };
 		28ADD037813ECB12F2DF59A4 /* UploadMaskingBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E528CCFAA1423FAE69CD013 /* UploadMaskingBackend.swift */; };
@@ -128,7 +129,6 @@
 		8D03DF06C6620F85AEB47EE2 /* star-anim-1.json in Resources */ = {isa = PBXBuildFile; fileRef = CB5585020776BB338F29E786 /* star-anim-1.json */; };
 		8E2CDB32D67E1D2148CB2192 /* AvatarOnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BA298132FF0C968C9EEBA8F /* AvatarOnboardingView.swift */; };
 		8F72948DEEE2D44825BE68A6 /* CalendarMonthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E5E7B65087075120E526293 /* CalendarMonthView.swift */; };
-		202607090000000B000004 /* CalendarDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202607090000000A000004 /* CalendarDetailSheet.swift */; };
 		9261D38B7469308E9C7E73CF /* UserProfileSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A852FB7BE96B45E54412928 /* UserProfileSheet.swift */; };
 		9CB31FFFBB1BA5EF0D91DB03 /* overcast.json in Resources */ = {isa = PBXBuildFile; fileRef = 4DB2F741FB63C26764629E7F /* overcast.json */; };
 		9CD7C338B9E7183740D18BE9 /* ShareCardComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A8B83877DA92714F54E7914 /* ShareCardComposer.swift */; };
@@ -281,11 +281,6 @@
 		202605302200000A000001 /* VibesWaveShader.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = VibesWaveShader.metal; sourceTree = "<group>"; };
 		202605302300000A000001 /* VibesWaveModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibesWaveModifier.swift; sourceTree = "<group>"; };
 		202605302500000A000001 /* WindowSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowSnapshot.swift; sourceTree = "<group>"; };
-		202607090000000A000003 /* FlowLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowLayout.swift; sourceTree = "<group>"; };
-		202607090000000A000002 /* TouchCountReporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchCountReporter.swift; sourceTree = "<group>"; };
-		202607090000000A000001 /* GridPinchZoom.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GridPinchZoom.swift; sourceTree = "<group>"; };
-		202607110000000A000001 /* GestureRouteHealer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GestureRouteHealer.swift; sourceTree = "<group>"; };
-		202607120000000A000001 /* WishlistBackfillService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WishlistBackfillService.swift; sourceTree = "<group>"; };
 		202605302600000A000001 /* VibeHapticPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeHapticPlayer.swift; sourceTree = "<group>"; };
 		202605302700000A000001 /* VibesFirstUseModal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibesFirstUseModal.swift; sourceTree = "<group>"; };
 		202605302800000A000001 /* InfoExplainerModal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InfoExplainerModal.swift; sourceTree = "<group>"; };
@@ -304,6 +299,13 @@
 		202606080000000A000001 /* OnboardingFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingFlow.swift; sourceTree = "<group>"; };
 		202606111200000A000001 /* ProfileShareSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileShareSheet.swift; sourceTree = "<group>"; };
 		20260620000000990A000001 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		202607090000000A000001 /* GridPinchZoom.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GridPinchZoom.swift; sourceTree = "<group>"; };
+		202607090000000A000002 /* TouchCountReporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchCountReporter.swift; sourceTree = "<group>"; };
+		202607090000000A000003 /* FlowLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowLayout.swift; sourceTree = "<group>"; };
+		202607090000000A000004 /* CalendarDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarDetailSheet.swift; sourceTree = "<group>"; };
+		202607100000000A000001 /* Caveat-Variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Caveat-Variable.ttf"; sourceTree = "<group>"; };
+		202607110000000A000001 /* GestureRouteHealer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GestureRouteHealer.swift; sourceTree = "<group>"; };
+		202607120000000A000001 /* WishlistBackfillService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WishlistBackfillService.swift; sourceTree = "<group>"; };
 		251414A04E6CDF8175AC3872 /* ProductLibraryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductLibraryService.swift; sourceTree = "<group>"; };
 		29E71BBBA1CFBB444044694A /* GenerationJobService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationJobService.swift; sourceTree = "<group>"; };
 		2BD94E7C6117190A4E63A8F5 /* ProductThumbnailUploadService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductThumbnailUploadService.swift; sourceTree = "<group>"; };
@@ -337,7 +339,6 @@
 		5896B8C8BF7E8A341C74D09E /* DressAvatarSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DressAvatarSheetView.swift; sourceTree = "<group>"; };
 		5BA298132FF0C968C9EEBA8F /* AvatarOnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarOnboardingView.swift; sourceTree = "<group>"; };
 		60A31063DA222A97AF101191 /* PlayfairDisplay-Italic.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "PlayfairDisplay-Italic.otf"; sourceTree = "<group>"; };
-		202607100000000A000001 /* Caveat-Variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Caveat-Variable.ttf"; sourceTree = "<group>"; };
 		646E58B0E2ADCFBE6F3987BF /* Profile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Profile.swift; sourceTree = "<group>"; };
 		662419C9FD163590FB593FB1 /* AddProductSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddProductSheet.swift; sourceTree = "<group>"; };
 		6A852FB7BE96B45E54412928 /* UserProfileSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfileSheet.swift; sourceTree = "<group>"; };
@@ -359,7 +360,6 @@
 		89B3091DEE0ED4BD08D99CA8 /* ImageMaskingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageMaskingService.swift; sourceTree = "<group>"; };
 		8BBAC0B0ACE295E42CFA0EEE /* App.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = App.xcconfig; sourceTree = "<group>"; };
 		8E5E7B65087075120E526293 /* CalendarMonthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarMonthView.swift; sourceTree = "<group>"; };
-		202607090000000A000004 /* CalendarDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarDetailSheet.swift; sourceTree = "<group>"; };
 		8E93326E60084B89CA340A41 /* cloudy.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = cloudy.json; sourceTree = "<group>"; };
 		8EBE6BC6F81A484544954195 /* OutfitCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutfitCardView.swift; sourceTree = "<group>"; };
 		905C6AFB58485F178201A276 /* Info 2.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Info 2.plist"; sourceTree = "<group>"; };
@@ -1236,7 +1236,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = YaelFits/YaelFits.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 57;
+				CURRENT_PROJECT_VERSION = 58;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = YaelFits/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1359,7 +1359,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = YaelFits/YaelFits.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 57;
+				CURRENT_PROJECT_VERSION = 58;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = YaelFits/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1441,7 +1441,7 @@
 				CODE_SIGN_ENTITLEMENTS = YafaShare/YafaShare.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 57;
+				CURRENT_PROJECT_VERSION = 58;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -1481,7 +1481,7 @@
 				CODE_SIGN_ENTITLEMENTS = YafaShare/YafaShare.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 57;
+				CURRENT_PROJECT_VERSION = 58;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;

@@ -157,9 +157,22 @@ class ShareViewController: UIViewController {
     // MARK: Flow
 
     private func run() async {
-        guard let product = await extractProduct() else {
+        guard var product = await extractProduct() else {
             await finish(message: "No link to save", ok: false)
             return
+        }
+        // Fast path: read the product page ourselves. URLSession's
+        // Apple TLS fingerprint passes bot walls that block the
+        // server's scrape (Jacquemus 403s every non-browser client),
+        // and sending the image bytes with the save skips the stub +
+        // WKWebView backfill entirely. Failure costs a few seconds
+        // behind the sparkle card and degrades to the URL-only save.
+        if product.imageData == nil, let enriched = await PageScraper.enrich(url: product.url) {
+            product.name = product.name ?? enriched.name
+            product.image = enriched.image
+            product.imageData = enriched.imageData
+            product.price = product.price ?? enriched.price
+            product.brand = product.brand ?? enriched.brand
         }
         guard var token = await accessToken(forceRefresh: false) else {
             await finish(message: "Open the Yafa app to enable saving", ok: false)
