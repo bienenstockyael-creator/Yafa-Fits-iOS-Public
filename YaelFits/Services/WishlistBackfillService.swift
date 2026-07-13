@@ -38,6 +38,38 @@ final class WishlistBackfillService: NSObject {
         }
     }
 
+    private struct HealRow: Decodable {
+        let id: UUID
+        let name: String
+        let imageUrl: String?
+        let thumbStatus: String?
+        enum CodingKeys: String, CodingKey {
+            case id, name
+            case imageUrl = "image_url"
+            case thumbStatus = "thumb_status"
+        }
+    }
+
+    /// IDs this service flipped to 'generating' whose polish hasn't
+    /// finished. Persisted so an app kill mid-polish can't wedge a row
+    /// at 'generating' forever (eternal sparkles + the closet's 4s
+    /// polish poll re-fetching on every future session). Only OUR ids
+    /// go in here — a row at 'generating' owned by the tagging flow is
+    /// someone else's in-flight work and must not be touched.
+    private static let pendingPolishKey = "yafa.backfill.pendingPolish"
+    private var pendingPolishIDs: [String] {
+        get { UserDefaults.standard.stringArray(forKey: Self.pendingPolishKey) ?? [] }
+        set { UserDefaults.standard.set(newValue, forKey: Self.pendingPolishKey) }
+    }
+    private func rememberPolishing(_ id: UUID) {
+        var ids = pendingPolishIDs
+        if !ids.contains(id.uuidString) { ids.append(id.uuidString) }
+        pendingPolishIDs = ids
+    }
+    private func forgetPolishing(_ id: UUID) {
+        pendingPolishIDs = pendingPolishIDs.filter { $0 != id.uuidString }
+    }
+
     private struct PageMeta: Decodable {
         let name: String?
         let price: String?
@@ -65,6 +97,8 @@ final class WishlistBackfillService: NSObject {
     }
 
     private func run(userId: UUID) async {
+        await healWedgedPolishes(userId: userId)
+
         let stubs: [StubRow]
         do {
             stubs = try await supabase
@@ -174,6 +208,7 @@ final class WishlistBackfillService: NSObject {
         // shows the same sparkles as every other polishing item; the
         // catalog cutout swaps in below and the closet's existing
         // polish-polling animates the change.
+        if uploadedImageURL != nil { rememberPolishing(stub.id) }
         try await WardrobeService.updateItem(
             id: stub.id,
             name: cleanName,
@@ -194,14 +229,75 @@ final class WishlistBackfillService: NSObject {
             )
             let polishedURL = try await ProductThumbnailUploadService.upload(polished, userId: userId)
             try await WardrobeService.updateItem(id: stub.id, imageURL: polishedURL, thumbStatus: "ready")
+            forgetPolishing(stub.id)
             #if DEBUG
             print("[Backfill] polished=\(polishedURL)")
             #endif
         } catch {
-            try? await WardrobeService.updateItem(id: stub.id, thumbStatus: "ready")
+            // Best effort; if this write also fails the id stays in
+            // pendingPolishIDs and the healer resolves it next run.
+            if (try? await WardrobeService.updateItem(id: stub.id, thumbStatus: "ready")) != nil {
+                forgetPolishing(stub.id)
+            }
             #if DEBUG
             print("[Backfill] polish failed, keeping raw: \(error.localizedDescription)")
             #endif
+        }
+    }
+
+    /// Rescue rows a previous session flipped to 'generating' and then
+    /// never finished (app killed mid-polish, or the final write
+    /// failed). The raw snapshot is already uploaded, so re-polish it;
+    /// whatever happens, the row leaves 'generating'.
+    private func healWedgedPolishes(userId: UUID) async {
+        for idString in pendingPolishIDs {
+            guard let id = UUID(uuidString: idString) else {
+                pendingPolishIDs = pendingPolishIDs.filter { $0 != idString }
+                continue
+            }
+            let row: HealRow?
+            do {
+                let rows: [HealRow] = try await supabase
+                    .from("products")
+                    .select("id, name, image_url, thumb_status")
+                    .eq("id", value: id.uuidString)
+                    .limit(1)
+                    .execute()
+                    .value
+                row = rows.first
+            } catch {
+                continue // transient fetch failure — retry next run
+            }
+            // Row gone, or someone else finished it — nothing to heal.
+            guard let row, row.thumbStatus == "generating" else {
+                forgetPolishing(id)
+                continue
+            }
+            #if DEBUG
+            print("[Backfill] healing wedged polish \(id)")
+            #endif
+            var healed = false
+            if let raw = row.imageUrl, let url = URL(string: raw), !raw.isEmpty {
+                if let (data, _) = try? await URLSession.shared.data(from: url),
+                   let image = UIImage(data: data),
+                   let polished = try? await FalProductThumbnailService.shared.generateCatalogThumbnail(
+                       fromProduct: image, label: row.name
+                   ),
+                   let polishedURL = try? await ProductThumbnailUploadService.upload(polished, userId: userId) {
+                    healed = (try? await WardrobeService.updateItem(
+                        id: id, imageURL: polishedURL, thumbStatus: "ready"
+                    )) != nil
+                }
+                // Re-polish failed — the raw snapshot is a fine thumbnail;
+                // just stop the eternal sparkles.
+                if !healed {
+                    healed = (try? await WardrobeService.updateItem(id: id, thumbStatus: "ready")) != nil
+                }
+            } else {
+                // No image ever landed — send it back through the scraper.
+                healed = (try? await WardrobeService.updateItem(id: id, thumbStatus: "needs_client_scrape")) != nil
+            }
+            if healed { forgetPolishing(id) }
         }
     }
 

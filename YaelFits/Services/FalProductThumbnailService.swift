@@ -37,7 +37,7 @@ actor FalProductThumbnailService {
         let prompt = Self.wornGarmentPrompt(item: item)
         // Transparent cutout, tight framing: Quick Add garments live
         // in small carousel slots and need to fill them.
-        return try await generate(prompt: prompt, jpegData: jpegData, transparentCutout: true, onUpdate: onUpdate)
+        return try await generate(prompt: prompt, jpegData: jpegData, onUpdate: onUpdate)
     }
 
     /// Same nano → Bria → tight-crop pipeline, but for a PRODUCT photo
@@ -54,7 +54,7 @@ actor FalProductThumbnailService {
         }
         let item = label.isEmpty ? "item" : label
         let prompt = Self.catalogProductPrompt(item: item)
-        return try await generate(prompt: prompt, jpegData: jpegData, transparentCutout: true, onUpdate: onUpdate)
+        return try await generate(prompt: prompt, jpegData: jpegData, onUpdate: onUpdate)
     }
 
     private static func catalogProductPrompt(item: String) -> String {
@@ -86,7 +86,6 @@ actor FalProductThumbnailService {
     private func generate(
         prompt: String,
         jpegData: Data,
-        transparentCutout: Bool,
         onUpdate: @escaping @Sendable (FalProductThumbnailProgress) async -> Void
     ) async throws -> UIImage {
         let apiKey = try loadFalAPIKey()
@@ -119,9 +118,6 @@ actor FalProductThumbnailService {
                     throw UploadPipelineError.decodingFailed
                 }
 
-                // Catalog products keep nano's white studio canvas —
-                // identical to the server polish's output family.
-                guard transparentCutout else { return nanoImage }
 
                 // nano-banana returns the thumbnail with a white studio
                 // background. Pipe it through Bria so the saved product image
