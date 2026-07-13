@@ -872,6 +872,34 @@ struct ProfileShareSheet: View {
                 .frame(width: cardWidth, height: cardHeight)
                 .compositingGroup()
                 .clipShape(RoundedRectangle(cornerRadius: 24 * scale, style: .continuous))
+                // Pills sit as overlays PAST the clip (their glow
+                // survives) but INSIDE the rotation, so they are
+                // physically attached to the card through the flip.
+                // FlipFace hides them edge-on with the rest of the
+                // front face. Photo-bust cards carry the handle in
+                // their highlighter blob instead, so no pill there.
+                .overlay(alignment: .topTrailing) {
+                    if !(outfits.isEmpty && hasProfilePhoto) {
+                        UsernamePill(
+                            username: store.currentProfile?.username ?? "",
+                            scale: scale
+                        )
+                        .padding(.trailing, 14 * scale)
+                        .padding(.top, 14 * scale)
+                        .modifier(FlipFace(angle: flipAngle, isBack: false))
+                    }
+                }
+                .overlay(alignment: .bottomTrailing) {
+                    if let invite, invite.quota > 0 {
+                        InviteChip(
+                            remaining: max(0, invite.quota - invite.used),
+                            scale: scale
+                        )
+                        .padding(.trailing, 14 * scale)
+                        .padding(.bottom, 14 * scale)
+                        .modifier(FlipFace(angle: flipAngle, isBack: false))
+                    }
+                }
                 .modifier(CardDepth(angle: flipAngle, cornerRadius: 24 * scale))
                 .rotation3DEffect(.degrees(flipAngle), axis: (x: 0, y: 1, z: 0), perspective: 0.35)
                 .shadow(color: .black.opacity(0.14), radius: 16, y: 10)
@@ -933,41 +961,6 @@ struct ProfileShareSheet: View {
                     .modifier(FlipFollow(angle: flipAngle))
                 }
 
-                // Username pill, top-right of the card — weather-pill style
-                // (frosted capsule + soft glow). On top so it stays crisp
-                // over the chrome + holo. Photo-bust cards carry the handle
-                // in their highlighter blob instead, so skip the pill there.
-                if !(outfits.isEmpty && hasProfilePhoto) {
-                    Color.clear
-                        .frame(width: cardWidth, height: cardHeight)
-                        .overlay(alignment: .topTrailing) {
-                            UsernamePill(
-                                username: store.currentProfile?.username ?? "",
-                                scale: scale
-                            )
-                            .padding(.trailing, 14 * scale)
-                            .padding(.top, 14 * scale)
-                        }
-                        .allowsHitTesting(false)
-                        .modifier(FlipFade(angle: flipAngle))
-                }
-
-                // Invite chip, bottom-right — the flip's discoverability.
-                // Only quota-holders ever see it (or the flip at all).
-                if let invite, invite.quota > 0 {
-                    Color.clear
-                        .frame(width: cardWidth, height: cardHeight)
-                        .overlay(alignment: .bottomTrailing) {
-                            InviteChip(
-                                remaining: max(0, invite.quota - invite.used),
-                                scale: scale
-                            )
-                            .padding(.trailing, 14 * scale)
-                            .padding(.bottom, 14 * scale)
-                        }
-                        .allowsHitTesting(false)
-                        .modifier(FlipFade(angle: flipAngle))
-                }
             }
             .frame(width: geo.size.width, height: geo.size.height)
             .contentShape(Rectangle())
