@@ -329,19 +329,31 @@ final class WishlistBackfillService: NSObject {
       var top = Math.max(r.top, 0), left = Math.max(r.left, 0);
       var right = Math.min(r.right, window.innerWidth);
       var bottom = Math.min(r.bottom, window.innerHeight);
-      // Push the top edge below fixed/sticky bars that overlap it.
-      var bars = document.querySelectorAll('header, nav, body > *');
-      for (var i = 0; i < bars.length; i++) {
-        var st = window.getComputedStyle(bars[i]);
-        if (st.position !== 'fixed' && st.position !== 'sticky') continue;
-        if (st.display === 'none') continue;
-        var b = bars[i].getBoundingClientRect();
-        // A top bar: full-ish width, short, overlapping our top edge.
-        if (b.width > window.innerWidth * 0.6 && b.height < window.innerHeight * 0.3 &&
-            b.top <= top && b.bottom > top) {
-          top = Math.max(top, b.bottom);
+      // Walk the top edge down past anything DRAWN OVER the hero
+      // (site headers, breadcrumbs, sticky bars). CSS heuristics and
+      // window scrolling both failed on real shops (Farfetch and
+      // Valentino scroll inner containers, so the hero stays parked
+      // under the header) — elementFromPoint asks the renderer
+      // directly what's topmost at a point, which is ground truth.
+      function obstructed(y) {
+        var xs = [left + (right - left) * 0.25,
+                  left + (right - left) * 0.5,
+                  left + (right - left) * 0.75];
+        for (var i = 0; i < xs.length; i++) {
+          var t = document.elementFromPoint(xs[i], y);
+          if (!t) continue;
+          if (t === el || el.contains(t) || t.contains(el)) continue;
+          return true;
         }
+        return false;
       }
+      var scanLimit = top + (bottom - top) * 0.5;
+      var cleanTop = top;
+      while (cleanTop < scanLimit && obstructed(cleanTop + 4)) cleanTop += 10;
+      // If half the image is 'obstructed', it's probably a transparent
+      // zoom layer over the whole photo — capture from the original
+      // top rather than eating the product.
+      if (cleanTop < scanLimit) top = cleanTop;
       return JSON.stringify({ x: left, y: top, w: Math.max(0, right - left), h: Math.max(0, bottom - top) });
     })()
     """
