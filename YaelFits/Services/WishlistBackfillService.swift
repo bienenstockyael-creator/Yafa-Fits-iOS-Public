@@ -22,6 +22,7 @@ final class WishlistBackfillService: NSObject {
     private var isRunning = false
     private var webView: WKWebView?
     private var loadContinuation: CheckedContinuation<Void, Error>?
+    private var loadGeneration = 0
 
     /// Max items completed per app session — each costs a full page
     /// load; a long backlog drains over a few launches instead of
@@ -56,6 +57,17 @@ final class WishlistBackfillService: NSObject {
     /// polish poll re-fetching on every future session). Only OUR ids
     /// go in here — a row at 'generating' owned by the tagging flow is
     /// someone else's in-flight work and must not be touched.
+    /// Per-stub scrape attempts (UserDefaults). A bot wall might pass
+    /// on a later session, so a failed load leaves the stub for a
+    /// retry — but only this many times, after which the row is marked
+    /// failed so it stops sparkling and polling forever.
+    private static let attemptsKey = "yafa.backfill.attempts"
+    private static let maxAttempts = 3
+    private var attemptCounts: [String: Int] {
+        get { UserDefaults.standard.dictionary(forKey: Self.attemptsKey) as? [String: Int] ?? [:] }
+        set { UserDefaults.standard.set(newValue, forKey: Self.attemptsKey) }
+    }
+
     private static let pendingPolishKey = "yafa.backfill.pendingPolish"
     private var pendingPolishIDs: [String] {
         get { UserDefaults.standard.stringArray(forKey: Self.pendingPolishKey) ?? [] }
@@ -120,12 +132,23 @@ final class WishlistBackfillService: NSObject {
                 await mark(stub.id, status: "client_scrape_failed")
                 continue
             }
+            let key = stub.id.uuidString
+            let tried = attemptCounts[key] ?? 0
+            guard tried < Self.maxAttempts else {
+                // Bot wall never yielded across several sessions —
+                // stop the sparkles and the closet's polish poll.
+                await mark(stub.id, status: "client_scrape_failed")
+                attemptCounts[key] = nil
+                continue
+            }
+            attemptCounts[key] = tried + 1
             do {
                 try await complete(stub: stub, url: url, userId: userId)
+                attemptCounts[key] = nil
             } catch {
                 // Leave the stub for a retry next session rather than
-                // burning it on one flaky page load — unless the URL
-                // itself was the problem (handled above).
+                // burning it on one flaky page load — the attempt cap
+                // above keeps this from running forever.
             }
         }
     }
@@ -204,18 +227,25 @@ final class WishlistBackfillService: NSObject {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanName = (pageName?.isEmpty == false && pageName!.count > 2)
             ? String(pageName!.prefix(120)) : nil
+        // No hero found — usually a bot-check interstitial ("Just a
+        // moment…"), whose title must never overwrite the slug-derived
+        // name and whose emptiness says nothing about the real page.
+        // Throw so the stub survives for a retry (attempt-capped in
+        // run()) instead of being burned as failed.
+        guard uploadedImageURL != nil else { throw URLError(.resourceUnavailable) }
+
         // Raw snapshot lands first with 'generating' so the closet
         // shows the same sparkles as every other polishing item; the
         // catalog cutout swaps in below and the closet's existing
         // polish-polling animates the change.
-        if uploadedImageURL != nil { rememberPolishing(stub.id) }
+        rememberPolishing(stub.id)
         try await WardrobeService.updateItem(
             id: stub.id,
             name: cleanName,
             brand: meta.brand.map { String($0.prefix(60)) },
             price: meta.price.map { String($0.prefix(40)) },
             imageURL: uploadedImageURL,
-            thumbStatus: uploadedImageURL != nil ? "generating" : "client_scrape_failed"
+            thumbStatus: "generating"
         )
 
         guard let snapshotImage = capturedImage else { return }
@@ -361,20 +391,27 @@ final class WishlistBackfillService: NSObject {
         webView = nil
     }
 
+    /// Loads `url`, returning when navigation settles OR the timeout
+    /// fires — whichever comes first resumes the one continuation (the
+    /// nil-check arbitrates). The previous task-group race couldn't
+    /// deliver its timeout: the group waits for the load child even
+    /// after the timeout throws, so a navigation WebKit never reports
+    /// hung the backfill for the whole session and leaked the web view.
     private func load(_ url: URL, in webView: WKWebView, timeout: TimeInterval) async throws {
-        try await withThrowingTaskGroup(of: Void.self) { group in
-            group.addTask { @MainActor in
-                try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-                    self.loadContinuation = cont
-                    webView.load(URLRequest(url: url))
-                }
+        loadGeneration += 1
+        let generation = loadGeneration
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            loadContinuation = cont
+            webView.load(URLRequest(url: url))
+            DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in
+                // Generation guard: a stale timer from load N must not
+                // shoot down load N+1's in-flight navigation.
+                guard let self, self.loadGeneration == generation,
+                      let cont = self.loadContinuation else { return }
+                self.loadContinuation = nil
+                webView.stopLoading()
+                cont.resume(throwing: URLError(.timedOut))
             }
-            group.addTask {
-                try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                throw URLError(.timedOut)
-            }
-            try await group.next()
-            group.cancelAll()
         }
     }
 
