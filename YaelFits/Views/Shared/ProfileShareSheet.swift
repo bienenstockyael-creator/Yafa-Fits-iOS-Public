@@ -386,6 +386,9 @@ struct ProfileShareSheet: View {
     private struct UsernamePill: View {
         let username: String
         let scale: CGFloat
+        let normalMap: UIImage?
+        let cardWidth: CGFloat
+        let cardHeight: CGFloat
 
         var body: some View {
             // Type as before — WeatherPill weight/colour (semibold, secondary).
@@ -394,29 +397,21 @@ struct ProfileShareSheet: View {
                 .foregroundStyle(AppPalette.textSecondary)
                 .padding(.horizontal, 11 * scale)
                 .padding(.vertical, 7 * scale)
-                // Crafted glass, NOT a sampling material: the card's 3D
-                // flip flattens this layer offscreen, so ultraThinMaterial
-                // has no backdrop to read and renders solid white. A
-                // translucent gradient + top edge-light reads as glass
-                // (the card art still ghosts through the 45–65%% fill)
-                // and can't break under the rotation.
+                // Real glass: blurred copy of the card art aligned to
+                // this pill's top-trailing position (see CardGlassBackdrop
+                // for why a sampling material can't work here).
                 .background {
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color.white.opacity(0.66), Color.white.opacity(0.42)],
-                                startPoint: .top, endPoint: .bottom
+                    CardGlassBackdrop(
+                        normalMap: normalMap,
+                        cardWidth: cardWidth,
+                        cardHeight: cardHeight,
+                        center: { size in
+                            CGPoint(
+                                x: cardWidth - 14 * scale - size.width / 2,
+                                y: 14 * scale + size.height / 2
                             )
-                        )
-                        .overlay(
-                            Capsule().strokeBorder(
-                                LinearGradient(
-                                    colors: [Color.white, Color.white.opacity(0.2)],
-                                    startPoint: .top, endPoint: .bottom
-                                ),
-                                lineWidth: 1
-                            )
-                        )
+                        }
+                    )
                 }
                 .overlay(Capsule().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
                 // Light-blue glow under the pill — gentle bloom.
@@ -595,6 +590,56 @@ struct ProfileShareSheet: View {
         }
     }
 
+    /// REAL glass for the pills, without backdrop sampling (the 3D
+    /// flip flattens the card offscreen, so materials render solid
+    /// white there): the pill's background is a BLURRED COPY of the
+    /// card's own art — cardGray + the chrome wordmark texture —
+    /// offset so the exact region under the pill shows through. True
+    /// see-through optics, immune to the rotation. The copy uses the
+    /// static normal-map image (not the live shader), which is what
+    /// the art looks like at rest; under 10pt of blur the difference
+    /// is imperceptible.
+    private struct CardGlassBackdrop: View {
+        let normalMap: UIImage?
+        let cardWidth: CGFloat
+        let cardHeight: CGFloat
+        /// The pill's center in CARD coordinates, given the pill's size.
+        let center: (CGSize) -> CGPoint
+
+        var body: some View {
+            GeometryReader { g in
+                let c = center(g.size)
+                ZStack {
+                    Color(white: 0.918)
+                    if let normalMap {
+                        Image(uiImage: normalMap)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(height: cardHeight * 0.9)
+                    }
+                }
+                .frame(width: cardWidth, height: cardHeight)
+                .blur(radius: 10)
+                .position(
+                    x: g.size.width / 2 + (cardWidth / 2 - c.x),
+                    y: g.size.height / 2 + (cardHeight / 2 - c.y)
+                )
+            }
+            .clipShape(Capsule())
+            // Frost + edge light over the blurred art.
+            .overlay(Capsule().fill(Color.white.opacity(0.30)))
+            .overlay(
+                Capsule().strokeBorder(
+                    LinearGradient(
+                        colors: [Color.white, Color.white.opacity(0.2)],
+                        startPoint: .top, endPoint: .bottom
+                    ),
+                    lineWidth: 1
+                )
+            )
+        }
+    }
+
     /// The card's extruded side: a darker slab behind the face,
     /// offset by the flip angle so the edge swings around as the
     /// card turns — and stays a hairline at rest so the card reads
@@ -621,6 +666,9 @@ struct ProfileShareSheet: View {
     private struct InviteChip: View {
         let remaining: Int
         let scale: CGFloat
+        let normalMap: UIImage?
+        let cardWidth: CGFloat
+        let cardHeight: CGFloat
         var body: some View {
             Text(remaining > 0 ? "\(remaining) INVITE\(remaining == 1 ? "" : "S")" : "INVITES")
                 .font(.system(size: 11 * scale, weight: .semibold))
@@ -628,29 +676,20 @@ struct ProfileShareSheet: View {
                 .foregroundStyle(AppPalette.textSecondary)
                 .padding(.horizontal, 11 * scale)
                 .padding(.vertical, 7 * scale)
-                // Crafted glass, NOT a sampling material: the card's 3D
-                // flip flattens this layer offscreen, so ultraThinMaterial
-                // has no backdrop to read and renders solid white. A
-                // translucent gradient + top edge-light reads as glass
-                // (the card art still ghosts through the 45–65%% fill)
-                // and can't break under the rotation.
+                // Real glass: blurred card art aligned to this pill's
+                // bottom-trailing position (see CardGlassBackdrop).
                 .background {
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color.white.opacity(0.66), Color.white.opacity(0.42)],
-                                startPoint: .top, endPoint: .bottom
+                    CardGlassBackdrop(
+                        normalMap: normalMap,
+                        cardWidth: cardWidth,
+                        cardHeight: cardHeight,
+                        center: { size in
+                            CGPoint(
+                                x: cardWidth - 14 * scale - size.width / 2,
+                                y: cardHeight - 14 * scale - size.height / 2
                             )
-                        )
-                        .overlay(
-                            Capsule().strokeBorder(
-                                LinearGradient(
-                                    colors: [Color.white, Color.white.opacity(0.2)],
-                                    startPoint: .top, endPoint: .bottom
-                                ),
-                                lineWidth: 1
-                            )
-                        )
+                        }
+                    )
                 }
                 .overlay(Capsule().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
                 .shadow(
@@ -924,7 +963,10 @@ struct ProfileShareSheet: View {
                     if !(outfits.isEmpty && hasProfilePhoto) {
                         UsernamePill(
                             username: store.currentProfile?.username ?? "",
-                            scale: scale
+                            scale: scale,
+                            normalMap: chromeNormalMap,
+                            cardWidth: cardWidth,
+                            cardHeight: cardHeight
                         )
                         .padding(.trailing, 14 * scale)
                         .padding(.top, 14 * scale)
@@ -935,7 +977,10 @@ struct ProfileShareSheet: View {
                     if let invite, invite.quota > 0 {
                         InviteChip(
                             remaining: max(0, invite.quota - invite.used),
-                            scale: scale
+                            scale: scale,
+                            normalMap: chromeNormalMap,
+                            cardWidth: cardWidth,
+                            cardHeight: cardHeight
                         )
                         .padding(.trailing, 14 * scale)
                         .padding(.bottom, 14 * scale)
