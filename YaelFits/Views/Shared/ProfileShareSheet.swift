@@ -727,24 +727,20 @@ struct ProfileShareSheet: View {
         var body: some View {
             let sine = sin(angle * .pi / 180)
             let w = abs(sine) * 7
-            ZStack {
-                // Resting lip — the always-there hint of thickness.
-                RoundedRectangle(cornerRadius: 24 * scale, style: .continuous)
-                    .fill(Color(white: 0.80))
-                    .offset(y: 1.5)
-                if w > 0.3 {
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color(white: 0.84), Color(white: 0.70)],
-                                startPoint: sine > 0 ? .trailing : .leading,
-                                endPoint: sine > 0 ? .leading : .trailing
-                            )
-                        )
-                        .frame(width: w + 2, height: cardHeight - 44 * scale)
-                        .offset(x: (sine > 0 ? -1 : 1) * (cardWidth / 2 + w / 2 - 1))
-                }
-            }
+            // The side is the card's OWN rounded-rect shape, offset
+            // sideways by the edge width: the visible crescent then
+            // wraps the rounded corners exactly (a straight capsule
+            // strip left the corners paper-thin). Gradient darkens
+            // toward the outer rim of the crescent.
+            RoundedRectangle(cornerRadius: 24 * scale, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [Color(white: 0.84), Color(white: 0.70)],
+                        startPoint: sine > 0 ? .trailing : .leading,
+                        endPoint: sine > 0 ? .leading : .trailing
+                    )
+                )
+                .offset(x: (sine > 0 ? -1 : 1) * w, y: 1.5)
         }
     }
 
