@@ -393,11 +393,10 @@ struct ProfileShareSheet: View {
                 .padding(.vertical, 7 * scale)
                 // SOLID fill (no UIVisualEffectView and no SwiftUI material) —
                 // both sample the backdrop and render transparent for a frame
-                // during the card's 3D entry, causing the flash. The blur was
-                // never visible anyway (cardFill covers it), so a plain
-                // cardFill capsule looks the same as the weather pill and can't
-                // flash.
-                .background(Capsule().fill(AppPalette.cardFill))
+                // during the card's 3D entry, causing the flash. FULLY opaque
+                // white (not the 48% cardFill): on the busy chrome card the
+                // translucent fill read as faded and hurt legibility.
+                .background(Capsule().fill(Color.white))
                 .overlay(Capsule().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
                 // Light-blue glow under the pill — gentle bloom.
                 .shadow(
@@ -529,15 +528,22 @@ struct ProfileShareSheet: View {
             set { angle = newValue }
         }
         func body(content: Content) -> some View {
-            // abs(): drag-to-flip can rotate either direction, so
-            // ±180 are both "back".
-            content.opacity((abs(angle) >= 90) == isBack ? 1 : 0)
+            // Distance from the nearest FRONT orientation (0/±360),
+            // so either drag direction — and full wrap-arounds —
+            // read correctly.
+            content.opacity((Self.frontDistance(angle) >= 90) == isBack ? 1 : 0)
+        }
+        static func frontDistance(_ angle: Double) -> Double {
+            var n = angle.truncatingRemainder(dividingBy: 360)
+            if n > 180 { n -= 360 }
+            if n < -180 { n += 360 }
+            return abs(n)
         }
     }
 
-    /// Proportional fade for the elements that float OVER the card
-    /// (outfit, pills) — they dissolve as the flip starts rather than
-    /// popping at the midpoint, since they don't rotate with the card.
+    /// Proportional fade for the pills that float OVER the card —
+    /// they dissolve as the flip starts rather than popping at the
+    /// midpoint, since they don't rotate with the card.
     private struct FlipFade: ViewModifier, Animatable {
         var angle: Double
         var animatableData: Double {
@@ -545,7 +551,26 @@ struct ProfileShareSheet: View {
             set { angle = newValue }
         }
         func body(content: Content) -> some View {
-            content.opacity(max(0, 1 - abs(angle) / 70))
+            content.opacity(max(0, 1 - FlipFace.frontDistance(angle) / 70))
+        }
+    }
+
+    /// The outfit's tether to the card: while fading out it also
+    /// slides and turns a touch WITH the flip (sin-shaped, so it
+    /// always lands back at neutral), which reads as the outfit
+    /// being carried by the card rather than independently vanishing.
+    private struct FlipFollow: ViewModifier, Animatable {
+        var angle: Double
+        var animatableData: Double {
+            get { angle }
+            set { angle = newValue }
+        }
+        func body(content: Content) -> some View {
+            let s = sin(angle * .pi / 180)
+            content
+                .opacity(max(0, 1 - FlipFace.frontDistance(angle) / 70))
+                .offset(x: CGFloat(s) * 26)
+                .rotation3DEffect(.degrees(s * 14), axis: (x: 0, y: 1, z: 0), perspective: 0.3)
         }
     }
 
@@ -582,7 +607,9 @@ struct ProfileShareSheet: View {
                 .foregroundStyle(AppPalette.textSecondary)
                 .padding(.horizontal, 11 * scale)
                 .padding(.vertical, 7 * scale)
-                .background(Capsule().fill(AppPalette.cardFill))
+                // Fully opaque like the username pill — the 48% cardFill
+                // reads as faded over the chrome card.
+                .background(Capsule().fill(Color.white))
                 .overlay(Capsule().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
                 .shadow(
                     color: Color(red: 0.58, green: 0.81, blue: 1.0).opacity(0.55),
@@ -871,12 +898,12 @@ struct ProfileShareSheet: View {
                                 .offset(y: -22 * scale * 0.5)
                             }
                             .allowsHitTesting(false)
-                            .modifier(FlipFade(angle: flipAngle))
+                            .modifier(FlipFollow(angle: flipAngle))
                     } else {
                         // No photo — logo silhouette placeholder.
                         emptyStateHero(height: cardHeight * 0.64)
                             .allowsHitTesting(false)
-                            .modifier(FlipFade(angle: flipAngle))
+                            .modifier(FlipFollow(angle: flipAngle))
                     }
                 } else {
                     // Outfit strip — floats over the card, unclipped.
@@ -903,7 +930,7 @@ struct ProfileShareSheet: View {
                         }
                     }
                     .frame(width: geo.size.width, height: cardHeight)
-                    .modifier(FlipFade(angle: flipAngle))
+                    .modifier(FlipFollow(angle: flipAngle))
                 }
 
                 // Username pill, top-right of the card — weather-pill style
@@ -962,7 +989,16 @@ struct ProfileShareSheet: View {
                             } else {
                                 cardDragMode = (inOutfitBand || !canFlip) ? .carousel : .flip
                             }
-                            flipDragBase = flipAngle
+                            // Canonicalize into (-180, 180] so the drag
+                            // range below is always base ± 180 — this is
+                            // what lets BOTH directions flip from either
+                            // face (previously the flipped side had a
+                            // dead direction against the clamp).
+                            var canonical = flipAngle.truncatingRemainder(dividingBy: 360)
+                            if canonical > 180 { canonical -= 360 }
+                            if canonical <= -180 { canonical += 360 }
+                            flipAngle = canonical
+                            flipDragBase = canonical
                         }
                         switch cardDragMode {
                         case .carousel:
@@ -973,9 +1009,10 @@ struct ProfileShareSheet: View {
                             carouselDragOffset = value.translation.width
                         case .flip:
                             // The card follows the finger 1:1 — a full
-                            // card-width of travel is a full half-turn.
+                            // card-width of travel is a full half-turn,
+                            // in either direction.
                             let delta = Double(value.translation.width / cardWidth) * 180
-                            flipAngle = min(180, max(-180, flipDragBase + delta))
+                            flipAngle = min(flipDragBase + 180, max(flipDragBase - 180, flipDragBase + delta))
                         case nil:
                             break
                         }
@@ -1000,14 +1037,18 @@ struct ProfileShareSheet: View {
                                 carouselDragOffset = 0
                             }
                         case .flip:
-                            // Settle to whichever face the card is
-                            // showing more of.
-                            let target: Double = abs(flipAngle) > 90
-                                ? (flipAngle >= 0 ? 180 : -180) : 0
-                            isFlipped = target != 0
+                            // Velocity-aware settle: a quick flick flips
+                            // even if the travel was short (this was the
+                            // "buggy" feel — release before halfway always
+                            // snapped back). Project the flick forward,
+                            // then land on the nearest half-turn.
+                            let flick = Double((value.predictedEndTranslation.width - value.translation.width) / cardWidth) * 180
+                            let projected = min(flipDragBase + 180, max(flipDragBase - 180, flipAngle + flick * 0.6))
+                            let target = (projected / 180).rounded() * 180
+                            isFlipped = FlipFace.frontDistance(target) >= 90
                             if isFlipped { showCopiedCode = false }
                             UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) {
+                            withAnimation(.spring(response: 0.55, dampingFraction: 0.68)) {
                                 flipAngle = target
                             }
                         case nil:
@@ -1025,9 +1066,15 @@ struct ProfileShareSheet: View {
     private func toggleFlip() {
         guard let invite, invite.quota > 0 else { return }
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        // Canonicalize first (drag settles can leave ±180/wraps) so
+        // the tap animates one clean half-turn from wherever we are.
+        var canonical = flipAngle.truncatingRemainder(dividingBy: 360)
+        if canonical > 180 { canonical -= 360 }
+        if canonical <= -180 { canonical += 360 }
+        flipAngle = canonical
         isFlipped.toggle()
         showCopiedCode = false
-        withAnimation(.spring(response: 0.55, dampingFraction: 0.82)) {
+        withAnimation(.spring(response: 0.55, dampingFraction: 0.68)) {
             flipAngle = isFlipped ? 180 : 0
         }
     }
