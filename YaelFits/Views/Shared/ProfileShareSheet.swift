@@ -708,6 +708,40 @@ struct ProfileShareSheet: View {
     /// same angles as the face but displaced in z (anchorZ), so the
     /// edge genuinely swings around in perspective as the card turns.
     /// At rest the 1.5pt y-offset keeps a hairline lip.
+    /// Device-tilt response for the whole card object — the same
+    /// baseline-calibrated HoloMotionTracker the chrome and holo
+    /// shaders use, mapped to a gentle ±4° lean, so the physical
+    /// card follows the phone the way its inks already do.
+    private struct GyroTilt: ViewModifier {
+        @State private var baseline: (roll: Double, pitch: Double)?
+        private static let sweepRange: Double = 0.6
+
+        func body(content: Content) -> some View {
+            TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { _ in
+                let tracker = HoloMotionTracker.shared
+                let base = baseline ?? (tracker.rollRadians, tracker.pitchRadians)
+                let roll = max(-1, min(1, (tracker.rollRadians - base.roll) / Self.sweepRange))
+                let pitch = max(-1, min(1, (tracker.pitchRadians - base.pitch) / Self.sweepRange))
+                content
+                    .rotation3DEffect(.degrees(roll * 4), axis: (x: 0, y: 1, z: 0), perspective: 0.35)
+                    .rotation3DEffect(.degrees(pitch * 4), axis: (x: 1, y: 0, z: 0), perspective: 0.35)
+            }
+            .onAppear {
+                HoloMotionTracker.shared.start()
+                if HoloMotionTracker.shared.hasSample, baseline == nil {
+                    baseline = (HoloMotionTracker.shared.rollRadians,
+                                HoloMotionTracker.shared.pitchRadians)
+                }
+            }
+            .onDisappear { HoloMotionTracker.shared.stop() }
+            .onChange(of: HoloMotionTracker.shared.hasSample) { _, has in
+                guard has, baseline == nil else { return }
+                baseline = (HoloMotionTracker.shared.rollRadians,
+                            HoloMotionTracker.shared.pitchRadians)
+            }
+        }
+    }
+
     /// What an extruded card actually shows when it turns: a side
     /// strip along the RECEDING edge that widens with the turn
     /// (w = thickness·|sin θ|) and foreshortens with the face. Drawn
@@ -735,7 +769,7 @@ struct ProfileShareSheet: View {
             RoundedRectangle(cornerRadius: 24 * scale, style: .continuous)
                 .fill(
                     LinearGradient(
-                        colors: [Color(white: 0.84), Color(white: 0.70)],
+                        colors: [Color(white: 0.72), Color(white: 0.56)],
                         startPoint: sine > 0 ? .trailing : .leading,
                         endPoint: sine > 0 ? .leading : .trailing
                     )
@@ -992,6 +1026,13 @@ struct ProfileShareSheet: View {
                 .frame(width: cardWidth, height: cardHeight)
                 .compositingGroup()
                 .clipShape(RoundedRectangle(cornerRadius: 24 * scale, style: .continuous))
+                // Hairline white rim — reads on both faces (it sits
+                // above whichever one is showing), like a card's
+                // printed edge highlight.
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24 * scale, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.9), lineWidth: 0.75)
+                )
                 // Pills sit as overlays PAST the clip (their glow
                 // survives) but INSIDE the rotation, so they are
                 // physically attached to the card through the flip.
@@ -1035,6 +1076,7 @@ struct ProfileShareSheet: View {
                 .rotation3DEffect(.degrees(cardTiltX), axis: (x: 1, y: 0, z: 0), perspective: 0.35)
                 .rotation3DEffect(.degrees(flipAngle), axis: (x: 0, y: 1, z: 0), perspective: 0.35)
                 .shadow(color: .black.opacity(0.14), radius: 16, y: 10)
+                .modifier(GyroTilt())
                 .allowsHitTesting(false)
 
                 if outfits.isEmpty {
