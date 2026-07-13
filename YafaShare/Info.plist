@@ -6,24 +6,18 @@
 	<dict>
 		<key>NSExtensionAttributes</key>
 		<dict>
-			<!-- Two-tier extraction. GetProduct.js reads the product
-			     straight from the live page (past any bot wall the
-			     server would hit), so shops like Jacquemus save
-			     instantly with no client backfill. On pages where
-			     Safari can't deliver the script's results (anti-bot
-			     shops that stall injection — Farfetch, Valentino,
-			     Cult Gaia via Lens), the controller falls back to the
-			     plain URL after one retry and the server stubs the
-			     save for the WKWebView backfill. The fallback is why
-			     re-enabling the JS is safe: a failed delivery used to
-			     hard-fail as "No link to save"; now it degrades. -->
-			<key>NSExtensionJavaScriptPreprocessingFile</key>
-			<string>GetProduct</string>
+			<!-- URL-only shares, NO JavaScript preprocessing. The
+			     GetProduct.js scraping route depended on Safari
+			     injecting the script into the shared page — anti-bot
+			     shops (Farfetch, Valentino, Cult Gaia) block or stall
+			     that injection, Safari then can't deliver the promised
+			     results plist, and the save hard-fails with "No link
+			     to save". A plain URL share works on every page in
+			     every load state; product metadata comes from the
+			     server-side scrape in `share-save` instead. -->
 			<key>NSExtensionActivationRule</key>
 			<dict>
 				<key>NSExtensionActivationSupportsWebURLWithMaxCount</key>
-				<integer>1</integer>
-				<key>NSExtensionActivationSupportsWebPageWithMaxCount</key>
 				<integer>1</integer>
 			</dict>
 		</dict>
