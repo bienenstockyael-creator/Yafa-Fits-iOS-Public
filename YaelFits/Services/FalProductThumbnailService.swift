@@ -35,7 +35,9 @@ actor FalProductThumbnailService {
         }
         let item = label.isEmpty ? "garment" : label
         let prompt = Self.wornGarmentPrompt(item: item)
-        return try await generate(prompt: prompt, jpegData: jpegData, onUpdate: onUpdate)
+        // Tight framing: Quick Add garments live in small carousel
+        // slots and need to fill them.
+        return try await generate(prompt: prompt, jpegData: jpegData, paddingFraction: 0.04, onUpdate: onUpdate)
     }
 
     /// Same nano → Bria → tight-crop pipeline, but for a PRODUCT photo
@@ -52,7 +54,10 @@ actor FalProductThumbnailService {
         }
         let item = label.isEmpty ? "item" : label
         let prompt = Self.catalogProductPrompt(item: item)
-        return try await generate(prompt: prompt, jpegData: jpegData, onUpdate: onUpdate)
+        // Generous framing to match server-polished wishlist items —
+        // the tight 4% crop made backfilled products render huge on
+        // the closet detail card next to everything else.
+        return try await generate(prompt: prompt, jpegData: jpegData, paddingFraction: 0.18, onUpdate: onUpdate)
     }
 
     private static func catalogProductPrompt(item: String) -> String {
@@ -84,6 +89,7 @@ actor FalProductThumbnailService {
     private func generate(
         prompt: String,
         jpegData: Data,
+        paddingFraction: CGFloat,
         onUpdate: @escaping @Sendable (FalProductThumbnailProgress) async -> Void
     ) async throws -> UIImage {
         let apiKey = try loadFalAPIKey()
@@ -135,7 +141,7 @@ actor FalProductThumbnailService {
                 // matches the framing of bundled product images — otherwise
                 // the transparent margin around the garment makes Quick Add
                 // products look smaller than other products in the carousel.
-                return Self.tightCrop(cleanedImage, paddingFraction: 0.04)
+                return Self.tightCrop(cleanedImage, paddingFraction: paddingFraction)
             case "failed", "error":
                 throw UploadPipelineError.requestFailed(status.error?.message ?? "nano-banana failed.")
             default:
