@@ -35,6 +35,20 @@ struct ProfileShareSheet: View {
     /// through outfits. Same continuous-strip mechanic as the
     /// ShareCardComposer template carousel.
     @State private var carouselDragOffset: CGFloat = 0
+    // MARK: Invite flip
+    /// Tap the card to flip it: the back reveals the user's one-time
+    /// invite code (minted lazily by `current_invite_code()`, within
+    /// the quota Yael granted). Users with no quota never see any of
+    /// this — the card simply doesn't flip.
+    @State private var isFlipped = false
+    @State private var flipAngle: Double = 0
+    @State private var invite: SocialService.InviteCodeInfo?
+    @State private var claimedInvites: [SocialService.ClaimedInvite] = []
+    /// Invite text being handed to the system share sheet (the
+    /// flipped card's SHARE shares the code, not the profile link).
+    @State private var activeInviteShareText: String? = nil
+    /// Brief "copied!" confirmation after tapping the code.
+    @State private var showCopiedCode = false
     /// Fractional dot position while the user is scrubbing the
     /// dot picker. nil at rest.
     @State private var dotScrubPosition: CGFloat? = nil
@@ -463,6 +477,16 @@ struct ProfileShareSheet: View {
             // user has a photo but no cutout yet (runs at most once).
             await ensureBustCutout()
         }
+        .task {
+            // Invite state for the card back. Mint-on-demand is safe
+            // here: the RPC only mints for quota-holders, one active
+            // code at a time.
+            guard invite == nil else { return }
+            invite = try? await SocialService.currentInviteCode()
+            if let invite, invite.quota > 0 {
+                claimedInvites = (try? await SocialService.myClaimedInvites()) ?? []
+            }
+        }
         .onChange(of: selectedIndex) { _, newIndex in
             // First time the user swipes to the end of their carousel,
             // pop the publish hint once (ever). Only meaningful with
@@ -471,6 +495,100 @@ struct ProfileShareSheet: View {
                   newIndex >= shareableOutfits.count - 1
             else { return }
             presentPublishHint()
+        }
+    }
+
+    // MARK: - Invite back face
+
+    /// Per-frame face gate for the 3D flip. Animatable, so the
+    /// visibility STEPS at 90° mid-animation (where the card is
+    /// edge-on and the swap is invisible) instead of crossfading
+    /// over the whole flip like a plain conditional opacity would.
+    private struct FlipFace: ViewModifier, Animatable {
+        var angle: Double
+        let isBack: Bool
+        var animatableData: Double {
+            get { angle }
+            set { angle = newValue }
+        }
+        func body(content: Content) -> some View {
+            content.opacity((angle >= 90) == isBack ? 1 : 0)
+        }
+    }
+
+    /// Remaining-invites capsule, bottom-right of the card front.
+    private struct InviteChip: View {
+        let remaining: Int
+        let scale: CGFloat
+        var body: some View {
+            Text(remaining > 0 ? "\(remaining) INVITE\(remaining == 1 ? "" : "S")" : "INVITES")
+                .font(.system(size: 10 * scale, weight: .semibold))
+                .tracking(1.5)
+                .foregroundStyle(.white.opacity(0.85))
+                .padding(.horizontal, 10 * scale)
+                .padding(.vertical, 6 * scale)
+                .background(Capsule().fill(.white.opacity(0.16)))
+        }
+    }
+
+    @ViewBuilder
+    private func inviteBackFace(cardWidth: CGFloat, cardHeight: CGFloat, scale: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            Spacer()
+
+            Text(invite?.state == "exhausted" ? "ALL INVITES USED" : "INVITE A FRIEND")
+                .font(.system(size: 12 * scale, weight: .semibold))
+                .tracking(3)
+                .foregroundStyle(.white.opacity(0.55))
+
+            if let code = invite?.code {
+                Text(code)
+                    .font(.custom("Inter28pt-SemiBold", size: 38 * scale))
+                    .tracking(3 * scale)
+                    .foregroundStyle(.white)
+                    .padding(.top, 18 * scale)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        UIPasteboard.general.string = code
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        withAnimation(.easeOut(duration: 0.15)) { showCopiedCode = true }
+                        Task {
+                            try? await Task.sleep(nanoseconds: 1_400_000_000)
+                            withAnimation(.easeOut(duration: 0.3)) { showCopiedCode = false }
+                        }
+                    }
+                Text(showCopiedCode ? "copied!" : "one-time code · tap to copy")
+                    .font(.custom("Inter28pt-MediumItalic", size: 12 * scale))
+                    .foregroundStyle(.white.opacity(0.45))
+                    .padding(.top, 10 * scale)
+            }
+
+            if let invite {
+                Text("\(invite.used) OF \(invite.quota) USED")
+                    .font(.system(size: 10 * scale, weight: .semibold))
+                    .tracking(2)
+                    .foregroundStyle(.white.opacity(0.35))
+                    .padding(.top, 26 * scale)
+            }
+
+            if !claimedInvites.isEmpty {
+                VStack(spacing: 5 * scale) {
+                    ForEach(claimedInvites.prefix(3)) { claim in
+                        Text("@\(claim.claimedByUsername ?? "someone") joined")
+                            .font(.system(size: 11 * scale, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.5))
+                    }
+                }
+                .padding(.top, 12 * scale)
+            }
+
+            Spacer()
+        }
+        .frame(width: cardWidth, height: cardHeight)
+        .overlay(alignment: .bottomLeading) {
+            MadeOnYafaMark(width: cardWidth * 0.20, color: .white)
+                .padding(.leading, 16 * scale)
+                .padding(.bottom, 14 * scale)
         }
     }
 
@@ -611,34 +729,53 @@ struct ProfileShareSheet: View {
                 ZStack {
                     Rectangle()
                         .fill(cardGray)
+
+                    // FRONT face decor. Face swaps must step at exactly
+                    // 90° on every animation FRAME (the card is edge-on
+                    // there, so the trade is invisible) — a plain
+                    // conditional opacity would crossfade over the whole
+                    // flip instead; FlipFace is Animatable and re-evaluates
+                    // per frame.
+                    Group {
                         // Yafa brand mark, bottom-LEFT — the shared MADE ON
                         // YAFA mark reused from the export/share cards.
-                        .overlay(alignment: .bottomLeading) {
-                            MadeOnYafaMark(width: cardWidth * 0.20, color: .white)
-                                .padding(.leading, 16 * scale)
-                                .padding(.bottom, 14 * scale)
-                        }
+                        Rectangle()
+                            .fill(.clear)
+                            .overlay(alignment: .bottomLeading) {
+                                MadeOnYafaMark(width: cardWidth * 0.20, color: .white)
+                                    .padding(.leading, 16 * scale)
+                                    .padding(.bottom, 14 * scale)
+                            }
 
-                    // Live chrome "add me on yafa" wordmark, behind the
-                    // outfit (replaces the old plain top label). Reflects
-                    // with device tilt. Loaded async on appear (see .task)
-                    // and freed on dismiss.
-                    if let chrome = chromeNormalMap {
-                        ChromeWordmark(image: chrome)
-                            .frame(height: cardHeight * 0.9)
-                            .transition(.opacity)
+                        // Live chrome "add me on yafa" wordmark, behind the
+                        // outfit (replaces the old plain top label). Reflects
+                        // with device tilt. Loaded async on appear (see .task)
+                        // and freed on dismiss.
+                        if let chrome = chromeNormalMap {
+                            ChromeWordmark(image: chrome)
+                                .frame(height: cardHeight * 0.9)
+                                .transition(.opacity)
+                        }
                     }
+                    .modifier(FlipFace(angle: flipAngle, isBack: false))
+
+                    // BACK face — the invite reveal. Pre-mirrored so it
+                    // reads correctly once the container rotation passes 90°.
+                    inviteBackFace(cardWidth: cardWidth, cardHeight: cardHeight, scale: scale)
+                        .modifier(FlipFace(angle: flipAngle, isBack: true))
+                        .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
 
                     // Holographic shimmer ABOVE the chrome wordmark — a
                     // clear card-sized layer carrying the holo shader, so
                     // the iridescence rides over the chrome text (not just
-                    // the bare card).
+                    // the bare card). Rides both faces.
                     Color.clear
                         .holoOverlay(active: true, cornerRadius: 24 * scale, edgeBleed: 2)
                 }
                 .frame(width: cardWidth, height: cardHeight)
                 .compositingGroup()
                 .clipShape(RoundedRectangle(cornerRadius: 24 * scale, style: .continuous))
+                .rotation3DEffect(.degrees(flipAngle), axis: (x: 0, y: 1, z: 0), perspective: 0.35)
                 .shadow(color: .black.opacity(0.14), radius: 16, y: 10)
                 .allowsHitTesting(false)
 
@@ -663,10 +800,12 @@ struct ProfileShareSheet: View {
                                 .offset(y: -22 * scale * 0.5)
                             }
                             .allowsHitTesting(false)
+                            .opacity(isFlipped ? 0 : 1)
                     } else {
                         // No photo — logo silhouette placeholder.
                         emptyStateHero(height: cardHeight * 0.64)
                             .allowsHitTesting(false)
+                            .opacity(isFlipped ? 0 : 1)
                     }
                 } else {
                     // Outfit strip — floats over the card, unclipped.
@@ -693,6 +832,7 @@ struct ProfileShareSheet: View {
                         }
                     }
                     .frame(width: geo.size.width, height: cardHeight)
+                    .opacity(isFlipped ? 0 : 1)
                 }
 
                 // Username pill, top-right of the card — weather-pill style
@@ -711,6 +851,24 @@ struct ProfileShareSheet: View {
                             .padding(.top, 14 * scale)
                         }
                         .allowsHitTesting(false)
+                        .opacity(isFlipped ? 0 : 1)
+                }
+
+                // Invite chip, bottom-right — the flip's discoverability.
+                // Only quota-holders ever see it (or the flip at all).
+                if let invite, invite.quota > 0 {
+                    Color.clear
+                        .frame(width: cardWidth, height: cardHeight)
+                        .overlay(alignment: .bottomTrailing) {
+                            InviteChip(
+                                remaining: max(0, invite.quota - invite.used),
+                                scale: scale
+                            )
+                            .padding(.trailing, 14 * scale)
+                            .padding(.bottom, 14 * scale)
+                        }
+                        .allowsHitTesting(false)
+                        .opacity(isFlipped ? 0 : 1)
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
@@ -719,12 +877,13 @@ struct ProfileShareSheet: View {
                 DragGesture()
                     .onChanged { value in
                         // Nothing to swipe with 0 or 1 outfit (the
-                        // empty-state hero is fixed, not a carousel).
-                        guard outfits.count > 1 else { return }
+                        // empty-state hero is fixed, not a carousel) —
+                        // and nothing while the invite back is up.
+                        guard outfits.count > 1, !isFlipped else { return }
                         carouselDragOffset = value.translation.width
                     }
                     .onEnded { value in
-                        guard outfits.count > 1 else { return }
+                        guard outfits.count > 1, !isFlipped else { return }
                         let translation = value.translation.width
                         let velocity = value.predictedEndTranslation.width
                         var newIndex = selectedIndex
@@ -740,8 +899,21 @@ struct ProfileShareSheet: View {
                         }
                     }
             )
+            .onTapGesture { toggleFlip() }
         }
         .frame(height: 560)
+    }
+
+    /// Flip between the profile front and the invite back. No-op for
+    /// users without invite quota — their card is just a card.
+    private func toggleFlip() {
+        guard let invite, invite.quota > 0 else { return }
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        isFlipped.toggle()
+        showCopiedCode = false
+        withAnimation(.spring(response: 0.55, dampingFraction: 0.82)) {
+            flipAngle = isFlipped ? 180 : 0
+        }
     }
 
     // MARK: - Dot picker (matches ShareCardComposer.templatePicker)
@@ -830,6 +1002,16 @@ struct ProfileShareSheet: View {
     private var shareButton: some View {
         Button {
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            if isFlipped {
+                // Invite mode: share the one-time code, not the profile.
+                guard let code = invite?.code else { return }
+                Analytics.log("invite_share_tapped", properties: [
+                    "code": .string(code)
+                ])
+                activeInviteShareText =
+                    "You're invited to Yafa. One-time code: \(code)\nhttps://yafafits.com/i/\(code)"
+                return
+            }
             guard let url = shareURL else { return }
             Analytics.log("profile_share_tapped", properties: [
                 "outfit_id": .string(selectedOutfit?.id ?? "none"),
@@ -837,7 +1019,7 @@ struct ProfileShareSheet: View {
             ])
             activeShareURL = url
         } label: {
-            Text("SHARE")
+            Text(isFlipped ? "SHARE INVITE" : "SHARE")
                 .font(.system(size: 12, weight: .semibold))
                 .tracking(1.5)
                 .foregroundStyle(AppPalette.textPrimary)
@@ -846,13 +1028,22 @@ struct ProfileShareSheet: View {
                 .appCapsule(shadowRadius: 6, shadowY: 3)
         }
         .buttonStyle(SolidPressButtonStyle())
-        .disabled(shareURL == nil)
+        .disabled(isFlipped ? invite?.code == nil : shareURL == nil)
         .sheet(isPresented: Binding(
             get: { activeShareURL != nil },
             set: { if !$0 { activeShareURL = nil } }
         )) {
             if let url = activeShareURL {
                 ShareActivityView(items: [url])
+                    .presentationDetents([.medium, .large])
+            }
+        }
+        .sheet(isPresented: Binding(
+            get: { activeInviteShareText != nil },
+            set: { if !$0 { activeInviteShareText = nil } }
+        )) {
+            if let text = activeInviteShareText {
+                ShareActivityView(items: [text])
                     .presentationDetents([.medium, .large])
             }
         }

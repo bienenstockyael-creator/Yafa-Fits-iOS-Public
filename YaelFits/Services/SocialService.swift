@@ -53,6 +53,46 @@ struct SocialService {
             .value
     }
 
+    /// The caller's shareable invite code (card back). The server
+    /// mints lazily: one active code at a time, only within quota.
+    /// state: "active" | "exhausted" | "no_quota".
+    struct InviteCodeInfo: Decodable {
+        let code: String?
+        let state: String
+        let used: Int
+        let quota: Int
+    }
+    static func currentInviteCode() async throws -> InviteCodeInfo? {
+        let rows: [InviteCodeInfo] = try await supabase
+            .rpc("current_invite_code")
+            .execute()
+            .value
+        return rows.first
+    }
+
+    /// Who joined through the caller's invites, newest first.
+    struct ClaimedInvite: Decodable, Identifiable {
+        let code: String
+        let redeemedAt: Date?
+        let claimedByUsername: String?
+        let claimedByDisplayName: String?
+        let claimedByAvatarUrl: String?
+        var id: String { code }
+        enum CodingKeys: String, CodingKey {
+            case code
+            case redeemedAt = "redeemed_at"
+            case claimedByUsername = "claimed_by_username"
+            case claimedByDisplayName = "claimed_by_display_name"
+            case claimedByAvatarUrl = "claimed_by_avatar_url"
+        }
+    }
+    static func myClaimedInvites() async throws -> [ClaimedInvite] {
+        try await supabase
+            .rpc("my_claimed_invites")
+            .execute()
+            .value
+    }
+
     static func getProfiles(userIds: Set<UUID>) async throws -> [Profile] {
         guard !userIds.isEmpty else { return [] }
         return try await supabase
