@@ -817,13 +817,13 @@ struct ProfileShareSheet: View {
             Spacer()
 
             Text(invite?.state == "exhausted" ? "ALL INVITES USED" : "INVITE A FRIEND")
-                .font(.system(size: 11 * scale, weight: .bold, design: .monospaced))
+                .font(.system(size: 11 * scale, weight: .semibold, design: .monospaced))
                 .tracking(2)
                 .foregroundStyle(AppPalette.textFaint)
 
             if let code = invite?.code {
                 Text(code)
-                    .font(.system(size: 36 * scale, weight: .bold, design: .monospaced))
+                    .font(.system(size: 36 * scale, weight: .semibold, design: .monospaced))
                     .tracking(2)
                     // Same mono voice as the labels around it, in the
                     // app's DARKEST text color — the hero should land,
@@ -841,7 +841,7 @@ struct ProfileShareSheet: View {
                         }
                     }
                 Text(showCopiedCode ? "COPIED!" : "ONE-TIME CODE · TAP TO COPY")
-                    .font(.system(size: 11 * scale, weight: .bold, design: .monospaced))
+                    .font(.system(size: 11 * scale, weight: .semibold, design: .monospaced))
                     .tracking(2)
                     .foregroundStyle(AppPalette.textFaint)
                     .padding(.top, 10 * scale)
@@ -851,7 +851,7 @@ struct ProfileShareSheet: View {
                 VStack(spacing: 5 * scale) {
                     ForEach(claimedInvites.prefix(3)) { claim in
                         Text("@\(claim.claimedByUsername ?? "someone") joined")
-                            .font(.system(size: 11 * scale, weight: .bold, design: .monospaced))
+                            .font(.system(size: 11 * scale, weight: .semibold, design: .monospaced))
                             .tracking(2)
                             .foregroundStyle(AppPalette.textFaint)
                     }
