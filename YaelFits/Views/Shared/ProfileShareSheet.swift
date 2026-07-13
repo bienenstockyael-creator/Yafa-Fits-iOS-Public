@@ -708,22 +708,46 @@ struct ProfileShareSheet: View {
     /// same angles as the face but displaced in z (anchorZ), so the
     /// edge genuinely swings around in perspective as the card turns.
     /// At rest the 1.5pt y-offset keeps a hairline lip.
-    private func cardThickness(cardWidth: CGFloat, cardHeight: CGFloat, scale: CGFloat) -> some View {
-        // Dense slices (0.7pt apart in z) so the side reads as ONE
-        // solid surface — the earlier 2pt spacing separated into
-        // visible bands mid-flip. Shading darkens toward the back
-        // slice, which is the depth cue that sells it as a side and
-        // not a smear.
-        ZStack {
-            ForEach(1...12, id: \.self) { (i: Int) in
-                let z = Double(i) * -0.7
-                let shade = 0.84 - Double(i) * 0.011
+    /// Animatable so `presence` is computed per FRAME: anchorZ +
+    /// perspective slightly scales the slices even at rest, which
+    /// poked all 12 darker layers out around the card as a muddy
+    /// halo (and fattened the drop shadow around them). The slices
+    /// now exist only while the card is actually turning; at rest a
+    /// single hairline lip carries the thickness cue.
+    private struct CardThickness: View, Animatable {
+        var flip: Double
+        var tilt: Double
+        let cardWidth: CGFloat
+        let cardHeight: CGFloat
+        let scale: CGFloat
+        var animatableData: AnimatablePair<Double, Double> {
+            get { AnimatablePair(flip, tilt) }
+            set { flip = newValue.first; tilt = newValue.second }
+        }
+        var body: some View {
+            let turn = abs(sin(flip * .pi / 180)) + abs(sin(tilt * .pi / 180))
+            let presence = min(1.0, turn * 2.2)
+            ZStack {
+                // Rest lip — fades out as the real 3D side takes over.
                 RoundedRectangle(cornerRadius: 24 * scale, style: .continuous)
-                    .fill(Color(white: shade))
+                    .fill(Color(white: 0.80))
                     .frame(width: cardWidth, height: cardHeight)
-                    .offset(y: 1.2)
-                    .rotation3DEffect(.degrees(cardTiltX), axis: (x: 1, y: 0, z: 0), anchorZ: z, perspective: 0.35)
-                    .rotation3DEffect(.degrees(flipAngle), axis: (x: 0, y: 1, z: 0), anchorZ: z, perspective: 0.35)
+                    .offset(y: 1.5)
+                    .opacity(1 - presence)
+                // Dense slices (0.7pt apart in z) so the side reads as
+                // ONE solid surface, shaded darker toward the back.
+                // Inset 1pt so residual perspective scale can't leak
+                // past the face at small angles.
+                ForEach(1...12, id: \.self) { (i: Int) in
+                    let z = Double(i) * -0.7
+                    let shade = 0.84 - Double(i) * 0.011
+                    RoundedRectangle(cornerRadius: 24 * scale, style: .continuous)
+                        .fill(Color(white: shade))
+                        .frame(width: cardWidth - 1, height: cardHeight - 1)
+                        .opacity(presence)
+                        .rotation3DEffect(.degrees(tilt), axis: (x: 1, y: 0, z: 0), anchorZ: z, perspective: 0.35)
+                        .rotation3DEffect(.degrees(flip), axis: (x: 0, y: 1, z: 0), anchorZ: z, perspective: 0.35)
+                }
             }
         }
     }
@@ -1015,7 +1039,7 @@ struct ProfileShareSheet: View {
                 // tilt, then springs flat on release.
                 .rotation3DEffect(.degrees(cardTiltX), axis: (x: 1, y: 0, z: 0), perspective: 0.35)
                 .rotation3DEffect(.degrees(flipAngle), axis: (x: 0, y: 1, z: 0), perspective: 0.35)
-                .background(cardThickness(cardWidth: cardWidth, cardHeight: cardHeight, scale: scale))
+                .background(CardThickness(flip: flipAngle, tilt: cardTiltX, cardWidth: cardWidth, cardHeight: cardHeight, scale: scale))
                 .shadow(color: .black.opacity(0.14), radius: 16, y: 10)
                 .allowsHitTesting(false)
 
