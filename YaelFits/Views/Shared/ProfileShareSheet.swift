@@ -821,13 +821,17 @@ struct ProfileShareSheet: View {
                 .font(.system(size: 9 * scale, weight: .semibold, design: .monospaced))
                 .tracking(2)
                 .foregroundStyle(AppPalette.textFaint)
-                .offset(y: -58 * scale)
+                // Uniform rhythm: every line sits one 48pt step from
+                // the centered code.
+                .offset(y: -48 * scale)
 
             if let code = invite?.code {
                 Text(code)
                     .font(.system(size: 36 * scale, weight: .semibold, design: .monospaced))
                     .tracking(2)
-                    .foregroundStyle(AppPalette.textFaint)
+                    // The one dark element on the face — the hero code
+                    // in the app's darkest text color.
+                    .foregroundStyle(AppPalette.textPrimary)
                     .contentShape(Rectangle())
                     .onTapGesture {
                         UIPasteboard.general.string = code
@@ -843,7 +847,7 @@ struct ProfileShareSheet: View {
                     .font(.system(size: 9 * scale, weight: .semibold, design: .monospaced))
                     .tracking(2)
                     .foregroundStyle(AppPalette.textFaint)
-                    .offset(y: 38 * scale)
+                    .offset(y: 48 * scale)
             }
 
             if !claimedInvites.isEmpty {
@@ -855,7 +859,7 @@ struct ProfileShareSheet: View {
                             .foregroundStyle(AppPalette.textFaint)
                     }
                 }
-                .offset(y: 76 * scale)
+                .offset(y: 96 * scale)
             }
         }
         .multilineTextAlignment(.center)
