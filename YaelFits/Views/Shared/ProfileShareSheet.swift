@@ -310,7 +310,10 @@ struct ProfileShareSheet: View {
     /// chrome environment off it; the image itself is just geometry. Called off
     /// the main thread on appear so the ~1.3MB decode never hitches sheet open.
     private static func loadChromeNormalMap() -> UIImage? {
-        guard let url = Bundle.main.url(forResource: "share-chrome-normal", withExtension: "png"),
+        // v2 bake (tools/share-card-assets recipe at 3x working res, 2x
+        // output, letterform-masked dither): visibly smoother chrome than
+        // v1. To fall back, point this at "share-chrome-normal".
+        guard let url = Bundle.main.url(forResource: "share-chrome-normal-v2", withExtension: "png"),
               let data = try? Data(contentsOf: url),
               let raw = UIImage(data: data)
         else { return nil }
