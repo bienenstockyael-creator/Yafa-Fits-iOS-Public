@@ -27,10 +27,28 @@ struct ProfileShareSheet: View {
     /// dismissed (this @State deallocates with the view) — rather than a
     /// process-lifetime static cache, so it holds zero memory while closed.
     @State private var chromeNormalMap: UIImage?
-    /// URL being handed to the system share sheet. Set at tap
+    /// Payload being handed to the system share sheet. Set at tap
     /// time (not view-build time) so the selected outfit is
-    /// guaranteed to be the one captured in the link.
-    @State private var activeShareURL: URL? = nil
+    /// guaranteed to be the one captured in the link. ONE sheet for
+    /// both modes — two .sheet modifiers chained on the same button
+    /// wedge SwiftUI's presentation system (the SHARE INVITE freeze).
+    private enum SharePayload: Identifiable {
+        case profile(URL)
+        case invite(String)
+        var id: String {
+            switch self {
+            case .profile(let url): return url.absoluteString
+            case .invite(let text): return text
+            }
+        }
+        var item: Any {
+            switch self {
+            case .profile(let url): return url
+            case .invite(let text): return text
+            }
+        }
+    }
+    @State private var activeShare: SharePayload? = nil
     /// Live horizontal drag offset while the user is swiping
     /// through outfits. Same continuous-strip mechanic as the
     /// ShareCardComposer template carousel.
@@ -44,9 +62,6 @@ struct ProfileShareSheet: View {
     @State private var flipAngle: Double = 0
     @State private var invite: SocialService.InviteCodeInfo?
     @State private var claimedInvites: [SocialService.ClaimedInvite] = []
-    /// Invite text being handed to the system share sheet (the
-    /// flipped card's SHARE shares the code, not the profile link).
-    @State private var activeInviteShareText: String? = nil
     /// Brief "copied!" confirmation after tapping the code.
     @State private var showCopiedCode = false
     /// What the current drag is steering — decided ONCE at drag
@@ -1380,8 +1395,9 @@ struct ProfileShareSheet: View {
                 ])
                 // The message must NOT spoil the code — the reveal is
                 // the web card's flip. The code rides only in the URL.
-                activeInviteShareText =
+                activeShare = .invite(
                     "You're invited to Yafa. Tap to see your one-time code:\nhttps://yafafits.com/i/\(code)"
+                )
                 return
             }
             guard let url = shareURL else { return }
@@ -1389,7 +1405,7 @@ struct ProfileShareSheet: View {
                 "outfit_id": .string(selectedOutfit?.id ?? "none"),
                 "url": .string(url.absoluteString)
             ])
-            activeShareURL = url
+            activeShare = .profile(url)
         } label: {
             Text(isFlipped ? "SHARE INVITE" : "SHARE")
                 .font(.system(size: 12, weight: .semibold))
@@ -1401,23 +1417,9 @@ struct ProfileShareSheet: View {
         }
         .buttonStyle(SolidPressButtonStyle())
         .disabled(isFlipped ? invite?.code == nil : shareURL == nil)
-        .sheet(isPresented: Binding(
-            get: { activeShareURL != nil },
-            set: { if !$0 { activeShareURL = nil } }
-        )) {
-            if let url = activeShareURL {
-                ShareActivityView(items: [url])
-                    .presentationDetents([.medium, .large])
-            }
-        }
-        .sheet(isPresented: Binding(
-            get: { activeInviteShareText != nil },
-            set: { if !$0 { activeInviteShareText = nil } }
-        )) {
-            if let text = activeInviteShareText {
-                ShareActivityView(items: [text])
-                    .presentationDetents([.medium, .large])
-            }
+        .sheet(item: $activeShare) { payload in
+            ShareActivityView(items: [payload.item])
+                .presentationDetents([.medium, .large])
         }
     }
 }
