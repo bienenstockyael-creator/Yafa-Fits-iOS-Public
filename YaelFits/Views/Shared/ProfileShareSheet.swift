@@ -496,6 +496,10 @@ struct ProfileShareSheet: View {
                 pageDots
                     .padding(.top, 14)
                     .opacity(cardVisible ? 1 : 0)
+                    // The dots page OUTFITS — they dissolve with the
+                    // outfit when the card flips to invite mode.
+                    .modifier(FlipFade(angle: flipAngle))
+                    .allowsHitTesting(!isFlipped)
 
                 Spacer(minLength: LayoutMetrics.large)
 
