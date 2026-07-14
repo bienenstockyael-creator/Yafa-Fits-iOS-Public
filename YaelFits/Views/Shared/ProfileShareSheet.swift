@@ -816,7 +816,9 @@ struct ProfileShareSheet: View {
         // content above/below can nudge the hero off-center.
         ZStack {
             Text(invite?.state == "exhausted" ? "ALL INVITES USED" : "INVITE A FRIEND")
-                .font(.system(size: 11 * scale, weight: .semibold, design: .monospaced))
+                // Same treatment as the tap-to-copy subtext below the
+                // code — the two quiet lines framing the hero match.
+                .font(.system(size: 9 * scale, weight: .semibold, design: .monospaced))
                 .tracking(2)
                 .foregroundStyle(AppPalette.textFaint)
                 .offset(y: -58 * scale)
