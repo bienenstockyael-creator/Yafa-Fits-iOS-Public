@@ -685,9 +685,10 @@ struct ProfileShareSheet: View {
         let cardWidth: CGFloat
         let cardHeight: CGFloat
         var body: some View {
-            Text(remaining > 0 ? "\(remaining) INVITE\(remaining == 1 ? "" : "S")" : "INVITES")
-                .font(.system(size: 11 * scale, weight: .semibold, design: .monospaced))
-                .tracking(1.2)
+            // Text styled EXACTLY like UsernamePill's — same size,
+            // weight, face, and color; only the words differ.
+            Text(remaining > 0 ? "\(remaining) invites" : "no invites left")
+                .font(.system(size: 12 * scale, weight: .semibold))
                 .foregroundStyle(AppPalette.textSecondary)
                 .padding(.horizontal, 11 * scale)
                 .padding(.vertical, 7 * scale)
