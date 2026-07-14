@@ -604,6 +604,20 @@ private struct AccessCodeGate: View {
         }
         .dynamicTypeSize(.large ... .accessibility1)
         .onAppear {
+            // Invite handoff: the web invite card copies the code to the
+            // clipboard; if a YAFA-XXXX code is still there, pre-fill it.
+            // Fill only — the user still taps REDEEM — and pattern-gated
+            // so unrelated clipboard content is never touched. (iOS shows
+            // its paste-permission prompt here; that's the expected trade
+            // for the install-gap handoff, and only fires when the
+            // clipboard actually has text.)
+            if code.isEmpty, UIPasteboard.general.hasStrings,
+               let paste = UIPasteboard.general.string?
+                   .trimmingCharacters(in: .whitespacesAndNewlines)
+                   .uppercased(),
+               paste.range(of: #"^YAFA-[A-Z2-9]{4}$"#, options: .regularExpression) != nil {
+                code = paste
+            }
             // Small delay so the keyboard doesn't fight the layer transition.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                 fieldFocused = true
