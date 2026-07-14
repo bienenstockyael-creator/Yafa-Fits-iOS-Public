@@ -93,6 +93,30 @@ struct SocialService {
             .value
     }
 
+    /// Deep-link resolution: yafa://u/<username> -> profile.
+    static func getProfile(username: String) async throws -> Profile? {
+        let rows: [Profile] = try await supabase
+            .from("profiles")
+            .select()
+            .eq("username", value: username)
+            .limit(1)
+            .execute()
+            .value
+        return rows.first
+    }
+
+    /// Mints a FRESH one-time invite code (mint-per-share: each
+    /// SHARE INVITE press sends a distinct code so several people
+    /// can be invited at once without racing for one slot). Quota
+    /// counts issued codes. Falls back server-side to nil when the
+    /// quota is exhausted.
+    static func mintInviteCode() async throws -> String? {
+        try await supabase
+            .rpc("mint_invite_code")
+            .execute()
+            .value
+    }
+
     static func getProfiles(userIds: Set<UUID>) async throws -> [Profile] {
         guard !userIds.isEmpty else { return [] }
         return try await supabase

@@ -1392,16 +1392,23 @@ struct ProfileShareSheet: View {
         Button {
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             if isFlipped {
-                // Invite mode: share the one-time code, not the profile.
-                guard let code = invite?.code else { return }
-                Analytics.log("invite_share_tapped", properties: [
-                    "code": .string(code)
-                ])
-                // The message must NOT spoil the code — the reveal is
-                // the web card's flip. The code rides only in the URL.
-                activeShare = .invite(
-                    "You're invited to Yafa. Tap to see your one-time code:\nhttps://yafafits.com/i/\(code)"
-                )
+                // Invite mode: MINT-PER-SHARE — every share sends a
+                // fresh one-time code, so several friends can be
+                // invited at once without racing for one slot. Falls
+                // back to the displayed code if minting fails (e.g.
+                // the mint RPC not yet applied, or quota exhausted).
+                guard let displayed = invite?.code else { return }
+                Task { @MainActor in
+                    let code = (try? await SocialService.mintInviteCode()) ?? displayed
+                    Analytics.log("invite_share_tapped", properties: [
+                        "code": .string(code)
+                    ])
+                    // The message must NOT spoil the code — the reveal
+                    // is the web card's flip; it rides only in the URL.
+                    activeShare = .invite(
+                        "You're invited to Yafa. Tap to see your one-time code:\nhttps://yafafits.com/i/\(code)"
+                    )
+                }
                 return
             }
             guard let url = shareURL else { return }

@@ -15,6 +15,9 @@ struct YaelFitsApp: App {
     // wasn't grandfathered). The access-code gate renders on top of everything
     // until they redeem, then the normal onboarding/app flow shows beneath it.
     @State private var showAccessGate = false
+    /// Profile opened via a yafa://u/<username> deep link (the web
+    /// invite card's "already on Yafa" path).
+    @State private var deepLinkProfile: Profile?
     // The user id we've finished resolving onboarding status for.
     // The gating cover below stays up until this matches the current
     // session, so RootView never flashes before we know whether to
@@ -227,6 +230,26 @@ struct YaelFitsApp: App {
             .environment(authManager)
             .environment(vibesEffectHost)
             .environment(vibesIncomingManager)
+            .onOpenURL { url in
+                // yafa://u/<username> — the invite card doubles as a
+                // profile card for people who already have the app.
+                guard url.scheme == "yafa" else { return }
+                let parts = url.host.map { [$0] + url.pathComponents.filter { $0 != "/" } } ?? []
+                guard parts.count >= 2, parts[0] == "u" else { return }
+                let username = parts[1]
+                Task { @MainActor in
+                    if let profile = try? await SocialService.getProfile(username: username) {
+                        deepLinkProfile = profile
+                    }
+                }
+            }
+            .fullScreenCover(item: $deepLinkProfile) { profile in
+                UserProfileView(userId: profile.id, onDismiss: { deepLinkProfile = nil })
+                    .environment(outfitStore)
+                    // Clear container — same rule as every profile
+                    // cover in the app (default is opaque black).
+                    .presentationBackground(.clear)
+            }
             .onAppear {
                 // App-wide tap-outside-to-dismiss-keyboard (every window/sheet).
                 GlobalKeyboardDismiss.shared.start()
