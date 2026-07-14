@@ -310,11 +310,7 @@ struct ProfileShareSheet: View {
     /// chrome environment off it; the image itself is just geometry. Called off
     /// the main thread on appear so the ~1.3MB decode never hitches sheet open.
     private static func loadChromeNormalMap() -> UIImage? {
-        // EXPERIMENT (easily reversible): v2 bake — 3x working res,
-        // 2x output, dithered encode (tools/share-card-assets, bake
-        // params in scratchpad bake_v2.py). To go back to the shipped
-        // map, change "share-chrome-normal-v2" -> "share-chrome-normal".
-        guard let url = Bundle.main.url(forResource: "share-chrome-normal-v2", withExtension: "png"),
+        guard let url = Bundle.main.url(forResource: "share-chrome-normal", withExtension: "png"),
               let data = try? Data(contentsOf: url),
               let raw = UIImage(data: data)
         else { return nil }
