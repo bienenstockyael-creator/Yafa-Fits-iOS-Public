@@ -809,27 +809,22 @@ struct ProfileShareSheet: View {
 
     @ViewBuilder
     private func inviteBackFace(cardWidth: CGFloat, cardHeight: CGFloat, scale: CGFloat) -> some View {
-        // EXACTLY the app's mono voice — bold monospaced, tracking(2),
-        // textFaint (the recipe every mono label in the app uses) —
-        // at two sizes only: big for the code, 11 for everything
-        // else. Everything centered.
-        VStack(alignment: .center, spacing: 0) {
-            Spacer()
-
+        // One mono voice (semibold, tracking 2, textFaint). The CODE
+        // is pinned to the card's exact center — both axes — and the
+        // other lines hang off it at fixed offsets, so no amount of
+        // content above/below can nudge the hero off-center.
+        ZStack {
             Text(invite?.state == "exhausted" ? "ALL INVITES USED" : "INVITE A FRIEND")
                 .font(.system(size: 11 * scale, weight: .semibold, design: .monospaced))
                 .tracking(2)
                 .foregroundStyle(AppPalette.textFaint)
+                .offset(y: -58 * scale)
 
             if let code = invite?.code {
                 Text(code)
                     .font(.system(size: 36 * scale, weight: .semibold, design: .monospaced))
                     .tracking(2)
-                    // One color for the whole face: the app's mono-label
-                    // grey. Size alone carries the hierarchy.
                     .foregroundStyle(AppPalette.textFaint)
-                    // Wider gap lifts INVITE A FRIEND clear of the code.
-                    .padding(.top, 30 * scale)
                     .contentShape(Rectangle())
                     .onTapGesture {
                         UIPasteboard.general.string = code
@@ -845,7 +840,7 @@ struct ProfileShareSheet: View {
                     .font(.system(size: 9 * scale, weight: .semibold, design: .monospaced))
                     .tracking(2)
                     .foregroundStyle(AppPalette.textFaint)
-                    .padding(.top, 10 * scale)
+                    .offset(y: 38 * scale)
             }
 
             if !claimedInvites.isEmpty {
@@ -857,10 +852,8 @@ struct ProfileShareSheet: View {
                             .foregroundStyle(AppPalette.textFaint)
                     }
                 }
-                .padding(.top, 18 * scale)
+                .offset(y: 76 * scale)
             }
-
-            Spacer()
         }
         .multilineTextAlignment(.center)
         .frame(width: cardWidth, height: cardHeight)
