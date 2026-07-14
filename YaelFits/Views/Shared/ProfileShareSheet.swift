@@ -1378,8 +1378,10 @@ struct ProfileShareSheet: View {
                 Analytics.log("invite_share_tapped", properties: [
                     "code": .string(code)
                 ])
+                // The message must NOT spoil the code — the reveal is
+                // the web card's flip. The code rides only in the URL.
                 activeInviteShareText =
-                    "You're invited to Yafa. One-time code: \(code)\nhttps://yafafits.com/i/\(code)"
+                    "You're invited to Yafa. Tap to see your one-time code:\nhttps://yafafits.com/i/\(code)"
                 return
             }
             guard let url = shareURL else { return }
