@@ -562,13 +562,33 @@ private struct AccessCodeGate: View {
                             prompt: Text("Enter your access code")
                                 .foregroundColor(AppPalette.textMuted.opacity(0.55))
                         )
-                        .font(.system(size: 24, weight: .semibold))
+                        // Codes are mono everywhere else in the app —
+                        // the field should look like what it holds.
+                        .font(.system(size: 24, weight: .semibold, design: .monospaced))
                         .foregroundStyle(AppPalette.textStrong)
                         .multilineTextAlignment(.center)
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.characters)
                         .submitLabel(.go)
                         .focused($fieldFocused)
+                        .onChange(of: code) { _, newValue in
+                            // Auto-insert the hyphen for new-format
+                            // codes (YAFA-XXXX): the dash lives behind
+                            // the symbols keyboard, so typing YAFA7K2M
+                            // becomes YAFA-7K2M as you go. Old-format
+                            // codes and edits elsewhere are untouched
+                            // (server-side redemption is forgiving
+                            // regardless).
+                            let up = newValue.uppercased()
+                            if up.count >= 5, up.hasPrefix("YAFA"),
+                               up.count <= 9,
+                               !up.contains("-"),
+                               up.dropFirst(4).allSatisfy({ $0.isLetter || $0.isNumber }) {
+                                code = "YAFA-" + up.dropFirst(4)
+                            } else if up != newValue {
+                                code = up
+                            }
+                        }
                         .onSubmit { Task { await redeem() } }
                         .onChange(of: code) { _, _ in errorMessage = nil }
                         .padding(.horizontal, LayoutMetrics.large)
