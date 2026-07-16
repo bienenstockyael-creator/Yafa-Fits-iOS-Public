@@ -1288,17 +1288,18 @@ struct ProfileShareSheet: View {
         .frame(height: 560)
         // Quota holders get a quiet hint that the card has a back —
         // same voice as the web invite card's under-card caption.
-        // Crossfades to the flip-back hint on the code side.
+        // Front side only; the code side speaks for itself.
         .overlay(alignment: .bottom) {
-            if let invite, invite.quota > 0, invite.code != nil {
-                Text(isFlipped ? "TAP THE CARD TO FLIP BACK" : "TAP THE CARD FOR YOUR INVITE CODE")
+            if let invite, invite.quota > 0, invite.code != nil, !isFlipped {
+                Text("TAP THE CARD TO SHARE AN INVITE CODE")
                     .font(.system(size: 9, weight: .semibold, design: .monospaced))
                     .tracking(2)
                     .foregroundStyle(AppPalette.textFaint)
-                    .animation(.easeOut(duration: 0.2), value: isFlipped)
+                    .transition(.opacity)
                     .allowsHitTesting(false)
             }
         }
+        .animation(.easeOut(duration: 0.2), value: isFlipped)
     }
 
     /// One-time "the card has a back" reveal: on the first sheet
