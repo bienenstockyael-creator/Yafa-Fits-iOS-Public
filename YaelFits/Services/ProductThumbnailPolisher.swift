@@ -84,68 +84,109 @@ final class ProductThumbnailPolisher {
     // MARK: Heal pass (launch-time)
 
     /// Retries polishes that died with the app. Called once per
-    /// session from the app root after sign-in.
+    /// session from the app root after sign-in. Covers BOTH the
+    /// locally-remembered pending list AND an orphan sweep of rows
+    /// stuck at thumb_status = "generating" with no local record
+    /// (a polish started on an older build, or lost UserDefaults) —
+    /// without the sweep those sparkle forever with no healer.
     func healIfNeeded(userId: UUID) {
-        guard !isHealing, !pending.isEmpty else { return }
+        guard !isHealing else { return }
         isHealing = true
         Task {
             defer { isHealing = false }
+
+            var work: [(id: UUID, label: String)] = []
             for (idString, label) in pending {
-                guard let id = UUID(uuidString: idString) else {
-                    forget(UUID()) // unreachable id — drop the record
+                if let id = UUID(uuidString: idString) {
+                    work.append((id, label))
+                } else {
                     var p = pending; p.removeValue(forKey: idString); pending = p
-                    continue
-                }
-                let tried = attemptCounts[idString] ?? 0
-                guard tried < Self.maxAttempts else {
-                    // Several sessions of failure — keep the raw shot,
-                    // stop the sparkles and the retries.
-                    try? await WardrobeService.updateItem(id: id, thumbStatus: "ready")
-                    forget(id)
-                    continue
-                }
-                var a = attemptCounts; a[idString] = tried + 1; attemptCounts = a
-
-                // Row check: someone (or a prior success whose forget
-                // was lost) may have finished it already.
-                struct Row: Decodable {
-                    let imageUrl: String?
-                    let thumbStatus: String?
-                    enum CodingKeys: String, CodingKey {
-                        case imageUrl = "image_url"
-                        case thumbStatus = "thumb_status"
-                    }
-                }
-                let row: Row?
-                do {
-                    let rows: [Row] = try await supabase
-                        .from("products")
-                        .select("image_url, thumb_status")
-                        .eq("id", value: id.uuidString)
-                        .limit(1)
-                        .execute()
-                        .value
-                    row = rows.first
-                } catch {
-                    continue // transient — retry next launch
-                }
-                guard let row, row.thumbStatus == "generating",
-                      let rawURLString = row.imageUrl, let rawURL = URL(string: rawURLString) else {
-                    forget(id)
-                    continue
-                }
-
-                polishingIds.insert(id)
-                defer { polishingIds.remove(id) }
-                guard let (data, _) = try? await URLSession.shared.data(from: rawURL),
-                      let raw = UIImage(data: data) else { continue }
-                do {
-                    try await generateAndApply(productId: id, label: label, userId: userId, raw: raw)
-                    forget(id)
-                } catch {
-                    // Retry next launch (until the attempt cap).
                 }
             }
+
+            struct OrphanRow: Decodable {
+                let id: UUID
+                let name: String?
+            }
+            if let orphans: [OrphanRow] = try? await supabase
+                .from("products")
+                .select("id, name")
+                .eq("user_id", value: userId.uuidString)
+                .eq("thumb_status", value: "generating")
+                .execute()
+                .value {
+                let known = Set(work.map(\.id))
+                for orphan in orphans
+                where !known.contains(orphan.id) && !polishingIds.contains(orphan.id) {
+                    work.append((orphan.id, orphan.name ?? ""))
+                }
+            }
+
+            for (id, label) in work {
+                await healOne(id: id, label: label, userId: userId)
+            }
+        }
+    }
+
+    private func healOne(id: UUID, label: String, userId: UUID) async {
+        let idString = id.uuidString
+        let tried = attemptCounts[idString] ?? 0
+        guard tried < Self.maxAttempts else {
+            // Several sessions of failure — keep the raw shot,
+            // stop the sparkles and the retries.
+            try? await WardrobeService.updateItem(id: id, thumbStatus: "ready")
+            forget(id)
+            return
+        }
+        var a = attemptCounts; a[idString] = tried + 1; attemptCounts = a
+
+        // Row check: someone (or a prior success whose forget
+        // was lost) may have finished it already.
+        struct Row: Decodable {
+            let name: String?
+            let imageUrl: String?
+            let thumbStatus: String?
+            enum CodingKeys: String, CodingKey {
+                case name
+                case imageUrl = "image_url"
+                case thumbStatus = "thumb_status"
+            }
+        }
+        let row: Row?
+        do {
+            let rows: [Row] = try await supabase
+                .from("products")
+                .select("name, image_url, thumb_status")
+                .eq("id", value: id.uuidString)
+                .limit(1)
+                .execute()
+                .value
+            row = rows.first
+        } catch {
+            return // transient — retry next launch
+        }
+        guard let row, row.thumbStatus == "generating" else {
+            forget(id)
+            return
+        }
+        guard let rawURLString = row.imageUrl, let rawURL = URL(string: rawURLString) else {
+            // No raw image to regenerate from — hand the row to the
+            // wishlist backfill's scraper instead of sparkling forever.
+            try? await WardrobeService.updateItem(id: id, thumbStatus: "needs_client_scrape")
+            forget(id)
+            return
+        }
+
+        polishingIds.insert(id)
+        defer { polishingIds.remove(id) }
+        guard let (data, _) = try? await URLSession.shared.data(from: rawURL),
+              let raw = UIImage(data: data) else { return }
+        let effectiveLabel = label.isEmpty ? (row.name ?? "") : label
+        do {
+            try await generateAndApply(productId: id, label: effectiveLabel, userId: userId, raw: raw)
+            forget(id)
+        } catch {
+            // Retry next launch (until the attempt cap).
         }
     }
 
