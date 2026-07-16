@@ -977,7 +977,7 @@ struct ProfileShareSheet: View {
 
             Spacer()
 
-            Text("SHARE PROFILE")
+            Text("SHARE YOUR PROFILE")
                 .font(.system(size: 9, weight: .bold, design: .monospaced))
                 .tracking(2)
                 .foregroundStyle(AppPalette.textFaint)
