@@ -443,9 +443,9 @@ struct CalendarDetailSheet: View {
         }
         .sheet(isPresented: $showAddProduct) {
             if let userId = store.userId {
-                AddProductSheet(userId: userId, outfitId: outfit.id) { product in
+                AddProductSheet(userId: userId, outfitId: outfit.id) { product, shopLink in
                     let p = Product(name: product.name, price: nil, image: product.imageURL,
-                                    productId: product.id, tags: product.tags)
+                                    shopLink: shopLink, productId: product.id, tags: product.tags)
                     store.updateOutfit(outfit.id, caption: outfit.caption,
                                        products: (outfit.products ?? []) + [p])
                 }

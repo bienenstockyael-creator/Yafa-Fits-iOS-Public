@@ -133,6 +133,21 @@ struct CarouselView: View {
     /// Unpublishing is destructive (pulls the fit from the feed) so it
     /// gets a confirm step, unlike publishing which has its own sheet.
     @State private var outfitToUnpublish: Outfit?
+    /// Share/publish attempted on a fit whose 3D render is still in
+    /// flight — the action waits behind an app-styled "still being
+    /// worked on" confirmation. nil at rest.
+    @State private var generatingConfirm: GeneratingConfirm?
+
+    private enum GeneratingConfirm {
+        case share(Outfit)
+        case publish(Outfit)
+        var key: String {
+            switch self {
+            case .share(let o): return "share-\(o.id)"
+            case .publish(let o): return "publish-\(o.id)"
+            }
+        }
+    }
     /// Outfit whose diary note is being written/edited. nil at rest;
     /// set by a long-press (or the ghost affordance) on the fit.
     @State private var outfitToEditNote: Outfit?
@@ -513,6 +528,7 @@ struct CarouselView: View {
             }
         }
         .overlay { unpublishConfirmOverlay }
+        .overlay { generatingConfirmOverlay }
         .sheet(isPresented: $showComments) {
             if let outfit = currentOutfit {
                 CommentsSheet(outfitId: outfit.id)
@@ -782,7 +798,15 @@ struct CarouselView: View {
     private func shareCircleButton(outfit: Outfit) -> some View {
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            showShareComposer = true
+            if isGenerating(outfit) {
+                // 3D render in flight: confirm before sharing the
+                // interim 2D version.
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                    generatingConfirm = .share(outfit)
+                }
+            } else {
+                showShareComposer = true
+            }
         } label: {
             AppIcon(glyph: .share, size: 16, color: AppPalette.iconPrimary)
                 .frame(width: 48, height: 48)
@@ -804,6 +828,12 @@ struct CarouselView: View {
             if live {
                 withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
                     outfitToUnpublish = outfit
+                }
+            } else if isGenerating(outfit) {
+                // 3D render in flight: confirm before publishing the
+                // interim 2D version to the feed.
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                    generatingConfirm = .publish(outfit)
                 }
             } else {
                 outfitToPublish = outfit
@@ -894,6 +924,88 @@ struct CarouselView: View {
     private func dismissUnpublish() {
         withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
             outfitToUnpublish = nil
+        }
+    }
+
+    /// App-styled "fit still rendering" confirmation for share/publish
+    /// — the exact scrim + frosted `appCard` recipe of
+    /// `unpublishConfirmOverlay`, with a non-destructive black primary.
+    @ViewBuilder
+    private var generatingConfirmOverlay: some View {
+        if let confirm = generatingConfirm {
+            let isShare: Bool = {
+                if case .share = confirm { return true }
+                return false
+            }()
+            ZStack {
+                // Dismissable scrim
+                Color.black.opacity(0.18)
+                    .ignoresSafeArea()
+                    .onTapGesture { dismissGeneratingConfirm() }
+                    .transition(.opacity)
+
+                VStack(spacing: 18) {
+                    VStack(spacing: 8) {
+                        Text("This fit is still being worked on")
+                            .font(.system(size: 19, weight: .semibold))
+                            .foregroundStyle(AppPalette.textStrong)
+                            .multilineTextAlignment(.center)
+                        Text(isShare
+                             ? "The 3D version is still rendering.\nShare the current version anyway?"
+                             : "The 3D version is still rendering.\nPublish the current version anyway?")
+                            .font(.system(size: 14, weight: .regular))
+                            .multilineTextAlignment(.center)
+                            .foregroundStyle(AppPalette.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    VStack(spacing: 10) {
+                        Button {
+                            UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+                            let action = confirm
+                            dismissGeneratingConfirm()
+                            switch action {
+                            case .share:
+                                showShareComposer = true
+                            case .publish(let outfit):
+                                outfitToPublish = outfit
+                            }
+                        } label: {
+                            Text(isShare ? "Share anyway" : "Publish anyway")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 50)
+                                .background(Capsule().fill(Color.black))
+                        }
+                        .buttonStyle(SolidPressButtonStyle())
+
+                        Button {
+                            dismissGeneratingConfirm()
+                        } label: {
+                            Text("Cancel")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(AppPalette.textPrimary)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 50)
+                                .appCapsule()
+                        }
+                        .buttonStyle(SolidPressButtonStyle())
+                    }
+                }
+                .padding(22)
+                .frame(maxWidth: 320)
+                .appCard(cornerRadius: 28)
+                .padding(.horizontal, 32)
+                .transition(.scale(scale: 0.92).combined(with: .opacity))
+            }
+            .animation(.spring(response: 0.32, dampingFraction: 0.86), value: generatingConfirm?.key)
+        }
+    }
+
+    private func dismissGeneratingConfirm() {
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+            generatingConfirm = nil
         }
     }
 

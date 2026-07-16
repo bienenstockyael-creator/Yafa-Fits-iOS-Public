@@ -233,6 +233,17 @@ struct RotatableOutfitImage: View {
             viewModel.outfit = outfit
             viewModel.loadCurrentFrame()
         }
+        .onChange(of: outfit.frameCount) { _, _ in
+            // Same staleness class as the Reverse toggle above: a fit
+            // upgraded IN PLACE (2D still -> accepted 3D render, same
+            // outfit id) never reaches the once-seeded viewModel, so
+            // scrubs kept computing over frameCount 1 — the cell read
+            // as not draggable even though the 3D badge showed.
+            viewModel.outfit = outfit
+            isSequenceReady = false
+            synchronizeSequenceState(preloadIfNeeded: false)
+            viewModel.loadCurrentFrame()
+        }
         .onChange(of: entranceSequenceActive) { _, isActive in
             guard isActive else {
                 entranceTask?.cancel()

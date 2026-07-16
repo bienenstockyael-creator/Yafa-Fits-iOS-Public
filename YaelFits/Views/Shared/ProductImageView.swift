@@ -62,11 +62,16 @@ struct ProductThumbnail: View {
                 CachedRemoteImage(
                     url: imageURL,
                     maxPixelSize: 640,
-                    contentMode: .fill,
+                    // FIT, never fill: closet items carry full-bleed
+                    // retailer shots and fill square-cropped them into
+                    // unrecognizable fabric swatches. Cutouts float on
+                    // the tile; rectangles letterbox gracefully.
+                    contentMode: .fit,
                     failure: AnyView(placeholder)
                 ) {
                     ProgressView().tint(AppPalette.textMuted)
                 }
+                .padding(side * 0.08)
             } else {
                 placeholder
             }

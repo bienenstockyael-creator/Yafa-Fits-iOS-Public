@@ -97,12 +97,20 @@ enum WardrobeService {
     /// products + inline outfit tags, both must go for the item to actually
     /// disappear.
     static func deleteItem(productId: UUID?, name: String) async throws {
+        // Untag from every outfit: by name (legacy inline tags) AND by
+        // product_id (a tag row can carry a renamed product's original
+        // name, so the name delete alone can miss it).
         try await supabase
             .from("outfit_products")
             .delete()
             .eq("name", value: name)
             .execute()
         if let productId {
+            try await supabase
+                .from("outfit_products")
+                .delete()
+                .eq("product_id", value: productId.uuidString)
+                .execute()
             try await supabase
                 .from("products")
                 .delete()

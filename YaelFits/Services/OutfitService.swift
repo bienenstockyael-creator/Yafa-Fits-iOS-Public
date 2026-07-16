@@ -7,11 +7,17 @@ struct ProductInput: Encodable {
     let price: String?
     let image: String
     let shopLink: String?
+    /// Link back to the canonical products row. WITHOUT this the
+    /// publish rewrite orphans the row — the background thumbnail
+    /// polish (which matches by product_id) can never reach it and
+    /// the feed freezes whatever image existed at publish time.
+    let productId: UUID?
 
     enum CodingKeys: String, CodingKey {
         case name, price, image
         case outfitId = "outfit_id"
         case shopLink = "shop_link"
+        case productId = "product_id"
     }
 }
 
@@ -188,39 +194,116 @@ struct OutfitService {
             .execute()
 
         if !products.isEmpty {
-            // Insert core fields first (always in schema)
-            struct ProductInsertCore: Encodable {
+            // Resolve canonical values FIRST, then insert rows that
+            // are BORN COMPLETE — image (possibly polished since the
+            // sheet opened), shop link (sheet value, else the
+            // product's durable source_url), and product_id all in the
+            // insert itself. The previous shape (minimal insert +
+            // follow-up UPDATEs) depended on updates that can silently
+            // match zero rows — which ate shop links (feed fell back
+            // to Google Lens), dropped product_id (the thumbnail
+            // polish could never reach published rows), and let raw
+            // images resurrect after publish.
+            struct CanonicalRow: Decodable {
+                let id: UUID
+                let imageUrl: String?
+                let sourceUrl: String?
+                enum CodingKeys: String, CodingKey {
+                    case id
+                    case imageUrl = "image_url"
+                    case sourceUrl = "source_url"
+                }
+            }
+            var canonicalById: [UUID: CanonicalRow] = [:]
+            let productIds = products.compactMap(\.productId)
+            if !productIds.isEmpty,
+               let rows: [CanonicalRow] = try? await supabase
+                   .from("products")
+                   .select("id, image_url, source_url")
+                   .in("id", values: productIds.map(\.uuidString))
+                   .execute()
+                   .value {
+                canonicalById = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0) })
+            }
+
+            struct FullInsert: Encodable {
                 let outfitId: String
                 let name: String
                 let price: String?
                 let image: String
+                let shopLink: String?
+                let productId: String?
                 enum CodingKeys: String, CodingKey {
                     case name, price, image
                     case outfitId = "outfit_id"
+                    case shopLink = "shop_link"
+                    case productId = "product_id"
                 }
             }
-            let coreInserts = products.map {
-                ProductInsertCore(outfitId: $0.outfitId, name: $0.name, price: $0.price, image: $0.image)
+            let fullInserts = products.map { p -> FullInsert in
+                let canon = p.productId.flatMap { canonicalById[$0] }
+                let image: String = {
+                    if let c = canon?.imageUrl, !c.isEmpty { return c }
+                    return p.image
+                }()
+                let link: String? = {
+                    if let l = p.shopLink, !l.isEmpty { return l }
+                    if let src = canon?.sourceUrl, !src.isEmpty { return src }
+                    return nil
+                }()
+                return FullInsert(
+                    outfitId: p.outfitId,
+                    name: p.name,
+                    price: p.price,
+                    image: image,
+                    shopLink: link,
+                    productId: p.productId?.uuidString
+                )
             }
-            try await supabase
-                .from("outfit_products")
-                .insert(coreInserts)
-                .execute()
 
-            // Update shop_link per product using name as key
-            // (ProductInput doesn't carry product_id; name is unique per outfit insert)
-            for product in products {
-                guard let shopLink = product.shopLink, !shopLink.isEmpty else { continue }
-                struct ShopLinkUpdate: Encodable {
-                    let shopLink: String
-                    enum CodingKeys: String, CodingKey { case shopLink = "shop_link" }
-                }
-                _ = try? await supabase
+            do {
+                try await supabase
                     .from("outfit_products")
-                    .update(ShopLinkUpdate(shopLink: shopLink))
-                    .eq("outfit_id", value: outfitId)
-                    .eq("name", value: product.name)
+                    .insert(fullInserts)
                     .execute()
+            } catch {
+                // Schema-cache fallback (the historical reason inserts
+                // were minimal): core columns only, then best-effort
+                // enrichment updates.
+                struct ProductInsertCore: Encodable {
+                    let outfitId: String
+                    let name: String
+                    let price: String?
+                    let image: String
+                    enum CodingKeys: String, CodingKey {
+                        case name, price, image
+                        case outfitId = "outfit_id"
+                    }
+                }
+                let coreInserts = fullInserts.map {
+                    ProductInsertCore(outfitId: $0.outfitId, name: $0.name, price: $0.price, image: $0.image)
+                }
+                try await supabase
+                    .from("outfit_products")
+                    .insert(coreInserts)
+                    .execute()
+                for row in fullInserts {
+                    struct Enrich: Encodable {
+                        let shopLink: String?
+                        let productId: String?
+                        enum CodingKeys: String, CodingKey {
+                            case shopLink = "shop_link"
+                            case productId = "product_id"
+                        }
+                    }
+                    guard row.shopLink != nil || row.productId != nil else { continue }
+                    _ = try? await supabase
+                        .from("outfit_products")
+                        .update(Enrich(shopLink: row.shopLink, productId: row.productId))
+                        .eq("outfit_id", value: outfitId)
+                        .eq("name", value: row.name)
+                        .execute()
+                }
             }
         }
     }

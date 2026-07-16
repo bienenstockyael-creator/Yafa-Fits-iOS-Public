@@ -158,6 +158,14 @@ enum PageScraper {
                 if types.contains(where: { $0.caseInsensitiveCompare("Product") == .orderedSame }) {
                     return dict
                 }
+                // schema.org ProductGroup (Valentino et al.): the real
+                // Product nodes live under hasVariant, and such pages
+                // often ship NO og:image fallback — without this dive
+                // the whole scrape comes back empty.
+                if types.contains(where: { $0.caseInsensitiveCompare("ProductGroup") == .orderedSame }),
+                   let variants = dict["hasVariant"] {
+                    return findProductNode(variants)
+                }
             }
             if let graph = dict["@graph"] { return findProductNode(graph) }
             return nil

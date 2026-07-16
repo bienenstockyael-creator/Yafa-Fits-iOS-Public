@@ -188,11 +188,12 @@ struct CarouselDetailCard: View {
         }
         .sheet(isPresented: $showAddProduct) {
             if let userId = store.userId {
-                AddProductSheet(userId: userId, outfitId: outfit.id) { product in
+                AddProductSheet(userId: userId, outfitId: outfit.id) { product, shopLink in
                     let newProduct = Product(
                         name: product.name,
                         price: nil,
                         image: product.imageURL,
+                        shopLink: shopLink,
                         productId: product.id,
                         tags: product.tags
                     )
@@ -540,6 +541,16 @@ struct CarouselDetailCard: View {
             } label: {
                 VStack(spacing: 8) {
                     ProductThumbnail(product: product, side: 100, cornerRadius: 18)
+                        .overlay {
+                            // Thumbnail polish in flight: same "magic
+                            // happening here" field as generating fits.
+                            if let pid = product.productId,
+                               ProductThumbnailPolisher.shared.polishingIds.contains(pid) {
+                                GenerationStarField(starSize: 100, interactive: false)
+                                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                    .allowsHitTesting(false)
+                            }
+                        }
 
                     // Force two lines worth of height so single-line
                     // names don't collapse the row — keeps the BUY

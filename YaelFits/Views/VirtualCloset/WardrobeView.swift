@@ -1240,6 +1240,9 @@ private struct ProductLightbox: View {
     @State private var isFull = false
     /// Whether the scroll content is pinned to the top (gates pull-to-dismiss).
     @State private var atTop = true
+    /// Live scroll offset of the editor form (0 at rest, negative
+    /// scrolled) — the hero image rides it 1:1 in full mode.
+    @State private var scrollTop: CGFloat = 0
     /// Live downward offset while pulling the full sheet down to dismiss.
     @State private var sheetDrag: CGFloat = 0
     /// Latches whether the in-progress drag began in full-screen mode, so a
@@ -1355,34 +1358,54 @@ private struct ProductLightbox: View {
     /// crossfade. (An earlier matchedGeometryEffect pair across the
     /// ScrollView boundary resolved unreliably and fell back to a
     /// fade — a never-unmounting view can't fail that way.)
+    /// Hero block metrics for the current mode — the content below is
+    /// indented by exactly this much so the image can live BEHIND it.
+    private var heroTopPadding: CGFloat {
+        isFull ? insetTop + LayoutMetrics.screenPadding + 44 + LayoutMetrics.small : 32
+    }
+    private var heroBlockHeight: CGFloat {
+        heroTopPadding + (isFull ? 200 : 170)
+    }
+
     private var unifiedContent: some View {
-        VStack(spacing: 0) {
+        ZStack(alignment: .top) {
             // (The "Edit item" title lives in `pinnedControls`, centered
             // on the X/Save row like the app's other sheet headers.)
             // Cap the hero's width as well as its height: with only a
             // fixed height, wide products (sandals, glasses) render at
             // full card width and dwarf tall/square ones.
+            //
+            // The hero still never unmounts (single continuous element
+            // across preview <-> editor), but in FULL mode it now
+            // RIDES the scroll: the form is inset by the hero block
+            // and the image translates 1:1 with the scroll offset —
+            // it scrolls away with the content instead of pinning on
+            // top and clipping the first field.
             TrimmedRemoteImage(url: item.resolvedImageURL)
                 .frame(maxWidth: 250)
                 .frame(height: isFull ? 200 : 170)
                 .frame(maxWidth: .infinity)
-                .padding(.top, isFull ? insetTop + LayoutMetrics.screenPadding + 44 + LayoutMetrics.small : 32)
+                .padding(.top, heroTopPadding)
+                .offset(y: isFull ? min(0, scrollTop) : 0)
                 .lightboxReveal(0, revealed: contentRevealed)
             if isFull {
                 editorScroll
                     .transition(.opacity)
             } else {
-                compactSections
-                    .transition(.opacity)
+                VStack(spacing: 0) {
+                    Color.clear.frame(height: heroBlockHeight)
+                    compactSections
+                }
+                .transition(.opacity)
             }
         }
         .onAppear { contentRevealed = true }
     }
 
-    /// FULL mode: the form scrolls UNDER the pinned hero — the product
-    /// stays visible while editing. A zero-size probe reports the
-    /// content offset so the pull-down-to-dismiss gesture knows when
-    /// it's pinned to the top.
+    /// FULL mode: the form starts below the hero block and the hero
+    /// scrolls away WITH it (see unifiedContent). A zero-size probe
+    /// reports the content offset — it drives both the hero's ride
+    /// and the pull-down-to-dismiss gesture's at-top check.
     private var editorScroll: some View {
         ScrollView {
             VStack(spacing: LayoutMetrics.large) {
@@ -1401,7 +1424,7 @@ private struct ProductLightbox: View {
                 deleteButton
             }
             .padding(.horizontal, LayoutMetrics.screenPadding)
-            .padding(.top, LayoutMetrics.large)
+            .padding(.top, heroBlockHeight + LayoutMetrics.large)
             // Clear the home indicator — as SCROLLABLE padding so the
             // last row reaches the very edge instead of clipping.
             .padding(.bottom, insetBottom + LayoutMetrics.large)
@@ -1420,7 +1443,10 @@ private struct ProductLightbox: View {
         }
         .coordinateSpace(name: "lightboxScroll")
         .scrollDismissesKeyboard(.interactively)
-        .onPreferenceChange(ScrollTopKey.self) { atTop = $0 >= -1 }
+        .onPreferenceChange(ScrollTopKey.self) {
+            atTop = $0 >= -1
+            scrollTop = $0
+        }
     }
 
     /// CARD mode sections below the hero: a plain VStack — intrinsic
@@ -1884,6 +1910,9 @@ private struct ProductLightbox: View {
     private func deleteItem() async {
         do {
             try await WardrobeService.deleteItem(productId: item.productId, name: item.name)
+            // Fits already loaded in memory must drop the product too —
+            // the server-side untag only covers the next fresh fetch.
+            store.removeProductEverywhere(productId: item.productId, name: item.name)
             onDeleted()
             await onChanged()
             onClose()

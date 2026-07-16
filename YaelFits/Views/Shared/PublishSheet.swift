@@ -33,6 +33,12 @@ struct PublishSheet: View {
     /// when the outfit has a note; the toggle row hides otherwise.
     @State private var shareNote = false
 
+    // Tap-to-focus: the styled containers are bigger than the text
+    // controls inside them — a tap anywhere on a field must focus it,
+    // not just a tap on the text itself.
+    @FocusState private var captionFocused: Bool
+    @FocusState private var focusedLinkEntry: UUID?
+
     init(
         outfit: Outfit,
         onAddNote: (() -> Void)? = nil,
@@ -75,10 +81,12 @@ struct PublishSheet: View {
             .overlay(alignment: .bottom) { publishButton }
             .sheet(isPresented: $showAddProduct) {
                 if let userId = store.userId {
-                    AddProductSheet(userId: userId, outfitId: outfit.id) { product in
+                    AddProductSheet(userId: userId, outfitId: outfit.id) { product, shopLink in
                         let p = Product(name: product.name, price: nil, image: product.imageURL,
-                                        productId: product.id, tags: product.tags)
-                        taggedProducts.append(ProductWithShopLink(product: p, shopURL: ""))
+                                        shopLink: shopLink, productId: product.id, tags: product.tags)
+                        // Pre-fill the shop-link field — link-imported
+                        // products arrive with their shop attached.
+                        taggedProducts.append(ProductWithShopLink(product: p, shopURL: shopLink ?? ""))
                     }
                     .roundedSheetBackground()
                 }
@@ -98,6 +106,76 @@ struct PublishSheet: View {
             .alert("Couldn't publish", isPresented: .constant(publishError != nil)) {
                 Button("OK") { publishError = nil }
             } message: { Text(publishError ?? "") }
+            .task {
+                // Pre-fill empty shop-link fields from the DB truth.
+                // Link-imported products save their link straight to
+                // outfit_products at add time, but the in-memory
+                // Product copy this sheet was seeded from can predate
+                // that write — the field looked empty even though the
+                // link was durably saved.
+                struct Row: Decodable {
+                    let productId: UUID?
+                    let name: String?
+                    let shopLink: String?
+                    enum CodingKeys: String, CodingKey {
+                        case productId = "product_id"
+                        case name
+                        case shopLink = "shop_link"
+                    }
+                }
+                guard let rows: [Row] = try? await supabase
+                    .from("outfit_products")
+                    .select("product_id, name, shop_link")
+                    .eq("outfit_id", value: outfit.id)
+                    .execute()
+                    .value
+                else { return }
+                for row in rows {
+                    guard let link = row.shopLink, !link.isEmpty else { continue }
+                    if let idx = taggedProducts.firstIndex(where: {
+                        $0.shopURL.isEmpty && (
+                            ($0.product.productId != nil && $0.product.productId == row.productId) ||
+                            ($0.product.productId == nil && $0.product.name == row.name)
+                        )
+                    }) {
+                        taggedProducts[idx].shopURL = link
+                    }
+                }
+
+                // Second pass — the CANONICAL fallback. Link-imported
+                // products durably store their shop page on the
+                // products row itself (source_url, written at save).
+                // Whatever happens to the per-fit copy (row rewritten
+                // by an old publish, outfit id changed by a 3D accept,
+                // a missed update), the canonical link fills the gap.
+                let missingIds = taggedProducts.compactMap {
+                    $0.shopURL.isEmpty ? $0.product.productId : nil
+                }
+                guard !missingIds.isEmpty else { return }
+                struct CanonicalLink: Decodable {
+                    let id: UUID
+                    let sourceUrl: String?
+                    enum CodingKeys: String, CodingKey {
+                        case id
+                        case sourceUrl = "source_url"
+                    }
+                }
+                guard let canonical: [CanonicalLink] = try? await supabase
+                    .from("products")
+                    .select("id, source_url")
+                    .in("id", values: missingIds.map(\.uuidString))
+                    .execute()
+                    .value
+                else { return }
+                for row in canonical {
+                    guard let link = row.sourceUrl, !link.isEmpty else { continue }
+                    if let idx = taggedProducts.firstIndex(where: {
+                        $0.shopURL.isEmpty && $0.product.productId == row.id
+                    }) {
+                        taggedProducts[idx].shopURL = link
+                    }
+                }
+            }
         }
     }
 
@@ -119,9 +197,12 @@ struct PublishSheet: View {
                     .foregroundStyle(AppPalette.textPrimary)
                     .frame(minHeight: 80, maxHeight: 140)
                     .scrollContentBackground(.hidden)
+                    .focused($captionFocused)
             }
             .padding(LayoutMetrics.xSmall)
             .appCard(cornerRadius: LayoutMetrics.cardCornerRadius)
+            .contentShape(Rectangle())
+            .onTapGesture { captionFocused = true }
         }
     }
 
@@ -313,7 +394,7 @@ struct PublishSheet: View {
                         .foregroundStyle(AppPalette.textPrimary)
                         .lineLimit(1)
                     if !hasShopURL {
-                        Text("Add a shop link to show on feed")
+                        Text("Add a shop link")
                             .font(.system(size: 10))
                             .foregroundStyle(AppPalette.textFaint)
                     } else {
@@ -347,7 +428,7 @@ struct PublishSheet: View {
                     .font(.system(size: 12))
                     .foregroundStyle(hasShopURL ? AppPalette.textSecondary : AppPalette.textFaint)
                 TextField("", text: entry.shopURL, prompt:
-                    Text("Add shop link to show on feed")
+                    Text("Add shop link")
                         .foregroundColor(AppPalette.textFaint)
                 )
                 .font(.system(size: 12))
@@ -355,6 +436,7 @@ struct PublishSheet: View {
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
                 .keyboardType(.URL)
+                .focused($focusedLinkEntry, equals: entry.wrappedValue.id)
                 .onChange(of: entry.wrappedValue.shopURL) { _, newValue in
                     scheduleShopLinkSave(
                         entryId: entry.wrappedValue.id,
@@ -365,6 +447,8 @@ struct PublishSheet: View {
             }
             .padding(.horizontal, LayoutMetrics.medium)
             .padding(.bottom, LayoutMetrics.xSmall)
+            .contentShape(Rectangle())
+            .onTapGesture { focusedLinkEntry = entry.wrappedValue.id }
         }
     }
 
@@ -427,16 +511,30 @@ struct PublishSheet: View {
 
     private func publish() async {
         isPublishing = true
+        // Freshen every entry from the LIVE store copy first: this
+        // sheet's snapshot was taken when it opened, and the
+        // background thumbnail polish may have swapped in the clean
+        // cutout since. Publishing the stale snapshot regressed the
+        // card (and the feed row, until its re-sync) back to the raw
+        // shot the moment PUBLISH was tapped.
+        let liveProducts = store.outfitById[outfit.id]?.products ?? []
+        func freshened(_ entry: ProductWithShopLink) -> Product {
+            guard let pid = entry.product.productId,
+                  let live = liveProducts.first(where: { $0.productId == pid })
+            else { return entry.product }
+            return live
+        }
         // Build product inputs: for pro users, only include products with shop URL on the public card
         let inputs = taggedProducts.map { entry in
             ProductInput(
                 outfitId: outfit.id,
                 name: entry.product.name,
                 price: nil,
-                image: entry.product.image,
+                image: freshened(entry).image,
                 shopLink: entry.shopURL.trimmingCharacters(in: .whitespaces).isEmpty
                     ? nil
-                    : entry.shopURL.trimmingCharacters(in: .whitespaces)
+                    : entry.shopURL.trimmingCharacters(in: .whitespaces),
+                productId: entry.product.productId
             )
         }
         do {
@@ -449,7 +547,7 @@ struct PublishSheet: View {
                 userId: userId
             )
             let updatedProducts = taggedProducts.map { entry -> Product in
-                var p = entry.product
+                var p = freshened(entry)
                 let url = entry.shopURL.trimmingCharacters(in: .whitespaces)
                 p.shopLink = url.isEmpty ? nil : url
                 return p

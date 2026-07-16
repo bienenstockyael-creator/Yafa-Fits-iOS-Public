@@ -30,7 +30,27 @@ struct ProductImageService {
 
         await onStatus("Uploading product image…")
 
-        // 3. Upload to Supabase Storage
+        return try await upload(png: thumbnailData, userId: userId, productName: productName)
+    }
+
+    /// Trim + resize + upload an ALREADY-CLEAN transparent product image
+    /// (a generated catalog thumbnail) — no background removal pass.
+    static func uploadThumbnail(
+        _ image: UIImage,
+        userId: UUID,
+        productName: String
+    ) async throws -> String {
+        let trimmed = trimTransparentEdges(image)
+        let resized = resize(trimmed, maxSide: 600) ?? trimmed
+        guard let png = resized.pngData() else {
+            throw NSError(domain: "ProductImageService", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "Could not encode the thumbnail."
+            ])
+        }
+        return try await upload(png: png, userId: userId, productName: productName)
+    }
+
+    private static func upload(png: Data, userId: UUID, productName: String) async throws -> String {
         let safeName = productName
             .lowercased()
             .components(separatedBy: .alphanumerics.inverted)
@@ -41,7 +61,7 @@ struct ProductImageService {
 
         try await supabase.storage
             .from("products")
-            .upload(filePath, data: thumbnailData, options: .init(contentType: "image/png"))
+            .upload(filePath, data: png, options: .init(contentType: "image/png"))
 
         let publicURL = try supabase.storage
             .from("products")

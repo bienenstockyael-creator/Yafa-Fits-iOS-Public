@@ -876,6 +876,14 @@ extension AutoDetectProductsView {
     /// directly. Returns nil on any fetch/decode failure so callers can
     /// surface their own error UI.
     static func loadCoverFrame(for outfit: Outfit) async -> UIImage? {
+        // Full loader chain first (memory -> local preview/disk ->
+        // CDN): a just-archived 2D still whose 3D render is in
+        // flight exists only on device — the old remote-only path
+        // returned nil there and the Add-product tap silently died
+        // on generating fits.
+        if let image = await FrameLoader.shared.frame(for: outfit, index: 0) {
+            return image
+        }
         guard let baseURL = outfit.resolvedRemoteBaseURL else { return nil }
         let frameURL = outfit.frameURL(index: 0, baseURL: baseURL)
         do {

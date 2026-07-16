@@ -189,6 +189,8 @@
 		E6A5D2C92FCB84450014D135 /* PhoneNumberKit in Frameworks */ = {isa = PBXBuildFile; productRef = E6A5D2C82FCB84450014D135 /* PhoneNumberKit */; };
 		E6DB588E2FEBFCB100A7587D /* YafaShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E6DB58842FEBFCB100A7587D /* YafaShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E823AF5D92E1552C3529D50F /* SocialService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0200DA9B94C7FF2FD79D899 /* SocialService.swift */; };
+		202607151200000B000001 /* PageScraper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202607151200000A000001 /* PageScraper.swift */; };
+		202607151300000B000001 /* ProductThumbnailPolisher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202607151300000A000001 /* ProductThumbnailPolisher.swift */; };
 		E829A0C19B1DFA9A885A7B54 /* CommentsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B54F1D89D0F53C54533E7A1 /* CommentsSheet.swift */; };
 		EC0CA5A8FA12A4B6E8771D0C /* FalVideoGenerationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EB8B4728A72D35257989791 /* FalVideoGenerationService.swift */; };
 		EDEF93D554B05F4556CBEF39 /* CarouselView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EE82713F28FF3FC8E2D62F9 /* CarouselView.swift */; };
@@ -383,6 +385,8 @@
 		B010E0020001000000000B01 /* OpenAIDressAvatarService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIDressAvatarService.swift; sourceTree = "<group>"; };
 		B01D7034E3B52D5B0635EAE8 /* Remix.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Remix.swift; sourceTree = "<group>"; };
 		B0200DA9B94C7FF2FD79D899 /* SocialService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialService.swift; sourceTree = "<group>"; };
+		202607151200000A000001 /* PageScraper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PageScraper.swift; path = YafaShare/PageScraper.swift; sourceTree = SOURCE_ROOT; };
+		202607151300000A000001 /* ProductThumbnailPolisher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductThumbnailPolisher.swift; sourceTree = "<group>"; };
 		B05700000000000000000001 /* bust-m-1.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "bust-m-1.webp"; sourceTree = "<group>"; };
 		B05700000000000000000002 /* bust-m-2.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "bust-m-2.webp"; sourceTree = "<group>"; };
 		B05700000000000000000003 /* bust-m-3.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "bust-m-3.webp"; sourceTree = "<group>"; };
@@ -799,6 +803,8 @@
 				35C267E0A7B040C73D2CA472 /* PushNotificationService.swift */,
 				870B827D251E84029B685BB1 /* RemixStorage.swift */,
 				B0200DA9B94C7FF2FD79D899 /* SocialService.swift */,
+				202607151200000A000001 /* PageScraper.swift */,
+				202607151300000A000001 /* ProductThumbnailPolisher.swift */,
 				20260530000000060A000001 /* ContactsService.swift */,
 				20260530000000080A000001 /* Analytics.swift */,
 				202605301600000A000001 /* VibesService.swift */,
@@ -1152,6 +1158,8 @@
 				33A8AA2DBEEB41D0AAB78B47 /* SignupVerificationView.swift in Sources */,
 				4F1A0139B6B9B22EC8397240 /* SocialModels.swift in Sources */,
 				E823AF5D92E1552C3529D50F /* SocialService.swift in Sources */,
+				202607151200000B000001 /* PageScraper.swift in Sources */,
+				202607151300000B000001 /* ProductThumbnailPolisher.swift in Sources */,
 				20260530000000060B000001 /* ContactsService.swift in Sources */,
 				20260530000000070B000001 /* PhoneCapturePromptView.swift in Sources */,
 				20260530000000080B000001 /* Analytics.swift in Sources */,
@@ -1323,7 +1331,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 57;
+				CURRENT_PROJECT_VERSION = 59;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = P5KZPUFLKJ;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -1412,7 +1420,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 57;
+				CURRENT_PROJECT_VERSION = 59;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = P5KZPUFLKJ;
 				ENABLE_NS_ASSERTIONS = NO;

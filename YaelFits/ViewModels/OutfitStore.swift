@@ -680,6 +680,24 @@ class OutfitStore {
         persistCache()
     }
 
+    /// Purge a deleted closet item from every loaded outfit — the
+    /// server-side untag (WardrobeService.deleteItem) removes the
+    /// rows, but fits already in memory kept showing the product
+    /// until the next full fetch.
+    func removeProductEverywhere(productId: UUID?, name: String) {
+        for index in outfits.indices {
+            guard let products = outfits[index].products, !products.isEmpty else { continue }
+            let filtered = products.filter { p in
+                if let productId, let pid = p.productId { return pid != productId }
+                return p.name != name
+            }
+            if filtered.count != products.count {
+                outfits[index].products = filtered
+            }
+        }
+        persistCache()
+    }
+
     /// Durable local publish state. The carousel used to track this only in
     /// an ephemeral per-view override — close + reopen the carousel and the
     /// fit looked unpublished (white globe) until the next server refresh,

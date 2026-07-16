@@ -555,6 +555,7 @@ struct ProfileShareSheet: View {
             }
             if let invite, invite.quota > 0 {
                 claimedInvites = (try? await SocialService.myClaimedInvites()) ?? []
+                await runFlipDemoIfNeeded()
             }
         }
         .onChange(of: selectedIndex) { _, newIndex in
@@ -705,7 +706,7 @@ struct ProfileShareSheet: View {
         var body: some View {
             // Text styled EXACTLY like UsernamePill's — same size,
             // weight, face, and color; only the words differ.
-            Text(remaining > 0 ? "\(remaining) invites" : "no invites left")
+            Text(remaining > 0 ? "\(remaining) invite\(remaining == 1 ? "" : "s")" : "no invites left")
                 .font(.system(size: 12 * scale, weight: .semibold))
                 .foregroundStyle(AppPalette.textSecondary)
                 .padding(.horizontal, 11 * scale)
@@ -1287,6 +1288,25 @@ struct ProfileShareSheet: View {
         .frame(height: 560)
     }
 
+    /// One-time "the card has a back" reveal: on the first sheet
+    /// entry with a live invite code, flip to the code and back so
+    /// the user learns the card flips. Never repeats — the flag is
+    /// set before the animation so even an interrupted demo counts.
+    private func runFlipDemoIfNeeded() async {
+        let key = "inviteFlipDemoShown"
+        guard invite?.code != nil,
+              !UserDefaults.standard.bool(forKey: key)
+        else { return }
+        UserDefaults.standard.set(true, forKey: key)
+        // Let the sheet's own entrance settle first.
+        try? await Task.sleep(nanoseconds: 900_000_000)
+        guard !isFlipped else { return }   // user beat us to it
+        toggleFlip()
+        try? await Task.sleep(nanoseconds: 1_400_000_000)
+        guard isFlipped else { return }    // user already flipped back
+        toggleFlip()
+    }
+
     /// Flip between the profile front and the invite back. No-op for
     /// users without invite quota — their card is just a card.
     private func toggleFlip() {
@@ -1405,14 +1425,6 @@ struct ProfileShareSheet: View {
                 activeShare = .invite(
                     "You're invited to Yafa. Tap to see your one-time code:\nhttps://yafafits.com/i/\(code)"
                 )
-                Task { @MainActor in
-                    // Mint the NEXT code (no-op when quota exhausted)
-                    // and re-fetch so the card + pill reflect reality.
-                    _ = try? await SocialService.mintInviteCode()
-                    if let refreshed = try? await SocialService.currentInviteCode() {
-                        invite = refreshed
-                    }
-                }
                 return
             }
             guard let url = shareURL else { return }
@@ -1433,8 +1445,20 @@ struct ProfileShareSheet: View {
         .buttonStyle(SolidPressButtonStyle())
         .disabled(isFlipped ? invite?.code == nil : shareURL == nil)
         .sheet(item: $activeShare) { payload in
-            ShareActivityView(items: [payload.item])
-                .presentationDetents([.medium, .large])
+            ShareActivityView(items: [payload.item]) { completed in
+                // Mint the NEXT code only after the invite was
+                // actually sent (or copied) — dismissing the share
+                // sheet unused must not burn a slot. No-op when the
+                // quota is exhausted.
+                guard completed, case .invite = payload else { return }
+                Task { @MainActor in
+                    _ = try? await SocialService.mintInviteCode()
+                    if let refreshed = try? await SocialService.currentInviteCode() {
+                        invite = refreshed
+                    }
+                }
+            }
+            .presentationDetents([.medium, .large])
         }
     }
 }
@@ -1442,9 +1466,14 @@ struct ProfileShareSheet: View {
 /// Thin UIActivityViewController wrapper for SwiftUI.
 private struct ShareActivityView: UIViewControllerRepresentable {
     let items: [Any]
+    var onComplete: ((Bool) -> Void)? = nil
 
     func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: items, applicationActivities: nil)
+        let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        controller.completionWithItemsHandler = { _, completed, _, _ in
+            onComplete?(completed)
+        }
+        return controller
     }
 
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}

@@ -7,9 +7,12 @@ private struct SupabaseProductDetail: Decodable {
     let name: String
     let imageURL: String
     let tags: [String]?
+    let sourceURL: String?
+
     enum CodingKeys: String, CodingKey {
         case id, name, tags
         case imageURL = "image_url"
+        case sourceURL = "source_url"
     }
 }
 
@@ -31,6 +34,13 @@ private struct SupabaseProductRow: Decodable {
 
     var effectiveName: String  { products?.name  ?? name  ?? "" }
     var effectiveImage: String { products?.imageURL ?? image ?? "" }
+    /// Inline link, else the product's durable source_url — the
+    /// inline copy is lost whenever a row is rebuilt without it.
+    var effectiveShopLink: String? {
+        if let l = shopLink, !l.isEmpty { return l }
+        if let s = products?.sourceURL, !s.isEmpty { return s }
+        return nil
+    }
     var effectiveTags: [String]? { products?.tags }
     var effectiveId: UUID? { products?.id ?? productId }
 
@@ -41,7 +51,7 @@ private struct SupabaseProductRow: Decodable {
             name: n,
             price: price,
             image: effectiveImage,
-            shopLink: shopLink,
+            shopLink: effectiveShopLink,
             productId: effectiveId,
             tags: effectiveTags
         )
@@ -140,7 +150,7 @@ private struct SupabaseOutfitRow: Decodable {
 }
 
 /// Select string that joins outfit_products + nested products library item.
-private let outfitSelectWithProducts = "*, caption, remote_base_url, outfit_products(name, price, image, shop_link, product_id, products(id, name, image_url, tags))"
+private let outfitSelectWithProducts = "*, caption, remote_base_url, outfit_products(name, price, image, shop_link, product_id, products(id, name, image_url, tags, source_url))"
 
 struct ContentSource {
 
@@ -242,8 +252,12 @@ struct ContentSource {
             let image: String?
             let shopLink: String?
             let productId: UUID?
+            /// Canonical products row — its image_url wins over the
+            /// inline copy (which freezes at tag/publish time; the
+            /// background thumbnail polish updates the canonical row).
+            let products: SupabaseProductDetail?
             enum CodingKeys: String, CodingKey {
-                case name, price, image
+                case name, price, image, products
                 case outfitId = "outfit_id"
                 case shopLink = "shop_link"
                 case productId = "product_id"
@@ -253,7 +267,7 @@ struct ContentSource {
         do {
             productRows = try await supabase
                 .from("outfit_products")
-                .select("outfit_id, name, price, image, shop_link, product_id")
+                .select("outfit_id, name, price, image, shop_link, product_id, products(id, name, image_url, tags, source_url)")
                 .in("outfit_id", values: outfitIds)
                 .execute()
                 .value
@@ -270,14 +284,20 @@ struct ContentSource {
         let productsByOutfit: [String: [Product]] = Dictionary(grouping: productRows, by: \.outfitId)
             .mapValues { rows in
                 rows.compactMap { row -> Product? in
-                    guard let n = row.name, !n.isEmpty else { return nil }
+                    let n = row.products?.name ?? row.name ?? ""
+                    guard !n.isEmpty else { return nil }
+                    let link: String? = {
+                        if let l = row.shopLink, !l.isEmpty { return l }
+                        if let s = row.products?.sourceURL, !s.isEmpty { return s }
+                        return nil
+                    }()
                     return Product(
                         name: n,
                         price: row.price,
-                        image: row.image ?? "",
-                        shopLink: row.shopLink,
-                        productId: row.productId,
-                        tags: nil
+                        image: row.products?.imageURL ?? row.image ?? "",
+                        shopLink: link,
+                        productId: row.products?.id ?? row.productId,
+                        tags: row.products?.tags
                     )
                 }
             }

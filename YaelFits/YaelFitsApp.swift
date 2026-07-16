@@ -43,6 +43,12 @@ struct YaelFitsApp: App {
                     ZStack {
                         RootView()
                             .environment(outfitStore)
+                            .onAppear {
+                                // Background product-thumbnail polish
+                                // outlives any sheet — it needs the
+                                // store to refresh outfits in place.
+                                ProductThumbnailPolisher.shared.store = outfitStore
+                            }
                             .task(id: authManager.userId) {
                                 guard let userId = authManager.userId else {
                                     outfitStore.resetForSignedOutState()
@@ -54,6 +60,10 @@ struct YaelFitsApp: App {
                                 }
 
                                 outfitStore.beginSession(for: userId)
+
+                                // Retry product-thumbnail polishes
+                                // that died with a previous session.
+                                ProductThumbnailPolisher.shared.healIfNeeded(userId: userId)
 
                                 // Resolve onboarding BEFORE the heavy
                                 // outfit/feed loads. loadSocialData applies
