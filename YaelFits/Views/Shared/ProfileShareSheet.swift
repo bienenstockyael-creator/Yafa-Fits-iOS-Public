@@ -977,7 +977,7 @@ struct ProfileShareSheet: View {
 
             Spacer()
 
-            Text("SHARE YOUR PROFILE")
+            Text("SHARE PROFILE")
                 .font(.system(size: 9, weight: .bold, design: .monospaced))
                 .tracking(2)
                 .foregroundStyle(AppPalette.textFaint)
@@ -1434,7 +1434,7 @@ struct ProfileShareSheet: View {
             ])
             activeShare = .profile(url)
         } label: {
-            Text(isFlipped ? "SHARE INVITE" : "SHARE")
+            Text(isFlipped ? "SHARE INVITE" : "SHARE YOUR PROFILE")
                 .font(.system(size: 12, weight: .semibold))
                 .tracking(1.5)
                 .foregroundStyle(AppPalette.textPrimary)
