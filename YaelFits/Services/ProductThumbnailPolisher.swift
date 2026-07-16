@@ -58,13 +58,36 @@ final class ProductThumbnailPolisher {
         attemptCounts = a
     }
 
+    /// Keeps an in-flight polish alive for the ~30s of background
+    /// execution iOS grants after the app leaves the foreground —
+    /// without this, backgrounding froze generations mid-flight and
+    /// they only resumed via the next-launch heal.
+    @MainActor
+    private final class BackgroundActivity {
+        private var id: UIBackgroundTaskIdentifier = .invalid
+        init(name: String) {
+            id = UIApplication.shared.beginBackgroundTask(withName: name) { [weak self] in
+                self?.end()
+            }
+        }
+        func end() {
+            guard id != .invalid else { return }
+            UIApplication.shared.endBackgroundTask(id)
+            id = .invalid
+        }
+    }
+
     // MARK: Live polish (save-time)
 
     func polish(productId: UUID, outfitId: String, label: String, userId: UUID, raw: UIImage) {
         remember(productId, label: label)
         polishingIds.insert(productId)
         Task {
-            defer { polishingIds.remove(productId) }
+            let activity = BackgroundActivity(name: "product-polish")
+            defer {
+                polishingIds.remove(productId)
+                activity.end()
+            }
             // Durable marker FIRST — if the app dies mid-generation,
             // the heal pass finds the row still "generating".
             try? await WardrobeService.updateItem(id: productId, thumbStatus: "generating")
@@ -93,7 +116,11 @@ final class ProductThumbnailPolisher {
         guard !isHealing else { return }
         isHealing = true
         Task {
-            defer { isHealing = false }
+            let activity = BackgroundActivity(name: "product-polish-heal")
+            defer {
+                isHealing = false
+                activity.end()
+            }
 
             var work: [(id: UUID, label: String)] = []
             for (idString, label) in pending {
