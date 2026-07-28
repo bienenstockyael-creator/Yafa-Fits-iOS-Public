@@ -239,15 +239,17 @@ private struct CreateProductView: View {
                 name = scraped
             }
         }
-        await processLinkImage(data)
+        await processImportedImage(data)
     }
 
-    /// Link imports: upload the raw page shot immediately so SAVE
-    /// enables in seconds. The REAL thumbnail generation (the save
-    /// flow's nano -> tight-crop catalog pipeline) runs in the
-    /// background AFTER save via ProductThumbnailPolisher and swaps
-    /// into the product when ready — nobody waits on it.
-    private func processLinkImage(_ data: Data) async {
+    /// BOTH import flows (link scrape + camera-roll photo): upload
+    /// the raw image immediately so SAVE enables in seconds. The REAL
+    /// thumbnail generation (the save flow's nano -> tight-crop
+    /// catalog pipeline) runs in the background AFTER save via
+    /// ProductThumbnailPolisher and swaps into the product when
+    /// ready — nobody waits on it, and every product ends up with
+    /// an identical clean cutout regardless of how it arrived.
+    private func processImportedImage(_ data: Data) async {
         processingTask?.cancel()
         processingTask = nil
 
@@ -310,7 +312,7 @@ private struct CreateProductView: View {
                                     Text("Choose a photo")
                                         .font(.system(size: 13, weight: .medium))
                                         .foregroundStyle(AppPalette.textMuted)
-                                    Text("For best results, use a clean photo or\nscreenshot without people or hangers.")
+                                    Text("Any photo works — even worn or on-model shots.\nThe thumbnail cleans itself up after saving.")
                                         .font(.system(size: 11))
                                         .foregroundStyle(AppPalette.textFaint)
                                         .multilineTextAlignment(.center)
@@ -447,39 +449,12 @@ private struct CreateProductView: View {
     private func loadAndProcess(_ item: PhotosPickerItem) async {
         guard let data = try? await item.loadTransferable(type: Data.self),
               UIImage(data: data) != nil else { return }
-        // A hand-picked photo is not a shop import — drop any link
-        // (and pending polish) carried over from a previous import so
-        // the save stays honest.
-        await MainActor.run { importedShopLink = nil; pendingPolishSource = nil }
-        await processImageData(data)
-    }
-
-    /// Shared tail of both flows (photo picker + link import):
-    /// preview immediately, then segment/upload for the thumbnail.
-    private func processImageData(_ data: Data) async {
-        // Cancel any in-flight upload before starting a new one
-        processingTask?.cancel()
-        processingTask = nil
-
-        guard let image = UIImage(data: data) else { return }
-
-        await MainActor.run { selectedImage = image; processedImageURL = nil; processingError = nil }
-
-        processingTask = Task {
-            do {
-                let url = try await ProductImageService.processAndUpload(
-                    imageData: data,
-                    userId: userId,
-                    productName: name.isEmpty ? "product" : name,
-                    onStatus: { status in
-                        await MainActor.run { processingStatus = status }
-                    }
-                )
-                await MainActor.run { processedImageURL = url; processingStatus = nil }
-            } catch {
-                await MainActor.run { processingError = error.localizedDescription; processingStatus = nil }
-            }
-        }
+        // A hand-picked photo is not a shop import — no link rides
+        // along. The IMAGE pipeline is identical though: instant
+        // save on the raw upload, then the same background catalog
+        // thumbnail as link imports (sparkles, heal pass and all).
+        await MainActor.run { importedShopLink = nil }
+        await processImportedImage(data)
     }
 
     private func save() async {
@@ -507,8 +482,8 @@ private struct CreateProductView: View {
                 try? await WardrobeService.updateItem(id: item.id, sourceURL: link)
             }
             // Kick the catalog-thumbnail generation into the
-            // background — it outlives this sheet and swaps the
-            // interim raw shot when ready.
+            // background (link imports AND photo picks) — it outlives
+            // this sheet and swaps the interim raw shot when ready.
             if let source = pendingPolishSource {
                 await ProductThumbnailPolisher.shared.polish(
                     productId: item.id,
