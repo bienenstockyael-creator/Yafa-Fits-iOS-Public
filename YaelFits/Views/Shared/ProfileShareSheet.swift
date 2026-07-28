@@ -1435,9 +1435,16 @@ struct ProfileShareSheet: View {
                     "code": .string(code)
                 ])
                 // The message must NOT spoil the code — the reveal is
-                // the web card's flip; it rides only in the URL.
+                // the web card's flip; it rides only in the URL. The
+                // selected outfit rides along too (same ?o= contract
+                // as the profile share) so the web card fronts the fit
+                // the sender actually chose, not their latest public.
+                var inviteURL = "https://yafafits.com/i/\(code)"
+                if let outfitId = selectedOutfit?.id {
+                    inviteURL += "?o=\(outfitId)"
+                }
                 activeShare = .invite(
-                    "You're invited to Yafa. Tap to see your one-time code:\nhttps://yafafits.com/i/\(code)"
+                    "You're invited to Yafa. Tap to see your one-time code:\n\(inviteURL)"
                 )
                 return
             }
