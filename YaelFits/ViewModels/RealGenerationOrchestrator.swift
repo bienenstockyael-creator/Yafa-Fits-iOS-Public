@@ -204,6 +204,10 @@ final class RealGenerationOrchestrator {
     /// User tapped "Regenerate" in the review card. Resubmit Kling
     /// against the same `sourceImagePath`.
     func retake(_ job: PipelineJob) {
+        // Hard cap: each retake is a fresh paid generation. The UI
+        // hides the button at the limit; this guard is the backstop.
+        guard job.regeneratesRemaining > 0 else { return }
+        job.recordRegenerate()
         cancel(job)
         guard let userId = userIdProvider() else { return }
 
@@ -484,6 +488,7 @@ final class RealGenerationOrchestrator {
     /// commits the credit, and removes the job from the queue.
     @MainActor
     private func finalize(job: PipelineJob, publishToFeed: Bool) {
+        job.clearRegenerateCount()
         guard let outfit = job.stagedOutfit else { return }
 
         var finalizedOutfit = outfit
@@ -718,6 +723,7 @@ final class RealGenerationOrchestrator {
     /// the 3D upgrade. The queue's own `cancel` handles the
     /// server-side kill + credit release.
     func discard(_ job: PipelineJob) {
+        job.clearRegenerateCount()
         cancel(job)
         guard let userId = userIdProvider() else { return }
         LocalOutfitStore.shared.removePendingJob(outfitNum: job.outfitNum, userId: userId)

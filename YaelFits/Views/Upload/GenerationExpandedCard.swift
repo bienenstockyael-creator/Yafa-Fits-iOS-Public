@@ -490,7 +490,14 @@ struct GenerationExpandedCard: View {
                     label: publishToFeed ? "Accept & Publish" : "Accept",
                     action: { publishToFeed ? onAcceptAndPublish() : onAccept() }
                 )
-                secondaryButton(label: "Regenerate", action: onRetake)
+                if job.regeneratesRemaining > 0 {
+                    secondaryButton(
+                        label: job.regenerateCount == 0
+                            ? "Regenerate"
+                            : "Regenerate (\(job.regeneratesRemaining) left)",
+                        action: onRetake
+                    )
+                }
                 cancelLink
             default:
                 EmptyView()

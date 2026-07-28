@@ -76,6 +76,40 @@ final class PipelineJob: Identifiable, @unchecked Sendable {
     init(outfitNum: Int) {
         self.id = "outfit-\(outfitNum)"
         self.outfitNum = outfitNum
+        regenerateCount = PipelineJob.storedRegenerateCount(for: id)
+    }
+
+    // MARK: Regenerate cap
+
+    /// Each Regenerate resubmits the video generation — real money.
+    /// Capped per fit; the count is UserDefaults-backed by job id so
+    /// a restart (or a restored review card) can't reset the meter.
+    static let maxRegenerates = 3
+    var regenerateCount: Int = 0
+
+    private static let regenerateCountsKey = "yafa.regenerateCounts"
+
+    static func storedRegenerateCount(for id: String) -> Int {
+        (UserDefaults.standard.dictionary(forKey: regenerateCountsKey) as? [String: Int])?[id] ?? 0
+    }
+
+    func recordRegenerate() {
+        regenerateCount = max(regenerateCount, PipelineJob.storedRegenerateCount(for: id)) + 1
+        var counts = (UserDefaults.standard.dictionary(forKey: PipelineJob.regenerateCountsKey) as? [String: Int]) ?? [:]
+        counts[id] = regenerateCount
+        UserDefaults.standard.set(counts, forKey: PipelineJob.regenerateCountsKey)
+    }
+
+    /// Terminal states clear the meter so the id can't leak defaults
+    /// storage (job ids recycle per outfit number).
+    func clearRegenerateCount() {
+        var counts = (UserDefaults.standard.dictionary(forKey: PipelineJob.regenerateCountsKey) as? [String: Int]) ?? [:]
+        counts.removeValue(forKey: id)
+        UserDefaults.standard.set(counts, forKey: PipelineJob.regenerateCountsKey)
+    }
+
+    var regeneratesRemaining: Int {
+        max(0, PipelineJob.maxRegenerates - max(regenerateCount, PipelineJob.storedRegenerateCount(for: id)))
     }
 }
 
