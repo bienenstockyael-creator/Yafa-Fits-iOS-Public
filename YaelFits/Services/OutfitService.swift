@@ -308,6 +308,51 @@ struct OutfitService {
         }
     }
 
+    /// Short share slug for yafafits.com/fit/<slug> — minted on first
+    /// share, stable forever after. Unambiguous alphabet (no 0/O/1/I/L),
+    /// unique-collision retried. Returns nil when the slug column
+    /// doesn't exist yet or every attempt fails — callers fall back to
+    /// the raw outfit id, which the web page also accepts.
+    static func ensureShareSlug(outfitId: String) async -> String? {
+        struct Row: Decodable { let slug: String? }
+        guard let rows: [Row] = try? await supabase
+            .from("outfits")
+            .select("slug")
+            .eq("id", value: outfitId)
+            .limit(1)
+            .execute()
+            .value
+        else { return nil }
+        if let existing = rows.first?.slug, !existing.isEmpty { return existing }
+
+        let alphabet = Array("ABCDEFGHJKMNPQRSTUVWXYZ23456789")
+        for _ in 0..<3 {
+            let candidate = String((0..<5).map { _ in alphabet.randomElement()! })
+            struct Update: Encodable { let slug: String }
+            do {
+                struct Updated: Decodable { let slug: String? }
+                let updated: [Updated] = try await supabase
+                    .from("outfits")
+                    .update(Update(slug: candidate))
+                    .eq("id", value: outfitId)
+                    .is("slug", value: nil)
+                    .select("slug")
+                    .execute()
+                    .value
+                if updated.first?.slug == candidate { return candidate }
+                // Zero rows: someone else minted concurrently — read it.
+                if let rows2: [Row] = try? await supabase
+                    .from("outfits").select("slug").eq("id", value: outfitId).limit(1).execute().value,
+                   let won = rows2.first?.slug, !won.isEmpty {
+                    return won
+                }
+            } catch {
+                continue // unique collision or transient — retry
+            }
+        }
+        return nil
+    }
+
     static func saveArchiveOutfit(_ outfit: Outfit, userId: UUID, isPublic: Bool = false) async throws {
         try await supabase
             .from("outfits")
