@@ -240,18 +240,25 @@ private struct ClipFeedCard: View {
             HStack(spacing: 16) {
                 ForEach(fit.products) { product in
                     Button {
-                        // Same rule as the app's ProductShopLink:
-                        // direct shop when linked, Google Shopping
-                        // search on the name otherwise (Lens-by-URL is
-                        // unreliable on mobile) — every tile buys.
+                        // Same cascade as the app's ProductShopLink:
+                        // direct shop when linked; otherwise Lens visual
+                        // search in the in-app sheet (clean cookie store —
+                        // Safari's logged-in Google session breaks
+                        // uploadbyurl), with a Shopping name search as
+                        // the sheet's own hard-failure fallback.
+                        let nameSearch = product.name
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                            .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
+                            .flatMap { $0.isEmpty ? nil : URL(string: "https://www.google.com/search?udm=28&q=\($0)") }
                         if let shop = product.shopURL {
                             openURL(shop)
-                        } else if let encoded = product.name
-                            .trimmingCharacters(in: .whitespacesAndNewlines)
-                            .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-                            !encoded.isEmpty,
-                            let search = URL(string: "https://www.google.com/search?udm=28&q=\(encoded)") {
-                            openURL(search)
+                        } else if let image = product.imageURL,
+                                  let encoded = image.absoluteString
+                                    .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+                                  let lens = URL(string: "https://lens.google.com/uploadbyurl?url=\(encoded)") {
+                            ShopBrowser.present(primary: lens, fallback: nameSearch)
+                        } else if let nameSearch {
+                            openURL(nameSearch)
                         }
                     } label: {
                         VStack(spacing: 6) {

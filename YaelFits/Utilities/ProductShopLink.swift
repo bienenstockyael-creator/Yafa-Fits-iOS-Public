@@ -5,6 +5,7 @@ import UIKit
 /// by the public feed's cart drawer and the carousel detail card's
 /// per-product BUY pill — same three-tier resolution in both surfaces.
 enum ProductShopLink {
+    @MainActor
     static func open(_ product: Product) {
         // 1. User-entered shop link wins — they have a specific product
         //    page in mind. Normalise scheme-less URLs (e.g.
@@ -17,18 +18,35 @@ enum ProductShopLink {
             return
         }
 
-        // 2. Fallback — Google Shopping text search on the product label.
-        //    This replaced the Lens visual search (uploadbyurl): that
-        //    endpoint is unreliable on mobile Safari — for logged-in EU
-        //    accounts the redirect drops the uploaded image and lands on
-        //    an empty results page. A Shopping search renders buyable
-        //    product tiles deterministically, logged in or out.
+        // 2. Thumbnail → Google Lens visual search, opened in the
+        //    IN-APP browser sheet — never Safari. Safari shares the
+        //    user's logged-in Google session, and for EU sessions the
+        //    uploadbyurl redirect drops the image (empty results). The
+        //    sheet's WKWebView has the app's own clean cookie store,
+        //    where Lens works — and if the load hard-fails, the sheet
+        //    cascades to the name search below on its own.
+        if let thumbnailURL = product.resolvedImageURL,
+           let encodedThumb = thumbnailURL.absoluteString
+            .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+           let lensURL = URL(string: "https://lens.google.com/uploadbyurl?url=\(encodedThumb)") {
+            ShopBrowser.present(primary: lensURL, fallback: nameSearchURL(for: product))
+            return
+        }
+
+        // 3. No image either — Google Shopping text search on the label.
+        guard let url = nameSearchURL(for: product) else { return }
+        UIApplication.shared.open(url)
+    }
+
+    /// Google Shopping (udm=28) text search on the product label —
+    /// the cascade's last tier. Renders buyable tiles deterministically,
+    /// logged in or out, but is only as specific as the name.
+    private static func nameSearchURL(for product: Product) -> URL? {
         let query = product.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty,
-              let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: "https://www.google.com/search?udm=28&q=\(encoded)")
-        else { return }
-        UIApplication.shared.open(url)
+              let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
+        else { return nil }
+        return URL(string: "https://www.google.com/search?udm=28&q=\(encoded)")
     }
 
     /// Returns a launchable https URL for a user-entered shop link.

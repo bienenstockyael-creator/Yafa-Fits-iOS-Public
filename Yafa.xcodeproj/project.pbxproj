@@ -235,6 +235,8 @@
 		20260730C11B000000000015 /* VibeHapticPlayer.swift in Sources (Clip) */ = {isa = PBXBuildFile; fileRef = 202605302600000A000001 /* VibeHapticPlayer.swift */; };
 		20260730C11B000000000016 /* VibesWaveShader.metal in Sources (Clip) */ = {isa = PBXBuildFile; fileRef = 202605302200000A000001 /* VibesWaveShader.metal */; };
 		20260730C11B000000000017 /* ClipVibesStubs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20260730C11B000000000018 /* ClipVibesStubs.swift */; };
+		20260730C11B00000000001A /* ShopBrowserSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20260730C11B000000000019 /* ShopBrowserSheet.swift */; };
+		20260730C11B00000000001B /* ShopBrowserSheet.swift in Sources (Clip) */ = {isa = PBXBuildFile; fileRef = 20260730C11B000000000019 /* ShopBrowserSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -496,6 +498,7 @@
 		20260730C11A00000000000E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		20260730C11A00000000000F /* YafaClip.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = YafaClip.entitlements; sourceTree = "<group>"; };
 		20260730C11B000000000018 /* ClipVibesStubs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipVibesStubs.swift; sourceTree = "<group>"; };
+		20260730C11B000000000019 /* ShopBrowserSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShopBrowserSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -683,6 +686,7 @@
 				1F9791776DC78094BBB88433 /* UploadLoaderView.swift */,
 				202605301700000A000001 /* VibeButton.swift */,
 				202605301800000A000001 /* VibesEffectHost.swift */,
+				20260730C11B000000000019 /* ShopBrowserSheet.swift */,
 				202605302100000A000001 /* IncomingVibeToast.swift */,
 				202606111200000A000001 /* ProfileShareSheet.swift */,
 				202605302700000A000001 /* VibesFirstUseModal.swift */,
@@ -1293,6 +1297,7 @@
 				7100FDD58A11CD8E87D341A6 /* UploadLoaderView.swift in Sources */,
 				202605301700000B000001 /* VibeButton.swift in Sources */,
 				202605301800000B000001 /* VibesEffectHost.swift in Sources */,
+				20260730C11B00000000001A /* ShopBrowserSheet.swift in Sources */,
 				202605301900000B000001 /* VibersListSheet.swift in Sources */,
 				202605302000000B000001 /* VibesIncomingManager.swift in Sources */,
 				202605302100000B000001 /* IncomingVibeToast.swift in Sources */,
@@ -1360,6 +1365,7 @@
 				20260730C11B000000000015 /* VibeHapticPlayer.swift in Sources (Clip) */,
 				20260730C11B000000000016 /* VibesWaveShader.metal in Sources (Clip) */,
 				20260730C11B000000000017 /* ClipVibesStubs.swift in Sources */,
+				20260730C11B00000000001B /* ShopBrowserSheet.swift in Sources (Clip) */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
