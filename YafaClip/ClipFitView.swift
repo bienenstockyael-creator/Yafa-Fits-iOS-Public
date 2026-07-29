@@ -9,6 +9,10 @@ import StoreKit
 struct ClipFitView: View {
     @Bindable var model: ClipModel
     @State private var showOverlay = false
+    // The app's root-level vibe effect portal — the wave shader,
+    // particle burst and hero morph render above the card exactly
+    // as they do above the feed.
+    @State private var vibesEffectHost = VibesEffectHost()
 
     var body: some View {
         ZStack {
@@ -39,7 +43,17 @@ struct ClipFitView: View {
                     .scrollIndicators(.hidden)
                 }
             }
+
+            // The app root's exact vibe layer stack (YaelFitsApp):
+            // distorted-snapshot wave, hero flame morph, particle
+            // burst, anchored pills — all above the card, none
+            // consuming touches.
+            VibesWaveOverlay()
+            VibesMorphLayer()
+            VibesParticleLayer()
+            VibesBannerLayer()
         }
+        .environment(vibesEffectHost)
         .onChange(of: model.phase) { _, phase in
             guard phase == .ready else { return }
             Task {
@@ -64,8 +78,18 @@ private struct ClipFeedCard: View {
     // but a clip has no account, so they live only in this moment.
     @State private var liked = false
     @State private var vibed = false
+    // Backing state for the REAL VibeButton (stubbed service always
+    // succeeds, so the vibe sticks for the clip session).
+    @State private var vibeCount: Int
+    @State private var remainingVibes = 3
     @State private var showComments = false
     @Environment(\.openURL) private var openURL
+
+    init(fit: ClipFit, onRequireApp: @escaping () -> Void) {
+        self.fit = fit
+        self.onRequireApp = onRequireApp
+        _vibeCount = State(initialValue: fit.vibeCount)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: LayoutMetrics.small) {
@@ -158,15 +182,14 @@ private struct ClipFeedCard: View {
                     }
                 }
                 Spacer()
-                actionButton(
-                    icon: .flame,
-                    count: fit.vibeCount + (vibed ? 1 : 0),
-                    filled: vibed,
-                    isActive: vibed
-                ) {
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                    withAnimation(.easeInOut(duration: 0.18)) { vibed.toggle() }
-                }
+                // The app's REAL vibe button — full burst choreography
+                // (wave shader, particles, hero morph, haptic score).
+                VibeButton(
+                    outfitId: fit.outfitId,
+                    vibeCount: $vibeCount,
+                    isVibedByMe: $vibed,
+                    remainingThisWeek: $remainingVibes
+                )
             }
             .padding(.top, LayoutMetrics.xxxSmall)
 
