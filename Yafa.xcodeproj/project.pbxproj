@@ -208,6 +208,11 @@
 		FB8F78F2E7DA0B20E0921100 /* AutoDetectProductsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AF9B1703DDDA42143804DAE /* AutoDetectProductsView.swift */; };
 		FE102BDC0F83DC35A370EAA6 /* OutfitGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DD57D3ECC6A4D838C53FBD9 /* OutfitGridView.swift */; };
 		FF542F98F1BFD9E0DA427831 /* ProductThumbnailUploadService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BD94E7C6117190A4E63A8F5 /* ProductThumbnailUploadService.swift */; };
+		20260730C11A000000000010 /* YafaClipApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20260730C11A00000000000A /* YafaClipApp.swift */; };
+		20260730C11A000000000011 /* ClipDataService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20260730C11A00000000000B /* ClipDataService.swift */; };
+		20260730C11A000000000012 /* FrameSpinner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20260730C11A00000000000C /* FrameSpinner.swift */; };
+		20260730C11A000000000013 /* ClipFitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20260730C11A00000000000D /* ClipFitView.swift */; };
+		20260730C11A000000000015 /* YafaClip.app in Embed App Clips */ = {isa = PBXBuildFile; fileRef = 20260730C11A000000000002 /* YafaClip.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -225,6 +230,13 @@
 			remoteGlobalIDString = E6DB58832FEBFCB100A7587D;
 			remoteInfo = YafaShare;
 		};
+		20260730C11A000000000016 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 2DE8C67D2750D80E205DE85A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 20260730C11A000000000001;
+			remoteInfo = YafaClip;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -237,6 +249,17 @@
 				E6DB588E2FEBFCB100A7587D /* YafaShare.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		20260730C11A000000000014 /* Embed App Clips */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/AppClips";
+			dstSubfolderSpec = 16;
+			files = (
+				20260730C11A000000000015 /* YafaClip.app in Embed App Clips */,
+			);
+			name = "Embed App Clips";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
@@ -443,6 +466,13 @@
 		FACE0000000000000000F004 /* YafaShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YafaShared.swift; sourceTree = "<group>"; };
 		FACE0000000000000000F005 /* ExtensionSessionProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionSessionProvider.swift; sourceTree = "<group>"; };
 		FDF9D01E8CA3A29D241E8B17 /* LottieView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LottieView.swift; sourceTree = "<group>"; };
+		20260730C11A000000000002 /* YafaClip.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = YafaClip.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		20260730C11A00000000000A /* YafaClipApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YafaClipApp.swift; sourceTree = "<group>"; };
+		20260730C11A00000000000B /* ClipDataService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipDataService.swift; sourceTree = "<group>"; };
+		20260730C11A00000000000C /* FrameSpinner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameSpinner.swift; sourceTree = "<group>"; };
+		20260730C11A00000000000D /* ClipFitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipFitView.swift; sourceTree = "<group>"; };
+		20260730C11A00000000000E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		20260730C11A00000000000F /* YafaClip.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = YafaClip.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -483,6 +513,13 @@
 				E6A5D2C92FCB84450014D135 /* PhoneNumberKit in Frameworks */,
 				1D2BA6E84DFF780E0FC3F652 /* WebP in Frameworks */,
 				4A4F1BB87ED3BD7DF0C413F7 /* Supabase in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		20260730C11A000000000004 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -666,6 +703,7 @@
 		49B12736E1C88E6100DBF8C2 = {
 			isa = PBXGroup;
 			children = (
+				20260730C11A000000000009 /* YafaClip */,
 				0DB1A0987C024104E5CEBBCC /* Config */,
 				18125B4AD89E6BF4CB99938E /* YaelFits */,
 				74CAC0B0995CA26CB7573FB2 /* YafaTests */,
@@ -823,6 +861,7 @@
 		90842B847FF4667E4FD2AB80 /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				20260730C11A000000000002 /* YafaClip.app */,
 				E9C9464710C446D7B975F055 /* Yafa.app */,
 				EE55D6A8AECEEB914A7A26B6 /* YafaTests.xctest */,
 				E6DB58842FEBFCB100A7587D /* YafaShare.appex */,
@@ -873,6 +912,19 @@
 			path = Auth;
 			sourceTree = "<group>";
 		};
+		20260730C11A000000000009 /* YafaClip */ = {
+			isa = PBXGroup;
+			children = (
+				20260730C11A00000000000A /* YafaClipApp.swift */,
+				20260730C11A00000000000B /* ClipDataService.swift */,
+				20260730C11A00000000000C /* FrameSpinner.swift */,
+				20260730C11A00000000000D /* ClipFitView.swift */,
+				20260730C11A00000000000E /* Info.plist */,
+				20260730C11A00000000000F /* YafaClip.entitlements */,
+			);
+			path = YafaClip;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -884,11 +936,13 @@
 				4292E04D47E2062ECDD4FF65 /* Resources */,
 				F5D9D2E960F3073309D3FEAA /* Frameworks */,
 				E6DB588F2FEBFCB100A7587D /* Embed Foundation Extensions */,
+				20260730C11A000000000014 /* Embed App Clips */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				E6DB588D2FEBFCB100A7587D /* PBXTargetDependency */,
+				20260730C11A000000000017 /* PBXTargetDependency */,
 			);
 			name = Yafa;
 			packageProductDependencies = (
@@ -942,6 +996,25 @@
 			productReference = E6DB58842FEBFCB100A7587D /* YafaShare.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		20260730C11A000000000001 /* YafaClip */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 20260730C11A000000000006 /* Build configuration list for PBXNativeTarget "YafaClip" */;
+			buildPhases = (
+				20260730C11A000000000003 /* Sources */,
+				20260730C11A000000000004 /* Frameworks */,
+				20260730C11A000000000005 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = YafaClip;
+			packageProductDependencies = (
+			);
+			productName = YafaClip;
+			productReference = 20260730C11A000000000002 /* YafaClip.app */;
+			productType = "com.apple.product-type.application.on-demand-install-capable";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -986,6 +1059,7 @@
 				23EBFD656AC4E943E9E34461 /* Yafa */,
 				ADC6973CF41C821B89708B5E /* YafaTests */,
 				E6DB58832FEBFCB100A7587D /* YafaShare */,
+				20260730C11A000000000001 /* YafaClip */,
 			);
 		};
 /* End PBXProject section */
@@ -1042,6 +1116,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		E6DB58822FEBFCB100A7587D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		20260730C11A000000000005 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -1224,6 +1305,17 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		20260730C11A000000000003 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				20260730C11A000000000010 /* YafaClipApp.swift in Sources */,
+				20260730C11A000000000011 /* ClipDataService.swift in Sources */,
+				20260730C11A000000000012 /* FrameSpinner.swift in Sources */,
+				20260730C11A000000000013 /* ClipFitView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -1236,6 +1328,11 @@
 			isa = PBXTargetDependency;
 			target = E6DB58832FEBFCB100A7587D /* YafaShare */;
 			targetProxy = E6DB588C2FEBFCB100A7587D /* PBXContainerItemProxy */;
+		};
+		20260730C11A000000000017 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 20260730C11A000000000001 /* YafaClip */;
+			targetProxy = 20260730C11A000000000016 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -1521,6 +1618,68 @@
 			};
 			name = Release;
 		};
+		20260730C11A000000000007 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CODE_SIGN_ENTITLEMENTS = YafaClip/YafaClip.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 62;
+				DEVELOPMENT_TEAM = P5KZPUFLKJ;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = YafaClip/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Yafa;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.2.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.yafa.Yafa.Clip;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = 1;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		20260730C11A000000000008 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CODE_SIGN_ENTITLEMENTS = YafaClip/YafaClip.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 62;
+				DEVELOPMENT_TEAM = P5KZPUFLKJ;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = YafaClip/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Yafa;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.2.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.yafa.Yafa.Clip;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = 1;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -1559,6 +1718,15 @@
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
+		};
+		20260730C11A000000000006 /* Build configuration list for PBXNativeTarget "YafaClip" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				20260730C11A000000000007 /* Debug */,
+				20260730C11A000000000008 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 
