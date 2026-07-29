@@ -36,6 +36,10 @@ struct GenerationExpandedCard: View {
     @Environment(OutfitStore.self) private var store
 
     @State private var dragOffset: CGFloat = 0
+    /// Regenerate-limit explainer. The button never shows a counter
+    /// (it would read as generation CREDITS); hitting the cap pops
+    /// this instead.
+    @State private var showRegenerateLimitModal = false
     @State private var publishToFeed: Bool = false
     /// Non-nil while the caption/products `PublishSheet` is up —
     /// toggling "Publish to Feed" ON routes through the same sheet
@@ -70,6 +74,64 @@ struct GenerationExpandedCard: View {
     private let chinToChipMargin: CGFloat = 8
 
     var body: some View {
+        bodyContent
+            .overlay { regenerateLimitModal }
+    }
+
+    /// App-standard centered modal (the unpublish/InfoExplainer
+    /// recipe): dim scrim + frosted appCard + GOT IT capsule.
+    @ViewBuilder
+    private var regenerateLimitModal: some View {
+        if showRegenerateLimitModal {
+            ZStack {
+                Color.black.opacity(0.45)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture { dismissRegenerateLimitModal() }
+                    .transition(.opacity)
+
+                VStack(spacing: 18) {
+                    VStack(spacing: 8) {
+                        Text("Regenerate limit reached")
+                            .font(.system(size: 19, weight: .semibold))
+                            .foregroundStyle(AppPalette.textStrong)
+                        Text("Each fit can be regenerated up to 3 times.\nYou can accept this version or save it as a 2D fit.")
+                            .font(.system(size: 14, weight: .regular))
+                            .multilineTextAlignment(.center)
+                            .foregroundStyle(AppPalette.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Button {
+                        dismissRegenerateLimitModal()
+                    } label: {
+                        Text("GOT IT")
+                            .font(.system(size: 12, weight: .bold, design: .monospaced))
+                            .tracking(2)
+                            .foregroundStyle(AppPalette.textPrimary)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 50)
+                            .appCapsule()
+                    }
+                    .buttonStyle(SolidPressButtonStyle())
+                }
+                .padding(22)
+                .frame(maxWidth: 320)
+                .appCard(cornerRadius: 28)
+                .padding(.horizontal, 32)
+                .transition(.scale(scale: 0.92).combined(with: .opacity))
+            }
+            .animation(.spring(response: 0.42, dampingFraction: 0.82), value: showRegenerateLimitModal)
+        }
+    }
+
+    private func dismissRegenerateLimitModal() {
+        withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
+            showRegenerateLimitModal = false
+        }
+    }
+
+    private var bodyContent: some View {
         GeometryReader { proxy in
             // Read insets from the key window — `proxy.safeAreaInsets`
             // returns zero here because `.ignoresSafeArea()` below
@@ -490,14 +552,16 @@ struct GenerationExpandedCard: View {
                     label: publishToFeed ? "Accept & Publish" : "Accept",
                     action: { publishToFeed ? onAcceptAndPublish() : onAccept() }
                 )
-                if job.regeneratesRemaining > 0 {
-                    secondaryButton(
-                        label: job.regenerateCount == 0
-                            ? "Regenerate"
-                            : "Regenerate (\(job.regeneratesRemaining) left)",
-                        action: onRetake
-                    )
-                }
+                secondaryButton(label: "Regenerate", action: {
+                    if job.regeneratesRemaining > 0 {
+                        onRetake()
+                    } else {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
+                            showRegenerateLimitModal = true
+                        }
+                    }
+                })
                 cancelLink
             default:
                 EmptyView()
