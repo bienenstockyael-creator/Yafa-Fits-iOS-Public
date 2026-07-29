@@ -26,10 +26,15 @@ struct ClipFitView: View {
             case .ready:
                 if let fit = model.fit {
                     ScrollView {
-                        ClipFeedCard(fit: fit)
-                            .padding(.horizontal, LayoutMetrics.small)
-                            .padding(.top, LayoutMetrics.large)
-                            .padding(.bottom, 170) // clear the overlay
+                        ClipFeedCard(fit: fit, onRequireApp: {
+                            // Social actions need an account — the
+                            // clip's answer is the install overlay.
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            showOverlay = true
+                        })
+                        .padding(.horizontal, LayoutMetrics.small)
+                        .padding(.top, LayoutMetrics.large)
+                        .padding(.bottom, 170) // clear the overlay
                     }
                     .scrollIndicators(.hidden)
                 }
@@ -53,6 +58,8 @@ struct ClipFitView: View {
 /// appCircle / AppIcon / WeatherPill).
 private struct ClipFeedCard: View {
     let fit: ClipFit
+    var onRequireApp: () -> Void
+    @State private var cartOpen = true
     @Environment(\.openURL) private var openURL
 
     var body: some View {
@@ -110,26 +117,34 @@ private struct ClipFeedCard: View {
     private var actions: some View {
         VStack(spacing: 0) {
             HStack(spacing: LayoutMetrics.xxSmall) {
-                actionButton(icon: .heart, count: fit.likeCount)
-                actionButton(icon: .comment, count: fit.commentCount)
-                actionButton(icon: .bookmark)
+                actionButton(icon: .heart, count: fit.likeCount, action: onRequireApp)
+                actionButton(icon: .comment, count: fit.commentCount, action: onRequireApp)
+                actionButton(icon: .bookmark, action: onRequireApp)
                 if !fit.products.isEmpty {
-                    actionButton(icon: .cart, isActive: true)
+                    actionButton(icon: .cart, isActive: cartOpen) {
+                        // The app's exact cart toggle curve.
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.5)) {
+                            cartOpen.toggle()
+                        }
+                    }
                 }
                 Spacer()
-                actionButton(icon: .flame)
+                actionButton(icon: .flame, action: onRequireApp)
             }
             .padding(.top, LayoutMetrics.xxxSmall)
 
-            if !fit.products.isEmpty {
+            if cartOpen, !fit.products.isEmpty {
                 productStrip
+                    .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .top)))
             }
         }
     }
 
-    /// FeedPostCard.actionButton, verbatim — taps hand off to the
-    /// full app via the overlay (a clip has no account).
-    private func actionButton(icon: AppIconGlyph, count: Int? = nil, isActive: Bool = false) -> some View {
+    /// FeedPostCard.actionButton, verbatim — social taps hand off to
+    /// the full app via the overlay (a clip has no account).
+    private func actionButton(icon: AppIconGlyph, count: Int? = nil, isActive: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
         ZStack(alignment: .topTrailing) {
             AppIcon(
                 glyph: icon,
@@ -154,6 +169,8 @@ private struct ClipFeedCard: View {
                     .offset(x: 4, y: -2)
             }
         }
+        }
+        .buttonStyle(SolidPressButtonStyle())
         .frame(minWidth: LayoutMetrics.touchTarget, minHeight: LayoutMetrics.touchTarget)
     }
 

@@ -12,11 +12,18 @@ struct FrameSpinner: View {
     @State private var loader: FrameSequence?
     @State private var displayed: UIImage?
     @State private var framePos: Double = 0
+    @State private var velocity: Double = 0
     @State private var dragging = false
     @State private var lastDragX: CGFloat?
+    @State private var lastDragTime: TimeInterval?
 
-    private let autoSpinPerTick = 0.6   // frames per 60fps tick (the app's value)
+    // FrameConfig physics, verbatim (same constants the app and the
+    // web card use): drag scrub -> release fling -> friction coast ->
+    // idle auto-spin.
+    private let autoSpinPerTick = 0.6
     private let pixelsPerFrame: CGFloat = 1.5
+    private let friction = 0.985
+    private let velocityThreshold = 0.3
 
     var body: some View {
         GeometryReader { geo in
@@ -34,16 +41,26 @@ struct FrameSpinner: View {
                     .onChanged { value in
                         guard let loader, loader.loadedCount > 1 else { return }
                         dragging = true
+                        let now = ProcessInfo.processInfo.systemUptime
                         let last = lastDragX ?? value.translation.width
                         let dx = value.translation.width - last
+                        let dt = max(0.001, now - (lastDragTime ?? now))
                         lastDragX = value.translation.width
+                        lastDragTime = now
                         let dir: Double = fit.isRotationReversed ? -1 : 1
-                        framePos = wrap(framePos + dir * Double(dx / pixelsPerFrame))
+                        let frameDelta = dir * Double(dx / pixelsPerFrame)
+                        framePos = wrap(framePos + frameDelta)
+                        // Normalize the per-event delta to a per-60fps
+                        // tick velocity so the release fling feels
+                        // identical at any touch event rate — the
+                        // app's exact rule.
+                        velocity = frameDelta * (0.01667 / dt)
                         show(frame: Int(framePos))
                     }
                     .onEnded { _ in
                         dragging = false
                         lastDragX = nil
+                        lastDragTime = nil
                     }
             )
         }
@@ -55,15 +72,25 @@ struct FrameSpinner: View {
                 displayed = first
             }
             await sequence.prefetchAll()
-            // Idle auto-spin: advance only onto frames that have
-            // arrived (the web card's progressive-spin rule).
+            // The app's tick loop: fling coasts down on friction
+            // until it drops below threshold, then the idle
+            // auto-spin takes over — advancing only onto frames
+            // that have arrived (the progressive-spin rule).
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 16_666_667)
                 guard !dragging, fit.frameCount > 1 else { continue }
-                let dir: Double = fit.isRotationReversed ? -1 : 1
-                let next = wrap(framePos + dir * autoSpinPerTick)
-                guard sequence.hasFrame(Int(next)) else { continue }
-                framePos = next
+                if abs(velocity) > velocityThreshold {
+                    velocity *= friction
+                    let next = wrap(framePos + velocity)
+                    guard sequence.hasFrame(Int(next)) else { continue }
+                    framePos = next
+                } else {
+                    velocity = 0
+                    let dir: Double = fit.isRotationReversed ? -1 : 1
+                    let next = wrap(framePos + dir * autoSpinPerTick)
+                    guard sequence.hasFrame(Int(next)) else { continue }
+                    framePos = next
+                }
                 show(frame: Int(framePos))
             }
         }
