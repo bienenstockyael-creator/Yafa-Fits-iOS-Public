@@ -16,7 +16,16 @@ struct ClipFit: Sendable {
     let frameExt: String
     let products: [ClipProduct]
     let likeCount: Int
-    let commentCount: Int
+    let vibeCount: Int
+    let comments: [ClipComment]
+    var commentCount: Int { comments.count }
+}
+
+struct ClipComment: Identifiable, Sendable {
+    let id = UUID()
+    let author: String
+    let avatarURL: URL?
+    let text: String
 }
 
 struct ClipProduct: Identifiable, Sendable {
@@ -75,6 +84,14 @@ enum ClipDataService {
         let username: String?
         let avatar_url: String?
     }
+    private struct CommentRow: Decodable {
+        struct Author: Decodable {
+            let username: String?
+            let avatar_url: String?
+        }
+        let body: String?
+        let profiles: Author?
+    }
     private struct ProductRow: Decodable {
         struct Canonical: Decodable {
             let name: String?
@@ -108,10 +125,21 @@ enum ClipDataService {
         async let profileData = get("/rest/v1/profiles?id=eq.\(outfit.user_id)&select=username,avatar_url&limit=1")
         async let productData = get("/rest/v1/outfit_products?outfit_id=eq.\(outfit.id)&select=name,image,shop_link,products(name,image_url,source_url)")
         async let likes = count("/rest/v1/likes?outfit_id=eq.\(outfit.id)&select=user_id")
-        async let comments = count("/rest/v1/comments?outfit_id=eq.\(outfit.id)&select=id")
+        async let vibes = count("/rest/v1/vibes?outfit_id=eq.\(outfit.id)&select=id")
+        async let commentData = get("/rest/v1/comments?outfit_id=eq.\(outfit.id)&select=body,profiles(username,avatar_url)&order=created_at.asc&limit=50")
 
         let profile = (try? JSONDecoder().decode([ProfileRow].self, from: await profileData ?? Data()))?.first
         let productRows = (try? JSONDecoder().decode([ProductRow].self, from: await productData ?? Data())) ?? []
+        let commentRows = (try? JSONDecoder().decode([CommentRow].self, from: await commentData ?? Data())) ?? []
+        let comments: [ClipComment] = commentRows.compactMap { row in
+            let text = (row.body ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { return nil }
+            return ClipComment(
+                author: row.profiles?.username ?? "someone",
+                avatarURL: row.profiles?.avatar_url.flatMap(URL.init(string:)),
+                text: text
+            )
+        }
 
         let products: [ClipProduct] = productRows.compactMap { p in
             let name = p.products?.name ?? p.name ?? ""
@@ -149,7 +177,8 @@ enum ClipDataService {
             frameExt: ext,
             products: products,
             likeCount: await likes,
-            commentCount: await comments
+            vibeCount: await vibes,
+            comments: comments
         )
     }
 

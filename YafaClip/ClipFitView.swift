@@ -60,6 +60,11 @@ private struct ClipFeedCard: View {
     let fit: ClipFit
     var onRequireApp: () -> Void
     @State private var cartOpen = true
+    // Playful local reactions — they fill and count up like the app's,
+    // but a clip has no account, so they live only in this moment.
+    @State private var liked = false
+    @State private var vibed = false
+    @State private var showComments = false
     @Environment(\.openURL) private var openURL
 
     var body: some View {
@@ -82,6 +87,14 @@ private struct ClipFeedCard: View {
         }
         .padding(LayoutMetrics.medium)
         .appCard()
+        .sheet(isPresented: $showComments) {
+            ClipCommentsSheet(comments: fit.comments, onRequireApp: {
+                showComments = false
+                onRequireApp()
+            })
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
     }
 
     private var header: some View {
@@ -117,8 +130,23 @@ private struct ClipFeedCard: View {
     private var actions: some View {
         VStack(spacing: 0) {
             HStack(spacing: LayoutMetrics.xxSmall) {
-                actionButton(icon: .heart, count: fit.likeCount, action: onRequireApp)
-                actionButton(icon: .comment, count: fit.commentCount, action: onRequireApp)
+                actionButton(
+                    icon: .heart,
+                    count: fit.likeCount + (liked ? 1 : 0),
+                    filled: liked,
+                    isActive: liked
+                ) {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    withAnimation(.easeInOut(duration: 0.18)) { liked.toggle() }
+                }
+                actionButton(icon: .comment, count: fit.commentCount) {
+                    if fit.comments.isEmpty {
+                        onRequireApp()
+                    } else {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        showComments = true
+                    }
+                }
                 actionButton(icon: .bookmark, action: onRequireApp)
                 if !fit.products.isEmpty {
                     actionButton(icon: .cart, isActive: cartOpen) {
@@ -130,7 +158,15 @@ private struct ClipFeedCard: View {
                     }
                 }
                 Spacer()
-                actionButton(icon: .flame, action: onRequireApp)
+                actionButton(
+                    icon: .flame,
+                    count: fit.vibeCount + (vibed ? 1 : 0),
+                    filled: vibed,
+                    isActive: vibed
+                ) {
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    withAnimation(.easeInOut(duration: 0.18)) { vibed.toggle() }
+                }
             }
             .padding(.top, LayoutMetrics.xxxSmall)
 
@@ -143,13 +179,14 @@ private struct ClipFeedCard: View {
 
     /// FeedPostCard.actionButton, verbatim — social taps hand off to
     /// the full app via the overlay (a clip has no account).
-    private func actionButton(icon: AppIconGlyph, count: Int? = nil, isActive: Bool = false, action: @escaping () -> Void) -> some View {
+    private func actionButton(icon: AppIconGlyph, count: Int? = nil, filled: Bool = false, isActive: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
         ZStack(alignment: .topTrailing) {
             AppIcon(
                 glyph: icon,
                 size: 14,
-                color: isActive ? AppPalette.iconActive : AppPalette.iconPrimary
+                color: isActive ? AppPalette.iconActive : AppPalette.iconPrimary,
+                filled: filled
             )
             .frame(width: 40, height: 40)
             .appCircle(shadowRadius: 0, shadowY: 0)
@@ -180,7 +217,15 @@ private struct ClipFeedCard: View {
             HStack(spacing: 16) {
                 ForEach(fit.products) { product in
                     Button {
-                        if let shop = product.shopURL { openURL(shop) }
+                        // Same rule as the app's ProductShopLink:
+                        // direct shop when linked, Google Lens on the
+                        // product image otherwise — every tile buys.
+                        if let shop = product.shopURL {
+                            openURL(shop)
+                        } else if let image = product.imageURL,
+                                  let lens = URL(string: "https://lens.google.com/uploadbyurl?url=\(image.absoluteString.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "")") {
+                            openURL(lens)
+                        }
                     } label: {
                         VStack(spacing: 6) {
                             productImage(product)
@@ -217,5 +262,62 @@ private struct ClipFeedCard: View {
             }
         }
         .frame(width: 56, height: 56)
+    }
+}
+
+
+/// Read-only comment thread — the same rows the app renders, with a
+/// join CTA where the composer would be.
+private struct ClipCommentsSheet: View {
+    let comments: [ClipComment]
+    var onRequireApp: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Text("COMMENTS")
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .tracking(2)
+                .foregroundStyle(AppPalette.textFaint)
+                .padding(.top, LayoutMetrics.medium)
+                .padding(.bottom, LayoutMetrics.xSmall)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: LayoutMetrics.small) {
+                    ForEach(comments) { comment in
+                        HStack(alignment: .top, spacing: LayoutMetrics.xxSmall + 2) {
+                            AvatarView(
+                                url: comment.avatarURL?.absoluteString,
+                                initial: String(comment.author.prefix(1)).uppercased(),
+                                size: 28
+                            )
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(comment.author)
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(AppPalette.textStrong)
+                                Text(comment.text)
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(AppPalette.textSecondary)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                    }
+                }
+                .padding(.horizontal, LayoutMetrics.medium)
+                .padding(.top, LayoutMetrics.xxSmall)
+            }
+
+            Button(action: onRequireApp) {
+                Text("JOIN THE CONVERSATION")
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .tracking(2)
+                    .foregroundStyle(AppPalette.textPrimary)
+                    .frame(maxWidth: .infinity, minHeight: 50)
+                    .appCapsule(shadowRadius: 6, shadowY: 3)
+            }
+            .buttonStyle(SolidPressButtonStyle())
+            .padding(.horizontal, LayoutMetrics.medium)
+            .padding(.vertical, LayoutMetrics.small)
+        }
+        .presentationBackground(AppPalette.groupedBackground)
     }
 }
