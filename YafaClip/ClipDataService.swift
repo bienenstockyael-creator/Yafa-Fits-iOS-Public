@@ -9,8 +9,7 @@ struct ClipFit: Sendable {
     let avatarURL: URL?
     let caption: String?
     let dateLabel: String
-    let weatherCondition: String?
-    let weatherTempC: Int?
+    let weather: Weather?
     let frameCount: Int
     let isRotationReversed: Bool
     let frameBase: String   // "<base>/<folder>/<prefix>" — append 00000.ext
@@ -69,6 +68,7 @@ enum ClipDataService {
         let caption: String?
         let date: String?
         let weather_temp_c: Int?
+        let weather_temp_f: Int?
         let weather_condition: String?
     }
     private struct ProfileRow: Decodable {
@@ -88,7 +88,7 @@ enum ClipDataService {
     }
 
     static func loadFit(slugOrId: String) async -> ClipFit? {
-        let cols = "id,user_id,folder,prefix,frame_ext,frame_count,is_rotation_reversed,remote_base_url,caption,date,weather_temp_c,weather_condition"
+        let cols = "id,user_id,folder,prefix,frame_ext,frame_count,is_rotation_reversed,remote_base_url,caption,date,weather_temp_c,weather_temp_f,weather_condition"
         let esc = slugOrId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? slugOrId
 
         var row: OutfitRow?
@@ -137,8 +137,12 @@ enum ClipDataService {
             avatarURL: profile?.avatar_url.flatMap(URL.init(string:)),
             caption: outfit.caption,
             dateLabel: Self.dateLabel(outfit.date),
-            weatherCondition: outfit.weather_condition,
-            weatherTempC: outfit.weather_temp_c,
+            weather: outfit.weather_condition.flatMap { condition in
+                guard !condition.isEmpty,
+                      let tempC = outfit.weather_temp_c else { return nil }
+                let tempF = outfit.weather_temp_f ?? Int(Double(tempC) * 9 / 5 + 32)
+                return Weather(tempF: tempF, tempC: tempC, condition: condition)
+            },
             frameCount: outfit.frame_count ?? 1,
             isRotationReversed: outfit.is_rotation_reversed ?? false,
             frameBase: remoteBase.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/\(folder)/\(prefix)",

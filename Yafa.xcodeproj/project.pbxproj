@@ -213,6 +213,20 @@
 		20260730C11A000000000012 /* FrameSpinner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20260730C11A00000000000C /* FrameSpinner.swift */; };
 		20260730C11A000000000013 /* ClipFitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20260730C11A00000000000D /* ClipFitView.swift */; };
 		20260730C11A000000000015 /* YafaClip.app in Embed App Clips */ = {isa = PBXBuildFile; fileRef = 20260730C11A000000000002 /* YafaClip.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		20260730C11B000000000001 /* Constants.swift in Sources (Clip) */ = {isa = PBXBuildFile; fileRef = 99AAD021B4DB43444818F1D3 /* Constants.swift */; };
+		20260730C11B000000000002 /* AppModifiers.swift in Sources (Clip) */ = {isa = PBXBuildFile; fileRef = C70BC4A54DE808065C369147 /* AppModifiers.swift */; };
+		20260730C11B000000000003 /* AppIcon.swift in Sources (Clip) */ = {isa = PBXBuildFile; fileRef = BBDABBB7E6689D56A3A999A1 /* AppIcon.swift */; };
+		20260730C11B000000000004 /* WeatherPill.swift in Sources (Clip) */ = {isa = PBXBuildFile; fileRef = 95B6E39D004DC56E44D4C822 /* WeatherPill.swift */; };
+		20260730C11B000000000005 /* LottieView.swift in Sources (Clip) */ = {isa = PBXBuildFile; fileRef = FDF9D01E8CA3A29D241E8B17 /* LottieView.swift */; };
+		20260730C11B000000000006 /* Outfit.swift in Sources (Clip) */ = {isa = PBXBuildFile; fileRef = F6BCC4406A27B6BF439BBA9D /* Outfit.swift */; };
+		20260730C11B000000000007 /* Lottie in Frameworks (Clip) */ = {isa = PBXBuildFile; productRef = 20260730C11B000000000008 /* Lottie */; };
+		20260730C11B000000000009 /* sunny.json in Resources (Clip) */ = {isa = PBXBuildFile; fileRef = 3256BEFAEA124C71EAF00C2D /* sunny.json */; };
+		20260730C11B00000000000A /* rainy.json in Resources (Clip) */ = {isa = PBXBuildFile; fileRef = 9819708241DB25B5D00386CD /* rainy.json */; };
+		20260730C11B00000000000B /* stormy.json in Resources (Clip) */ = {isa = PBXBuildFile; fileRef = 027956B7C06F724EDDA85B50 /* stormy.json */; };
+		20260730C11B00000000000C /* snowy.json in Resources (Clip) */ = {isa = PBXBuildFile; fileRef = BEB8EAABC18747CDBDD38332 /* snowy.json */; };
+		20260730C11B00000000000D /* windy.json in Resources (Clip) */ = {isa = PBXBuildFile; fileRef = F6B8C9D105280144E32EBE34 /* windy.json */; };
+		20260730C11B00000000000E /* cloudy.json in Resources (Clip) */ = {isa = PBXBuildFile; fileRef = 8E93326E60084B89CA340A41 /* cloudy.json */; };
+		20260730C11B00000000000F /* AvatarView.swift in Sources (Clip) */ = {isa = PBXBuildFile; fileRef = F15640B030569340C148E2F4 /* AvatarView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -520,6 +534,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				20260730C11B000000000007 /* Lottie in Frameworks (Clip) */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1010,6 +1025,7 @@
 			);
 			name = YafaClip;
 			packageProductDependencies = (
+				20260730C11B000000000008 /* Lottie */,
 			);
 			productName = YafaClip;
 			productReference = 20260730C11A000000000002 /* YafaClip.app */;
@@ -1126,6 +1142,12 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				20260730C11B000000000009 /* sunny.json in Resources (Clip) */,
+				20260730C11B00000000000A /* rainy.json in Resources (Clip) */,
+				20260730C11B00000000000B /* stormy.json in Resources (Clip) */,
+				20260730C11B00000000000C /* snowy.json in Resources (Clip) */,
+				20260730C11B00000000000D /* windy.json in Resources (Clip) */,
+				20260730C11B00000000000E /* cloudy.json in Resources (Clip) */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1309,6 +1331,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				20260730C11B000000000001 /* Constants.swift in Sources (Clip) */,
+				20260730C11B000000000002 /* AppModifiers.swift in Sources (Clip) */,
+				20260730C11B000000000003 /* AppIcon.swift in Sources (Clip) */,
+				20260730C11B000000000004 /* WeatherPill.swift in Sources (Clip) */,
+				20260730C11B000000000005 /* LottieView.swift in Sources (Clip) */,
+				20260730C11B000000000006 /* Outfit.swift in Sources (Clip) */,
+				20260730C11B00000000000F /* AvatarView.swift in Sources (Clip) */,
 				20260730C11A000000000010 /* YafaClipApp.swift in Sources */,
 				20260730C11A000000000011 /* ClipDataService.swift in Sources */,
 				20260730C11A000000000012 /* FrameSpinner.swift in Sources */,
@@ -1787,6 +1816,11 @@
 			productName = PhoneNumberKit;
 		};
 		FACE0000000000000000D001 /* Lottie */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7BB966226F388D7967BC5DFF /* XCRemoteSwiftPackageReference "lottie-ios" */;
+			productName = Lottie;
+		};
+		20260730C11B000000000008 /* Lottie */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 7BB966226F388D7967BC5DFF /* XCRemoteSwiftPackageReference "lottie-ios" */;
 			productName = Lottie;
