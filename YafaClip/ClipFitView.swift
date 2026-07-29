@@ -241,13 +241,17 @@ private struct ClipFeedCard: View {
                 ForEach(fit.products) { product in
                     Button {
                         // Same rule as the app's ProductShopLink:
-                        // direct shop when linked, Google Lens on the
-                        // product image otherwise — every tile buys.
+                        // direct shop when linked, Google Shopping
+                        // search on the name otherwise (Lens-by-URL is
+                        // unreliable on mobile) — every tile buys.
                         if let shop = product.shopURL {
                             openURL(shop)
-                        } else if let image = product.imageURL,
-                                  let lens = URL(string: "https://lens.google.com/uploadbyurl?url=\(image.absoluteString.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "")") {
-                            openURL(lens)
+                        } else if let encoded = product.name
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                            .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+                            !encoded.isEmpty,
+                            let search = URL(string: "https://www.google.com/search?udm=28&q=\(encoded)") {
+                            openURL(search)
                         }
                     } label: {
                         VStack(spacing: 6) {

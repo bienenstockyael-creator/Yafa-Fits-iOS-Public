@@ -17,22 +17,16 @@ enum ProductShopLink {
             return
         }
 
-        // 2. Thumbnail → Google Lens visual search. The thumbnail is more
-        //    discriminating than the label alone, so this returns the
-        //    closest visual matches for the actual product image.
-        if let thumbnailURL = product.resolvedImageURL,
-           let encodedThumb = thumbnailURL.absoluteString
-            .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-           let lensURL = URL(string: "https://lens.google.com/uploadbyurl?url=\(encodedThumb)") {
-            UIApplication.shared.open(lensURL)
-            return
-        }
-
-        // 3. Fallback — Google Images text search using the product label.
+        // 2. Fallback — Google Shopping text search on the product label.
+        //    This replaced the Lens visual search (uploadbyurl): that
+        //    endpoint is unreliable on mobile Safari — for logged-in EU
+        //    accounts the redirect drops the uploaded image and lands on
+        //    an empty results page. A Shopping search renders buyable
+        //    product tiles deterministically, logged in or out.
         let query = product.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty,
               let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: "https://www.google.com/search?tbm=isch&q=\(encoded)")
+              let url = URL(string: "https://www.google.com/search?udm=28&q=\(encoded)")
         else { return }
         UIApplication.shared.open(url)
     }
