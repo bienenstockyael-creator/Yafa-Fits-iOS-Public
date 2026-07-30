@@ -68,20 +68,41 @@ struct ShopBrowserSheet: View {
     let fallbackURL: URL?
     var onClose: () -> Void
 
+    /// Live copy of the web page's background color. The sheet's own
+    /// chrome adopts it so the page never reads as a "second sheet"
+    /// inside ours — Google in dark mode gets a dark sheet, a white
+    /// shop gets a light one.
+    @State private var pageBackground = UIColor.systemGroupedBackground
+
+    private var pageIsDark: Bool {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        pageBackground.getRed(&r, green: &g, blue: &b, alpha: &a)
+        // Fully transparent reports as black — treat it as "unknown,
+        // assume light" so the chrome doesn't flash dark on load.
+        guard a > 0.1 else { return false }
+        return (0.299 * r + 0.587 * g + 0.114 * b) < 0.5
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack {
                 Text("SHOP THIS LOOK")
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
                     .tracking(2.4)
-                    .foregroundStyle(AppPalette.textFaint)
+                    .foregroundStyle(pageIsDark ? Color.white.opacity(0.55) : AppPalette.textFaint)
 
                 Spacer()
 
                 Button(action: onClose) {
-                    AppIcon(glyph: .xmark, size: 12, color: AppPalette.iconPrimary)
-                        .frame(width: 32, height: 32)
-                        .appCircle(shadowRadius: 0, shadowY: 0)
+                    if pageIsDark {
+                        AppIcon(glyph: .xmark, size: 12, color: .white.opacity(0.85))
+                            .frame(width: 32, height: 32)
+                            .background(Circle().fill(Color.white.opacity(0.14)))
+                    } else {
+                        AppIcon(glyph: .xmark, size: 12, color: AppPalette.iconPrimary)
+                            .frame(width: 32, height: 32)
+                            .appCircle(shadowRadius: 0, shadowY: 0)
+                    }
                 }
                 .buttonStyle(SolidPressButtonStyle())
             }
@@ -89,27 +110,33 @@ struct ShopBrowserSheet: View {
             .padding(.top, LayoutMetrics.medium)
             .padding(.bottom, LayoutMetrics.xSmall)
 
-            ShopWebView(url: url, fallbackURL: fallbackURL)
-                .clipShape(
-                    UnevenRoundedRectangle(
-                        topLeadingRadius: 16,
-                        topTrailingRadius: 16
-                    )
-                )
-                .ignoresSafeArea(edges: .bottom)
+            ShopWebView(
+                url: url,
+                fallbackURL: fallbackURL,
+                onBackgroundChange: { color in
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        pageBackground = color
+                    }
+                }
+            )
+            .ignoresSafeArea(edges: .bottom)
         }
-        .background(AppPalette.groupedBackground)
+        .background(Color(uiColor: pageBackground).ignoresSafeArea())
     }
 }
 
 private struct ShopWebView: UIViewRepresentable {
     let url: URL
     let fallbackURL: URL?
+    var onBackgroundChange: (UIColor) -> Void
 
     func makeUIView(context: Context) -> WKWebView {
         let web = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
         web.navigationDelegate = context.coordinator
         web.allowsBackForwardNavigationGestures = true
+        // Follow the page's own background so the sheet chrome can
+        // match it — KVO fires as the page (or its dark mode) loads.
+        context.coordinator.observeBackground(of: web, onChange: onBackgroundChange)
         web.load(URLRequest(url: url))
         return web
     }
@@ -123,9 +150,24 @@ private struct ShopWebView: UIViewRepresentable {
     final class Coordinator: NSObject, WKNavigationDelegate {
         let fallbackURL: URL?
         private var fellBack = false
+        private var backgroundObservation: NSKeyValueObservation?
 
         init(fallbackURL: URL?) {
             self.fallbackURL = fallbackURL
+        }
+
+        func observeBackground(
+            of webView: WKWebView,
+            onChange: @escaping (UIColor) -> Void
+        ) {
+            backgroundObservation = webView.observe(
+                \.underPageBackgroundColor,
+                options: [.initial, .new]
+            ) { webView, _ in
+                let color = webView.underPageBackgroundColor
+                    .resolvedColor(with: webView.traitCollection)
+                DispatchQueue.main.async { onChange(color) }
+            }
         }
 
         func webView(
