@@ -73,6 +73,7 @@ struct ShopBrowserSheet: View {
     /// inside ours — Google in dark mode gets a dark sheet, a white
     /// shop gets a light one.
     @State private var pageBackground = UIColor.systemGroupedBackground
+    @State private var isLoading = true
 
     private var pageIsDark: Bool {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
@@ -117,9 +118,33 @@ struct ShopBrowserSheet: View {
                     withAnimation(.easeInOut(duration: 0.25)) {
                         pageBackground = color
                     }
+                },
+                onLoadingChange: { loading in
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        isLoading = loading
+                    }
                 }
             )
             .ignoresSafeArea(edges: .bottom)
+            .overlay {
+                // Lens takes a few seconds server-side (image fetch +
+                // visual match) — an intentional loading state on the
+                // page's own color beats a silent blank page.
+                if isLoading {
+                    VStack(spacing: LayoutMetrics.small) {
+                        ProgressView()
+                            .tint(pageIsDark ? .white : AppPalette.textMuted)
+                        Text("FINDING MATCHES")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .tracking(2.4)
+                            .foregroundStyle(pageIsDark ? Color.white.opacity(0.55) : AppPalette.textFaint)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(uiColor: pageBackground))
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+                }
+            }
         }
         .background(Color(uiColor: pageBackground).ignoresSafeArea())
     }
@@ -129,8 +154,10 @@ private struct ShopWebView: UIViewRepresentable {
     let url: URL
     let fallbackURL: URL?
     var onBackgroundChange: (UIColor) -> Void
+    var onLoadingChange: (Bool) -> Void
 
     func makeUIView(context: Context) -> WKWebView {
+        context.coordinator.onLoadingChange = onLoadingChange
         let web = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
         web.navigationDelegate = context.coordinator
         web.allowsBackForwardNavigationGestures = true
@@ -149,8 +176,18 @@ private struct ShopWebView: UIViewRepresentable {
 
     final class Coordinator: NSObject, WKNavigationDelegate {
         let fallbackURL: URL?
+        var onLoadingChange: ((Bool) -> Void)?
         private var fellBack = false
+        private var finishedOnce = false
         private var backgroundObservation: NSKeyValueObservation?
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            // First finished navigation = real content on screen
+            // (later Lens redirects render their own skeletons).
+            guard !finishedOnce else { return }
+            finishedOnce = true
+            onLoadingChange?(false)
+        }
 
         init(fallbackURL: URL?) {
             self.fallbackURL = fallbackURL
@@ -187,7 +224,12 @@ private struct ShopWebView: UIViewRepresentable {
         }
 
         private func loadFallback(in webView: WKWebView) {
-            guard !fellBack, let fallbackURL else { return }
+            guard !fellBack, let fallbackURL else {
+                // Nothing left to try — reveal whatever the web view
+                // shows rather than spinning forever.
+                onLoadingChange?(false)
+                return
+            }
             fellBack = true
             webView.load(URLRequest(url: fallbackURL))
         }
