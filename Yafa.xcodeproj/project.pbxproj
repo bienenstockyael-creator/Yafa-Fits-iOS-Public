@@ -237,6 +237,7 @@
 		20260730C11B000000000017 /* ClipVibesStubs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20260730C11B000000000018 /* ClipVibesStubs.swift */; };
 		20260730C11B00000000001A /* ShopBrowserSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20260730C11B000000000019 /* ShopBrowserSheet.swift */; };
 		20260730C11B00000000001B /* ShopBrowserSheet.swift in Sources (Clip) */ = {isa = PBXBuildFile; fileRef = 20260730C11B000000000019 /* ShopBrowserSheet.swift */; };
+		20260730C11B00000000001D /* BannerAppIcon.png in Resources (Clip) */ = {isa = PBXBuildFile; fileRef = 20260730C11B00000000001C /* BannerAppIcon.png */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -499,6 +500,7 @@
 		20260730C11A00000000000F /* YafaClip.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = YafaClip.entitlements; sourceTree = "<group>"; };
 		20260730C11B000000000018 /* ClipVibesStubs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipVibesStubs.swift; sourceTree = "<group>"; };
 		20260730C11B000000000019 /* ShopBrowserSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShopBrowserSheet.swift; sourceTree = "<group>"; };
+		20260730C11B00000000001C /* BannerAppIcon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = BannerAppIcon.png; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -948,6 +950,7 @@
 				20260730C11A00000000000C /* FrameSpinner.swift */,
 				20260730C11A00000000000D /* ClipFitView.swift */,
 				20260730C11B000000000018 /* ClipVibesStubs.swift */,
+				20260730C11B00000000001C /* BannerAppIcon.png */,
 				20260730C11A00000000000E /* Info.plist */,
 				20260730C11A00000000000F /* YafaClip.entitlements */,
 			);
@@ -1162,6 +1165,7 @@
 				20260730C11B00000000000C /* snowy.json in Resources (Clip) */,
 				20260730C11B00000000000D /* windy.json in Resources (Clip) */,
 				20260730C11B00000000000E /* cloudy.json in Resources (Clip) */,
+				20260730C11B00000000001D /* BannerAppIcon.png in Resources (Clip) */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

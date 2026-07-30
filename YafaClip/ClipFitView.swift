@@ -38,10 +38,24 @@ struct ClipFitView: View {
                         })
                         .padding(.horizontal, LayoutMetrics.small)
                         .padding(.top, LayoutMetrics.large)
-                        .padding(.bottom, 170) // clear the overlay
+                        .padding(.bottom, 120) // clear the install banner
                     }
                     .scrollIndicators(.hidden)
                 }
+            }
+
+            // Yafa-styled install CTA — our own chrome instead of the
+            // auto-popping system overlay. GET summons Apple's SKOverlay
+            // (the only sanctioned install path); this banner just makes
+            // the pitch in the app's own voice.
+            if model.phase == .ready {
+                VStack {
+                    Spacer()
+                    installBanner
+                        .padding(.horizontal, LayoutMetrics.small)
+                        .padding(.bottom, LayoutMetrics.xSmall)
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
             // The app root's exact vibe layer stack (YaelFitsApp):
@@ -54,7 +68,11 @@ struct ClipFitView: View {
             VibesBannerLayer()
         }
         .environment(vibesEffectHost)
+        .animation(.spring(response: 0.45, dampingFraction: 0.85), value: model.phase)
         .onChange(of: model.phase) { _, phase in
+            // Hot path stays one tap: Apple's overlay (with its GET
+            // button) auto-presents once after load. Our banner is the
+            // persistent re-entry after the viewer dismisses it.
             guard phase == .ready else { return }
             Task {
                 try? await Task.sleep(nanoseconds: 900_000_000)
@@ -64,6 +82,56 @@ struct ClipFitView: View {
         .appStoreOverlay(isPresented: $showOverlay) {
             SKOverlay.AppClipConfiguration(position: .bottom)
         }
+    }
+
+    /// The clip's own pitch, in the app's chrome: appCard surface,
+    /// hand-drawn tshirt glyph, mono caps title, solid GET capsule.
+    private var installBanner: some View {
+        HStack(spacing: LayoutMetrics.xSmall) {
+            if let icon = UIImage(named: "BannerAppIcon") {
+                Image(uiImage: icon)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 40, height: 40)
+                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .strokeBorder(AppPalette.cardBorder, lineWidth: 0.75)
+                    )
+            } else {
+                AppIcon(glyph: .tshirt, size: 18, color: AppPalette.iconPrimary)
+                    .frame(width: 40, height: 40)
+                    .appCircle(shadowRadius: 0, shadowY: 0)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("YAFA")
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .tracking(2.4)
+                    .foregroundStyle(AppPalette.textStrong)
+                Text("Spin fits. Shop looks. Join in.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(AppPalette.textSecondary)
+            }
+
+            Spacer(minLength: LayoutMetrics.xxSmall)
+
+            Button {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                showOverlay = true
+            } label: {
+                Text("GET")
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .tracking(1.6)
+                    .foregroundStyle(AppPalette.textPrimary)
+                    .padding(.horizontal, 18)
+                    .frame(height: 40)
+                    .appCapsule(shadowRadius: 0, shadowY: 0)
+            }
+            .buttonStyle(SolidPressButtonStyle())
+        }
+        .padding(LayoutMetrics.xSmall)
+        .appCard()
     }
 }
 
@@ -78,6 +146,7 @@ private struct ClipFeedCard: View {
     // but a clip has no account, so they live only in this moment.
     @State private var liked = false
     @State private var vibed = false
+    @State private var saved = false
     // Backing state for the REAL VibeButton (stubbed service always
     // succeeds, so the vibe sticks for the clip session).
     @State private var vibeCount: Int
@@ -171,7 +240,14 @@ private struct ClipFeedCard: View {
                         showComments = true
                     }
                 }
-                actionButton(icon: .bookmark, action: onRequireApp)
+                actionButton(
+                    icon: .bookmark,
+                    filled: saved,
+                    isActive: saved
+                ) {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    withAnimation(.easeInOut(duration: 0.18)) { saved.toggle() }
+                }
                 if !fit.products.isEmpty {
                     actionButton(icon: .cart, isActive: cartOpen) {
                         // The app's exact cart toggle curve.
