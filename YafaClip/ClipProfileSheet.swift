@@ -105,6 +105,15 @@ struct ClipProfileSheet: View {
         .task {
             profile = await ClipDataService.loadProfile(userId: userId)
             isLoading = false
+            #if DEBUG
+            // Headless UI verification hook: auto-open the carousel so
+            // simulator screenshots can check the chrome layout.
+            if ProcessInfo.processInfo.environment["CLIP_AUTO_CAROUSEL"] == "1",
+               let first = profile?.fits.first {
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                openCarousel(at: 0, thumbURL: first.thumbURL)
+            }
+            #endif
         }
     }
 
@@ -413,6 +422,15 @@ private struct ClipCarouselView: View {
 
                         slideStrip(slideWidth: slideWidth, slideHeight: slideHeight, step: step, center: geo.size.width / 2)
                             .frame(height: slideHeight)
+                            // Pin the overlay container to the
+                            // VIEWPORT width — the strip itself is as
+                            // wide as every slide laid out side by
+                            // side, which shoved the nav arrows
+                            // several screens off to the right.
+                            // Leading alignment keeps the strip's
+                            // origin at x=0 so the paging offset math
+                            // holds.
+                            .frame(width: geo.size.width, alignment: .leading)
                             .scaleEffect(1.0 - (cardProgress * Self.cardExpandSlideShrink), anchor: .top)
                             .overlay {
                                 navButtons

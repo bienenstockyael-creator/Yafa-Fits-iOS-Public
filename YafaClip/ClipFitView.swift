@@ -78,10 +78,16 @@ struct ClipFitView: View {
         .environment(vibesEffectHost)
         .animation(.spring(response: 0.45, dampingFraction: 0.85), value: model.phase)
         .onChange(of: model.phase) { _, phase in
+            guard phase == .ready else { return }
+            #if DEBUG
+            if ProcessInfo.processInfo.environment["CLIP_AUTO_PROFILE"] == "1" {
+                showProfile = true
+                return
+            }
+            #endif
             // Hot path stays one tap: Apple's overlay (with its GET
             // button) auto-presents once after load. Our banner is the
             // persistent re-entry after the viewer dismisses it.
-            guard phase == .ready else { return }
             Task {
                 try? await Task.sleep(nanoseconds: 900_000_000)
                 showOverlay = true
