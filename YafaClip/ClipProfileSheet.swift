@@ -20,8 +20,24 @@ struct ClipProfileSheet: View {
 
     @State private var profile: ClipProfile?
     @State private var isLoading = true
-    @State private var showCarousel = false
     @State private var carouselIndex = 0
+
+    // Hero-transition state — the app's grid→carousel choreography:
+    // the tapped cell flies to the slide position while the backdrop
+    // fades in, then chrome + live slide reveal; reversed on close.
+    @State private var carouselMounted = false
+    @State private var backdropOpacity: Double = 0
+    @State private var chromeVisible = false
+    @State private var liveSlideVisible = false
+    @State private var heroVisible = false
+    @State private var heroFrame: CGRect = .zero
+    @State private var heroThumbURL: URL?
+    @State private var heroGridIndex: Int?
+    @State private var gridFrames: [Int: CGRect] = [:]
+    @State private var slideFrame: CGRect = .null
+
+    private static let spaceName = "clipProfileSpace"
+    private static let heroFlight = Animation.timingCurve(0.22, 0.84, 0.18, 1, duration: 0.26)
 
     private let gridColumns = [
         GridItem(.flexible(), spacing: 24, alignment: .top),
@@ -30,49 +46,148 @@ struct ClipProfileSheet: View {
     ]
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: LayoutMetrics.xSmall) {
-                header
-                if let profile, !profile.fits.isEmpty {
-                    sectionHeader
-                    grid(profile.fits)
-                } else if !isLoading {
-                    Text("No public outfits yet")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(AppPalette.textMuted)
-                        .padding(.top, LayoutMetrics.large)
-                } else {
-                    ProgressView()
-                        .tint(AppPalette.textMuted)
-                        .padding(.top, LayoutMetrics.xLarge)
+        ZStack {
+            ScrollView {
+                VStack(spacing: LayoutMetrics.xSmall) {
+                    header
+                    if let profile, !profile.fits.isEmpty {
+                        sectionHeader
+                        grid(profile.fits)
+                    } else if !isLoading {
+                        Text("No public outfits yet")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(AppPalette.textMuted)
+                            .padding(.top, LayoutMetrics.large)
+                    } else {
+                        ProgressView()
+                            .tint(AppPalette.textMuted)
+                            .padding(.top, LayoutMetrics.xLarge)
+                    }
                 }
+                .padding(.horizontal, LayoutMetrics.medium)
+                .padding(.top, LayoutMetrics.large)
+                .padding(.bottom, LayoutMetrics.xLarge)
             }
-            .padding(.horizontal, LayoutMetrics.medium)
-            .padding(.top, LayoutMetrics.large)
-            .padding(.bottom, LayoutMetrics.xLarge)
-        }
-        .scrollIndicators(.hidden)
-        .presentationBackground(AppPalette.groupedBackground)
-        .task {
-            profile = await ClipDataService.loadProfile(userId: userId)
-            isLoading = false
-        }
-        // Grid tap → full-screen carousel over the creator's fits,
-        // the app's profile flow: swipe between fits, back arrow
-        // returns to the grid.
-        .fullScreenCover(isPresented: $showCarousel) {
-            if let profile {
+            .scrollIndicators(.hidden)
+
+            // Carousel mounts as an in-tree overlay (NOT a cover) so
+            // the hero can fly between the grid and the slide — the
+            // app's exact presentation model.
+            if carouselMounted, let profile {
                 ClipCarouselView(
                     fits: profile.fits,
                     index: $carouselIndex,
-                    onClose: { showCarousel = false },
+                    backdropOpacity: backdropOpacity,
+                    chromeVisible: chromeVisible,
+                    liveSlideVisible: liveSlideVisible,
+                    spaceName: Self.spaceName,
+                    onSlideFrame: { slideFrame = $0 },
+                    onClose: { closeCarousel() },
                     onRequireApp: {
-                        showCarousel = false
+                        closeCarousel()
                         onRequireApp()
                     }
                 )
                 .environment(vibesHost)
             }
+
+            // The flying thumbnail.
+            if heroVisible {
+                ClipThumbImage(url: heroThumbURL)
+                    .frame(width: heroFrame.width, height: heroFrame.height)
+                    .position(x: heroFrame.midX, y: heroFrame.midY)
+                    .allowsHitTesting(false)
+            }
+        }
+        .coordinateSpace(name: Self.spaceName)
+        .onPreferenceChange(ClipGridFramesKey.self) { gridFrames = $0 }
+        .presentationBackground(AppPalette.groupedBackground)
+        .task {
+            profile = await ClipDataService.loadProfile(userId: userId)
+            isLoading = false
+        }
+    }
+
+    // MARK: - Hero choreography (CarouselHeroChoreography's timings)
+
+    private func openCarousel(at index: Int, thumbURL: URL?) {
+        carouselIndex = index
+        heroThumbURL = thumbURL
+        heroGridIndex = index
+        heroFrame = gridFrames[index] ?? .zero
+        heroVisible = gridFrames[index] != nil
+        backdropOpacity = 0
+        chromeVisible = false
+        liveSlideVisible = false
+        slideFrame = .null
+        carouselMounted = true
+
+        Task { @MainActor in
+            withAnimation(.easeOut(duration: 0.22)) { backdropOpacity = 1 }
+
+            // Wait for the slide to report a stable target frame —
+            // flying toward a mid-layout transient makes the landing
+            // snap (the app polls the same way).
+            var stable: CGRect?
+            var last: CGRect?
+            for _ in 0..<30 {
+                let frame = slideFrame
+                if !frame.isNull, frame.width > 0 {
+                    if let l = last, abs(l.minX - frame.minX) < 0.5, abs(l.minY - frame.minY) < 0.5 {
+                        stable = frame
+                        break
+                    }
+                    last = frame
+                }
+                try? await Task.sleep(nanoseconds: 16_000_000)
+            }
+            let target = stable ?? last ?? heroFrame
+
+            guard heroVisible else {
+                // No source cell (shouldn't happen) — just reveal.
+                withAnimation(.easeInOut(duration: 0.28)) { chromeVisible = true }
+                withAnimation(.easeInOut(duration: 0.12)) { liveSlideVisible = true }
+                heroGridIndex = nil
+                return
+            }
+
+            withAnimation(Self.heroFlight) { heroFrame = target }
+            try? await Task.sleep(nanoseconds: 270_000_000)
+            withAnimation(.easeInOut(duration: 0.28)) { chromeVisible = true }
+            withAnimation(.easeInOut(duration: 0.12)) { liveSlideVisible = true }
+            try? await Task.sleep(nanoseconds: 130_000_000)
+            heroVisible = false
+            heroGridIndex = nil
+        }
+    }
+
+    private func closeCarousel() {
+        guard carouselMounted else { return }
+        Task { @MainActor in
+            guard let profile, profile.fits.indices.contains(carouselIndex) else {
+                carouselMounted = false
+                return
+            }
+            let fit = profile.fits[carouselIndex]
+            heroThumbURL = fit.thumbURL
+            heroGridIndex = carouselIndex
+            if !slideFrame.isNull, slideFrame.width > 0 {
+                heroFrame = slideFrame
+            }
+            heroVisible = true
+            withAnimation(.easeInOut(duration: 0.1)) {
+                liveSlideVisible = false
+                chromeVisible = false
+            }
+
+            if let home = gridFrames[carouselIndex] {
+                withAnimation(Self.heroFlight) { heroFrame = home }
+            }
+            withAnimation(.easeOut(duration: 0.22).delay(0.06)) { backdropOpacity = 0 }
+            try? await Task.sleep(nanoseconds: 290_000_000)
+            carouselMounted = false
+            heroVisible = false
+            heroGridIndex = nil
         }
     }
 
@@ -171,16 +286,34 @@ struct ClipProfileSheet: View {
             ForEach(Array(fits.enumerated()), id: \.element.id) { index, fit in
                 Button {
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                    carouselIndex = index
-                    showCarousel = true
+                    openCarousel(at: index, thumbURL: fit.thumbURL)
                 } label: {
                     ClipThumbImage(url: fit.thumbURL)
                         .frame(height: 132)
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(SolidPressButtonStyle())
+                // Source cell hides while the hero flies from/to it —
+                // otherwise the outfit shows twice mid-flight.
+                .opacity(heroVisible && heroGridIndex == index ? 0.001 : 1)
+                .background {
+                    GeometryReader { geo in
+                        Color.clear.preference(
+                            key: ClipGridFramesKey.self,
+                            value: [index: geo.frame(in: .named(Self.spaceName))]
+                        )
+                    }
+                }
             }
         }
+    }
+}
+
+/// Grid-cell frames in the profile's coordinate space, for the hero.
+private struct ClipGridFramesKey: PreferenceKey {
+    static let defaultValue: [Int: CGRect] = [:]
+    static func reduce(value: inout [Int: CGRect], nextValue: () -> [Int: CGRect]) {
+        value.merge(nextValue()) { _, new in new }
     }
 }
 
@@ -197,6 +330,14 @@ struct ClipProfileSheet: View {
 private struct ClipCarouselView: View {
     let fits: [ClipProfileFit]
     @Binding var index: Int
+    // Hero-choreography inputs, driven by ClipProfileSheet: the
+    // backdrop fades in first, the hero lands, then chrome and the
+    // live slide reveal.
+    let backdropOpacity: Double
+    let chromeVisible: Bool
+    let liveSlideVisible: Bool
+    let spaceName: String
+    var onSlideFrame: (CGRect) -> Void
     var onClose: () -> Void
     var onRequireApp: () -> Void
 
@@ -231,7 +372,9 @@ private struct ClipCarouselView: View {
             // CarouselView's two-stage tap-outside semantics.
             AppPalette.pageBackground
                 .ignoresSafeArea()
+                .opacity(backdropOpacity)
                 .contentShape(Rectangle())
+                .allowsHitTesting(backdropOpacity > 0.08)
                 .onTapGesture {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     if cardVisible {
@@ -244,6 +387,7 @@ private struct ClipCarouselView: View {
             Color.black.opacity(0.1)
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
+                .opacity(backdropOpacity)
 
             GeometryReader { geo in
                 let slideWidth = geo.size.width - Self.cardInset * 2
@@ -262,8 +406,10 @@ private struct ClipCarouselView: View {
                         }
                         .frame(height: 36)
                         .offset(y: 3 * (1.0 - cardProgress))
+                        .opacity(chromeVisible ? 1 : 0)
 
                         dateLocationLabel
+                            .opacity(chromeVisible ? 1 : 0)
 
                         slideStrip(slideWidth: slideWidth, slideHeight: slideHeight, step: step, center: geo.size.width / 2)
                             .frame(height: slideHeight)
@@ -271,6 +417,8 @@ private struct ClipCarouselView: View {
                             .overlay {
                                 navButtons
                                     .padding(.horizontal, Self.cardInset)
+                                    .opacity(chromeVisible ? 1 : 0)
+                                    .allowsHitTesting(chromeVisible)
                             }
 
                         Spacer(minLength: 0)
@@ -293,8 +441,8 @@ private struct ClipCarouselView: View {
                                 .opacity(0)
                         }
                         .padding(.bottom, 40)
-                        .opacity(cardVisible ? 0 : 1)
-                        .allowsHitTesting(!cardVisible)
+                        .opacity(cardVisible || !chromeVisible ? 0 : 1)
+                        .allowsHitTesting(!cardVisible && chromeVisible)
                         .animation(cardSpring, value: cardVisible)
                     }
 
@@ -368,6 +516,13 @@ private struct ClipCarouselView: View {
         HStack(spacing: gap) {
             ForEach(Array(fits.enumerated()), id: \.element.id) { i, fit in
                 let distance = abs(i - index)
+                let falloff = max(0.38, 1.0 - Double(distance) * 0.34)
+                // CarouselView's reveal gating: the current slide
+                // stays hidden until the hero lands (the flying thumb
+                // IS the visual); neighbors wait for the chrome fade.
+                let slideOpacity: Double = i == index
+                    ? (liveSlideVisible ? falloff : 0)
+                    : (chromeVisible ? falloff : 0)
                 Group {
                     // Only the current slide is a live spinner; ±2
                     // neighbors show static first frames; the rest
@@ -382,7 +537,20 @@ private struct ClipCarouselView: View {
                 }
                 .frame(width: slideWidth, height: slideHeight)
                 .scaleEffect(max(0.82, 1.0 - Double(distance) * 0.16))
-                .opacity(max(0.38, 1.0 - Double(distance) * 0.34))
+                .opacity(slideOpacity)
+                .background {
+                    // Report the current slide's frame so the hero
+                    // knows where to land / launch from.
+                    if i == index {
+                        GeometryReader { geo in
+                            Color.clear
+                                .onAppear { onSlideFrame(geo.frame(in: .named(spaceName))) }
+                                .onChange(of: geo.frame(in: .named(spaceName))) { _, frame in
+                                    onSlideFrame(frame)
+                                }
+                        }
+                    }
+                }
             }
         }
         .offset(x: center - slideWidth / 2 - CGFloat(index) * step)
