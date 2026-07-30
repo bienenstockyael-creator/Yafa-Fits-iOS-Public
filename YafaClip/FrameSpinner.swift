@@ -12,11 +12,26 @@ struct FrameSpinner: View {
     /// slide's cached first-frame thumbnail here so the static→live
     /// swap is pixel-invisible instead of a blank flash.
     var placeholder: UIImage? = nil
+    /// Feed cards idle-spin; the app's carousel does NOT — the outfit
+    /// rests until scrubbed, and a fling coasts down and stops.
+    var autoSpins: Bool = true
     /// Fired when a scrub drag ends, with (netTranslation,
     /// monotonicityRatio). The carousel uses the app's ScrubSwipe
     /// rule — a long, mostly-one-direction drag flips the page,
     /// a back-and-forth scrub never does.
     var onScrubRelease: ((CGFloat, CGFloat) -> Void)? = nil
+    /// When set, drags that start in the 60pt edge margins or run
+    /// mostly vertical are ROUTED to the host instead of scrubbing —
+    /// the app's RotatableOutfitImage edge-inset/direction rule, so
+    /// page-drags, swipe-up (card) and swipe-down (dismiss) work over
+    /// the outfit.
+    var onPassThroughChanged: ((CGSize) -> Void)? = nil
+    var onPassThroughEnded: ((CGSize, CGSize) -> Void)? = nil
+
+    private static let passEdgeInset: CGFloat = 60
+
+    private enum DragRoute { case undecided, scrub, pass }
+    @State private var route: DragRoute = .undecided
 
     @State private var loader: FrameSequence?
     @State private var dragMinX: CGFloat = 0
@@ -54,37 +69,71 @@ struct FrameSpinner: View {
             .gesture(
                 DragGesture(minimumDistance: 2)
                     .onChanged { value in
-                        guard let loader, loader.loadedCount > 1 else { return }
-                        if !dragging {
-                            dragMinX = value.translation.width
-                            dragMaxX = value.translation.width
+                        if route == .undecided {
+                            if onPassThroughChanged != nil {
+                                let w = abs(value.translation.width)
+                                let h = abs(value.translation.height)
+                                let inEdge = value.startLocation.x < Self.passEdgeInset
+                                    || value.startLocation.x > geo.size.width - Self.passEdgeInset
+                                if inEdge {
+                                    route = .pass
+                                } else if w < 8, h < 8 {
+                                    // Too early to judge direction.
+                                    return
+                                } else {
+                                    route = h > w ? .pass : .scrub
+                                }
+                            } else {
+                                route = .scrub
+                            }
                         }
-                        dragMinX = min(dragMinX, value.translation.width)
-                        dragMaxX = max(dragMaxX, value.translation.width)
-                        dragging = true
-                        let now = ProcessInfo.processInfo.systemUptime
-                        let last = lastDragX ?? value.translation.width
-                        let dx = value.translation.width - last
-                        let dt = max(0.001, now - (lastDragTime ?? now))
-                        lastDragX = value.translation.width
-                        lastDragTime = now
-                        let dir: Double = fit.isRotationReversed ? -1 : 1
-                        let frameDelta = dir * Double(dx / pixelsPerFrame)
-                        framePos = wrap(framePos + frameDelta)
-                        // Normalize the per-event delta to a per-60fps
-                        // tick velocity so the release fling feels
-                        // identical at any touch event rate — the
-                        // app's exact rule.
-                        velocity = frameDelta * (0.01667 / dt)
-                        show(frame: Int(framePos))
+
+                        switch route {
+                        case .pass:
+                            onPassThroughChanged?(value.translation)
+                        case .scrub:
+                            guard let loader, loader.loadedCount > 1 else { return }
+                            if !dragging {
+                                dragMinX = value.translation.width
+                                dragMaxX = value.translation.width
+                            }
+                            dragMinX = min(dragMinX, value.translation.width)
+                            dragMaxX = max(dragMaxX, value.translation.width)
+                            dragging = true
+                            let now = ProcessInfo.processInfo.systemUptime
+                            let last = lastDragX ?? value.translation.width
+                            let dx = value.translation.width - last
+                            let dt = max(0.001, now - (lastDragTime ?? now))
+                            lastDragX = value.translation.width
+                            lastDragTime = now
+                            let dir: Double = fit.isRotationReversed ? -1 : 1
+                            let frameDelta = dir * Double(dx / pixelsPerFrame)
+                            framePos = wrap(framePos + frameDelta)
+                            // Normalize the per-event delta to a per-60fps
+                            // tick velocity so the release fling feels
+                            // identical at any touch event rate — the
+                            // app's exact rule.
+                            velocity = frameDelta * (0.01667 / dt)
+                            show(frame: Int(framePos))
+                        case .undecided:
+                            break
+                        }
                     }
                     .onEnded { value in
-                        dragging = false
-                        lastDragX = nil
-                        lastDragTime = nil
-                        let net = value.translation.width
-                        let range = max(1, dragMaxX - dragMinX)
-                        onScrubRelease?(net, abs(net) / range)
+                        defer { route = .undecided }
+                        switch route {
+                        case .pass:
+                            onPassThroughEnded?(value.translation, value.predictedEndTranslation)
+                        case .scrub:
+                            dragging = false
+                            lastDragX = nil
+                            lastDragTime = nil
+                            let net = value.translation.width
+                            let range = max(1, dragMaxX - dragMinX)
+                            onScrubRelease?(net, abs(net) / range)
+                        case .undecided:
+                            break
+                        }
                     }
             )
         }
@@ -110,6 +159,9 @@ struct FrameSpinner: View {
                     framePos = next
                 } else {
                     velocity = 0
+                    // The carousel rests when idle — only feed cards
+                    // idle-spin.
+                    guard autoSpins else { continue }
                     let dir: Double = fit.isRotationReversed ? -1 : 1
                     let next = wrap(framePos + dir * autoSpinPerTick)
                     guard sequence.hasFrame(Int(next)) else { continue }

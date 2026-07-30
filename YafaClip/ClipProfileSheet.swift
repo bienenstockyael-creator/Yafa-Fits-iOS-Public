@@ -355,6 +355,13 @@ private struct ClipCarouselView: View {
     @State private var likedIds: Set<String> = []
     @State private var savedIds: Set<String> = []
     @State private var showComments = false
+    // CarouselView's page-drag state: the strip follows the finger,
+    // with a springy vertical nudge; a clear downward drag enters
+    // dismiss mode and the content tracks the pull.
+    @State private var dragOffset: CGFloat = 0
+    @State private var verticalNudge: CGFloat = 0
+    @State private var verticalDismissOffset: CGFloat = 0
+    @State private var isDismissing = false
     @Environment(\.openURL) private var openURL
 
     // CarouselView's metrics, verbatim.
@@ -438,12 +445,30 @@ private struct ClipCarouselView: View {
                                     .opacity(chromeVisible ? 1 : 0)
                                     .allowsHitTesting(chromeVisible)
                             }
+                            // Page-drag from the gaps / neighbor
+                            // slides; drags over the outfit itself
+                            // route here via the spinner's
+                            // pass-through.
+                            .gesture(
+                                DragGesture(minimumDistance: 10)
+                                    .onChanged { pageDragChanged($0.translation) }
+                                    .onEnded { value in
+                                        pageDragEnded(
+                                            translation: value.translation,
+                                            predicted: value.predictedEndTranslation,
+                                            step: step
+                                        )
+                                    }
+                            )
 
                         Spacer(minLength: 0)
                     }
                     .offset(y: Self.slideExpandTranslation * cardProgress)
                     .animation(cardSpring, value: cardVisible)
                     .padding(.top, Self.slideTopInset)
+                    // Dismiss pull: content follows the downward drag
+                    // (×0.6 damping, the app's rule) until release.
+                    .offset(y: verticalDismissOffset)
 
                     // Bottom action row, pinned 40pt up — the viewer
                     // ordering: Like → Comment → Save → Cart.
@@ -549,7 +574,12 @@ private struct ClipCarouselView: View {
                         FrameSpinner(
                             fit: loaded,
                             placeholder: ClipThumbImage.cachedImage(url: fit.thumbURL),
-                            onScrubRelease: handleScrubRelease
+                            autoSpins: false,
+                            onScrubRelease: handleScrubRelease,
+                            onPassThroughChanged: { pageDragChanged($0) },
+                            onPassThroughEnded: { translation, predicted in
+                                pageDragEnded(translation: translation, predicted: predicted, step: step)
+                            }
                         )
                     } else if distance <= 2 {
                         ClipThumbImage(url: fit.thumbURL)
@@ -582,8 +612,78 @@ private struct ClipCarouselView: View {
                 }
             }
         }
-        .offset(x: center - slideWidth / 2 - CGFloat(index) * step)
+        .offset(
+            x: center - slideWidth / 2 - CGFloat(index) * step + dragOffset,
+            y: verticalNudge
+        )
         .animation(pageCurve, value: index)
+    }
+
+    /// CarouselView.carouselSwipeGesture, verbatim: the strip follows
+    /// the finger; mostly-vertical up opens the card, mostly-vertical
+    /// down closes it or enters dismiss mode; release either flips
+    /// the page past the threshold or springs back.
+    private func pageDragChanged(_ translation: CGSize) {
+        let horizontal = translation.width
+        let vertical = translation.height
+        let isMostlyVertical = abs(vertical) > abs(horizontal) * 2.0
+
+        if !cardVisible, isMostlyVertical, vertical < -50,
+           let fit = currentFit, !fit.products.isEmpty {
+            withAnimation(cardSpring) { cardVisible = true }
+            return
+        }
+
+        if !isDismissing, vertical > 50, isMostlyVertical {
+            if cardVisible {
+                withAnimation(cardSpring) { cardVisible = false }
+                return
+            }
+            isDismissing = true
+        }
+
+        if isDismissing {
+            verticalDismissOffset = max(0, vertical * 0.6)
+        } else {
+            dragOffset = horizontal
+            verticalNudge = max(-18, min(18, vertical * 0.16))
+        }
+    }
+
+    private func pageDragEnded(translation: CGSize, predicted: CGSize, step: CGFloat) {
+        if isDismissing {
+            if verticalDismissOffset > 80 || predicted.height > 400 {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                withAnimation(.timingCurve(0.32, 0.72, 0, 1, duration: 0.32)) {
+                    verticalDismissOffset = 0
+                }
+                isDismissing = false
+                onClose()
+                return
+            }
+            withAnimation(.timingCurve(0.32, 0.72, 0, 1, duration: 0.32)) {
+                verticalDismissOffset = 0
+            }
+            isDismissing = false
+            return
+        }
+
+        let threshold = max(48, step * 0.18)
+        var changed = false
+        if translation.width < -threshold, index < fits.count - 1 {
+            index += 1
+            changed = true
+        } else if translation.width > threshold, index > 0 {
+            index -= 1
+            changed = true
+        }
+        if changed {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
+        withAnimation(pageCurve) {
+            dragOffset = 0
+            verticalNudge = 0
+        }
     }
 
     /// CarouselView.ScrubSwipe, verbatim: a drag well past a third of
