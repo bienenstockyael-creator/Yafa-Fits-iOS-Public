@@ -14,6 +14,10 @@ struct ClipProfileSheet: View {
     let seedAvatarURL: URL?
     var onRequireApp: () -> Void
 
+    // Re-injected into the full-screen carousel below — presented
+    // contexts don't inherit it automatically.
+    @Environment(VibesEffectHost.self) private var vibesHost
+
     @State private var profile: ClipProfile?
     @State private var isLoading = true
     @State private var showCarousel = false
@@ -67,6 +71,7 @@ struct ClipProfileSheet: View {
                         onRequireApp()
                     }
                 )
+                .environment(vibesHost)
             }
         }
     }

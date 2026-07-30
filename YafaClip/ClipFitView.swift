@@ -104,6 +104,10 @@ struct ClipFitView: View {
                 )
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
+                // Presented contexts do NOT inherit the ZStack's
+                // .environment — without this, the carousel's vibe
+                // layers fatal-error on a missing observable.
+                .environment(vibesEffectHost)
             }
         }
     }
