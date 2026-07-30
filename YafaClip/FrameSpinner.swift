@@ -118,10 +118,33 @@ final class FrameSequence {
     private var data: [Int: Data] = [:]
     private var decoded: [Int: UIImage] = [:]
     private var decodeOrder: [Int] = []
-    private let decodeCacheLimit = 40
+    // 24 × ~3MB decoded ≈ 72MB ceiling per live spinner. Two can be
+    // alive at once (main card under a presented carousel page) — 40
+    // was fine solo but risked jetsam in the clip's budget once the
+    // profile carousel shipped.
+    private let decodeCacheLimit = 24
+    private var memoryWarningObserver: NSObjectProtocol?
 
     init(fit: ClipFit) {
         self.fit = fit
+        // Under memory pressure, dump decoded bitmaps (recreatable
+        // from the compressed store) before the OS dumps us.
+        memoryWarningObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.decoded.removeAll()
+                self?.decodeOrder.removeAll()
+            }
+        }
+    }
+
+    deinit {
+        if let memoryWarningObserver {
+            NotificationCenter.default.removeObserver(memoryWarningObserver)
+        }
     }
 
     var loadedCount: Int { data.count }

@@ -199,8 +199,16 @@ private struct ClipCarouselView: View {
 
             TabView(selection: $index) {
                 ForEach(Array(fits.enumerated()), id: \.element.id) { i, fit in
+                    // Paged TabView is NOT lazy — all pages mount at
+                    // once. Only the selected page gets the live card
+                    // (spinner + data fetch); the rest show the static
+                    // first frame. Without this, 12 spinners prefetch
+                    // whole frame sequences concurrently and the clip
+                    // gets jetsammed.
                     ClipCarouselPage(
                         outfitId: fit.id,
+                        thumbURL: fit.thumbURL,
+                        isActive: i == index,
                         onRequireApp: onRequireApp,
                         onClose: onClose
                     )
@@ -238,6 +246,8 @@ private struct ClipCarouselView: View {
 
 private struct ClipCarouselPage: View {
     let outfitId: String
+    let thumbURL: URL?
+    let isActive: Bool
     var onRequireApp: () -> Void
     var onClose: () -> Void
 
@@ -246,7 +256,7 @@ private struct ClipCarouselPage: View {
 
     var body: some View {
         Group {
-            if let fit {
+            if let fit, isActive {
                 ScrollView {
                     ClipFeedCard(
                         fit: fit,
@@ -266,12 +276,16 @@ private struct ClipCarouselPage: View {
                     .tracking(2.4)
                     .foregroundStyle(AppPalette.textFaint)
             } else {
-                ProgressView()
-                    .tint(AppPalette.textMuted)
+                // Inactive (or still-loading) page: the static first
+                // frame, so mid-swipe the neighbor shows the outfit
+                // without paying for a live spinner.
+                ClipThumbImage(url: thumbURL)
+                    .frame(height: 292)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .task {
-            guard fit == nil else { return }
+        .task(id: isActive) {
+            guard isActive, fit == nil else { return }
             if let loaded = await ClipDataService.loadFit(slugOrId: outfitId) {
                 fit = loaded
             } else {
