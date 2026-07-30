@@ -607,6 +607,16 @@ private struct ClipCarouselView: View {
                         Color.clear
                     }
                 }
+                // Content swaps (thumb ⇄ spinner, window-edge
+                // placeholders) must be INSTANT — the spinner's
+                // placeholder is the same frame, so the swap is
+                // pixel-invisible. Left animated, SwiftUI renders
+                // each swap as an in-place crossfade mid-flight,
+                // which read as outfits fading in at random spots
+                // instead of riding the strip in. Only the strip
+                // offset and the scale/opacity falloff (outside this
+                // transaction) animate.
+                .transaction { $0.animation = nil }
                 .frame(width: slideWidth, height: slideHeight)
                 .scaleEffect(max(0.82, 1.0 - Double(distance) * 0.16))
                 .opacity(slideOpacity)
