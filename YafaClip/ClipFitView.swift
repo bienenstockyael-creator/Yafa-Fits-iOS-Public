@@ -100,12 +100,6 @@ struct ClipFitView: View {
                         showProfile = false
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         showOverlay = true
-                    },
-                    onSelectFit: { outfitId in
-                        // Swap the tapped fit into the main card —
-                        // the clip becomes a browsable mini-feed.
-                        showProfile = false
-                        model.load(slug: outfitId)
                     }
                 )
                 .presentationDetents([.large])
@@ -167,8 +161,9 @@ struct ClipFitView: View {
 
 /// FeedPostCard's layout, fed by clip data. Every metric, color and
 /// modifier is the app's own (LayoutMetrics / AppPalette / appCard /
-/// appCircle / AppIcon / WeatherPill).
-private struct ClipFeedCard: View {
+/// appCircle / AppIcon / WeatherPill). Internal so the profile
+/// carousel can page through the same card.
+struct ClipFeedCard: View {
     let fit: ClipFit
     var onRequireApp: () -> Void
     var onOpenProfile: () -> Void

@@ -13,10 +13,11 @@ struct ClipProfileSheet: View {
     let seedUsername: String
     let seedAvatarURL: URL?
     var onRequireApp: () -> Void
-    var onSelectFit: (String) -> Void
 
     @State private var profile: ClipProfile?
     @State private var isLoading = true
+    @State private var showCarousel = false
+    @State private var carouselIndex = 0
 
     private let gridColumns = [
         GridItem(.flexible(), spacing: 24, alignment: .top),
@@ -51,6 +52,22 @@ struct ClipProfileSheet: View {
         .task {
             profile = await ClipDataService.loadProfile(userId: userId)
             isLoading = false
+        }
+        // Grid tap → full-screen carousel over the creator's fits,
+        // the app's profile flow: swipe between fits, back arrow
+        // returns to the grid.
+        .fullScreenCover(isPresented: $showCarousel) {
+            if let profile {
+                ClipCarouselView(
+                    fits: profile.fits,
+                    index: $carouselIndex,
+                    onClose: { showCarousel = false },
+                    onRequireApp: {
+                        showCarousel = false
+                        onRequireApp()
+                    }
+                )
+            }
         }
     }
 
@@ -146,16 +163,119 @@ struct ClipProfileSheet: View {
 
     private func grid(_ fits: [ClipProfileFit]) -> some View {
         LazyVGrid(columns: gridColumns, spacing: 42) {
-            ForEach(fits) { fit in
+            ForEach(Array(fits.enumerated()), id: \.element.id) { index, fit in
                 Button {
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                    onSelectFit(fit.id)
+                    carouselIndex = index
+                    showCarousel = true
                 } label: {
                     ClipThumbImage(url: fit.thumbURL)
                         .frame(height: 132)
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(SolidPressButtonStyle())
+            }
+        }
+    }
+}
+
+// MARK: - Carousel (the app's profile-grid → carousel flow)
+
+/// Full-screen, horizontally paged carousel over the creator's public
+/// fits. Each page lazily loads the full ClipFit and renders the same
+/// feed card as the clip's main screen — spin, like, vibe, comments,
+/// shop all live. Drag on the outfit scrubs the spin; swiping
+/// elsewhere on the page changes fits, mirroring the app's carousel
+/// gesture split.
+private struct ClipCarouselView: View {
+    let fits: [ClipProfileFit]
+    @Binding var index: Int
+    var onClose: () -> Void
+    var onRequireApp: () -> Void
+
+    var body: some View {
+        ZStack {
+            AppPalette.groupedBackground.ignoresSafeArea()
+
+            TabView(selection: $index) {
+                ForEach(Array(fits.enumerated()), id: \.element.id) { i, fit in
+                    ClipCarouselPage(
+                        outfitId: fit.id,
+                        onRequireApp: onRequireApp,
+                        onClose: onClose
+                    )
+                    .tag(i)
+                }
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .ignoresSafeArea(edges: .bottom)
+
+            // Back arrow — same affordance as UserProfileView's
+            // full-screen presentation.
+            VStack {
+                HStack {
+                    Button(action: onClose) {
+                        AppIcon(glyph: .chevronLeft, size: 14, color: AppPalette.iconPrimary)
+                            .frame(width: 40, height: 40)
+                            .appCircle(shadowRadius: 0, shadowY: 0)
+                    }
+                    .buttonStyle(SolidPressButtonStyle())
+                    Spacer()
+                }
+                .padding(.horizontal, LayoutMetrics.medium)
+                Spacer()
+            }
+
+            // The vibe burst renders in THIS hosting context too —
+            // the root layers sit beneath the full-screen cover.
+            VibesWaveOverlay()
+            VibesMorphLayer()
+            VibesParticleLayer()
+            VibesBannerLayer()
+        }
+    }
+}
+
+private struct ClipCarouselPage: View {
+    let outfitId: String
+    var onRequireApp: () -> Void
+    var onClose: () -> Void
+
+    @State private var fit: ClipFit?
+    @State private var failed = false
+
+    var body: some View {
+        Group {
+            if let fit {
+                ScrollView {
+                    ClipFeedCard(
+                        fit: fit,
+                        onRequireApp: onRequireApp,
+                        // Header tap here just returns to the profile
+                        // we came from.
+                        onOpenProfile: onClose
+                    )
+                    .padding(.horizontal, LayoutMetrics.small)
+                    .padding(.top, 64) // clear the back arrow
+                    .padding(.bottom, LayoutMetrics.xLarge)
+                }
+                .scrollIndicators(.hidden)
+            } else if failed {
+                Text("THIS FIT ISN’T AVAILABLE")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .tracking(2.4)
+                    .foregroundStyle(AppPalette.textFaint)
+            } else {
+                ProgressView()
+                    .tint(AppPalette.textMuted)
+            }
+        }
+        .task {
+            guard fit == nil else { return }
+            if let loaded = await ClipDataService.loadFit(slugOrId: outfitId) {
+                fit = loaded
+            } else {
+                failed = true
             }
         }
     }
