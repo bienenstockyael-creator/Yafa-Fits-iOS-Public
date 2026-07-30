@@ -6,8 +6,16 @@ import ImageIO
 // stores and actors the clip doesn't need. This one streams frames
 // from the CDN, keeps the COMPRESSED bytes (a few MB), and decodes
 // on demand through a small LRU so memory stays flat.
+//
+// `fit` is OPTIONAL so the carousel can keep ONE stable view type
+// per slide (like the app's RotatableOutfitImage): a nil fit renders
+// just the placeholder with no loader — flipping a slide live is a
+// prop change, never a view-identity change. Identity churn was the
+// root of the "outfits ghost-crossfade instead of sliding" bug: the
+// old slide subtree got removed+reinserted mid-page-animation and
+// rendered as a fading ghost at the old strip position.
 struct FrameSpinner: View {
-    let fit: ClipFit
+    let fit: ClipFit?
     /// Shown until the first frame decodes — the carousel passes the
     /// slide's cached first-frame thumbnail here so the static→live
     /// swap is pixel-invisible instead of a blank flash.
@@ -24,7 +32,7 @@ struct FrameSpinner: View {
     /// mostly vertical are ROUTED to the host instead of scrubbing —
     /// the app's RotatableOutfitImage edge-inset/direction rule, so
     /// page-drags, swipe-up (card) and swipe-down (dismiss) work over
-    /// the outfit.
+    /// the outfit. A nil-fit (inactive) slide routes EVERY drag.
     var onPassThroughChanged: ((CGSize) -> Void)? = nil
     var onPassThroughEnded: ((CGSize, CGSize) -> Void)? = nil
 
@@ -70,7 +78,10 @@ struct FrameSpinner: View {
                 DragGesture(minimumDistance: 2)
                     .onChanged { value in
                         if route == .undecided {
-                            if onPassThroughChanged != nil {
+                            if fit == nil, onPassThroughChanged != nil {
+                                // Inactive slide: everything pages.
+                                route = .pass
+                            } else if onPassThroughChanged != nil {
                                 let w = abs(value.translation.width)
                                 let h = abs(value.translation.height)
                                 let inEdge = value.startLocation.x < Self.passEdgeInset
@@ -92,7 +103,7 @@ struct FrameSpinner: View {
                         case .pass:
                             onPassThroughChanged?(value.translation)
                         case .scrub:
-                            guard let loader, loader.loadedCount > 1 else { return }
+                            guard let fit, let loader, loader.loadedCount > 1 else { return }
                             if !dragging {
                                 dragMinX = value.translation.width
                                 dragMaxX = value.translation.width
@@ -137,9 +148,19 @@ struct FrameSpinner: View {
                     }
             )
         }
-        .task(id: fit.outfitId) {
+        .task(id: fit?.outfitId) {
+            guard let fit else {
+                // Inactive: shed the loader and rest on the placeholder.
+                loader = nil
+                displayed = nil
+                framePos = 0
+                velocity = 0
+                return
+            }
             let sequence = FrameSequence(fit: fit)
             loader = sequence
+            framePos = 0
+            velocity = 0
             // First frame ASAP, then the rest stream in behind it.
             if let first = await sequence.frame(0) {
                 displayed = first
@@ -173,7 +194,7 @@ struct FrameSpinner: View {
     }
 
     private func wrap(_ value: Double) -> Double {
-        let n = Double(max(fit.frameCount, 1))
+        let n = Double(max(fit?.frameCount ?? 1, 1))
         return (value.truncatingRemainder(dividingBy: n) + n).truncatingRemainder(dividingBy: n)
     }
 
@@ -225,11 +246,6 @@ final class FrameSequence {
 
     var loadedCount: Int { data.count }
     func hasFrame(_ index: Int) -> Bool { data[index] != nil }
-
-    private func url(_ index: Int) -> URL? {
-        URL(string: "https://\(fit.frameBase)\(String(format: "%05d", index)).\(fit.frameExt)")
-            ?? URL(string: "\(fit.frameBase)\(String(format: "%05d", index)).\(fit.frameExt)")
-    }
 
     private func fetch(_ index: Int) async {
         guard data[index] == nil else { return }

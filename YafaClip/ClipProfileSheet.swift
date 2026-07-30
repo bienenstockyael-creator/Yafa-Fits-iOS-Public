@@ -502,10 +502,14 @@ private struct ClipCarouselView: View {
                 // Dismiss pull moves EVERYTHING — slides, chrome,
                 // action row, card — fading and slightly shrinking
                 // from the top as it goes (CarouselView, verbatim).
+                // NO .compositingGroup() here even though the app has
+                // one: rasterizing this subtree made Core Animation
+                // render every index change as a full-screen layer
+                // crossfade (outfits dissolving in place instead of
+                // the strip sliding).
                 .offset(y: verticalDismissOffset)
                 .opacity(isDismissing ? max(0.0, 1.0 - (verticalDismissOffset / 300.0)) : 1.0)
                 .scaleEffect(isDismissing ? max(0.9, 1.0 - (verticalDismissOffset / 1500.0)) : 1.0, anchor: .top)
-                .compositingGroup()
             }
 
             // Vibe layers live in this hosting context so bursts
@@ -515,6 +519,7 @@ private struct ClipCarouselView: View {
             VibesParticleLayer()
             VibesBannerLayer()
         }
+        .onAppear { NSLog("[ClipCarousel] BODY identity created") }
         .animation(cardSpring, value: cardVisible)
         .task(id: index) {
             // Current fit loads eagerly; neighbors prefetch in the
@@ -550,6 +555,22 @@ private struct ClipCarouselView: View {
                 .presentationDragIndicator(.visible)
             }
         }
+        #if DEBUG
+        .task {
+            // Headless paging driver for screenshot-burst verification:
+            // page right three times, then left three times.
+            guard ProcessInfo.processInfo.environment["CLIP_AUTO_PAGE"] == "1" else { return }
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
+            for _ in 0..<3 {
+                withAnimation(pageCurve) { if index < fits.count - 1 { index += 1 } }
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+            }
+            for _ in 0..<3 {
+                withAnimation(pageCurve) { if index > 0 { index -= 1 } }
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+            }
+        }
+        #endif
     }
 
     // MARK: chrome
@@ -587,12 +608,16 @@ private struct ClipCarouselView: View {
                     ? (liveSlideVisible ? falloff : 0)
                     : (chromeVisible ? falloff : 0)
                 Group {
-                    // Only the current slide is a live spinner; ±2
-                    // neighbors show static first frames; the rest
-                    // are layout placeholders (memory + network).
-                    if i == index, let loaded = loadedFits[fit.id] {
+                    // ONE stable view type per windowed slide (the
+                    // app's architecture): going live is a PROP change
+                    // (fit nil → loaded), never an identity change —
+                    // identity churn made removed slides render as
+                    // fading ghosts at the old strip position. Only
+                    // beyond ±2 do slides become placeholders, and
+                    // that swap happens fully off-screen.
+                    if distance <= 2 {
                         FrameSpinner(
-                            fit: loaded,
+                            fit: i == index ? loadedFits[fit.id] : nil,
                             placeholder: ClipThumbImage.cachedImage(url: fit.thumbURL),
                             autoSpins: false,
                             onScrubRelease: handleScrubRelease,
@@ -601,43 +626,48 @@ private struct ClipCarouselView: View {
                                 pageDragEnded(translation: translation, predicted: predicted, step: step)
                             }
                         )
-                    } else if distance <= 2 {
-                        ClipThumbImage(url: fit.thumbURL)
                     } else {
                         Color.clear
                     }
                 }
-                // Content swaps (thumb ⇄ spinner, window-edge
-                // placeholders) must be INSTANT — the spinner's
-                // placeholder is the same frame, so the swap is
-                // pixel-invisible. Left animated, SwiftUI renders
-                // each swap as an in-place crossfade mid-flight,
-                // which read as outfits fading in at random spots
-                // instead of riding the strip in. Only the strip
-                // offset and the scale/opacity falloff (outside this
-                // transaction) animate.
-                .transaction { $0.animation = nil }
                 .frame(width: slideWidth, height: slideHeight)
+                #if DEBUG
+                .overlay {
+                    if ProcessInfo.processInfo.environment["CLIP_DEBUG_BORDERS"] == "1" {
+                        ZStack(alignment: .topLeading) {
+                            Rectangle().strokeBorder(i == index ? Color.red : Color.blue, lineWidth: 3)
+                            Text("\(i)")
+                                .font(.system(size: 28, weight: .black))
+                                .foregroundStyle(i == index ? Color.red : Color.blue)
+                                .padding(8)
+                        }
+                        .allowsHitTesting(false)
+                    }
+                }
+                #endif
                 .scaleEffect(max(0.82, 1.0 - Double(distance) * 0.16))
                 .opacity(slideOpacity)
                 .background {
                     // Report the current slide's frame so the hero
-                    // knows where to land / launch from. ONLY while
-                    // the hero choreography is active — continuous
-                    // reporting during page animations re-rendered
-                    // the whole sheet every frame (visible jank).
-                    // The rect is index-independent (the current
-                    // slide always occupies the same spot), so the
-                    // value captured during open stays valid for the
-                    // close flight.
-                    if i == index, !liveSlideVisible {
-                        GeometryReader { geo in
-                            Color.clear
-                                .onAppear { onSlideFrame(geo.frame(in: .named(spaceName))) }
-                                .onChange(of: geo.frame(in: .named(spaceName))) { _, frame in
+                    // knows where to land / launch from. The reader is
+                    // UNCONDITIONAL (structural stability!) but only
+                    // forwards while the hero choreography is active —
+                    // continuous reporting during page animations
+                    // re-rendered the whole sheet every frame. The
+                    // rect is index-independent, so the value captured
+                    // during open stays valid for the close flight.
+                    GeometryReader { geo in
+                        Color.clear
+                            .onAppear {
+                                if i == index, !liveSlideVisible {
+                                    onSlideFrame(geo.frame(in: .named(spaceName)))
+                                }
+                            }
+                            .onChange(of: geo.frame(in: .named(spaceName))) { _, frame in
+                                if i == index, !liveSlideVisible {
                                     onSlideFrame(frame)
                                 }
-                        }
+                            }
                     }
                 }
             }
@@ -647,6 +677,7 @@ private struct ClipCarouselView: View {
             y: verticalNudge
         )
         .animation(pageCurve, value: index)
+        .onAppear { NSLog("[ClipCarousel] STRIP identity created") }
     }
 
     /// CarouselView.carouselSwipeGesture, verbatim: the strip follows
