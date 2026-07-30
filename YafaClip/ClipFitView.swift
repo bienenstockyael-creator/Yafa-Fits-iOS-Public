@@ -9,6 +9,7 @@ import StoreKit
 struct ClipFitView: View {
     @Bindable var model: ClipModel
     @State private var showOverlay = false
+    @State private var showProfile = false
     // The app's root-level vibe effect portal — the wave shader,
     // particle burst and hero morph render above the card exactly
     // as they do above the feed.
@@ -30,12 +31,19 @@ struct ClipFitView: View {
             case .ready:
                 if let fit = model.fit {
                     ScrollView {
-                        ClipFeedCard(fit: fit, onRequireApp: {
-                            // Social actions need an account — the
-                            // clip's answer is the install overlay.
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            showOverlay = true
-                        })
+                        ClipFeedCard(
+                            fit: fit,
+                            onRequireApp: {
+                                // Social actions need an account — the
+                                // clip's answer is the install overlay.
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                showOverlay = true
+                            },
+                            onOpenProfile: {
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                showProfile = true
+                            }
+                        )
                         .padding(.horizontal, LayoutMetrics.small)
                         .padding(.top, LayoutMetrics.large)
                         .padding(.bottom, 120) // clear the install banner
@@ -81,6 +89,28 @@ struct ClipFitView: View {
         }
         .appStoreOverlay(isPresented: $showOverlay) {
             SKOverlay.AppClipConfiguration(position: .bottom)
+        }
+        .sheet(isPresented: $showProfile) {
+            if let fit = model.fit {
+                ClipProfileSheet(
+                    userId: fit.userId,
+                    seedUsername: fit.username,
+                    seedAvatarURL: fit.avatarURL,
+                    onRequireApp: {
+                        showProfile = false
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        showOverlay = true
+                    },
+                    onSelectFit: { outfitId in
+                        // Swap the tapped fit into the main card —
+                        // the clip becomes a browsable mini-feed.
+                        showProfile = false
+                        model.load(slug: outfitId)
+                    }
+                )
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+            }
         }
     }
 
@@ -141,6 +171,7 @@ struct ClipFitView: View {
 private struct ClipFeedCard: View {
     let fit: ClipFit
     var onRequireApp: () -> Void
+    var onOpenProfile: () -> Void
     @State private var cartOpen = true
     // Playful local reactions — they fill and count up like the app's,
     // but a clip has no account, so they live only in this moment.
@@ -154,9 +185,14 @@ private struct ClipFeedCard: View {
     @State private var showComments = false
     @Environment(\.openURL) private var openURL
 
-    init(fit: ClipFit, onRequireApp: @escaping () -> Void) {
+    init(
+        fit: ClipFit,
+        onRequireApp: @escaping () -> Void,
+        onOpenProfile: @escaping () -> Void
+    ) {
         self.fit = fit
         self.onRequireApp = onRequireApp
+        self.onOpenProfile = onOpenProfile
         _vibeCount = State(initialValue: fit.vibeCount)
     }
 
@@ -192,17 +228,24 @@ private struct ClipFeedCard: View {
 
     private var header: some View {
         HStack(spacing: LayoutMetrics.xSmall) {
-            avatar
+            // Avatar + username open the creator's profile — same
+            // affordance as the app's public feed.
+            Button(action: onOpenProfile) {
+                HStack(spacing: LayoutMetrics.xSmall) {
+                    avatar
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(fit.username)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(AppPalette.textStrong)
-                Text(fit.dateLabel)
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .tracking(1.3)
-                    .foregroundStyle(AppPalette.textFaint)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(fit.username)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppPalette.textStrong)
+                        Text(fit.dateLabel)
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .tracking(1.3)
+                            .foregroundStyle(AppPalette.textFaint)
+                    }
+                }
             }
+            .buttonStyle(SolidPressButtonStyle())
 
             Spacer()
 

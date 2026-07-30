@@ -5,6 +5,7 @@ import Foundation
 
 struct ClipFit: Sendable {
     let outfitId: String
+    let userId: String
     let username: String
     let avatarURL: URL?
     let caption: String?
@@ -33,6 +34,21 @@ struct ClipProduct: Identifiable, Sendable {
     let name: String
     let imageURL: URL?
     let shopURL: URL?
+}
+
+struct ClipProfile: Sendable {
+    let username: String
+    let displayName: String
+    let avatarURL: URL?
+    let bio: String?
+    let outfitCount: Int
+    let followerCount: Int
+    let fits: [ClipProfileFit]
+}
+
+struct ClipProfileFit: Identifiable, Sendable {
+    let id: String       // outfit id — loadable via loadFit(slugOrId:)
+    let thumbURL: URL?   // first spin frame, shown static in the grid
 }
 
 enum ClipDataService {
@@ -161,6 +177,7 @@ enum ClipDataService {
 
         return ClipFit(
             outfitId: outfit.id,
+            userId: outfit.user_id,
             username: profile?.username ?? "yafa",
             avatarURL: profile?.avatar_url.flatMap(URL.init(string:)),
             caption: outfit.caption,
@@ -179,6 +196,60 @@ enum ClipDataService {
             likeCount: await likes,
             vibeCount: await vibes,
             comments: comments
+        )
+    }
+
+    /// Creator profile for the clip's profile sheet: header fields,
+    /// public counts, and the 12 most recent public fits (capped —
+    /// the clip is a taste, the app is the archive).
+    static func loadProfile(userId: String) async -> ClipProfile? {
+        struct FullProfileRow: Decodable {
+            let username: String?
+            let display_name: String?
+            let avatar_url: String?
+            let bio: String?
+        }
+        struct ThumbRow: Decodable {
+            let id: String
+            let folder: String?
+            let prefix: String?
+            let frame_ext: String?
+            let remote_base_url: String?
+        }
+
+        async let profileData = get("/rest/v1/profiles?id=eq.\(userId)&select=username,display_name,avatar_url,bio&limit=1")
+        async let fitData = get("/rest/v1/outfits?user_id=eq.\(userId)&is_public=eq.true&select=id,folder,prefix,frame_ext,remote_base_url&order=created_at.desc&limit=12")
+        async let outfitTotal = count("/rest/v1/outfits?user_id=eq.\(userId)&is_public=eq.true&select=id")
+        async let followerTotal = count("/rest/v1/follows?following_id=eq.\(userId)&select=follower_id")
+
+        guard let profile = (try? JSONDecoder().decode([FullProfileRow].self, from: await profileData ?? Data()))?.first
+        else { return nil }
+
+        let thumbRows = (try? JSONDecoder().decode([ThumbRow].self, from: await fitData ?? Data())) ?? []
+        let fits: [ClipProfileFit] = thumbRows.compactMap { row in
+            guard let folder = row.folder, let prefix = row.prefix,
+                  let base = row.remote_base_url, !base.isEmpty else { return nil }
+            var ext = (row.frame_ext ?? "webp").lowercased().trimmingCharacters(in: .whitespaces)
+            if ext.hasPrefix(".") { ext.removeFirst() }
+            if ext == "webmp" { ext = "webp" }
+            let trimmed = base.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            let root = trimmed.hasPrefix("http") ? trimmed : "https://\(trimmed)"
+            return ClipProfileFit(
+                id: row.id,
+                thumbURL: URL(string: "\(root)/\(folder)/\(prefix)00000.\(ext)")
+            )
+        }
+
+        let username = profile.username ?? "yafa"
+        let display = (profile.display_name?.isEmpty == false) ? profile.display_name! : username
+        return ClipProfile(
+            username: username,
+            displayName: display,
+            avatarURL: profile.avatar_url.flatMap(URL.init(string:)),
+            bio: profile.bio,
+            outfitCount: await outfitTotal,
+            followerCount: await followerTotal,
+            fits: fits
         )
     }
 
