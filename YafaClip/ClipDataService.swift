@@ -10,6 +10,9 @@ struct ClipFit: Sendable {
     let avatarURL: URL?
     let caption: String?
     let dateLabel: String
+    /// dd/MM/yy — the carousel chrome's date format.
+    let numericDateLabel: String
+    let location: String?
     let weather: Weather?
     let frameCount: Int
     let isRotationReversed: Bool
@@ -92,6 +95,7 @@ enum ClipDataService {
         let remote_base_url: String?
         let caption: String?
         let date: String?
+        let location: String?
         let weather_temp_c: Int?
         let weather_temp_f: Int?
         let weather_condition: String?
@@ -121,7 +125,7 @@ enum ClipDataService {
     }
 
     static func loadFit(slugOrId: String) async -> ClipFit? {
-        let cols = "id,user_id,folder,prefix,frame_ext,frame_count,is_rotation_reversed,remote_base_url,caption,date,weather_temp_c,weather_temp_f,weather_condition"
+        let cols = "id,user_id,folder,prefix,frame_ext,frame_count,is_rotation_reversed,remote_base_url,caption,date,location,weather_temp_c,weather_temp_f,weather_condition"
         let esc = slugOrId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? slugOrId
 
         var row: OutfitRow?
@@ -182,6 +186,8 @@ enum ClipDataService {
             avatarURL: profile?.avatar_url.flatMap(URL.init(string:)),
             caption: outfit.caption,
             dateLabel: Self.dateLabel(outfit.date),
+            numericDateLabel: Self.numericDateLabel(outfit.date),
+            location: outfit.location?.trimmingCharacters(in: .whitespacesAndNewlines),
             weather: outfit.weather_condition.flatMap { condition in
                 guard !condition.isEmpty,
                       let tempC = outfit.weather_temp_c else { return nil }
@@ -261,5 +267,17 @@ enum ClipDataService {
         let out = DateFormatter()
         out.dateFormat = "EEE MMM d"
         return out.string(from: date).uppercased()
+    }
+
+    /// Outfit.numericDateLabel's non-Fahrenheit branch (dd/MM/yy).
+    private static func numericDateLabel(_ iso: String?) -> String {
+        guard let iso else { return "" }
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        guard let date = f.date(from: iso) else { return iso }
+        let out = DateFormatter()
+        out.locale = Locale(identifier: "en_US_POSIX")
+        out.dateFormat = "dd/MM/yy"
+        return out.string(from: date)
     }
 }

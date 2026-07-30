@@ -419,8 +419,9 @@ struct ClipFeedCard: View {
 
 
 /// Read-only comment thread — the same rows the app renders, with a
-/// join CTA where the composer would be.
-private struct ClipCommentsSheet: View {
+/// join CTA where the composer would be. Internal: the profile
+/// carousel presents it too.
+struct ClipCommentsSheet: View {
     let comments: [ClipComment]
     var onRequireApp: () -> Void
 

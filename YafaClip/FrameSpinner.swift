@@ -8,8 +8,15 @@ import ImageIO
 // on demand through a small LRU so memory stays flat.
 struct FrameSpinner: View {
     let fit: ClipFit
+    /// Fired when a scrub drag ends, with (netTranslation,
+    /// monotonicityRatio). The carousel uses the app's ScrubSwipe
+    /// rule — a long, mostly-one-direction drag flips the page,
+    /// a back-and-forth scrub never does.
+    var onScrubRelease: ((CGFloat, CGFloat) -> Void)? = nil
 
     @State private var loader: FrameSequence?
+    @State private var dragMinX: CGFloat = 0
+    @State private var dragMaxX: CGFloat = 0
     @State private var displayed: UIImage?
     @State private var framePos: Double = 0
     @State private var velocity: Double = 0
@@ -40,6 +47,12 @@ struct FrameSpinner: View {
                 DragGesture(minimumDistance: 2)
                     .onChanged { value in
                         guard let loader, loader.loadedCount > 1 else { return }
+                        if !dragging {
+                            dragMinX = value.translation.width
+                            dragMaxX = value.translation.width
+                        }
+                        dragMinX = min(dragMinX, value.translation.width)
+                        dragMaxX = max(dragMaxX, value.translation.width)
                         dragging = true
                         let now = ProcessInfo.processInfo.systemUptime
                         let last = lastDragX ?? value.translation.width
@@ -57,10 +70,13 @@ struct FrameSpinner: View {
                         velocity = frameDelta * (0.01667 / dt)
                         show(frame: Int(framePos))
                     }
-                    .onEnded { _ in
+                    .onEnded { value in
                         dragging = false
                         lastDragX = nil
                         lastDragTime = nil
+                        let net = value.translation.width
+                        let range = max(1, dragMaxX - dragMinX)
+                        onScrubRelease?(net, abs(net) / range)
                     }
             )
         }

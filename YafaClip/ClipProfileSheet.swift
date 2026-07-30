@@ -184,118 +184,377 @@ struct ClipProfileSheet: View {
     }
 }
 
-// MARK: - Carousel (the app's profile-grid → carousel flow)
+// MARK: - Carousel (CarouselView's viewer recipe, clip-native)
 
-/// Full-screen, horizontally paged carousel over the creator's public
-/// fits. Each page lazily loads the full ClipFit and renders the same
-/// feed card as the clip's main screen — spin, like, vibe, comments,
-/// shop all live. Drag on the outfit scrubs the spin; swiping
-/// elsewhere on the page changes fits, mirroring the app's carousel
-/// gesture split.
+/// The app's carousel, viewer mode: pageBackground backdrop + 10%
+/// dim, weather pill + date · location chrome up top, the outfit
+/// slide big in the middle with faded/scaled neighbors, chevron nav
+/// arrows, a Like / Comment / Save / Cart circle row pinned at the
+/// bottom, and the cart toggling the detail card (product cells with
+/// BUY pills) that shrinks the slide upward. Scrub spins; a long
+/// one-direction drag flips the page (the app's ScrubSwipe rule).
+/// Tap the backdrop to close the card, then to dismiss.
 private struct ClipCarouselView: View {
     let fits: [ClipProfileFit]
     @Binding var index: Int
     var onClose: () -> Void
     var onRequireApp: () -> Void
 
+    @State private var loadedFits: [String: ClipFit] = [:]
+    @State private var cardVisible = false
+    @State private var likedIds: Set<String> = []
+    @State private var savedIds: Set<String> = []
+    @State private var showComments = false
+    @Environment(\.openURL) private var openURL
+
+    // CarouselView's metrics, verbatim.
+    private static let slideTopInset: CGFloat = LayoutMetrics.touchTarget + LayoutMetrics.xxSmall
+    private static let cardInset: CGFloat = 12
+    private static let actionRowReserve: CGFloat = 40 + 88 - 18
+    private static let slideHeightFactor: CGFloat = 0.58 * 1.2
+    private static let minSlideHeight: CGFloat = 320
+    private static let cardExpandSlideShrink: CGFloat = 0.34
+    private static let slideExpandTranslation: CGFloat = -20
+    private let gap: CGFloat = LayoutMetrics.xSmall
+    private let pageCurve = Animation.timingCurve(0.32, 0.72, 0, 1, duration: 0.56)
+    private let cardSpring = Animation.spring(response: 0.4, dampingFraction: 0.78)
+
+    private var currentFit: ClipFit? {
+        guard fits.indices.contains(index) else { return nil }
+        return loadedFits[fits[index].id]
+    }
+    private var cardProgress: CGFloat { cardVisible ? 1 : 0 }
+
     var body: some View {
         ZStack {
-            AppPalette.groupedBackground.ignoresSafeArea()
-
-            TabView(selection: $index) {
-                ForEach(Array(fits.enumerated()), id: \.element.id) { i, fit in
-                    // Paged TabView is NOT lazy — all pages mount at
-                    // once. Only the selected page gets the live card
-                    // (spinner + data fetch); the rest show the static
-                    // first frame. Without this, 12 spinners prefetch
-                    // whole frame sequences concurrently and the clip
-                    // gets jetsammed.
-                    ClipCarouselPage(
-                        outfitId: fit.id,
-                        thumbURL: fit.thumbURL,
-                        isActive: i == index,
-                        onRequireApp: onRequireApp,
-                        onClose: onClose
-                    )
-                    .tag(i)
-                }
-            }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            .ignoresSafeArea(edges: .bottom)
-
-            // Back arrow — same affordance as UserProfileView's
-            // full-screen presentation.
-            VStack {
-                HStack {
-                    Button(action: onClose) {
-                        AppIcon(glyph: .chevronLeft, size: 14, color: AppPalette.iconPrimary)
-                            .frame(width: 40, height: 40)
-                            .appCircle(shadowRadius: 0, shadowY: 0)
+            // Backdrop: tap closes the card first, then dismisses —
+            // CarouselView's two-stage tap-outside semantics.
+            AppPalette.pageBackground
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    if cardVisible {
+                        withAnimation(cardSpring) { cardVisible = false }
+                    } else {
+                        onClose()
                     }
-                    .buttonStyle(SolidPressButtonStyle())
-                    Spacer()
                 }
-                .padding(.horizontal, LayoutMetrics.medium)
-                Spacer()
+
+            Color.black.opacity(0.1)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+
+            GeometryReader { geo in
+                let slideWidth = geo.size.width - Self.cardInset * 2
+                let usable = geo.size.height - Self.slideTopInset - Self.actionRowReserve
+                let slideHeight = max(Self.minSlideHeight, usable * Self.slideHeightFactor)
+                let step = slideWidth + gap
+
+                ZStack(alignment: .bottom) {
+                    VStack(spacing: LayoutMetrics.small) {
+                        // Weather slot always reserved so the chrome
+                        // never shifts when a fit has no weather.
+                        ZStack {
+                            if let weather = currentFit?.weather, !weather.condition.isEmpty {
+                                WeatherPill(weather: weather, useFahrenheit: false)
+                            }
+                        }
+                        .frame(height: 36)
+                        .offset(y: 3 * (1.0 - cardProgress))
+
+                        dateLocationLabel
+
+                        slideStrip(slideWidth: slideWidth, slideHeight: slideHeight, step: step, center: geo.size.width / 2)
+                            .frame(height: slideHeight)
+                            .scaleEffect(1.0 - (cardProgress * Self.cardExpandSlideShrink), anchor: .top)
+                            .overlay {
+                                navButtons
+                                    .padding(.horizontal, Self.cardInset)
+                            }
+
+                        Spacer(minLength: 0)
+                    }
+                    .offset(y: Self.slideExpandTranslation * cardProgress)
+                    .animation(cardSpring, value: cardVisible)
+                    .padding(.top, Self.slideTopInset)
+
+                    // Bottom action row, pinned 40pt up — the viewer
+                    // ordering: Like → Comment → Save → Cart.
+                    if let fit = currentFit {
+                        VStack(spacing: LayoutMetrics.xSmall) {
+                            actionRow(fit)
+                            // CarouselView keeps an invisible Delete
+                            // placeholder on viewer surfaces so the
+                            // circles sit at the owner-mode height.
+                            Text("Delete")
+                                .font(.system(size: 13))
+                                .padding(.vertical, 6)
+                                .opacity(0)
+                        }
+                        .padding(.bottom, 40)
+                        .opacity(cardVisible ? 0 : 1)
+                        .allowsHitTesting(!cardVisible)
+                        .animation(cardSpring, value: cardVisible)
+                    }
+
+                    // Detail card — viewer mode: the product cells
+                    // with BUY pills.
+                    if cardVisible, let fit = currentFit {
+                        detailCard(fit)
+                            .padding(.horizontal, Self.cardInset)
+                            .padding(.bottom, 30)
+                            .transition(
+                                .scale(scale: 0.92, anchor: .bottom)
+                                    .combined(with: .move(edge: .bottom))
+                                    .combined(with: .opacity)
+                            )
+                    }
+                }
             }
 
-            // The vibe burst renders in THIS hosting context too —
-            // the root layers sit beneath the full-screen cover.
+            // Vibe layers live in this hosting context so bursts
+            // render above the cover.
             VibesWaveOverlay()
             VibesMorphLayer()
             VibesParticleLayer()
             VibesBannerLayer()
         }
-    }
-}
-
-private struct ClipCarouselPage: View {
-    let outfitId: String
-    let thumbURL: URL?
-    let isActive: Bool
-    var onRequireApp: () -> Void
-    var onClose: () -> Void
-
-    @State private var fit: ClipFit?
-    @State private var failed = false
-
-    var body: some View {
-        Group {
-            if let fit, isActive {
-                ScrollView {
-                    ClipFeedCard(
-                        fit: fit,
-                        onRequireApp: onRequireApp,
-                        // Header tap here just returns to the profile
-                        // we came from.
-                        onOpenProfile: onClose
-                    )
-                    .padding(.horizontal, LayoutMetrics.small)
-                    .padding(.top, 64) // clear the back arrow
-                    .padding(.bottom, LayoutMetrics.xLarge)
-                }
-                .scrollIndicators(.hidden)
-            } else if failed {
-                Text("THIS FIT ISN’T AVAILABLE")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .tracking(2.4)
-                    .foregroundStyle(AppPalette.textFaint)
-            } else {
-                // Inactive (or still-loading) page: the static first
-                // frame, so mid-swipe the neighbor shows the outfit
-                // without paying for a live spinner.
-                ClipThumbImage(url: thumbURL)
-                    .frame(height: 292)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .animation(cardSpring, value: cardVisible)
+        .task(id: index) {
+            guard fits.indices.contains(index) else { return }
+            let id = fits[index].id
+            guard loadedFits[id] == nil else { return }
+            if let fit = await ClipDataService.loadFit(slugOrId: id) {
+                loadedFits[id] = fit
             }
         }
-        .task(id: isActive) {
-            guard isActive, fit == nil else { return }
-            if let loaded = await ClipDataService.loadFit(slugOrId: outfitId) {
-                fit = loaded
-            } else {
-                failed = true
+        .sheet(isPresented: $showComments) {
+            if let fit = currentFit {
+                ClipCommentsSheet(comments: fit.comments, onRequireApp: {
+                    showComments = false
+                    onRequireApp()
+                })
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
             }
+        }
+    }
+
+    // MARK: chrome
+
+    private var dateLocationLabel: some View {
+        HStack(spacing: 8) {
+            Text(currentFit?.numericDateLabel ?? "")
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .tracking(1.8)
+                .foregroundStyle(AppPalette.textFaint)
+            if let location = currentFit?.location, !location.isEmpty {
+                Text("·")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundStyle(AppPalette.textFaint)
+                Text(location.uppercased())
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .tracking(1.8)
+                    .foregroundStyle(AppPalette.textFaint)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: slides
+
+    private func slideStrip(slideWidth: CGFloat, slideHeight: CGFloat, step: CGFloat, center: CGFloat) -> some View {
+        HStack(spacing: gap) {
+            ForEach(Array(fits.enumerated()), id: \.element.id) { i, fit in
+                let distance = abs(i - index)
+                Group {
+                    // Only the current slide is a live spinner; ±2
+                    // neighbors show static first frames; the rest
+                    // are layout placeholders (memory + network).
+                    if i == index, let loaded = loadedFits[fit.id] {
+                        FrameSpinner(fit: loaded, onScrubRelease: handleScrubRelease)
+                    } else if distance <= 2 {
+                        ClipThumbImage(url: fit.thumbURL)
+                    } else {
+                        Color.clear
+                    }
+                }
+                .frame(width: slideWidth, height: slideHeight)
+                .scaleEffect(max(0.82, 1.0 - Double(distance) * 0.16))
+                .opacity(max(0.38, 1.0 - Double(distance) * 0.34))
+            }
+        }
+        .offset(x: center - slideWidth / 2 - CGFloat(index) * step)
+        .animation(pageCurve, value: index)
+    }
+
+    /// CarouselView.ScrubSwipe, verbatim: a drag well past a third of
+    /// the slide that ran mostly one direction flips the page; a
+    /// back-and-forth scrub never does.
+    private func handleScrubRelease(_ net: CGFloat, _ monotonicity: CGFloat) {
+        let width = UIScreen.main.bounds.width - Self.cardInset * 2
+        let threshold = max(130, width * 0.35)
+        guard abs(net) > threshold, monotonicity >= 0.80 else { return }
+        let direction = net < 0 ? 1 : -1
+        let proposed = index + direction
+        guard fits.indices.contains(proposed) else { return }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        withAnimation(pageCurve) { index = proposed }
+    }
+
+    private var navButtons: some View {
+        HStack {
+            navButton(icon: .chevronLeft, disabled: index <= 0) { index -= 1 }
+            Spacer()
+            navButton(icon: .chevronRight, disabled: index >= fits.count - 1) { index += 1 }
+        }
+    }
+
+    private func navButton(icon: AppIconGlyph, disabled: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            withAnimation(pageCurve) { action() }
+        } label: {
+            AppIcon(glyph: icon, size: 16, color: AppPalette.iconPrimary)
+                .frame(width: LayoutMetrics.touchTarget, height: LayoutMetrics.touchTarget)
+                .appCircle(shadowRadius: 10, shadowY: 5)
+                .padding(20)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(SolidPressButtonStyle())
+        .opacity(disabled ? 0.35 : 1)
+        .disabled(disabled)
+    }
+
+    // MARK: action row
+
+    private func actionRow(_ fit: ClipFit) -> some View {
+        HStack(spacing: LayoutMetrics.medium) {
+            circleButton(glyph: .heart, filled: likedIds.contains(fit.outfitId)) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
+                    toggle(&likedIds, fit.outfitId)
+                }
+            }
+            circleButton(glyph: .comment) {
+                if fit.comments.isEmpty {
+                    onRequireApp()
+                } else {
+                    showComments = true
+                }
+            }
+            circleButton(glyph: .bookmark, filled: savedIds.contains(fit.outfitId)) {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    toggle(&savedIds, fit.outfitId)
+                }
+            }
+            if !fit.products.isEmpty {
+                circleButton(glyph: .cart) {
+                    withAnimation(cardSpring) { cardVisible.toggle() }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func circleButton(glyph: AppIconGlyph, filled: Bool = false, action: @escaping () -> Void) -> some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            action()
+        } label: {
+            AppIcon(glyph: glyph, size: 16, color: AppPalette.iconPrimary, filled: filled)
+                .frame(width: 48, height: 48)
+                .appCircle()
+        }
+        .buttonStyle(SolidPressButtonStyle())
+    }
+
+    private func toggle(_ set: inout Set<String>, _ id: String) {
+        if set.contains(id) { set.remove(id) } else { set.insert(id) }
+    }
+
+    // MARK: detail card
+
+    private func detailCard(_ fit: ClipFit) -> some View {
+        VStack(alignment: .leading, spacing: 18) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 20) {
+                    ForEach(fit.products) { product in
+                        productCell(product)
+                    }
+                }
+            }
+        }
+        .padding(LayoutMetrics.small)
+        .appCard(cornerRadius: LayoutMetrics.cardCornerRadius)
+        .gesture(
+            DragGesture(minimumDistance: 20)
+                .onEnded { value in
+                    if value.translation.height > 50 || value.predictedEndTranslation.height > 200 {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        withAnimation(cardSpring) { cardVisible = false }
+                    }
+                }
+        )
+    }
+
+    /// CarouselDetailCard.productCell, viewer mode: 100pt thumbnail,
+    /// two-line name slot, BUY capsule.
+    private func productCell(_ product: ClipProduct) -> some View {
+        VStack(spacing: 16) {
+            VStack(spacing: 8) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(Color.white.opacity(0.28))
+                    AsyncImage(url: product.imageURL) { image in
+                        image.resizable().scaledToFit().padding(5)
+                    } placeholder: {
+                        Color.clear
+                    }
+                }
+                .frame(width: 100, height: 100)
+
+                Text(product.name)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppPalette.textMuted)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .frame(width: 100, height: 32, alignment: .top)
+            }
+
+            Button {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                openShop(product)
+            } label: {
+                Text("BUY")
+                    .font(.system(size: 13, weight: .semibold))
+                    .tracking(0.8)
+                    .foregroundStyle(AppPalette.textPrimary)
+                    .padding(.horizontal, 18)
+                    .frame(height: 48)
+                    .appCapsule(shadowRadius: 0, shadowY: 0)
+            }
+            .buttonStyle(SolidPressButtonStyle())
+        }
+    }
+
+    /// ProductShopLink's cascade with clip data: shop link → Lens in
+    /// the in-app sheet (name search as its own fallback) → name
+    /// search directly.
+    private func openShop(_ product: ClipProduct) {
+        let nameSearch = product.name
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
+            .flatMap { $0.isEmpty ? nil : URL(string: "https://www.google.com/search?udm=28&q=\($0)") }
+        if let shop = product.shopURL {
+            openURL(shop)
+        } else if let image = product.imageURL,
+                  let encoded = image.absoluteString
+                    .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+                  let lens = URL(string: "https://lens.google.com/uploadbyurl?url=\(encoded)") {
+            ShopBrowser.present(primary: lens, fallback: nameSearch)
+        } else if let nameSearch {
+            openURL(nameSearch)
         }
     }
 }
