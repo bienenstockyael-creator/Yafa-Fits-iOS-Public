@@ -8,6 +8,10 @@ import ImageIO
 // on demand through a small LRU so memory stays flat.
 struct FrameSpinner: View {
     let fit: ClipFit
+    /// Shown until the first frame decodes — the carousel passes the
+    /// slide's cached first-frame thumbnail here so the static→live
+    /// swap is pixel-invisible instead of a blank flash.
+    var placeholder: UIImage? = nil
     /// Fired when a scrub drag ends, with (netTranslation,
     /// monotonicityRatio). The carousel uses the app's ScrubSwipe
     /// rule — a long, mostly-one-direction drag flips the page,
@@ -37,6 +41,10 @@ struct FrameSpinner: View {
             ZStack {
                 if let displayed {
                     Image(uiImage: displayed)
+                        .resizable()
+                        .scaledToFit()
+                } else if let placeholder {
+                    Image(uiImage: placeholder)
                         .resizable()
                         .scaledToFit()
                 }

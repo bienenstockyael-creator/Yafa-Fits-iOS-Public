@@ -546,7 +546,11 @@ private struct ClipCarouselView: View {
                     // neighbors show static first frames; the rest
                     // are layout placeholders (memory + network).
                     if i == index, let loaded = loadedFits[fit.id] {
-                        FrameSpinner(fit: loaded, onScrubRelease: handleScrubRelease)
+                        FrameSpinner(
+                            fit: loaded,
+                            placeholder: ClipThumbImage.cachedImage(url: fit.thumbURL),
+                            onScrubRelease: handleScrubRelease
+                        )
                     } else if distance <= 2 {
                         ClipThumbImage(url: fit.thumbURL)
                     } else {
@@ -558,8 +562,15 @@ private struct ClipCarouselView: View {
                 .opacity(slideOpacity)
                 .background {
                     // Report the current slide's frame so the hero
-                    // knows where to land / launch from.
-                    if i == index {
+                    // knows where to land / launch from. ONLY while
+                    // the hero choreography is active — continuous
+                    // reporting during page animations re-rendered
+                    // the whole sheet every frame (visible jank).
+                    // The rect is index-independent (the current
+                    // slide always occupies the same spot), so the
+                    // value captured during open stays valid for the
+                    // close flight.
+                    if i == index, !liveSlideVisible {
                         GeometryReader { geo in
                             Color.clear
                                 .onAppear { onSlideFrame(geo.frame(in: .named(spaceName))) }
@@ -747,12 +758,20 @@ private struct ClipCarouselView: View {
 
 /// Static first-frame thumbnail with a small shared cache — decodes
 /// at grid size (not full frame size) via ImageIO, same technique as
-/// FrameSpinner's LRU.
-private struct ClipThumbImage: View {
+/// FrameSpinner's LRU. Internal: FrameSpinner borrows the cache for
+/// its placeholder so the thumb→spinner handoff is seamless.
+struct ClipThumbImage: View {
     let url: URL?
     @State private var image: UIImage?
 
     private static let cache = NSCache<NSURL, UIImage>()
+
+    /// Cache-only lookup (no fetch) — the carousel hands this to
+    /// FrameSpinner as the placeholder frame.
+    static func cachedImage(url: URL?) -> UIImage? {
+        guard let url else { return nil }
+        return cache.object(forKey: url as NSURL)
+    }
 
     var body: some View {
         ZStack {
