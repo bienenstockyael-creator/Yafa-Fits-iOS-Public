@@ -466,9 +466,6 @@ private struct ClipCarouselView: View {
                     .offset(y: Self.slideExpandTranslation * cardProgress)
                     .animation(cardSpring, value: cardVisible)
                     .padding(.top, Self.slideTopInset)
-                    // Dismiss pull: content follows the downward drag
-                    // (×0.6 damping, the app's rule) until release.
-                    .offset(y: verticalDismissOffset)
 
                     // Bottom action row, pinned 40pt up — the viewer
                     // ordering: Like → Comment → Save → Cart.
@@ -502,6 +499,13 @@ private struct ClipCarouselView: View {
                             )
                     }
                 }
+                // Dismiss pull moves EVERYTHING — slides, chrome,
+                // action row, card — fading and slightly shrinking
+                // from the top as it goes (CarouselView, verbatim).
+                .offset(y: verticalDismissOffset)
+                .opacity(isDismissing ? max(0.0, 1.0 - (verticalDismissOffset / 300.0)) : 1.0)
+                .scaleEffect(isDismissing ? max(0.9, 1.0 - (verticalDismissOffset / 1500.0)) : 1.0, anchor: .top)
+                .compositingGroup()
             }
 
             // Vibe layers live in this hosting context so bursts
@@ -513,11 +517,27 @@ private struct ClipCarouselView: View {
         }
         .animation(cardSpring, value: cardVisible)
         .task(id: index) {
-            guard fits.indices.contains(index) else { return }
-            let id = fits[index].id
-            guard loadedFits[id] == nil else { return }
-            if let fit = await ClipDataService.loadFit(slugOrId: id) {
-                loadedFits[id] = fit
+            // Current fit loads eagerly; neighbors prefetch in the
+            // background so page flips land on ready data — the app
+            // feels instant because everything is local, and this is
+            // the clip's equivalent.
+            for offset in [0, 1, -1] {
+                let i = index + offset
+                guard fits.indices.contains(i) else { continue }
+                let id = fits[i].id
+                guard loadedFits[id] == nil else { continue }
+                if offset == 0 {
+                    if let fit = await ClipDataService.loadFit(slugOrId: id) {
+                        loadedFits[id] = fit
+                    }
+                } else {
+                    Task {
+                        if let fit = await ClipDataService.loadFit(slugOrId: id),
+                           loadedFits[id] == nil {
+                            loadedFits[id] = fit
+                        }
+                    }
+                }
             }
         }
         .sheet(isPresented: $showComments) {
