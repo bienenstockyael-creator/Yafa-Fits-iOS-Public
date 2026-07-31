@@ -119,7 +119,19 @@ struct FrameSpinner: View {
                             lastDragTime = now
                             let dir: Double = fit.isRotationReversed ? -1 : 1
                             let frameDelta = dir * Double(dx / pixelsPerFrame)
-                            framePos = wrap(framePos + frameDelta)
+                            // Progressive-spin rule for the SCRUB too
+                            // (the fling and auto-spin already obey
+                            // it): only advance onto frames that have
+                            // arrived. Without this, an early scrub
+                            // requests un-fetched frames and the
+                            // rotation stutters — it should feel
+                            // elastic while the sequence streams in.
+                            let next = wrap(framePos + frameDelta)
+                            guard loader.hasFrame(Int(next)) else {
+                                velocity = 0
+                                return
+                            }
+                            framePos = next
                             // Normalize the per-event delta to a per-60fps
                             // tick velocity so the release fling feels
                             // identical at any touch event rate — the

@@ -12,6 +12,9 @@ struct ClipProfileSheet: View {
     let userId: String
     let seedUsername: String
     let seedAvatarURL: URL?
+    /// Profile warmed by ClipModel while the viewer was on the card —
+    /// when present, the sheet opens fully formed with zero fetch.
+    var preloaded: ClipProfile? = nil
     var onRequireApp: () -> Void
 
     // Re-injected into the full-screen carousel below — presented
@@ -103,8 +106,13 @@ struct ClipProfileSheet: View {
         .onPreferenceChange(ClipGridFramesKey.self) { gridFrames = $0 }
         .presentationBackground(AppPalette.groupedBackground)
         .task {
-            profile = await ClipDataService.loadProfile(userId: userId)
-            isLoading = false
+            if let preloaded {
+                profile = preloaded
+                isLoading = false
+            } else {
+                profile = await ClipDataService.loadProfile(userId: userId)
+                isLoading = false
+            }
             #if DEBUG
             // Headless UI verification hook: auto-open the carousel so
             // simulator screenshots can check the chrome layout.
@@ -934,15 +942,36 @@ struct ClipThumbImage: View {
         return cache.object(forKey: url as NSURL)
     }
 
+    /// Warm the cache ahead of display (profile preload) so the grid
+    /// opens fully formed instead of thumbs popping in.
+    static func prefetch(urls: [URL]) async {
+        await withTaskGroup(of: Void.self) { group in
+            for url in urls where cache.object(forKey: url as NSURL) == nil {
+                group.addTask {
+                    guard let (data, resp) = try? await URLSession.shared.data(from: url),
+                          (resp as? HTTPURLResponse)?.statusCode == 200,
+                          let decoded = downsample(data) else { return }
+                    await MainActor.run {
+                        cache.setObject(decoded, forKey: url as NSURL)
+                    }
+                }
+            }
+        }
+    }
+
     var body: some View {
         ZStack {
+            // Soft placeholder tile while the thumb streams — a late
+            // image reads as designed loading, not a broken hole.
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.white.opacity(0.35))
+                .opacity(image == nil ? 1 : 0)
+
             if let image {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFit()
                     .transition(.opacity)
-            } else {
-                Color.clear
             }
         }
         .task(id: url) {

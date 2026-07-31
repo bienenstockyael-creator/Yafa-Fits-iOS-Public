@@ -45,8 +45,27 @@ final class ClipModel {
     /// The slug (or outfit id) from the invocation URL — preserved so
     /// the full app can continue exactly here after install.
     var invocationSlug: String?
+    /// Creator profile, warmed in the background the moment the fit
+    /// loads — the header tap then opens a fully-formed profile with
+    /// zero visible loading (clip viewers are all first-timers; a
+    /// spinner-y profile reads as broken).
+    var preloadedProfile: ClipProfile?
 
     private var loadTask: Task<Void, Never>?
+    private var profileTask: Task<Void, Never>?
+
+    /// Fetch the profile + warm the first grid thumbnails.
+    private func preloadProfile(userId: String) {
+        profileTask?.cancel()
+        profileTask = Task {
+            guard let profile = await ClipDataService.loadProfile(userId: userId) else { return }
+            guard !Task.isCancelled else { return }
+            self.preloadedProfile = profile
+            // First two grid rows' thumbs — enough that the sheet
+            // opens looking complete; the rest stream lazily.
+            await ClipThumbImage.prefetch(urls: profile.fits.prefix(6).compactMap(\.thumbURL))
+        }
+    }
 
     func handleInvocation(url: URL) {
         // yafafits.com/fit/<slug> — last path component is the key.
@@ -71,6 +90,10 @@ final class ClipModel {
                 guard !Task.isCancelled else { return }
                 self.fit = fit
                 self.phase = .ready
+                // Warm the creator's profile behind the card.
+                if preloadedProfile == nil {
+                    preloadProfile(userId: fit.userId)
+                }
             } else {
                 guard !Task.isCancelled else { return }
                 self.phase = .unavailable

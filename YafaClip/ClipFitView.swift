@@ -102,6 +102,7 @@ struct ClipFitView: View {
                     userId: fit.userId,
                     seedUsername: fit.username,
                     seedAvatarURL: fit.avatarURL,
+                    preloaded: model.preloadedProfile,
                     onRequireApp: {
                         showProfile = false
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
