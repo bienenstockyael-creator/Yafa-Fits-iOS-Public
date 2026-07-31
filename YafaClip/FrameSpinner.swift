@@ -119,24 +119,21 @@ struct FrameSpinner: View {
                             lastDragTime = now
                             let dir: Double = fit.isRotationReversed ? -1 : 1
                             let frameDelta = dir * Double(dx / pixelsPerFrame)
-                            // Progressive-spin rule for the SCRUB too
-                            // (the fling and auto-spin already obey
-                            // it): advance only where frames (or a
-                            // near neighbor, during the sparse
-                            // pyramid passes) have arrived — elastic
-                            // low-fps spin, never a stutter or wall.
-                            let next = wrap(framePos + frameDelta)
-                            guard let display = loader.nearestLoadedFrame(to: Int(next)) else {
-                                velocity = 0
-                                return
-                            }
-                            framePos = next
+                            // Position ALWAYS tracks the finger at
+                            // full speed — only the displayed image
+                            // quantizes to the nearest loaded frame.
+                            // Sparse fits spin at the same velocity
+                            // as loaded ones, just at a lower frame
+                            // rate that sharpens as frames stream.
+                            framePos = wrap(framePos + frameDelta)
                             // Normalize the per-event delta to a per-60fps
                             // tick velocity so the release fling feels
                             // identical at any touch event rate — the
                             // app's exact rule.
                             velocity = frameDelta * (0.01667 / dt)
-                            show(frame: display)
+                            if let display = loader.nearestLoadedFrame(to: Int(framePos), radius: 3) {
+                                show(frame: display)
+                            }
                         case .undecided:
                             break
                         }
@@ -184,25 +181,27 @@ struct FrameSpinner: View {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 16_666_667)
                 guard !dragging, fit.frameCount > 1 else { continue }
-                let display: Int
+                // Physics never waits for the network: position
+                // advances at full velocity every tick, and only the
+                // DISPLAY quantizes to the nearest loaded frame
+                // (briefly holding the last image at the streaming
+                // frontier). Sparse fits spin at the exact same
+                // velocity as fully-loaded ones — just at a lower
+                // frame rate until the pyramid fills in.
                 if abs(velocity) > velocityThreshold {
                     velocity *= friction
-                    let next = wrap(framePos + velocity)
-                    guard let nearest = sequence.nearestLoadedFrame(to: Int(next)) else { continue }
-                    framePos = next
-                    display = nearest
+                    framePos = wrap(framePos + velocity)
                 } else {
                     velocity = 0
                     // The carousel rests when idle — only feed cards
                     // idle-spin.
                     guard autoSpins else { continue }
                     let dir: Double = fit.isRotationReversed ? -1 : 1
-                    let next = wrap(framePos + dir * autoSpinPerTick)
-                    guard let nearest = sequence.nearestLoadedFrame(to: Int(next)) else { continue }
-                    framePos = next
-                    display = nearest
+                    framePos = wrap(framePos + dir * autoSpinPerTick)
                 }
-                show(frame: display)
+                if let display = sequence.nearestLoadedFrame(to: Int(framePos), radius: 3) {
+                    show(frame: display)
+                }
             }
         }
     }
