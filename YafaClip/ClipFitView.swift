@@ -88,6 +88,14 @@ struct ClipFitView: View {
             VibesBannerLayer()
         }
         .environment(vibesEffectHost)
+        // Tap anywhere (without stealing the tap from buttons) while
+        // Apple's overlay is up → dismiss it, like tapping outside a
+        // sheet.
+        .simultaneousGesture(
+            TapGesture().onEnded {
+                if showOverlay { showOverlay = false }
+            }
+        )
         .animation(.spring(response: 0.45, dampingFraction: 0.85), value: model.phase)
         .onChange(of: model.phase) { _, phase in
             guard phase == .ready else { return }

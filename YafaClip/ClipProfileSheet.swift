@@ -56,6 +56,10 @@ struct ClipProfileSheet: View {
                     if let profile, !profile.fits.isEmpty {
                         sectionHeader
                         grid(profile)
+                        if profile.outfitCount > profile.fits.count {
+                            seeAllButton(profile)
+                                .padding(.top, LayoutMetrics.medium)
+                        }
                     } else if !isLoading {
                         Text("No public outfits yet")
                             .font(.system(size: 14, weight: .medium))
@@ -286,6 +290,22 @@ struct ClipProfileSheet: View {
         .buttonStyle(SolidPressButtonStyle())
     }
 
+    /// Explicit CTA under the grid — the locked tile's clearer twin.
+    private func seeAllButton(_ profile: ClipProfile) -> some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            onRequireApp()
+        } label: {
+            Text("GET THE APP FOR ALL \(profile.outfitCount) FITS")
+                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .tracking(2)
+                .foregroundStyle(AppPalette.textPrimary)
+                .frame(maxWidth: .infinity, minHeight: 50)
+                .appCapsule(shadowRadius: 6, shadowY: 3)
+        }
+        .buttonStyle(SolidPressButtonStyle())
+    }
+
     private var sectionHeader: some View {
         HStack {
             Text("outfits")
@@ -331,9 +351,11 @@ struct ClipProfileSheet: View {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     onRequireApp()
                 } label: {
-                    VStack(spacing: 8) {
-                        AppIcon(glyph: .plusCircle, size: 22, color: AppPalette.textMuted)
-                        Text("ALL \(profile.outfitCount) FITS")
+                    VStack(spacing: 6) {
+                        Text("+\(profile.outfitCount - fits.count)")
+                            .font(.system(size: 26, weight: .bold))
+                            .foregroundStyle(AppPalette.textStrong)
+                        Text("MORE FITS")
                             .font(.system(size: 9, weight: .bold, design: .monospaced))
                             .tracking(1.6)
                             .foregroundStyle(AppPalette.textFaint)
