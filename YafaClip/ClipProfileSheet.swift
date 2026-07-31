@@ -296,7 +296,7 @@ struct ClipProfileSheet: View {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             onRequireApp()
         } label: {
-            Text("GET THE APP TO SEE \(profile.username.uppercased())’S FITS")
+            Text("GET THE APP TO SEE MORE")
                 .font(.system(size: 11, weight: .bold, design: .monospaced))
                 .tracking(2)
                 .foregroundStyle(AppPalette.textPrimary)
@@ -353,7 +353,7 @@ struct ClipProfileSheet: View {
                 } label: {
                     VStack(spacing: 8) {
                         AppIcon(glyph: .plusCircle, size: 22, color: AppPalette.textMuted)
-                        Text("ALL \(profile.outfitCount) FITS")
+                        Text("+\(profile.outfitCount) FITS")
                             .font(.system(size: 9, weight: .bold, design: .monospaced))
                             .tracking(1.6)
                             .foregroundStyle(AppPalette.textFaint)
