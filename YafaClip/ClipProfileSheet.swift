@@ -874,20 +874,19 @@ private struct ClipCarouselView: View {
     }
 
     /// CarouselDetailCard.productCell, viewer mode: 100pt thumbnail,
-    /// two-line name slot, BUY capsule.
+    /// two-line name slot, BUY capsule. Like the app's
+    /// ProductThumbnail, the cutout floats directly on the card —
+    /// no tile behind it.
     private func productCell(_ product: ClipProduct) -> some View {
         VStack(spacing: 16) {
             VStack(spacing: 8) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(Color.white.opacity(0.28))
-                    AsyncImage(url: product.imageURL) { image in
-                        image.resizable().scaledToFit().padding(5)
-                    } placeholder: {
-                        Color.clear
-                    }
+                AsyncImage(url: product.imageURL) { image in
+                    image.resizable().scaledToFit().padding(8)
+                } placeholder: {
+                    Color.clear
                 }
                 .frame(width: 100, height: 100)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
 
                 Text(product.name)
                     .font(.system(size: 12, weight: .medium))
@@ -907,7 +906,7 @@ private struct ClipCarouselView: View {
                     .foregroundStyle(AppPalette.textPrimary)
                     .padding(.horizontal, 18)
                     .frame(height: 48)
-                    .appCapsule(shadowRadius: 0, shadowY: 0)
+                    .appCapsule(shadowRadius: 4, shadowY: 2)
             }
             .buttonStyle(SolidPressButtonStyle())
         }
