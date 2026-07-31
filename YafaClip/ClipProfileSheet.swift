@@ -545,9 +545,12 @@ private struct ClipCarouselView: View {
                     }
                 } else {
                     Task {
-                        if let fit = await ClipDataService.loadFit(slugOrId: id),
-                           loadedFits[id] == nil {
-                            loadedFits[id] = fit
+                        if let fit = await ClipDataService.loadFit(slugOrId: id) {
+                            if loadedFits[id] == nil { loadedFits[id] = fit }
+                            // Pre-stream the neighbor's quarter-rate
+                            // pass so a page flip lands on a fit
+                            // that's already spinnable.
+                            await FrameSequence.shared(for: fit).prefetchPass1()
                         }
                     }
                 }

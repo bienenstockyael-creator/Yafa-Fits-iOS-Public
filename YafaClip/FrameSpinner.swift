@@ -103,7 +103,12 @@ struct FrameSpinner: View {
                         case .pass:
                             onPassThroughChanged?(value.translation)
                         case .scrub:
-                            guard let fit, let loader, loader.loadedCount > 1 else { return }
+                            // Alive from the FIRST touch — even before
+                            // any frames arrive, position tracks the
+                            // finger so the spin picks up mid-gesture
+                            // the moment frames land (a dead first
+                            // second read as a stall).
+                            guard let fit, let loader else { return }
                             if !dragging {
                                 dragMinX = value.translation.width
                                 dragMaxX = value.translation.width
@@ -165,7 +170,9 @@ struct FrameSpinner: View {
                 velocity = 0
                 return
             }
-            let sequence = FrameSequence(fit: fit)
+            // Registry-backed: frames survive paging away and back,
+            // and a neighbor pre-streamed sequence is already warm.
+            let sequence = FrameSequence.activate(for: fit)
             loader = sequence
             framePos = 0
             velocity = 0
@@ -224,10 +231,56 @@ struct FrameSpinner: View {
 /// Compressed-bytes store + bounded decode cache.
 @MainActor
 final class FrameSequence {
+    // MARK: Shared registry — sequences survive paging.
+    //
+    // The carousel used to discard a fit's sequence the moment you
+    // swiped away and re-download from zero on return; and a freshly
+    // paged fit started with nothing. The registry keeps the last few
+    // sequences alive (compressed bytes are cheap); only the current
+    // fit keeps DECODED bitmaps — everyone else's are purged on
+    // switch and re-decoded on demand.
+    private static var registry: [String: FrameSequence] = [:]
+    private static var registryOrder: [String] = []
+
+    /// The sequence a live spinner should drive. Purges every OTHER
+    /// sequence's decoded bitmaps — only the active fit holds them.
+    static func activate(for fit: ClipFit) -> FrameSequence {
+        for (id, seq) in registry where id != fit.outfitId {
+            seq.purgeDecoded()
+        }
+        return shared(for: fit)
+    }
+
+    /// Registry lookup WITHOUT the purge — background warming
+    /// (neighbor pass-1 streaming) must not evict the current fit's
+    /// decoded frames.
+    static func shared(for fit: ClipFit) -> FrameSequence {
+        if let existing = registry[fit.outfitId] {
+            registryOrder.removeAll { $0 == fit.outfitId }
+            registryOrder.append(fit.outfitId)
+            return existing
+        }
+        let fresh = FrameSequence(fit: fit)
+        registry[fit.outfitId] = fresh
+        registryOrder.append(fit.outfitId)
+        while registryOrder.count > 4 {
+            let evicted = registryOrder.removeFirst()
+            registry.removeValue(forKey: evicted)
+        }
+        return fresh
+    }
+
+    private func purgeDecoded() {
+        decoded.removeAll()
+        decodeOrder.removeAll()
+    }
+
     private let fit: ClipFit
     private var data: [Int: Data] = [:]
     private var decoded: [Int: UIImage] = [:]
     private var decodeOrder: [Int] = []
+    private var pass1Started = false
+    private var fullPrefetchStarted = false
     // 24 × ~3MB decoded ≈ 72MB ceiling per live spinner. Two can be
     // alive at once (main card under a presented carousel page) — 40
     // was fine solo but risked jetsam in the clip's budget once the
@@ -275,13 +328,28 @@ final class FrameSequence {
         // immediately), then the remaining evens (half rate), then
         // the odds. Paired with nearest-loaded-frame display, early
         // interaction feels like a low-fps spin that sharpens as
-        // frames stream in — never a wall. Modest parallelism — the
-        // clip shares the phone's radio with whatever invoked it.
+        // frames stream in — never a wall.
+        guard !fullPrefetchStarted else { return }
+        fullPrefetchStarted = true
         let total = fit.frameCount
         var order: [Int] = []
         order.append(contentsOf: stride(from: 0, to: total, by: 4))
         order.append(contentsOf: stride(from: 2, to: total, by: 4))
         order.append(contentsOf: stride(from: 1, to: total, by: 2))
+        await prefetch(order: order)
+    }
+
+    /// Quarter-rate coverage only — streamed for NEIGHBOR slides in
+    /// the background so a page flip lands already spinnable.
+    func prefetchPass1() async {
+        guard !pass1Started, !fullPrefetchStarted else { return }
+        pass1Started = true
+        await prefetch(order: Array(stride(from: 0, to: fit.frameCount, by: 4)))
+    }
+
+    private func prefetch(order: [Int]) async {
+        // Modest parallelism — the clip shares the phone's radio with
+        // whatever invoked it.
         var cursor = 0
         while cursor < order.count, !Task.isCancelled {
             let batch = Array(order[cursor..<min(cursor + 6, order.count)])
@@ -314,7 +382,22 @@ final class FrameSequence {
         if let cached = decoded[index] { return cached }
         if data[index] == nil { await fetch(index) }
         guard let bytes = data[index] else { return nil }
-        // Downsampled decode (display is ~400pt) keeps each frame small.
+        // Decode OFF the main actor — first-time decodes during a
+        // scrub were hitching the 60fps loop.
+        guard let image = await Task.detached(priority: .userInitiated, operation: {
+            Self.decode(bytes)
+        }).value else { return nil }
+        decoded[index] = image
+        decodeOrder.append(index)
+        if decodeOrder.count > decodeCacheLimit {
+            let evict = decodeOrder.removeFirst()
+            decoded.removeValue(forKey: evict)
+        }
+        return image
+    }
+
+    /// Downsampled decode (display is ~400pt) keeps each frame small.
+    private nonisolated static func decode(_ bytes: Data) -> UIImage? {
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceThumbnailMaxPixelSize: 900,
@@ -323,13 +406,6 @@ final class FrameSequence {
         guard let source = CGImageSourceCreateWithData(bytes as CFData, nil),
               let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
         else { return nil }
-        let image = UIImage(cgImage: cg)
-        decoded[index] = image
-        decodeOrder.append(index)
-        if decodeOrder.count > decodeCacheLimit {
-            let evict = decodeOrder.removeFirst()
-            decoded.removeValue(forKey: evict)
-        }
-        return image
+        return UIImage(cgImage: cg)
     }
 }
