@@ -30,25 +30,37 @@ struct ClipFitView: View {
                     .foregroundStyle(AppPalette.textFaint)
             case .ready:
                 if let fit = model.fit {
-                    ScrollView {
-                        ClipFeedCard(
-                            fit: fit,
-                            onRequireApp: {
-                                // Social actions need an account — the
-                                // clip's answer is the install overlay.
-                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                showOverlay = true
-                            },
-                            onOpenProfile: {
-                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                showProfile = true
-                            }
-                        )
-                        .padding(.horizontal, LayoutMetrics.small)
-                        .padding(.top, LayoutMetrics.large)
-                        .padding(.bottom, 120) // clear the install banner
+                    GeometryReader { geo in
+                        // Grow the outfit to absorb the whitespace
+                        // between card and install banner: spinner
+                        // height = whatever the screen leaves after
+                        // this fit's actual chrome (caption/products
+                        // vary per fit). Overflow just scrolls.
+                        let chrome: CGFloat = 322
+                            + (fit.caption?.isEmpty == false ? 42 : 0)
+                            + (fit.products.isEmpty ? 0 : 108)
+                        let spinnerHeight = max(292, geo.size.height - chrome)
+                        ScrollView {
+                            ClipFeedCard(
+                                fit: fit,
+                                spinnerHeight: spinnerHeight,
+                                onRequireApp: {
+                                    // Social actions need an account — the
+                                    // clip's answer is the install overlay.
+                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                    showOverlay = true
+                                },
+                                onOpenProfile: {
+                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                    showProfile = true
+                                }
+                            )
+                            .padding(.horizontal, LayoutMetrics.small)
+                            .padding(.top, LayoutMetrics.large)
+                            .padding(.bottom, 96) // clear the install banner
+                        }
+                        .scrollIndicators(.hidden)
                     }
-                    .scrollIndicators(.hidden)
                 }
             }
 
@@ -172,6 +184,7 @@ struct ClipFitView: View {
 /// carousel can page through the same card.
 struct ClipFeedCard: View {
     let fit: ClipFit
+    var spinnerHeight: CGFloat = 292
     var onRequireApp: () -> Void
     var onOpenProfile: () -> Void
     @State private var cartOpen = true
@@ -189,10 +202,12 @@ struct ClipFeedCard: View {
 
     init(
         fit: ClipFit,
+        spinnerHeight: CGFloat = 292,
         onRequireApp: @escaping () -> Void,
         onOpenProfile: @escaping () -> Void
     ) {
         self.fit = fit
+        self.spinnerHeight = spinnerHeight
         self.onRequireApp = onRequireApp
         self.onOpenProfile = onOpenProfile
         _vibeCount = State(initialValue: fit.vibeCount)
@@ -203,7 +218,7 @@ struct ClipFeedCard: View {
             header
 
             FrameSpinner(fit: fit)
-                .frame(height: 292)
+                .frame(height: spinnerHeight)
                 .frame(maxWidth: .infinity)
 
             if let caption = fit.caption, !caption.isEmpty {
