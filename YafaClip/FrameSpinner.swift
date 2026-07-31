@@ -121,13 +121,12 @@ struct FrameSpinner: View {
                             let frameDelta = dir * Double(dx / pixelsPerFrame)
                             // Progressive-spin rule for the SCRUB too
                             // (the fling and auto-spin already obey
-                            // it): only advance onto frames that have
-                            // arrived. Without this, an early scrub
-                            // requests un-fetched frames and the
-                            // rotation stutters — it should feel
-                            // elastic while the sequence streams in.
+                            // it): advance only where frames (or a
+                            // near neighbor, during the sparse
+                            // pyramid passes) have arrived — elastic
+                            // low-fps spin, never a stutter or wall.
                             let next = wrap(framePos + frameDelta)
-                            guard loader.hasFrame(Int(next)) else {
+                            guard let display = loader.nearestLoadedFrame(to: Int(next)) else {
                                 velocity = 0
                                 return
                             }
@@ -137,7 +136,7 @@ struct FrameSpinner: View {
                             // identical at any touch event rate — the
                             // app's exact rule.
                             velocity = frameDelta * (0.01667 / dt)
-                            show(frame: Int(framePos))
+                            show(frame: display)
                         case .undecided:
                             break
                         }
@@ -185,11 +184,13 @@ struct FrameSpinner: View {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 16_666_667)
                 guard !dragging, fit.frameCount > 1 else { continue }
+                let display: Int
                 if abs(velocity) > velocityThreshold {
                     velocity *= friction
                     let next = wrap(framePos + velocity)
-                    guard sequence.hasFrame(Int(next)) else { continue }
+                    guard let nearest = sequence.nearestLoadedFrame(to: Int(next)) else { continue }
                     framePos = next
+                    display = nearest
                 } else {
                     velocity = 0
                     // The carousel rests when idle — only feed cards
@@ -197,10 +198,11 @@ struct FrameSpinner: View {
                     guard autoSpins else { continue }
                     let dir: Double = fit.isRotationReversed ? -1 : 1
                     let next = wrap(framePos + dir * autoSpinPerTick)
-                    guard sequence.hasFrame(Int(next)) else { continue }
+                    guard let nearest = sequence.nearestLoadedFrame(to: Int(next)) else { continue }
                     framePos = next
+                    display = nearest
                 }
-                show(frame: Int(framePos))
+                show(frame: display)
             }
         }
     }
@@ -269,19 +271,44 @@ final class FrameSequence {
     }
 
     func prefetchAll() async {
-        // Modest parallelism — the clip shares the phone's radio with
-        // whatever invoked it.
+        // Pyramid order: every 4th frame first (the whole circle
+        // becomes spinnable at quarter frame rate almost
+        // immediately), then the remaining evens (half rate), then
+        // the odds. Paired with nearest-loaded-frame display, early
+        // interaction feels like a low-fps spin that sharpens as
+        // frames stream in — never a wall. Modest parallelism — the
+        // clip shares the phone's radio with whatever invoked it.
         let total = fit.frameCount
-        var index = 0
-        while index < total, !Task.isCancelled {
-            let batch = Array(index..<min(index + 6, total))
+        var order: [Int] = []
+        order.append(contentsOf: stride(from: 0, to: total, by: 4))
+        order.append(contentsOf: stride(from: 2, to: total, by: 4))
+        order.append(contentsOf: stride(from: 1, to: total, by: 2))
+        var cursor = 0
+        while cursor < order.count, !Task.isCancelled {
+            let batch = Array(order[cursor..<min(cursor + 6, order.count)])
             await withTaskGroup(of: Void.self) { group in
                 for i in batch {
                     group.addTask { await self.fetch(i) }
                 }
             }
-            index += 6
+            cursor += 6
         }
+    }
+
+    /// Nearest fetched frame within `radius` of the target (wrapping).
+    /// After the stride-4 pass no target is more than 2 away, so the
+    /// spin can traverse the full circle before every frame lands.
+    func nearestLoadedFrame(to index: Int, radius: Int = 2) -> Int? {
+        let n = max(fit.frameCount, 1)
+        let base = ((index % n) + n) % n
+        if data[base] != nil { return base }
+        for d in 1...max(1, radius) {
+            let up = (base + d) % n
+            if data[up] != nil { return up }
+            let down = (((base - d) % n) + n) % n
+            if data[down] != nil { return down }
+        }
+        return nil
     }
 
     func frame(_ index: Int) async -> UIImage? {
