@@ -430,10 +430,10 @@ private struct ClipCarouselView: View {
                         }
                         .frame(height: 36)
                         .offset(y: 3 * (1.0 - cardProgress))
-                        .opacity(chromeVisible ? 1 : 0)
+                        .opacity(chromeVisible && currentFit != nil ? 1 : 0)
 
                         dateLocationLabel
-                            .opacity(chromeVisible ? 1 : 0)
+                            .opacity(chromeVisible && currentFit != nil ? 1 : 0)
 
                         slideStrip(slideWidth: slideWidth, slideHeight: slideHeight, step: step, center: geo.size.width / 2)
                             .frame(height: slideHeight)
@@ -492,6 +492,7 @@ private struct ClipCarouselView: View {
                         .opacity(cardVisible || !chromeVisible ? 0 : 1)
                         .allowsHitTesting(!cardVisible && chromeVisible)
                         .animation(cardSpring, value: cardVisible)
+                        .transition(.opacity)
                     }
 
                     // Detail card — viewer mode: the product cells
@@ -541,7 +542,12 @@ private struct ClipCarouselView: View {
                 guard loadedFits[id] == nil else { continue }
                 if offset == 0 {
                     if let fit = await ClipDataService.loadFit(slugOrId: id) {
-                        loadedFits[id] = fit
+                        // Chrome (weather, date · location, action
+                        // row incl. cart) FADES in with the data
+                        // instead of popping.
+                        withAnimation(.easeIn(duration: 0.35)) {
+                            loadedFits[id] = fit
+                        }
                     }
                 } else {
                     Task {
