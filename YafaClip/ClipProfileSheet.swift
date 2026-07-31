@@ -378,7 +378,9 @@ private struct ClipCarouselView: View {
     private static let actionRowReserve: CGFloat = 40 + 88 - 18
     private static let slideHeightFactor: CGFloat = 0.58 * 1.2
     private static let minSlideHeight: CGFloat = 320
-    private static let cardExpandSlideShrink: CGFloat = 0.34
+    // Matches CarouselView: 0.22 keeps the outfit at 78% on card-open
+    // instead of 66% — less dead space above the card.
+    private static let cardExpandSlideShrink: CGFloat = 0.22
     private static let slideExpandTranslation: CGFloat = -20
     private let gap: CGFloat = LayoutMetrics.xSmall
     private let pageCurve = Animation.timingCurve(0.32, 0.72, 0, 1, duration: 0.56)
@@ -852,13 +854,7 @@ private struct ClipCarouselView: View {
 
     private func detailCard(_ fit: ClipFit) -> some View {
         VStack(alignment: .leading, spacing: 18) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 20) {
-                    ForEach(fit.products) { product in
-                        productCell(product)
-                    }
-                }
-            }
+            productRow(fit.products)
         }
         .padding(LayoutMetrics.small)
         .appCard(cornerRadius: LayoutMetrics.cardCornerRadius)
@@ -873,28 +869,57 @@ private struct ClipCarouselView: View {
         )
     }
 
+    /// CarouselDetailCard.productRow, verbatim: few products render
+    /// as a CENTERED non-scrolling row (shadows never clipped); many
+    /// fall back to a horizontal ScrollView with the negative-margin
+    /// bleed so the card width stays consistent.
+    private func productRow(_ products: [ClipProduct]) -> some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 24) {
+                ForEach(products) { productCell($0) }
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 24) {
+                    ForEach(products) { productCell($0) }
+                }
+                .padding(.horizontal, LayoutMetrics.medium)
+            }
+            .padding(.horizontal, -LayoutMetrics.medium)
+        }
+    }
+
     /// CarouselDetailCard.productCell, viewer mode: 100pt thumbnail,
     /// two-line name slot, BUY capsule. Like the app's
     /// ProductThumbnail, the cutout floats directly on the card —
     /// no tile behind it.
     private func productCell(_ product: ClipProduct) -> some View {
         VStack(spacing: 16) {
-            VStack(spacing: 8) {
-                AsyncImage(url: product.imageURL) { image in
-                    image.resizable().scaledToFit().padding(8)
-                } placeholder: {
-                    Color.clear
-                }
-                .frame(width: 100, height: 100)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            // Thumbnail + name are a button like the app's cell —
+            // in the clip both routes lead to the shop.
+            Button {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                openShop(product)
+            } label: {
+                VStack(spacing: 8) {
+                    AsyncImage(url: product.imageURL) { image in
+                        image.resizable().scaledToFit().padding(8)
+                    } placeholder: {
+                        Color.clear
+                    }
+                    .frame(width: 100, height: 100)
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
 
-                Text(product.name)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(AppPalette.textMuted)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .frame(width: 100, height: 32, alignment: .top)
+                    Text(product.name)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppPalette.textMuted)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .frame(width: 100, height: 32, alignment: .top)
+                }
             }
+            .buttonStyle(SolidPressButtonStyle())
 
             Button {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
