@@ -36,8 +36,8 @@ struct ClipFitView: View {
                         // height = whatever the screen leaves after
                         // this fit's actual chrome (caption/products
                         // vary per fit). Overflow just scrolls.
-                        let chrome: CGFloat = 322
-                            + (fit.caption?.isEmpty == false ? 42 : 0)
+                        let chrome: CGFloat = 272
+                            + (fit.caption?.isEmpty == false ? 40 : 0)
                             + (fit.products.isEmpty ? 0 : 108)
                         let spinnerHeight = max(292, geo.size.height - chrome)
                         ScrollView {
@@ -57,7 +57,7 @@ struct ClipFitView: View {
                             )
                             .padding(.horizontal, LayoutMetrics.small)
                             .padding(.top, LayoutMetrics.large)
-                            .padding(.bottom, 96) // clear the install banner
+                            .padding(.bottom, 80) // clear the install banner
                         }
                         .scrollIndicators(.hidden)
                     }
