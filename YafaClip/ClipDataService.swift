@@ -206,8 +206,9 @@ enum ClipDataService {
     }
 
     /// Creator profile for the clip's profile sheet: header fields,
-    /// public counts, and the 12 most recent public fits (capped —
-    /// the clip is a taste, the app is the archive).
+    /// public counts, and the 6 most recent public fits (capped —
+    /// the clip is a taste, the app is the archive; the grid's
+    /// locked "see all" tile carries the rest to the install).
     static func loadProfile(userId: String) async -> ClipProfile? {
         struct FullProfileRow: Decodable {
             let username: String?
@@ -224,7 +225,7 @@ enum ClipDataService {
         }
 
         async let profileData = get("/rest/v1/profiles?id=eq.\(userId)&select=username,display_name,avatar_url,bio&limit=1")
-        async let fitData = get("/rest/v1/outfits?user_id=eq.\(userId)&is_public=eq.true&select=id,folder,prefix,frame_ext,remote_base_url&order=created_at.desc&limit=12")
+        async let fitData = get("/rest/v1/outfits?user_id=eq.\(userId)&is_public=eq.true&select=id,folder,prefix,frame_ext,remote_base_url&order=created_at.desc&limit=6")
         async let outfitTotal = count("/rest/v1/outfits?user_id=eq.\(userId)&is_public=eq.true&select=id")
         async let followerTotal = count("/rest/v1/follows?following_id=eq.\(userId)&select=follower_id")
 

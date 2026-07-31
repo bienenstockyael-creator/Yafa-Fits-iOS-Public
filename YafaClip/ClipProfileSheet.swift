@@ -55,7 +55,7 @@ struct ClipProfileSheet: View {
                     header
                     if let profile, !profile.fits.isEmpty {
                         sectionHeader
-                        grid(profile.fits)
+                        grid(profile)
                     } else if !isLoading {
                         Text("No public outfits yet")
                             .font(.system(size: 14, weight: .medium))
@@ -298,8 +298,9 @@ struct ClipProfileSheet: View {
         .padding(.bottom, LayoutMetrics.xSmall)
     }
 
-    private func grid(_ fits: [ClipProfileFit]) -> some View {
-        LazyVGrid(columns: gridColumns, spacing: 42) {
+    private func grid(_ profile: ClipProfile) -> some View {
+        let fits = profile.fits
+        return LazyVGrid(columns: gridColumns, spacing: 42) {
             ForEach(Array(fits.enumerated()), id: \.element.id) { index, fit in
                 Button {
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
@@ -321,6 +322,34 @@ struct ClipProfileSheet: View {
                         )
                     }
                 }
+            }
+
+            // The cap itself converts: a locked tile for the rest of
+            // the archive raises the install overlay.
+            if profile.outfitCount > fits.count {
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    onRequireApp()
+                } label: {
+                    VStack(spacing: 8) {
+                        AppIcon(glyph: .plusCircle, size: 22, color: AppPalette.textMuted)
+                        Text("ALL \(profile.outfitCount) FITS")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .tracking(1.6)
+                            .foregroundStyle(AppPalette.textFaint)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 132)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(Color.white.opacity(0.35))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .strokeBorder(AppPalette.cardBorder, lineWidth: 0.75)
+                    )
+                }
+                .buttonStyle(SolidPressButtonStyle())
             }
         }
     }
