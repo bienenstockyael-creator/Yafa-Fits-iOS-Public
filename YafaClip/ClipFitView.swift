@@ -82,16 +82,12 @@ struct ClipFitView: View {
             #if DEBUG
             if ProcessInfo.processInfo.environment["CLIP_AUTO_PROFILE"] == "1" {
                 showProfile = true
-                return
             }
             #endif
-            // Hot path stays one tap: Apple's overlay (with its GET
-            // button) auto-presents once after load. Our banner is the
-            // persistent re-entry after the viewer dismisses it.
-            Task {
-                try? await Task.sleep(nanoseconds: 900_000_000)
-                showOverlay = true
-            }
+            // Apple's SKOverlay is summoned ONLY by explicit intent —
+            // our GET banner, FOLLOW, join-conversation. Auto-
+            // presenting it covered the carousel's action row and
+            // fought the browsing experience.
         }
         .appStoreOverlay(isPresented: $showOverlay) {
             SKOverlay.AppClipConfiguration(position: .bottom)
