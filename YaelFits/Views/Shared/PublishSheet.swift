@@ -330,6 +330,8 @@ struct PublishSheet: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(LayoutMetrics.medium)
+                    // Whole row is the tap target, not just the label.
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(SolidPressButtonStyle())
                 .disabled(isLoadingAutoDetect)
@@ -344,13 +346,15 @@ struct PublishSheet: View {
                         Image(systemName: "plus.circle.fill")
                             .font(.system(size: 18))
                             .foregroundStyle(AppPalette.textFaint)
-                        Text("ADD PRODUCT")
+                        Text("ADD PRODUCTS MANUALLY")
                             .font(.system(size: 10, weight: .semibold, design: .monospaced))
                             .tracking(1.5)
                             .foregroundStyle(AppPalette.textFaint)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(LayoutMetrics.medium)
+                    // Whole row is the tap target, not just the label.
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(SolidPressButtonStyle())
             }
