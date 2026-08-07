@@ -1,5 +1,26 @@
 import Foundation
 
+/// Cross-path "this notice already reached the user" registry.
+/// A vibe can surface through TWO channels: the foreground APNs
+/// push (InAppNoticePill) and the 30s poll (IncomingVibeToast).
+/// Whichever lands first claims the key — kind:actor:outfit, a
+/// stable identity since a vibe is unique per (giver, outfit) —
+/// and the other stays silent.
+@MainActor
+enum SurfacedNoticeRegistry {
+    private static var claimed: Set<String> = []
+
+    /// True if this is the first claim (caller may show the notice);
+    /// false if another path already surfaced it.
+    static func claim(_ key: String) -> Bool {
+        claimed.insert(key).inserted
+    }
+
+    static func vibeKey(actorId: String, outfitId: String) -> String {
+        "vibe:\(actorId.lowercased()):\(outfitId)"
+    }
+}
+
 /// Watches the vibes table for new vibes received by the
 /// current user and surfaces them as in-app toasts.
 ///
@@ -147,6 +168,18 @@ final class VibesIncomingManager {
         // Detect milestone crossing.
         let newTotal = await VibesService.receivedCount(userId: userId)
         let crossed = (previousTotal / 5) < (newTotal / 5)
+
+        // If the foreground push pill already surfaced this vibe,
+        // stay silent — one notice per vibe across BOTH channels.
+        let key = SurfacedNoticeRegistry.vibeKey(
+            actorId: mostRecent.giver_id.uuidString,
+            outfitId: mostRecent.outfit_id
+        )
+        guard SurfacedNoticeRegistry.claim(key) else {
+            await MainActor.run { self.previousTotal = newTotal }
+            lastSeenAt = mostRecent.created_at
+            return
+        }
 
         let vibe = IncomingVibe(
             id: mostRecent.id,

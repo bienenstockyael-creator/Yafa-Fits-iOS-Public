@@ -162,6 +162,10 @@ Deno.serve(async (req) => {
     aps: { alert: { title, body: alertBody }, sound: "default" },
     kind,
     outfit_id: outfit_id ?? null,
+    // Lets the app dedupe a foreground push against the polled
+    // vibe toast: a vibe is unique per (actor, outfit), so
+    // kind:actor:outfit is a stable cross-path identity.
+    actor_id,
   };
 
   // 64-byte APNs limit; kind+actor+target uniquely names the event.
