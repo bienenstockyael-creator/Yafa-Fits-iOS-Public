@@ -1935,22 +1935,18 @@ struct ShareCardComposer: View {
         let productCount = outfit.products?.count ?? 0
         return ShareCardTemplate.allCases.filter { template in
             if template == .layered2 || template == .layered3 {
-                // FITS and STATS are Pro-only. Archive owner sees them
-                // regardless, matching the rest of the Pro-gated UI.
-                return productCount >= 3 && canAccessProTemplates
+                // FITS and STATS are exclusive to the archive owner's
+                // account (@yafa) — not offered to any other user,
+                // Pro or otherwise.
+                return productCount >= 3 && isArchiveOwner
             }
             return true
         }
     }
 
-    /// Pro feature gate for the layered FITS/STATS templates. Mirrors
-    /// `RootView.canAccessVirtualCloset` so Pro entitlements stay
-    /// consistent across the app.
-    private var canAccessProTemplates: Bool {
-        if store.userId?.uuidString.lowercased() == AppConfig.archiveOwnerUserId {
-            return true
-        }
-        return store.currentProfile?.isPro == true
+    /// FITS/STATS exclusivity gate: the archive owner's account only.
+    private var isArchiveOwner: Bool {
+        store.userId?.uuidString.lowercased() == AppConfig.archiveOwnerUserId
     }
 
     /// The dots' continuous "active" index — drives the magnification
