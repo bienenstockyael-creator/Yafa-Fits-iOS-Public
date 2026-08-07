@@ -390,6 +390,11 @@ struct ShareCardComposer: View {
     @State private var coloramaOotdImage: UIImage?
     @State private var coloramaOotdStroke: UIImage?
 
+    // Shoppable-link state: LINK mints (or fetches) the fit's short
+    // slug, copies yafafits.com/fit/<slug> and confirms inline.
+    @State private var linkCopied = false
+    @State private var mintingLink = false
+
     // Format-picker state. STORY taps on dynamic templates surface a
     // sheet with two preview thumbnails (card-on-white vs full-screen);
     // the chosen format is then handed back to `exportAndShareVideo`.
@@ -1930,22 +1935,18 @@ struct ShareCardComposer: View {
         let productCount = outfit.products?.count ?? 0
         return ShareCardTemplate.allCases.filter { template in
             if template == .layered2 || template == .layered3 {
-                // FITS and STATS are Pro-only. Archive owner sees them
-                // regardless, matching the rest of the Pro-gated UI.
-                return productCount >= 3 && canAccessProTemplates
+                // FITS and STATS are exclusive to the archive owner's
+                // account (@yafa) — not offered to any other user,
+                // Pro or otherwise.
+                return productCount >= 3 && isArchiveOwner
             }
             return true
         }
     }
 
-    /// Pro feature gate for the layered FITS/STATS templates. Mirrors
-    /// `RootView.canAccessVirtualCloset` so Pro entitlements stay
-    /// consistent across the app.
-    private var canAccessProTemplates: Bool {
-        if store.userId?.uuidString.lowercased() == AppConfig.archiveOwnerUserId {
-            return true
-        }
-        return store.currentProfile?.isPro == true
+    /// FITS/STATS exclusivity gate: the archive owner's account only.
+    private var isArchiveOwner: Bool {
+        store.userId?.uuidString.lowercased() == AppConfig.archiveOwnerUserId
     }
 
     /// The dots' continuous "active" index — drives the magnification
@@ -2198,6 +2199,41 @@ struct ShareCardComposer: View {
     private var shareActions: some View {
         let exporting = activeExport != nil
         return HStack(spacing: 10) {
+            Button {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                guard !mintingLink else { return }
+                mintingLink = true
+                Task { @MainActor in
+                    // Slug when the column exists; raw outfit id
+                    // otherwise — the /fit/ page accepts both.
+                    let key = await OutfitService.ensureShareSlug(outfitId: outfit.id) ?? outfit.id
+                    UIPasteboard.general.string = "https://yafafits.com/fit/\(key)"
+                    mintingLink = false
+                    withAnimation(.easeOut(duration: 0.15)) { linkCopied = true }
+                    try? await Task.sleep(nanoseconds: 1_600_000_000)
+                    withAnimation(.easeOut(duration: 0.3)) { linkCopied = false }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    if mintingLink {
+                        ProgressView()
+                            .tint(AppPalette.textMuted)
+                            .scaleEffect(0.7)
+                    } else {
+                        AppIcon(glyph: .share, size: 12, color: AppPalette.iconPrimary)
+                    }
+                    Text(linkCopied ? "COPIED!" : "LINK")
+                        .font(.system(size: 10, weight: .semibold))
+                        .tracking(1)
+                        .foregroundStyle(AppPalette.textMuted)
+                }
+                .padding(.horizontal, 14)
+                .frame(height: 36)
+                .appCapsule()
+            }
+            .buttonStyle(SolidPressButtonStyle())
+            .disabled(exporting)
+
             Button {
                 storyHaptic.impactOccurred()
                 if selectedTemplate.isDynamic {

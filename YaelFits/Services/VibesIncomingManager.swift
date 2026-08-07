@@ -1,5 +1,26 @@
 import Foundation
 
+/// Cross-path "this notice already reached the user" registry.
+/// A vibe can surface through TWO channels: the foreground APNs
+/// push (InAppNoticePill) and the 30s poll (IncomingVibeToast).
+/// Whichever lands first claims the key — kind:actor:outfit, a
+/// stable identity since a vibe is unique per (giver, outfit) —
+/// and the other stays silent.
+@MainActor
+enum SurfacedNoticeRegistry {
+    private static var claimed: Set<String> = []
+
+    /// True if this is the first claim (caller may show the notice);
+    /// false if another path already surfaced it.
+    static func claim(_ key: String) -> Bool {
+        claimed.insert(key).inserted
+    }
+
+    static func vibeKey(actorId: String, outfitId: String) -> String {
+        "vibe:\(actorId.lowercased()):\(outfitId)"
+    }
+}
+
 /// Watches the vibes table for new vibes received by the
 /// current user and surfaces them as in-app toasts.
 ///
@@ -40,11 +61,27 @@ final class VibesIncomingManager {
     private var pollTask: Task<Void, Never>?
     private var sessionStart: Date = .distantPast
     private var lastSeenAt: Date = .distantPast
+    /// Vibes already surfaced this session. The timestamp cursor
+    /// alone CANNOT exclude the boundary row: serializing the
+    /// cursor to ISO8601 truncates sub-second precision, so
+    /// `created_at > cursor` kept matching the same vibe and the
+    /// toast re-fired every poll (~30s). IDs are exact.
+    private var seenVibeIds: Set<UUID> = []
+
+    /// Cursor serializer WITH fractional seconds — the default
+    /// ISO8601DateFormatter drops them, which widened the query
+    /// window by up to a second every poll.
+    private static let sinceFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
 
     func start(for userId: UUID) {
         stop()
         sessionStart = Date()
         lastSeenAt = sessionStart
+        seenVibeIds = []
         previousTotal = 0
         pollTask = Task { [weak self] in
             // Initial baseline: stamp the current received count
@@ -91,7 +128,7 @@ final class VibesIncomingManager {
                 .from("vibes")
                 .select("id, giver_id, outfit_id, created_at")
                 .eq("receiver_id", value: userId.uuidString)
-                .gt("created_at", value: ISO8601DateFormatter().string(from: since))
+                .gt("created_at", value: Self.sinceFormatter.string(from: since))
                 .order("created_at", ascending: false)
                 .limit(5)
                 .execute()
@@ -100,7 +137,13 @@ final class VibesIncomingManager {
             return
         }
 
-        guard let mostRecent = rows.first else {
+        // Exact dedupe — every fetched row is marked seen whether or
+        // not it toasts, so a vibe can only ever surface ONCE per
+        // session.
+        let fresh = rows.filter { !seenVibeIds.contains($0.id) }
+        for row in rows { seenVibeIds.insert(row.id) }
+
+        guard let mostRecent = fresh.first else {
             // No new vibes — bump lastSeenAt so we don't
             // refetch the same empty window forever.
             lastSeenAt = Date()
@@ -125,6 +168,18 @@ final class VibesIncomingManager {
         // Detect milestone crossing.
         let newTotal = await VibesService.receivedCount(userId: userId)
         let crossed = (previousTotal / 5) < (newTotal / 5)
+
+        // If the foreground push pill already surfaced this vibe,
+        // stay silent — one notice per vibe across BOTH channels.
+        let key = SurfacedNoticeRegistry.vibeKey(
+            actorId: mostRecent.giver_id.uuidString,
+            outfitId: mostRecent.outfit_id
+        )
+        guard SurfacedNoticeRegistry.claim(key) else {
+            await MainActor.run { self.previousTotal = newTotal }
+            lastSeenAt = mostRecent.created_at
+            return
+        }
 
         let vibe = IncomingVibe(
             id: mostRecent.id,

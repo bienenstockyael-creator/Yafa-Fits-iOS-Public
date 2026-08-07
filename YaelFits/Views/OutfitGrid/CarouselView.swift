@@ -107,7 +107,10 @@ struct CarouselView: View {
     /// How much the slide shrinks at full card expansion (0.34 →
     /// scale lands at 0.66). Roughly 1.2× the prior 0.55, giving
     /// the outfit more presence above the open card.
-    private static let cardExpandSlideShrink: CGFloat = 0.34
+    // 0.34 shrank the outfit to 66% on card-open, leaving a dead gap
+    // between the fit's feet and the card's top edge — 0.22 keeps it
+    // at 78%, closing most of that whitespace.
+    private static let cardExpandSlideShrink: CGFloat = 0.22
     /// Upward translation applied to the slide stack at full
     /// expansion. Combined with the scale, the slide visibly moves
     /// up; smaller magnitude here brings the outfit down on the

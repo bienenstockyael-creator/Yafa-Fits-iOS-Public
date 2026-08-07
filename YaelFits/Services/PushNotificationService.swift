@@ -100,6 +100,18 @@ final class PushNotificationAppDelegate: NSObject, UIApplicationDelegate, UNUser
         // Yafa pill instead. Backgrounded/locked delivery is untouched.
         let content = notification.request.content
         let kind = content.userInfo["kind"] as? String
+
+        // Vibes also arrive via VibesIncomingManager's 30s poll —
+        // whichever channel surfaces a given vibe first claims it in
+        // the shared registry, and the other stays silent.
+        if kind == "vibe",
+           let actorId = content.userInfo["actor_id"] as? String,
+           let outfitId = content.userInfo["outfit_id"] as? String {
+            let key = SurfacedNoticeRegistry.vibeKey(actorId: actorId, outfitId: outfitId)
+            let isFirst = await MainActor.run { SurfacedNoticeRegistry.claim(key) }
+            guard isFirst else { return [] }
+        }
+
         await InAppNoticeCenter.shared.show(kind: kind, title: content.title)
         return []
     }
