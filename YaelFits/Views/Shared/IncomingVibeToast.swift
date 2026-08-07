@@ -21,7 +21,7 @@ struct IncomingVibeToast: View {
     var body: some View {
         VStack(spacing: 0) {
             if let vibe = manager.latest {
-                toastCard(vibe)
+                toastPill(vibe)
                     .transition(
                         .move(edge: .top)
                         .combined(with: .opacity)
@@ -30,61 +30,39 @@ struct IncomingVibeToast: View {
             }
             Spacer()
         }
-        .animation(.spring(response: 0.45, dampingFraction: 0.78), value: manager.latest?.id)
+        .animation(.spring(response: 0.38, dampingFraction: 0.8), value: manager.latest?.id)
         .allowsHitTesting(manager.latest != nil)
     }
 
-    private func toastCard(_ vibe: VibesIncomingManager.IncomingVibe) -> some View {
-        Button {
+    /// InAppNoticePill's exact recipe (the "new like" pill): compact
+    /// hug-width capsule, 12pt semibold single line, with the SAME
+    /// blue-gradient flame the vibe button settles on.
+    private func toastPill(_ vibe: VibesIncomingManager.IncomingVibe) -> some View {
+        HStack(spacing: LayoutMetrics.xxSmall) {
+            GradientFlameIcon(size: 15, stroked: true)
+            Text(
+                vibe.crossedMilestone
+                    ? "You earned a free 3D fit!"
+                    : "\(vibe.giver.handle) vibed your fit"
+            )
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(AppPalette.textPrimary)
+            .lineLimit(1)
+        }
+        .padding(.horizontal, LayoutMetrics.xSmall)
+        .padding(.vertical, 8)
+        .appCapsule(shadowRadius: 8, shadowY: 2)
+        .onTapGesture {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             manager.dismissLatest()
-        } label: {
-            HStack(spacing: LayoutMetrics.small) {
-                AvatarView(
-                    url: vibe.giver.avatarUrl,
-                    initial: vibe.giver.initial,
-                    size: 40,
-                    shadowRadius: 2,
-                    shadowY: 1
-                )
-                VStack(alignment: .leading, spacing: 2) {
-                    if vibe.crossedMilestone {
-                        Text("You earned a free 3D fit!")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(AppPalette.textStrong)
-                        Text("Thanks to a vibe from \(vibe.giver.handle)")
-                            .font(.system(size: 12))
-                            .foregroundStyle(AppPalette.textMuted)
-                    } else {
-                        Text("\(vibe.giver.handle) vibed your fit")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(AppPalette.textStrong)
-                            .lineLimit(1)
-                    }
-                }
-                Spacer(minLength: 0)
-                AppIcon(
-                    glyph: .flame,
-                    size: 22,
-                    color: AppPalette.uploadGlow,
-                    filled: true
-                )
-                .shadow(color: AppPalette.uploadGlow.opacity(0.7), radius: 6)
-            }
-            .padding(.horizontal, LayoutMetrics.medium)
-            .padding(.vertical, LayoutMetrics.small)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .appCard(cornerRadius: 16, shadowRadius: 12, shadowY: 6)
         }
-        .buttonStyle(SolidPressButtonStyle())
-        .padding(.horizontal, LayoutMetrics.screenPadding)
-        .padding(.top, LayoutMetrics.xSmall)
+        .padding(.top, 4)
     }
 
     private func scheduleDismiss() {
         dismissTask?.cancel()
         dismissTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 3_800_000_000)
+            try? await Task.sleep(nanoseconds: 3_200_000_000)
             guard !Task.isCancelled else { return }
             manager.dismissLatest()
         }
