@@ -75,24 +75,10 @@ struct VibesFirstUseModal: View {
     }
 
     /// Gradient-filled flame icon matching the morph's `.gradient`
-    /// phase: yellow core fading through warm-white into cyan/blue.
+    /// phase — rendered by the canonical component so every vibes
+    /// surface stays in lockstep. Halo shadow preserved.
     private var gradientFlame: some View {
-        RadialGradient(
-            gradient: Gradient(stops: [
-                .init(color: Color(red: 1.00, green: 0.93, blue: 0.55), location: 0.0),
-                .init(color: Color(red: 1.00, green: 0.97, blue: 0.78), location: 0.07),
-                .init(color: Color(red: 0.96, green: 0.98, blue: 0.95), location: 0.22),
-                .init(color: Color(red: 0.85, green: 0.95, blue: 1.00), location: 0.42),
-                .init(color: Color(red: 0.65, green: 0.88, blue: 1.00), location: 0.68),
-                .init(color: Color(red: 0.50, green: 0.82, blue: 1.00), location: 0.86),
-                .init(color: AppPalette.uploadGlow, location: 1.0)
-            ]),
-            center: UnitPoint(x: 0.5, y: 0.65),
-            startRadius: 0,
-            endRadius: 22
-        )
-        .frame(width: 36, height: 36)
-        .mask(AppIcon(glyph: .flame, size: 36, color: .white, filled: true))
-        .shadow(color: AppPalette.uploadGlow.opacity(0.45), radius: 10)
+        GradientFlameIcon(size: 36)
+            .shadow(color: AppPalette.uploadGlow.opacity(0.45), radius: 10)
     }
 }

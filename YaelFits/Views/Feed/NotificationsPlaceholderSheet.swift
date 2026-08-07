@@ -141,12 +141,7 @@ struct NotificationsPlaceholderSheet: View {
                         .fill(.white)
                         .frame(width: 16, height: 16)
                         .shadow(color: .black.opacity(0.15), radius: 1.5, y: 0.5)
-                    AppIcon(
-                        glyph: .flame,
-                        size: 10,
-                        color: AppPalette.uploadGlow,
-                        filled: true
-                    )
+                    GradientFlameIcon(size: 10, stroked: true)
                 }
                 .offset(x: 2, y: 2)
             }
