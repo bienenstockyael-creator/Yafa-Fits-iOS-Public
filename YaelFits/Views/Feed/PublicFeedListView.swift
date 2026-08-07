@@ -640,6 +640,9 @@ struct FeedPostCard: View {
     /// User's remaining-this-week vibe quota. Shared across all
     /// cards in the feed via a Binding to the parent list.
     var vibesRemainingThisWeek: Binding<Int>?
+    /// When true, the comments sheet presents itself right after the
+    /// card appears — comment-notification tap-through.
+    var autoOpenComments: Bool = false
     @Environment(OutfitStore.self) private var store
     @State private var showComments = false
     @State private var showUserProfile = false
@@ -729,8 +732,16 @@ struct FeedPostCard: View {
             // outfits are typically pre-cached — cards there
             // popped in without the friends-feed fade. Animating
             // both paths makes the entry consistent.
-            guard outfit != nil, !cardVisible else { return }
-            withAnimation(.easeOut(duration: 0.3)) { cardVisible = true }
+            if outfit != nil, !cardVisible {
+                withAnimation(.easeOut(duration: 0.3)) { cardVisible = true }
+            }
+            // Comment-notification tap-through: surface the thread
+            // as soon as the card has settled.
+            if autoOpenComments, !showComments {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    showComments = true
+                }
+            }
         }
         .sheet(isPresented: $showLikers) {
             LikersSheet(outfitId: post.outfitId)

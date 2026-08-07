@@ -4,8 +4,10 @@ struct LikersSheet: View {
     let outfitId: String
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(OutfitStore.self) private var store
     @State private var profiles: [Profile] = []
     @State private var isLoading = true
+    @State private var selectedUserId: UUID?
 
     var body: some View {
         NavigationStack {
@@ -46,10 +48,17 @@ struct LikersSheet: View {
                 }
             }
             .task { await load() }
+            .fullScreenCover(item: $selectedUserId) { userId in
+                UserProfileView(userId: userId, onDismiss: { selectedUserId = nil })
+                    .environment(store)
+            }
         }
     }
 
     private func row(_ profile: Profile) -> some View {
+        Button {
+            selectedUserId = profile.id
+        } label: {
         HStack(spacing: LayoutMetrics.small) {
             AvatarView(
                 url: profile.avatarUrl,
@@ -81,6 +90,9 @@ struct LikersSheet: View {
         }
         .padding(.horizontal, LayoutMetrics.screenPadding)
         .padding(.vertical, LayoutMetrics.xSmall)
+        .contentShape(Rectangle())
+        }
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     private func load() async {
