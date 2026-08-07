@@ -377,7 +377,8 @@ struct CommentsSheet: View {
 
     private func deleteComment(_ comment: Comment) {
         guard let id = comment.id else { return }
-        withAnimation {
+        // Quick exit — matches the snappy optimistic-insert spring.
+        withAnimation(.easeOut(duration: 0.18)) {
             comments.removeAll { $0.id == id }
         }
         Task {
