@@ -335,18 +335,40 @@ struct CommentsSheet: View {
         let text = newCommentText
         newCommentText = ""
 
+        // Optimistic append — the comment appears the instant you hit
+        // send (temp negative id), then swaps for the server row.
+        let tempId = Int64(-Date().timeIntervalSince1970 * 1000)
+        let optimistic = Comment(
+            id: tempId,
+            userId: userId,
+            outfitId: outfitId,
+            body: text,
+            createdAt: Date()
+        )
+        if let profile = store.currentProfile { profiles[userId] = profile }
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
+            comments.append(optimistic)
+        }
+
         Task {
             do {
                 let comment = try await SocialService.addComment(userId: userId, outfitId: outfitId, body: text)
                 let profile = store.currentProfile ?? profiles[userId]
                 await MainActor.run {
-                    comments.append(comment)
+                    if let index = comments.firstIndex(where: { $0.id == tempId }) {
+                        comments[index] = comment
+                    } else {
+                        comments.append(comment)
+                    }
                     if let profile { profiles[userId] = profile }
                     isSending = false
                 }
             } catch {
                 await MainActor.run {
-                    newCommentText = text
+                    // Roll the optimistic row back and restore the
+                    // text so nothing is lost.
+                    comments.removeAll { $0.id == tempId }
+                    if newCommentText.isEmpty { newCommentText = text }
                     isSending = false
                 }
             }

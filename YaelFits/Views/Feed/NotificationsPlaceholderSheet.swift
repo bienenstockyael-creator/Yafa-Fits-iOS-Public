@@ -17,6 +17,7 @@ struct NotificationsPlaceholderSheet: View {
     @State private var cardVibeCount = 0
     @State private var cardIsLiked = false
     @State private var cardIsVibed = false
+    @State private var cardAutoOpenComments = false
     @State private var vibesRemainingThisWeek: Int = 3
 
     var body: some View {
@@ -28,7 +29,9 @@ struct NotificationsPlaceholderSheet: View {
                     outfitCardOverlay(outfit: outfit)
                         .opacity(overlayVisible ? 1 : 0)
                         .scaleEffect(overlayVisible ? 1 : 0.96)
-                        .animation(.easeOut(duration: 0.15), value: overlayVisible)
+                        // Snappy spring — the card should feel like it
+                        // was already waiting behind the row.
+                        .animation(.spring(response: 0.26, dampingFraction: 0.88), value: overlayVisible)
                 }
             }
         }
@@ -93,9 +96,15 @@ struct NotificationsPlaceholderSheet: View {
             switch item.type {
             case .like, .comment, .vibe:
                 // Social actions on one of MY outfits → open that
-                // outfit's feed card.
+                // outfit's feed card. Comment rows land straight in
+                // the thread.
                 if let outfitId = item.outfitId {
-                    Task { await presentOutfitCard(outfitId: outfitId) }
+                    Task {
+                        await presentOutfitCard(
+                            outfitId: outfitId,
+                            openComments: item.type == .comment
+                        )
+                    }
                 }
             case .follow:
                 guard let id = UUID(uuidString: item.actorId) else { return }
@@ -207,7 +216,8 @@ struct NotificationsPlaceholderSheet: View {
                 hideProChrome: true,
                 vibeCountInitial: cardVibeCount,
                 isVibedByMeInitial: cardIsVibed,
-                vibesRemainingThisWeek: $vibesRemainingThisWeek
+                vibesRemainingThisWeek: $vibesRemainingThisWeek,
+                autoOpenComments: cardAutoOpenComments
             )
             .padding(.horizontal, LayoutMetrics.xxSmall)
             .padding(.top, LayoutMetrics.medium)
@@ -233,14 +243,36 @@ struct NotificationsPlaceholderSheet: View {
         )
     }
 
-    private func presentOutfitCard(outfitId: String) async {
+    private func presentOutfitCard(outfitId: String, openComments: Bool) async {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
 
-        // Resolve the outfit + live counts BEFORE presenting so the
-        // card never flashes zeros.
-        let resolved = await ContentSource.getPublicOutfitsByIds([outfitId])
-        guard let outfit = resolved.first?.outfit else { return }
+        // INSTANT present: these notifications are always about the
+        // user's own outfits, which the archive store already holds —
+        // no network round-trip before the card appears. Counts
+        // stream in right behind it.
+        var outfit = store.outfits.first(where: { $0.id == outfitId })
+            ?? store.feedOutfitCache[outfitId]
+        if outfit == nil {
+            outfit = await ContentSource.getPublicOutfitsByIds([outfitId]).first?.outfit
+        }
+        guard let outfit else { return }
 
+        await MainActor.run {
+            cardLikeCount = 0
+            cardCommentCount = 0
+            cardVibeCount = 0
+            cardIsLiked = false
+            cardIsVibed = false
+            cardAutoOpenComments = openComments
+            // Pre-populate the cache so the card mounts fully formed.
+            store.feedOutfitCache[outfit.id] = outfit
+            selectedOutfit = outfit
+            overlayVisible = false
+            DispatchQueue.main.async { overlayVisible = true }
+        }
+
+        // Live counts arrive behind the presentation (typically well
+        // under half a second) — FeedPostCard re-renders in place.
         async let likesTask = try? SocialService.getLikeCounts(outfitIds: [outfitId])
         async let cmtsTask = try? SocialService.getCommentCounts(outfitIds: [outfitId])
         async let vibesTask = VibesService.vibeCounts(outfitIds: [outfitId])
@@ -260,17 +292,14 @@ struct NotificationsPlaceholderSheet: View {
         let remaining = await remainingTask
 
         await MainActor.run {
+            // Only apply if the card is still showing this outfit.
+            guard selectedOutfit?.id == outfitId else { return }
             cardLikeCount = likes[outfitId] ?? 0
             cardCommentCount = cmts[outfitId] ?? 0
             cardVibeCount = vibes[outfitId] ?? 0
             cardIsLiked = liked
             cardIsVibed = vibed
             vibesRemainingThisWeek = remaining
-            // Pre-populate the cache so the card mounts fully formed.
-            store.feedOutfitCache[outfit.id] = outfit
-            selectedOutfit = outfit
-            overlayVisible = false
-            DispatchQueue.main.async { overlayVisible = true }
         }
     }
 
