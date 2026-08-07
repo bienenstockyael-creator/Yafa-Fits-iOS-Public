@@ -12,6 +12,23 @@ struct CommentsSheet: View {
     @State private var reportTarget: ReportTarget?
     @State private var blockCandidate: BlockCandidate?
 
+    // @-mention autocomplete: when the composer's tail is an
+    // in-progress "@query" token, surface matching usernames above
+    // the compose bar; tapping one completes the mention.
+    @State private var mentionSuggestions: [Profile] = []
+    @State private var mentionSearchTask: Task<Void, Never>?
+
+    /// The "@query" token being typed at the END of the composer,
+    /// if any (mentions are completed as you type, so the tail is
+    /// the only token that needs live suggestions).
+    private var activeMentionQuery: String? {
+        guard let match = newCommentText.range(
+            of: "@([A-Za-z0-9_.]{1,30})$",
+            options: .regularExpression
+        ) else { return nil }
+        return String(newCommentText[match].dropFirst())
+    }
+
     /// Comments from users this person has blocked are hidden.
     private var visibleComments: [Comment] {
         comments.filter { !store.blockedUserIds.contains($0.userId) }
@@ -22,9 +39,15 @@ struct CommentsSheet: View {
             VStack(spacing: 0) {
                 commentsList
                 Divider().opacity(0.16)
+                if !mentionSuggestions.isEmpty {
+                    mentionSuggestionBar
+                }
                 composeBar
             }
             .background(AppPalette.groupedBackground)
+            .onChange(of: newCommentText) { _, _ in
+                updateMentionSuggestions()
+            }
             .navigationTitle("Comments")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.light, for: .navigationBar)
@@ -158,7 +181,7 @@ struct CommentsSheet: View {
                     }
                 }
 
-                Text(comment.body)
+                Text(styledCommentBody(comment.body))
                     .font(.system(size: 13))
                     .foregroundStyle(AppPalette.textSecondary)
                     .lineSpacing(2)
@@ -166,6 +189,96 @@ struct CommentsSheet: View {
         }
         .padding(LayoutMetrics.xSmall)
         .appCard(cornerRadius: 16, shadowRadius: 2, shadowY: 1)
+    }
+
+    /// Horizontal strip of username matches for the @-token being
+    /// typed. Tapping completes the mention in the composer.
+    private var mentionSuggestionBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: LayoutMetrics.xxSmall) {
+                ForEach(mentionSuggestions) { profile in
+                    Button {
+                        completeMention(with: profile)
+                    } label: {
+                        HStack(spacing: 6) {
+                            AvatarView(
+                                url: profile.avatarUrl,
+                                initial: profile.initial,
+                                size: 22
+                            )
+                            Text(profile.handle)
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(AppPalette.textStrong)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .appCapsule(shadowRadius: 2, shadowY: 1)
+                    }
+                    .buttonStyle(SolidPressButtonStyle())
+                }
+            }
+            .padding(.horizontal, LayoutMetrics.screenPadding)
+            .padding(.vertical, LayoutMetrics.xxSmall)
+        }
+        .background(AppPalette.groupedBackground)
+    }
+
+    private func updateMentionSuggestions() {
+        mentionSearchTask?.cancel()
+        guard let query = activeMentionQuery else {
+            if !mentionSuggestions.isEmpty { mentionSuggestions = [] }
+            return
+        }
+        mentionSearchTask = Task {
+            // Debounce keystrokes so we don't query per character.
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            guard !Task.isCancelled else { return }
+            let results = (try? await SocialService.searchProfiles(query: query)) ?? []
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                // Guard against a stale result landing after the
+                // token changed or was completed.
+                mentionSuggestions = activeMentionQuery == nil ? [] : Array(results.prefix(5))
+            }
+        }
+    }
+
+    private func completeMention(with profile: Profile) {
+        guard let match = newCommentText.range(
+            of: "@([A-Za-z0-9_.]{1,30})$",
+            options: .regularExpression
+        ) else { return }
+        let username = profile.username ?? profile.handle.replacingOccurrences(of: "@", with: "")
+        newCommentText.replaceSubrange(match, with: "@\(username) ")
+        mentionSuggestions = []
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+
+    /// Renders @mentions inside a comment in the strong text color
+    /// with semibold weight, so tagged usernames stand out from the
+    /// surrounding copy.
+    private func styledCommentBody(_ body: String) -> AttributedString {
+        var result = AttributedString()
+        var cursor = body.startIndex
+        guard let regex = try? NSRegularExpression(pattern: "@[A-Za-z0-9_.]+") else {
+            return AttributedString(body)
+        }
+        let matches = regex.matches(in: body, range: NSRange(body.startIndex..., in: body))
+        for match in matches {
+            guard let range = Range(match.range, in: body) else { continue }
+            if cursor < range.lowerBound {
+                result += AttributedString(String(body[cursor..<range.lowerBound]))
+            }
+            var mention = AttributedString(String(body[range]))
+            mention.font = .system(size: 13, weight: .semibold)
+            mention.foregroundColor = AppPalette.textStrong
+            result += mention
+            cursor = range.upperBound
+        }
+        if cursor < body.endIndex {
+            result += AttributedString(String(body[cursor...]))
+        }
+        return result
     }
 
     private var composeBar: some View {
