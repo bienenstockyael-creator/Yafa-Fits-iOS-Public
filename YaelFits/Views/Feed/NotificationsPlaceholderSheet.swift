@@ -169,9 +169,11 @@ struct NotificationsPlaceholderSheet: View {
                 shadowY: 1
             )
             .overlay(alignment: .bottomTrailing) {
-                // Bare gradient flame — no white disc behind it.
-                GradientFlameIcon(size: 15, stroked: true)
-                    .offset(x: 3, y: 3)
+                // Bare gradient flame — no disc, lifted by a soft
+                // drop shadow so it pops off the avatar.
+                GradientFlameIcon(size: 20, stroked: true)
+                    .shadow(color: .black.opacity(0.25), radius: 3, y: 1.5)
+                    .offset(x: 5, y: 4)
             }
         case .like, .comment, .follow:
             AvatarView(
