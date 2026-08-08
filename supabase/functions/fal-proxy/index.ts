@@ -54,8 +54,37 @@ interface ProxyPayload {
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const falApiKey = Deno.env.get("FAL_API_KEY") ?? "";
 const openaiApiKey = Deno.env.get("OPENAI_API_KEY") ?? "";
+
+// Fire-and-forget observability event into analytics_events.
+// NEVER throws and NEVER delays the response — a logging outage
+// must not touch the generation path. waitUntil (when available)
+// keeps the runtime alive long enough for the insert to land.
+function logEvent(
+  eventName: string,
+  userId: string | null,
+  properties: Record<string, unknown>,
+): void {
+  if (!supabaseServiceKey) return;
+  const insert = fetch(`${supabaseUrl}/rest/v1/analytics_events`, {
+    method: "POST",
+    headers: {
+      apikey: supabaseServiceKey,
+      Authorization: `Bearer ${supabaseServiceKey}`,
+      "Content-Type": "application/json",
+      Prefer: "return=minimal",
+    },
+    body: JSON.stringify({
+      user_id: userId,
+      event_name: eventName,
+      properties,
+    }),
+  }).then(() => {}).catch(() => {});
+  // deno-lint-ignore no-explicit-any
+  (globalThis as any).EdgeRuntime?.waitUntil?.(insert);
+}
 
 serve(async (req) => {
   // CORS preflight: standard handshake so the iOS client (which
@@ -150,14 +179,44 @@ serve(async (req) => {
     }
   }
 
+  // Observability: model = the endpoint path minus any /requests/<id>
+  // suffix, so submissions and their status polls group together.
+  const modelPath = targetURL.pathname.split("/requests/")[0];
+  const isFal = targetURL.hostname.endsWith("fal.run");
+  const isSubmission = isFal && method === "POST" &&
+    !targetURL.pathname.includes("/requests/");
+  const startedAt = Date.now();
+
   let upstream: Response;
   try {
     upstream = await fetch(targetURL.toString(), init);
   } catch (err) {
+    logEvent("fal_proxy_unreachable", user.id, {
+      host: targetURL.hostname,
+      model: modelPath,
+      duration_ms: Date.now() - startedAt,
+    });
     return jsonError(
       502,
       "upstream_unreachable",
       `Failed to reach ${targetURL.hostname}: ${err}`,
+    );
+  }
+
+  // Log every SUBMISSION (each one costs money) and every upstream
+  // error — but not the happy-path status polls, which would flood
+  // the table at ~1 event/second per generation.
+  if (isSubmission || upstream.status >= 400) {
+    logEvent(
+      upstream.status < 400 ? "fal_submit" : "fal_error",
+      user.id,
+      {
+        host: targetURL.hostname,
+        model: modelPath,
+        status: upstream.status,
+        method,
+        duration_ms: Date.now() - startedAt,
+      },
     );
   }
 
