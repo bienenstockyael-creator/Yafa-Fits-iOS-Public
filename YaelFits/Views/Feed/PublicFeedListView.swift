@@ -80,7 +80,15 @@ struct PublicFeedListView: View {
                 // appears, immune to any state race), the explicit
                 // .onAppear snapshot, and the live `isEmpty` fallback
                 // for the very first body call before .onAppear fires.
+                // Clip-installed users auto-follow their creator, so
+                // followingIds is non-empty — but the creator follow
+                // must NOT skip discovery. The one-shot flag forces
+                // the Find Your People surface on their first feed
+                // entry; `everShownDiscovery` then latches it for the
+                // visit and the flag is consumed.
+                let clipForcesDiscovery = ClipDiscoveryPending.isPending()
                 let showsDiscovery = everShownDiscovery
+                    || clipForcesDiscovery
                     || (hasEvaluatedEntry ? discoveryLocked : store.followingIds.isEmpty)
                 if showsDiscovery {
                     // No outer top padding — the scroll content
@@ -102,7 +110,13 @@ struct PublicFeedListView: View {
                         onProfileTap: { selectedDiscoveryProfile = $0 },
                         seedProfiles: contactMatches
                     )
-                    .onAppear { everShownDiscovery = true }
+                    .onAppear {
+                        everShownDiscovery = true
+                        // Consume the clip-install one-shot: discovery
+                        // has been shown; future visits follow the
+                        // normal following-count rules.
+                        ClipDiscoveryPending.clear()
+                    }
                 } else if store.feedPosts.isEmpty {
                     emptyState
                 } else {

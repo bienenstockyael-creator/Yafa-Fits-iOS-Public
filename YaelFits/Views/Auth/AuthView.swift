@@ -4,9 +4,15 @@ import SwiftUI
 struct AuthView: View {
     @Environment(AuthManager.self) private var auth
 
+    /// Set when this install came through the App Clip: renders the
+    /// pre-checked "Follow @creator" row and records the intent for
+    /// execution after the gate + onboarding.
+    var clipCreator: ClipHandoff? = nil
+
     @State private var email = ""
     @State private var password = ""
     @State private var isSignUp = false
+    @State private var clipFollowChecked = true
     @State private var isSubmitting = false
     @State private var errorMessage: String?
     @State private var showPasswordReset = false
@@ -44,6 +50,10 @@ struct AuthView: View {
                             }
                         }
                     } else {
+                        if let creator = clipCreator {
+                            clipFollowRow(creator)
+                            Color.clear.frame(height: LayoutMetrics.medium)
+                        }
                         modePicker
                         Color.clear.frame(height: LayoutMetrics.large)
                         formSection
@@ -271,6 +281,55 @@ struct AuthView: View {
     }
 
     // MARK: - Mode picker (Sign In / Sign Up)
+
+    /// Pre-checked consent to follow the creator whose fit brought
+    /// this user here. The intent persists in UserDefaults and is
+    /// executed only AFTER the gate + onboarding complete.
+    private func clipFollowRow(_ creator: ClipHandoff) -> some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            clipFollowChecked.toggle()
+            if clipFollowChecked {
+                ClipFollowIntent.set(creatorUserId: creator.creatorUserId)
+            } else {
+                ClipFollowIntent.clear()
+            }
+        } label: {
+            HStack(spacing: LayoutMetrics.xSmall) {
+                AvatarView(
+                    url: creator.creatorAvatarURL,
+                    initial: String(creator.creatorUsername.prefix(1)).uppercased(),
+                    size: 32
+                )
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Follow @\(creator.creatorUsername)")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AppPalette.textStrong)
+                    Text("They shared that fit with you")
+                        .font(.system(size: 11))
+                        .foregroundStyle(AppPalette.textFaint)
+                }
+                Spacer(minLength: 0)
+                AppIcon(
+                    glyph: clipFollowChecked ? .circleCheck : .plusCircle,
+                    size: 20,
+                    color: clipFollowChecked ? AppPalette.uploadGlow : AppPalette.textFaint,
+                    filled: clipFollowChecked
+                )
+            }
+            .padding(.horizontal, LayoutMetrics.small)
+            .padding(.vertical, LayoutMetrics.xSmall)
+            .contentShape(Rectangle())
+            .appCard(cornerRadius: 16, shadowRadius: 4, shadowY: 2)
+        }
+        .buttonStyle(SolidPressButtonStyle())
+        .onAppear {
+            // Default-on consent, captured the moment the row exists.
+            if clipFollowChecked {
+                ClipFollowIntent.set(creatorUserId: creator.creatorUserId)
+            }
+        }
+    }
 
     private var modePicker: some View {
         HStack(spacing: 0) {

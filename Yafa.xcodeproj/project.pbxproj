@@ -236,6 +236,9 @@
 		20260730C11B000000000016 /* VibesWaveShader.metal in Sources (Clip) */ = {isa = PBXBuildFile; fileRef = 202605302200000A000001 /* VibesWaveShader.metal */; };
 		20260730C11B000000000017 /* ClipVibesStubs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20260730C11B000000000018 /* ClipVibesStubs.swift */; };
 		20260730C11B00000000001A /* ShopBrowserSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20260730C11B000000000019 /* ShopBrowserSheet.swift */; };
+		20260808AA000000000000B1 /* ClipHandoff.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20260808AA000000000000A1 /* ClipHandoff.swift */; };
+		20260808AA000000000000B3 /* ClipRecognitionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20260808AA000000000000A2 /* ClipRecognitionView.swift */; };
+		20260808AA000000000000B2 /* ClipHandoff.swift in Sources (Clip) */ = {isa = PBXBuildFile; fileRef = 20260808AA000000000000A1 /* ClipHandoff.swift */; };
 		20260730C11B00000000001B /* ShopBrowserSheet.swift in Sources (Clip) */ = {isa = PBXBuildFile; fileRef = 20260730C11B000000000019 /* ShopBrowserSheet.swift */; };
 		20260730C11B00000000001D /* BannerAppIcon.png in Resources (Clip) */ = {isa = PBXBuildFile; fileRef = 20260730C11B00000000001C /* BannerAppIcon.png */; };
 		20260730C11B00000000001F /* ClipProfileSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20260730C11B00000000001E /* ClipProfileSheet.swift */; };
@@ -501,6 +504,8 @@
 		20260730C11A00000000000F /* YafaClip.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = YafaClip.entitlements; sourceTree = "<group>"; };
 		20260730C11B000000000018 /* ClipVibesStubs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipVibesStubs.swift; sourceTree = "<group>"; };
 		20260730C11B000000000019 /* ShopBrowserSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShopBrowserSheet.swift; sourceTree = "<group>"; };
+		20260808AA000000000000A1 /* ClipHandoff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipHandoff.swift; sourceTree = "<group>"; };
+		20260808AA000000000000A2 /* ClipRecognitionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipRecognitionView.swift; sourceTree = "<group>"; };
 		20260730C11B00000000001C /* BannerAppIcon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = BannerAppIcon.png; sourceTree = "<group>"; };
 		20260730C11B00000000001E /* ClipProfileSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipProfileSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -716,6 +721,7 @@
 			isa = PBXGroup;
 			children = (
 				202606080000000A000001 /* OnboardingFlow.swift */,
+				20260808AA000000000000A2 /* ClipRecognitionView.swift */,
 			);
 			path = Onboarding;
 			sourceTree = "<group>";
@@ -881,6 +887,7 @@
 				202606011200000A000001 /* AIProxyClient.swift */,
 				202605302000000A000001 /* VibesIncomingManager.swift */,
 				202605302600000A000001 /* VibeHapticPlayer.swift */,
+				20260808AA000000000000A1 /* ClipHandoff.swift */,
 				D49292C2B1DF2789A26ECDC7 /* SupabaseClient.swift */,
 				AA9CDA154F7FD6F2F0D57A92 /* VideoFrameSequenceExporter.swift */,
 				AABBCC10000000000000CCC2 /* CreditService.swift */,
@@ -1305,6 +1312,8 @@
 				202605301700000B000001 /* VibeButton.swift in Sources */,
 				202605301800000B000001 /* VibesEffectHost.swift in Sources */,
 				20260730C11B00000000001A /* ShopBrowserSheet.swift in Sources */,
+				20260808AA000000000000B1 /* ClipHandoff.swift in Sources */,
+				20260808AA000000000000B3 /* ClipRecognitionView.swift in Sources */,
 				202605301900000B000001 /* VibersListSheet.swift in Sources */,
 				202605302000000B000001 /* VibesIncomingManager.swift in Sources */,
 				202605302100000B000001 /* IncomingVibeToast.swift in Sources */,
@@ -1373,6 +1382,7 @@
 				20260730C11B000000000016 /* VibesWaveShader.metal in Sources (Clip) */,
 				20260730C11B000000000017 /* ClipVibesStubs.swift in Sources */,
 				20260730C11B00000000001B /* ShopBrowserSheet.swift in Sources (Clip) */,
+				20260808AA000000000000B2 /* ClipHandoff.swift in Sources (Clip) */,
 				20260730C11B00000000001F /* ClipProfileSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

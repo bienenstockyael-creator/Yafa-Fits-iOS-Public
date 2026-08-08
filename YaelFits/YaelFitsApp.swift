@@ -24,7 +24,43 @@ struct YaelFitsApp: App {
     // present onboarding (and it can't go stale across sign-out → a
     // new sign-in re-gates because the ids no longer match).
     @State private var resolvedForUserId: UUID?
+    /// Clip → app handoff (App Group). Non-nil means this install (or
+    /// launch) came through the App Clip: the signed-out flow opens
+    /// with the recognition screen and AuthView carries the
+    /// pre-checked Follow row.
+    @State private var clipHandoff: ClipHandoff? = ClipHandoffStore.load()
+    @State private var clipRecognitionDismissed = false
     @Environment(\.scenePhase) private var scenePhase
+
+    /// Executes the clip-install follow consent once the user is
+    /// fully in (existing users: right after resolve; new users:
+    /// after onboarding). Idempotent and consuming: intent + handoff
+    /// are cleared regardless, so the flow can never replay.
+    private func consumeClipFollowIntent(userId: UUID, isNewUser: Bool) async {
+        defer {
+            ClipFollowIntent.clear()
+            ClipHandoffStore.clear()
+            Task { @MainActor in clipHandoff = nil }
+        }
+        guard let creatorIdString = ClipFollowIntent.creatorId(),
+              let creatorId = UUID(uuidString: creatorIdString),
+              creatorId != userId
+        else { return }
+
+        try? await SocialService.follow(followerId: userId, followingId: creatorId)
+        await MainActor.run {
+            outfitStore.followingIds.insert(creatorId)
+        }
+        if isNewUser {
+            // The creator follow must NOT skip Find Your People —
+            // the feed honors this one-shot flag on first entry.
+            ClipDiscoveryPending.mark()
+        }
+        Analytics.log("clip_install_follow_executed", properties: [
+            "creator_id": .string(creatorIdString),
+            "new_user": .bool(isNewUser),
+        ])
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -120,6 +156,16 @@ struct YaelFitsApp: App {
                                     resolvedForUserId = userId
                                 }
 
+                                // Clip attribution: users who don't
+                                // need onboarding (existing accounts
+                                // signing in via a clip handoff)
+                                // consume the pending follow here;
+                                // new users consume it after
+                                // onboarding completes.
+                                if !needsSetup && !gated {
+                                    await consumeClipFollowIntent(userId: userId, isNewUser: false)
+                                }
+
                                 // Remaining loads run after the onboarding
                                 // decision so they never hold the cover up.
                                 await outfitStore.loadData()
@@ -132,7 +178,14 @@ struct YaelFitsApp: App {
                                 withAnimation(.easeInOut(duration: 0.3)) {
                                     showOnboarding = false
                                 }
-                                Task { await outfitStore.loadSocialData(userId: userId) }
+                                Task {
+                                    // Execute the clip-install follow
+                                    // BEFORE loadSocialData so the
+                                    // relationship is reflected in the
+                                    // first social snapshot.
+                                    await consumeClipFollowIntent(userId: userId, isNewUser: true)
+                                    await outfitStore.loadSocialData(userId: userId)
+                                }
                             }
                             .environment(outfitStore)
                             .transition(.opacity)
@@ -146,6 +199,7 @@ struct YaelFitsApp: App {
                         // app) shows through.
                         if showAccessGate {
                             AccessCodeGate(
+                                creator: clipHandoff,
                                 onRedeemed: {
                                     outfitStore.currentProfile?.hasAccess = true
                                     withAnimation(.easeInOut(duration: 0.3)) {
@@ -174,8 +228,17 @@ struct YaelFitsApp: App {
                         }
                     }
                 } else {
-                    AuthView()
+                    if let handoff = clipHandoff, !clipRecognitionDismissed {
+                        ClipRecognitionView(handoff: handoff) {
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                clipRecognitionDismissed = true
+                            }
+                        }
                         .transition(.opacity)
+                    } else {
+                        AuthView(clipCreator: clipHandoff)
+                            .transition(.opacity)
+                    }
                 }
             }
 
@@ -515,6 +578,10 @@ struct WhatsNewModal: View {
 /// large centered inline prompt for the code, and the same capsule primary
 /// button used for Continue/Skip in `OnboardingFlow`.
 private struct AccessCodeGate: View {
+    /// Clip handoff, when this install came via a shared fit —
+    /// personalizes the gate ("@x is on Yafa — ask them for a code")
+    /// while keeping it honest: a code is still required.
+    var creator: ClipHandoff? = nil
     let onRedeemed: () -> Void
     let onSignOut: () -> Void
 
@@ -561,6 +628,32 @@ private struct AccessCodeGate: View {
                                 .tracking(3)
                                 .foregroundStyle(AppPalette.textPrimary.opacity(0.82))
                         }
+                    }
+
+                    if let creator {
+                        HStack(spacing: LayoutMetrics.xSmall) {
+                            AvatarView(
+                                url: creator.creatorAvatarURL,
+                                initial: String(creator.creatorUsername.prefix(1)).uppercased(),
+                                size: 36,
+                                shadowRadius: 2,
+                                shadowY: 1
+                            )
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text("@\(creator.creatorUsername) is on Yafa")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(AppPalette.textStrong)
+                                Text("Ask them for an invite code to get in.")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(AppPalette.textFaint)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, LayoutMetrics.small)
+                        .padding(.vertical, LayoutMetrics.xSmall)
+                        .appCard(cornerRadius: 16, shadowRadius: 4, shadowY: 2)
+                        .padding(.horizontal, LayoutMetrics.screenPadding)
+                        .padding(.bottom, LayoutMetrics.medium)
                     }
 
                     // Centered inline prompt — same composition as an

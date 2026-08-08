@@ -90,6 +90,19 @@ final class ClipModel {
                 guard !Task.isCancelled else { return }
                 self.fit = fit
                 self.phase = .ready
+                // Phase 4 handoff: record what the viewer is looking
+                // at in the shared App Group container, so if they
+                // install, the full app opens with the recognition
+                // flow ("@x shared this fit with you") and the
+                // pre-checked follow. Latest fit wins.
+                ClipHandoffStore.save(ClipHandoff(
+                    slug: invocationSlug ?? slug,
+                    outfitId: fit.outfitId,
+                    creatorUserId: fit.userId,
+                    creatorUsername: fit.username,
+                    creatorAvatarURL: fit.avatarURL?.absoluteString,
+                    invokedAt: Date()
+                ))
                 // Warm the creator's profile behind the card.
                 if preloadedProfile == nil {
                     preloadProfile(userId: fit.userId)
