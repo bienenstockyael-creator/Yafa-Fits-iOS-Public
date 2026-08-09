@@ -834,6 +834,7 @@ struct OnboardingFlow: View {
             store.cacheCurrentProfile()
         }
         try? await SocialService.setOnboardingComplete(userId: userId)
+        Analytics.log("onboarding_completed")
         await MainActor.run { onFinish() }
     }
 

@@ -812,6 +812,7 @@ private struct AccessCodeGate: View {
             let status = try await SocialService.redeemAccessCode(value)
             switch status {
             case "ok":
+                Analytics.log("gate_redeemed")
                 onRedeemed()
             case "already_used":
                 withAnimation { errorMessage = "That code has already been used." }

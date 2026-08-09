@@ -140,6 +140,10 @@ final class RealGenerationOrchestrator {
             } catch is CancellationError {
                 self.endBackgroundActivity()
             } catch {
+                Analytics.log("gen_failed", properties: [
+                    "stage": .string("pipeline"),
+                    "error": .string(String(describing: error).prefix(120).description),
+                ])
                 if let serverJobId = job.serverJobId {
                     try? await CreditService.shared.release(jobId: serverJobId)
                 }
@@ -187,6 +191,7 @@ final class RealGenerationOrchestrator {
 
     /// User tapped "Accept" in the review card.
     func accept(_ job: PipelineJob) {
+        Analytics.log("gen_accepted", properties: ["publish": .bool(false)])
         cancel(job)
         tasks[job.id] = Task { @MainActor in
             self.finalize(job: job, publishToFeed: false)
@@ -195,6 +200,7 @@ final class RealGenerationOrchestrator {
 
     /// User tapped "Accept & Publish to Feed" in the review card.
     func acceptAndPublish(_ job: PipelineJob) {
+        Analytics.log("gen_accepted", properties: ["publish": .bool(true)])
         cancel(job)
         tasks[job.id] = Task { @MainActor in
             self.finalize(job: job, publishToFeed: true)

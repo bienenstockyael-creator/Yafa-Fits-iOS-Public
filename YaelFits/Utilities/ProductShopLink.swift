@@ -7,6 +7,10 @@ import UIKit
 enum ProductShopLink {
     @MainActor
     static func open(_ product: Product) {
+        Analytics.log("buy_tapped", properties: [
+            "product": .string(product.name),
+            "has_link": .bool(!(product.shopLink ?? "").isEmpty),
+        ])
         // 1. User-entered shop link wins — they have a specific product
         //    page in mind. Normalise scheme-less URLs (e.g.
         //    "amazon.com/x") by prefixing https:// so they actually

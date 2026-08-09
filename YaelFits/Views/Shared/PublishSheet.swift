@@ -556,6 +556,10 @@ struct PublishSheet: View {
                 p.shopLink = url.isEmpty ? nil : url
                 return p
             }
+            Analytics.log("outfit_published", properties: [
+                "outfit_id": .string(outfit.id),
+                "product_count": .int(inputs.count),
+            ])
             await MainActor.run {
                 onPublished(caption.isEmpty ? nil : caption, updatedProducts)
                 dismiss()

@@ -2208,6 +2208,7 @@ struct ShareCardComposer: View {
                     // otherwise — the /fit/ page accepts both.
                     let key = await OutfitService.ensureShareSlug(outfitId: outfit.id) ?? outfit.id
                     UIPasteboard.general.string = "https://yafafits.com/fit/\(key)"
+                    Analytics.log("share_link_copied", properties: ["outfit_id": .string(outfit.id)])
                     mintingLink = false
                     withAnimation(.easeOut(duration: 0.15)) { linkCopied = true }
                     try? await Task.sleep(nanoseconds: 1_600_000_000)
