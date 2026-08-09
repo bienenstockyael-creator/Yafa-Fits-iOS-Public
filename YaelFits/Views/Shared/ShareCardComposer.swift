@@ -11,6 +11,9 @@ private let cardGray = Color(white: 0.918) // matches Mono PNG background exactl
 private let cardBlue = Color(red: 24/255, green: 3/255, blue: 254/255) // #1803FE
 
 enum ShareCardTemplate: Int, CaseIterable, Identifiable, Hashable {
+    // The app's own feed card, recreated 1:1 — first position, the
+    // default story: "this is what Yafa looks like".
+    case feedCard = 10
     // Dynamic code templates
     case monoLive     = 5
     case electricLive = 6
@@ -25,6 +28,7 @@ enum ShareCardTemplate: Int, CaseIterable, Identifiable, Hashable {
 
     var name: String {
         switch self {
+        case .feedCard:     return "Feed"
         case .monoLive:     return "Mono"
         case .electricLive: return "Electric"
         case .ootdLive:     return "Editorial"
@@ -37,7 +41,7 @@ enum ShareCardTemplate: Int, CaseIterable, Identifiable, Hashable {
 
     /// Dynamic code-based templates — render date layers in SwiftUI.
     var isDynamic: Bool {
-        self == .monoLive || self == .electricLive
+        self == .feedCard || self == .monoLive || self == .electricLive
             || self == .ootdLive || self == .colorama || self == .worldCup
     }
 
@@ -245,7 +249,7 @@ enum ShareCardTemplate: Int, CaseIterable, Identifiable, Hashable {
                 TemplateColorVariant(id: 10, tint: bwLogo, textColor: bwLogo, backgroundColor: bwBg),
                 TemplateColorVariant(id: 11, tint: rbLogo, textColor: rbLogo, backgroundColor: rbBg),
             ]
-        case .layered2, .layered3:
+        case .feedCard, .layered2, .layered3:
             return []
         }
     }
@@ -334,7 +338,7 @@ struct ShareCardComposer: View {
     @Environment(OutfitStore.self) private var store
     @Environment(\.dismiss) private var dismiss
 
-    @State private var selectedTemplate: ShareCardTemplate = .monoLive
+    @State private var selectedTemplate: ShareCardTemplate = .feedCard
     @State private var motionManager = CMMotionManager()
     @State private var gyroPitch: Double = 0
     @State private var gyroRoll: Double = 0
@@ -394,6 +398,12 @@ struct ShareCardComposer: View {
     // slug, copies yafafits.com/fit/<slug> and confirms inline.
     @State private var linkCopied = false
     @State private var mintingLink = false
+
+    // Feed-template imagery, preloaded as UIImages: the export
+    // snapshot (ImageRenderer) can't run CachedRemoteImage's async
+    // .task, so the Feed chrome draws these directly.
+    @State private var feedAvatarImage: UIImage?
+    @State private var feedProductImages: [String: UIImage] = [:]
 
     // Format-picker state. STORY taps on dynamic templates surface a
     // sheet with two preview thumbnails (card-on-white vs full-screen);
@@ -473,6 +483,16 @@ struct ShareCardComposer: View {
         .onAppear {
             storyHaptic.prepare()
             startGyroscope()
+            #if DEBUG
+            // Sim auto-drive: render the selected template's video and
+            // leave the mp4 in tmp/ for extraction — no taps needed.
+            if ProcessInfo.processInfo.environment["COMPOSER_AUTO_EXPORT"] == "1" {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                    activeExport = .cameraRoll
+                    exportAndShareVideo(destination: .cameraRoll, format: .cardOnWhite)
+                }
+            }
+            #endif
             withAnimation(
                 .spring(response: 0.58, dampingFraction: 0.70)
                 .delay(0.06)
@@ -481,6 +501,7 @@ struct ShareCardComposer: View {
             }
         }
         .onDisappear { stopGyroscope() }
+        .task { await preloadFeedTemplateImages() }
     }
 
     // MARK: - Header
@@ -566,7 +587,15 @@ struct ShareCardComposer: View {
                     .offset(x: baseOffset + carouselDragOffset)
                 }
                 .overlay {
+                    // The Feed card keeps real chrome above AND below
+                    // the fit, so the shared outfit layer shrinks into
+                    // the chrome-free band — mirroring the export
+                    // placement exactly (WYSIWYG with the video).
+                    let placement = feedOutfitPlacement
+                    let isFeed = selectedTemplate == .feedCard
                     outfitLayer
+                        .scaleEffect(isFeed ? placement.maxHRatio * cardHeight / 384 : 1)
+                        .offset(y: isFeed ? (placement.centerYRatio - 0.5) * cardHeight : 0)
                         .frame(width: cardWidth, height: cardHeight)
                 }
                 .overlay(alignment: .leading) {
@@ -631,7 +660,9 @@ struct ShareCardComposer: View {
         forcedTime: Double? = nil
     ) -> some View {
         Group {
-            if template == .ootdLive {
+            if template == .feedCard {
+                feedCardBackLayer
+            } else if template == .ootdLive {
                 // Variants 1+ override the white→black 40% gradient
                 // with a full-opacity two-stop gradient. Variant 0
                 // (unchanged) keeps the original look.
@@ -1489,7 +1520,7 @@ struct ShareCardComposer: View {
     private func cardFrontLayer(for template: ShareCardTemplate) -> some View {
         ZStack {
             if template.isDynamic && template != .ootdLive && template != .colorama
-                && template != .worldCup {
+                && template != .worldCup && template != .feedCard {
                 // colorama renders day/weekday with the gradient effect
                 // in its back layer (coloramaBigNumber), so we skip the
                 // plain-text front layer for that template. World Cup shows
@@ -1894,6 +1925,81 @@ struct ShareCardComposer: View {
         }
     }
 
+    // MARK: - Feed template
+
+    /// Products shown on the Feed card — the open-cart row caps at 4
+    /// tiles (what fits a 342pt card without scrolling).
+    private var feedProducts: [Product] {
+        Array((outfit.products ?? []).prefix(4))
+    }
+
+    /// Where the spinning outfit sits inside the Feed card, as ratios
+    /// of card height. The chrome reserves a top band (header) and a
+    /// bottom band (caption / action row / product row); these mirror
+    /// the fixed 342×480 design metrics in `feedCardChrome`, so the
+    /// live carousel and the exported video agree.
+    private var feedOutfitPlacement: (maxHRatio: CGFloat, centerYRatio: CGFloat) {
+        let hasCaption = !(outfit.caption ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let fitTop: CGFloat = 68                    // padding 16 + header 40 + spacing 12
+        var bottom: CGFloat = 16 + 40 + 12          // padding + action circles + spacing
+        if hasCaption { bottom += 20 + 12 }
+        if !feedProducts.isEmpty { bottom += 88 + 12 }  // tile 56 + 6 + BUY 26
+        let fitBottom = 480 - bottom
+        return (
+            maxHRatio: (fitBottom - fitTop) / 480 * 0.97,
+            centerYRatio: (fitTop + fitBottom) / 2 / 480
+        )
+    }
+
+    /// Chrome inputs captured as plain values at construction time.
+    /// CRITICAL: the export snapshots this layer with ImageRenderer,
+    /// which builds a FRESH view tree — @State/@Environment read
+    /// through captured closures there return their INITIAL values
+    /// (that bug shipped fallback tiles in the first cut). So the
+    /// chrome is a standalone struct of lets, built OUTSIDE any
+    /// lazily-evaluated closure.
+    private var feedCardBackLayer: some View {
+        let chrome = FeedCardChrome(
+            username: store.currentProfile?.username ?? "yafa",
+            dateline: feedDateline,
+            weather: outfit.weather,
+            useFahrenheit: store.useFahrenheit,
+            caption: outfit.caption,
+            products: feedProducts,
+            avatarImage: feedAvatarImage,
+            productImages: feedProductImages
+        )
+        return GeometryReader { geo in
+            let scale = geo.size.width / 342
+            chrome
+                .frame(width: 342, height: geo.size.height / max(scale, 0.01))
+                .scaleEffect(scale, anchor: .topLeading)
+        }
+    }
+
+    private var feedDateline: String {
+        let date = outfit.numericDateLabel(useFahrenheit: store.useFahrenheit)
+        let location = outfit.location?
+            .trimmingCharacters(in: .whitespacesAndNewlines).uppercased() ?? ""
+        return location.isEmpty ? date : "\(date) · \(location)"
+    }
+
+    private func preloadFeedTemplateImages() async {
+        if feedAvatarImage == nil,
+           let raw = store.currentProfile?.avatarUrl,
+           let url = URL(string: raw) {
+            feedAvatarImage = await RemoteImageCache.shared.load(url, maxPixelSize: 160)
+        }
+        for product in feedProducts {
+            guard let url = product.resolvedImageURL,
+                  feedProductImages[url.absoluteString] == nil else { continue }
+            if let img = await RemoteImageCache.shared.load(url, maxPixelSize: 640) {
+                feedProductImages[url.absoluteString] = img
+            }
+        }
+    }
+
     // MARK: - Outfit layer
 
     private var outfitLayer: some View {
@@ -2237,7 +2343,7 @@ struct ShareCardComposer: View {
 
             Button {
                 storyHaptic.impactOccurred()
-                if selectedTemplate.isDynamic {
+                if selectedTemplate.isDynamic && selectedTemplate != .feedCard {
                     pendingFormatDestination = .instagramStories
                     presentFormatPicker()
                 } else {
@@ -2267,7 +2373,7 @@ struct ShareCardComposer: View {
 
             Button {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                if selectedTemplate.isDynamic {
+                if selectedTemplate.isDynamic && selectedTemplate != .feedCard {
                     pendingFormatDestination = .cameraRoll
                     presentFormatPicker()
                 } else {
@@ -2392,6 +2498,8 @@ struct ShareCardComposer: View {
         // can otherwise carry over OOTD's MARCH/15th front-layer text
         // until the view tree settles on the next render pass.
         if selectedTemplate == .colorama { return nil }
+        // Feed's chrome lives entirely in the back layer.
+        if selectedTemplate == .feedCard { return nil }
 
         let view = cardFrontLayer(for: selectedTemplate)
             .frame(width: size.width, height: size.height)
@@ -2510,6 +2618,13 @@ struct ShareCardComposer: View {
             // pending UI render runs.
             try? await Task.sleep(for: .milliseconds(50))
 
+            // Feed's chrome draws preloaded UIImages (avatar, product
+            // tiles) — make sure they're actually loaded before the
+            // one-shot back-layer snapshot.
+            if selectedTemplate == .feedCard {
+                await preloadFeedTemplateImages()
+            }
+
             let canvas = storyCanvas
             // We render the back/front layers at HALF the canvas
             // dimensions (logical) — the SwiftUI layout (font sizes,
@@ -2561,6 +2676,11 @@ struct ShareCardComposer: View {
                 }
                 return selectedTemplate.frontImageName.flatMap { UIImage(named: $0) }
             }
+
+            // Feed places the fit inside its chrome-free band; every
+            // other template centers it.
+            let feedPlacement: (maxHRatio: CGFloat, centerYRatio: CGFloat)? =
+                selectedTemplate == .feedCard ? feedOutfitPlacement : nil
 
             // One full forward rotation — seamless loop since frame 0 ≈ frame N (360° orbit)
             let totalFrames = outfit.frameCount
@@ -2649,7 +2769,9 @@ struct ShareCardComposer: View {
                                               backImage: frameBackImage,
                                               frontImage: frontImage,
                                               canvas: canvas,
-                                              format: format)
+                                              format: format,
+                                              outfitMaxHRatio: feedPlacement?.maxHRatio,
+                                              outfitCenterYRatio: feedPlacement?.centerYRatio)
                 if let composed, let buffer = pixelBuffer(from: composed, size: canvas) {
                     let time = CMTime(value: CMTimeValue(writtenCount), timescale: CMTimeScale(fps))
                     adaptor.append(buffer, withPresentationTime: time)
@@ -2667,6 +2789,10 @@ struct ShareCardComposer: View {
                     exportError = "Couldn't export the video. Please try again."
                     return
                 }
+                Analytics.log("story_exported", properties: [
+                    "template": .string(selectedTemplate.name),
+                    "destination": .string(destination == .instagramStories ? "instagram" : "camera_roll"),
+                ])
                 switch destination {
                 case .instagramStories:
                     shareToInstagramStories(videoURL: url)
@@ -2713,7 +2839,9 @@ struct ShareCardComposer: View {
         backImage: UIImage?,
         frontImage: UIImage?,
         canvas: CGSize,
-        format: ShareCardFormat = .cardOnWhite
+        format: ShareCardFormat = .cardOnWhite,
+        outfitMaxHRatio: CGFloat? = nil,
+        outfitCenterYRatio: CGFloat? = nil
     ) -> UIImage? {
         UIGraphicsBeginImageContextWithOptions(canvas, true, 1)
         defer { UIGraphicsEndImageContext() }
@@ -2781,7 +2909,8 @@ struct ShareCardComposer: View {
         let hPadRatio: CGFloat = format == .fullScreen ? 60.0 / 345.0 : 40.0 / 345.0
         let hPad = cardRect.width * hPadRatio
         let maxW = cardRect.width - hPad * 2
-        let maxHRatio: CGFloat = format == .fullScreen ? 0.78 : 0.80
+        let maxHRatio: CGFloat = outfitMaxHRatio
+            ?? (format == .fullScreen ? 0.78 : 0.80)
         let maxH = cardRect.height * maxHRatio
         let frameAspect = outfitFrame.size.height / max(outfitFrame.size.width, 1)
 
@@ -2793,9 +2922,11 @@ struct ShareCardComposer: View {
             outfitW = outfitH / frameAspect
         }
 
+        let outfitCenterY = cardRect.minY
+            + cardRect.height * (outfitCenterYRatio ?? 0.5)
         outfitFrame.draw(in: CGRect(
             x: cardRect.minX + (cardRect.width - outfitW) / 2,
-            y: cardRect.minY + (cardRect.height - outfitH) / 2,
+            y: outfitCenterY - outfitH / 2,
             width: outfitW,
             height: outfitH
         ))
@@ -2958,3 +3089,218 @@ private struct ShareFormatPickerSheet: View {
         .frame(maxWidth: .infinity)
     }
 }
+
+
+// MARK: - Feed chrome (snapshot-safe)
+
+/// The public feed card's chrome, recreated for the Feed share
+/// template. Everything is a plain `let` and every icon/backdrop is
+/// pure SwiftUI drawing (Path-based glyphs, solid fills): this view
+/// is snapshotted with ImageRenderer for the story video, which
+/// renders Canvas and UIViewRepresentables (blur, Lottie) as the
+/// slashed placeholder, resets @State in its fresh tree, and drops
+/// @Environment. The fit itself is composited separately into the
+/// empty middle band (see `feedOutfitPlacement`).
+private struct FeedCardChrome: View {
+    let username: String
+    let dateline: String
+    let weather: Weather?
+    let useFahrenheit: Bool
+    let caption: String?
+    let products: [Product]
+    let avatarImage: UIImage?
+    let productImages: [String: UIImage]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: LayoutMetrics.small) {
+            HStack(spacing: LayoutMetrics.xSmall) {
+                avatar
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(username)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppPalette.textStrong)
+                    Text(dateline)
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .tracking(1.3)
+                        .foregroundStyle(AppPalette.textFaint)
+                }
+                Spacer()
+                if let weather, !weather.condition.isEmpty {
+                    weatherPill(weather)
+                }
+            }
+
+            Spacer(minLength: 0)   // the outfit spins in this band
+
+            if let caption = caption?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+               !caption.isEmpty {
+                Text(caption)
+                    .font(.system(size: 13))
+                    .foregroundStyle(AppPalette.textSecondary)
+                    .lineLimit(1)
+            }
+
+            HStack(spacing: LayoutMetrics.xxSmall) {
+                actionCircle(.heart)
+                actionCircle(.comment)
+                actionCircle(.bookmark)
+                if !products.isEmpty { actionCircle(.cart) }
+                Spacer()
+                GradientFlameIcon(size: 20, stroked: true, rendererSafe: true)
+            }
+
+            if !products.isEmpty {
+                HStack(spacing: 16) {
+                    ForEach(products) { product in
+                        VStack(spacing: 6) {
+                            productTile(product)
+                            Text("BUY")
+                                .font(.system(size: 10, weight: .bold))
+                                .tracking(1.1)
+                                .foregroundStyle(AppPalette.textMuted)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(Capsule().fill(Color.white.opacity(0.45)))
+                                .overlay(Capsule().strokeBorder(Color.white.opacity(0.6), lineWidth: 0.8))
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .padding(LayoutMetrics.medium)
+        .background {
+            ZStack {
+                Color.white
+                AppPalette.cardFill
+            }
+        }
+    }
+
+    private var initial: String {
+        String(username.prefix(1)).uppercased()
+    }
+
+    private var avatar: some View {
+        Group {
+            if let avatarImage {
+                Image(uiImage: avatarImage)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                ZStack {
+                    AvatarGradients.gradient(for: initial)
+                    Text(initial)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppPalette.textStrong)
+                }
+            }
+        }
+        .frame(width: 40, height: 40)
+        .clipShape(Circle())
+        .overlay(Circle().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
+    }
+
+    /// Solid stand-in for the app's blurred circle-chip look — the
+    /// blur can't be snapshotted, and cardFill alone vanishes against
+    /// the white card.
+    private static let chipFill = Color(red: 0.951, green: 0.957, blue: 0.965)
+
+    private func actionCircle(_ glyph: AppIconGlyph) -> some View {
+        AppIcon(glyph: glyph, size: 14, color: AppPalette.iconPrimary)
+            .rendererSafe
+            .frame(width: 40, height: 40)
+            .background(Circle().fill(Self.chipFill))
+            .overlay(Circle().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
+    }
+
+    private func weatherPill(_ weather: Weather) -> some View {
+        HStack(spacing: LayoutMetrics.xxSmall) {
+            AppIcon(glyph: weatherGlyph(weather), size: 16, color: weatherColor(weather))
+                .rendererSafe
+            Text("\(useFahrenheit ? weather.tempF : weather.tempC)\u{00B0}")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(AppPalette.textSecondary)
+        }
+        .padding(.horizontal, LayoutMetrics.xSmall)
+        .padding(.vertical, 7)
+        .background(Capsule().fill(Self.chipFill))
+        .overlay(Capsule().strokeBorder(AppPalette.cardBorder, lineWidth: 0.75))
+    }
+
+    /// Static glyph + colour matching LottieWeatherIcon's fallback map.
+    private func weatherGlyph(_ weather: Weather) -> AppIconGlyph {
+        switch weather.visualKind {
+        case .sunny, .clear: return .sun
+        case .snowy: return .snowflake
+        case .breezy, .windy: return .wind
+        default: return .cloud
+        }
+    }
+
+    private func weatherColor(_ weather: Weather) -> Color {
+        switch weather.visualKind {
+        case .sunny, .clear: return Color(red: 0.95, green: 0.75, blue: 0.2)
+        case .rainy: return Color(red: 0.45, green: 0.65, blue: 0.9)
+        case .stormy: return Color(red: 0.6, green: 0.5, blue: 0.85)
+        case .snowy, .cold: return Color(red: 0.6, green: 0.78, blue: 0.95)
+        case .breezy, .windy: return Color(red: 0.45, green: 0.8, blue: 0.72)
+        default: return Color(red: 0.65, green: 0.68, blue: 0.72)
+        }
+    }
+
+    private func productTile(_ product: Product) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.white.opacity(0.28))
+            if let url = product.resolvedImageURL,
+               let img = productImages[url.absoluteString] {
+                Image(uiImage: img)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .padding(8)
+            } else {
+                Text(product.displayName)
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(AppPalette.textMuted)
+                    .multilineTextAlignment(.center)
+                    .padding(6)
+            }
+        }
+        .frame(width: 56, height: 56)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Self.chipFill)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(AppPalette.cardBorder, lineWidth: 0.75)
+        )
+    }
+}
+
+#if DEBUG
+/// Sim auto-drive host (COMPOSER_PREVIEW_OUTFIT): fetches a public
+/// outfit and mounts the composer directly — no auth, no navigation.
+struct ComposerPreviewHost: View {
+    let outfitId: String
+    @Environment(OutfitStore.self) private var store
+    @State private var outfit: Outfit?
+
+    var body: some View {
+        ZStack {
+            AppPalette.groupedBackground.ignoresSafeArea()
+            if let outfit {
+                ShareCardComposer(outfit: outfit)
+                    .environment(store)
+            } else {
+                ProgressView()
+            }
+        }
+        .task {
+            outfit = await ContentSource.getPublicOutfit(id: outfitId)
+        }
+    }
+}
+#endif

@@ -467,3 +467,28 @@ struct AppIcon: View {
         return p
     }
 }
+
+extension AppIcon {
+    /// The glyph drawn with plain Path views instead of Canvas.
+    /// Pixel-identical, but survives ImageRenderer snapshots — which
+    /// render Canvas (and any UIViewRepresentable) as the slashed
+    /// missing-content placeholder. Used by share-template chrome
+    /// that gets snapshotted for the story video export.
+    var rendererSafe: some View {
+        GeometryReader { geo in
+            let rect = CGRect(origin: .zero, size: geo.size)
+            let lineWidth = min(rect.width, rect.height) * (strokeWidth / 24)
+            let style = StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round)
+            ZStack {
+                if filled, let fill = fillPath(in: rect) {
+                    fill.fill(color)
+                }
+                ForEach(Array(strokePaths(in: rect).enumerated()), id: \.offset) { _, path in
+                    path.stroke(color, style: style)
+                }
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+}

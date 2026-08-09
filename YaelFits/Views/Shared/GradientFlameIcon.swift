@@ -30,6 +30,9 @@ struct GradientFlameIcon: View {
     /// (particle burst, hero flames) keep the soft gradient-
     /// only look they're designed for.
     var stroked: Bool = false
+    /// Draw the flame mask/outline with the Path-based AppIcon variant
+    /// so the icon survives ImageRenderer snapshots (story export).
+    var rendererSafe: Bool = false
 
     var body: some View {
         ZStack {
@@ -49,25 +52,32 @@ struct GradientFlameIcon: View {
             )
             .frame(width: size, height: size)
             .mask(
-                AppIcon(
-                    glyph: .flame,
-                    size: size,
-                    color: .white,
-                    filled: true
-                )
+                Group {
+                    if rendererSafe {
+                        AppIcon(glyph: .flame, size: size, color: .white, filled: true)
+                            .rendererSafe
+                    } else {
+                        AppIcon(glyph: .flame, size: size, color: .white, filled: true)
+                    }
+                }
             )
 
             if stroked {
                 // Hairline white outline. ~3% of diameter (min
                 // 0.4pt) so it reads as a delicate highlight on
                 // the gradient rather than a frame around it.
-                AppIcon(
+                let outline = AppIcon(
                     glyph: .flame,
                     size: size,
                     color: .white,
                     filled: false,
                     strokeWidth: max(0.4, size * 0.03)
                 )
+                if rendererSafe {
+                    outline.rendererSafe
+                } else {
+                    outline
+                }
             }
         }
         // Whisper-soft drop shadow so the flame just barely

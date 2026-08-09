@@ -85,6 +85,17 @@ struct YaelFitsApp: App {
         ])
     }
 
+    /// Sim auto-drive: COMPOSER_PREVIEW_OUTFIT=<public outfit id>
+    /// opens the share composer directly on that outfit, no auth —
+    /// share-template visual verification from simctl. Env vars only
+    /// exist on scheme/simctl launches, so this is inert in release.
+    #if DEBUG
+    private static let composerPreviewOutfitId =
+        ProcessInfo.processInfo.environment["COMPOSER_PREVIEW_OUTFIT"]
+    #else
+    private static let composerPreviewOutfitId: String? = nil
+    #endif
+
     var body: some Scene {
         WindowGroup {
             ZStack {
@@ -93,7 +104,10 @@ struct YaelFitsApp: App {
             // app distorts + glows via Metal. Idle case is a
             // straight pass-through with zero cost.
             Group {
-                if authManager.isLoading {
+                if let composerPreviewOutfitId = Self.composerPreviewOutfitId {
+                    ComposerPreviewHost(outfitId: composerPreviewOutfitId)
+                        .environment(outfitStore)
+                } else if authManager.isLoading {
                     ZStack {
                         Color.white.ignoresSafeArea()
                         ProgressView()
