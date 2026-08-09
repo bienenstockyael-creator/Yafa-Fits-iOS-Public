@@ -52,6 +52,7 @@ struct ClipFitView: View {
                                 },
                                 onOpenProfile: {
                                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                    ClipDataService.logEvent("clip_profile_opened")
                                     showProfile = true
                                 }
                             )
@@ -169,6 +170,7 @@ struct ClipFitView: View {
 
             Button {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                ClipDataService.logEvent("clip_get_tapped", properties: ["source": "banner"])
                 showOverlay = true
             } label: {
                 Text("GET")

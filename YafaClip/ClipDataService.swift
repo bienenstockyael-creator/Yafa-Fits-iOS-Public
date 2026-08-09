@@ -260,6 +260,22 @@ enum ClipDataService {
         )
     }
 
+    /// Fire-and-forget anonymous analytics insert (user_id null —
+    /// permitted by the anon-insert RLS policy). Clip funnel events:
+    /// clip_open, clip_get_tapped, clip_profile_opened, clip_buy_tapped.
+    static func logEvent(_ name: String, properties: [String: String] = [:]) {
+        guard let url = URL(string: base + "/rest/v1/analytics_events") else { return }
+        var req = URLRequest(url: url, timeoutInterval: 8)
+        req.httpMethod = "POST"
+        req.setValue(anonKey, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(anonKey)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
+        let body: [String: Any] = ["event_name": name, "properties": properties]
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        URLSession.shared.dataTask(with: req).resume()
+    }
+
     private static func dateLabel(_ iso: String?) -> String {
         guard let iso else { return "" }
         let f = DateFormatter()

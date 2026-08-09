@@ -90,6 +90,10 @@ final class ClipModel {
                 guard !Task.isCancelled else { return }
                 self.fit = fit
                 self.phase = .ready
+                ClipDataService.logEvent("clip_open", properties: [
+                    "slug": invocationSlug ?? slug,
+                    "creator": fit.username,
+                ])
                 // Phase 4 handoff: record what the viewer is looking
                 // at in the shared App Group container, so if they
                 // install, the full app opens with the recognition
