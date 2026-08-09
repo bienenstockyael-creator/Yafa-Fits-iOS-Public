@@ -1,10 +1,26 @@
 import Lottie
+import Sentry
 import SwiftUI
 import UIKit
 import UserNotifications
 
 @main
 struct YaelFitsApp: App {
+    init() {
+        // Crash + performance monitoring. DSN is an ingest address,
+        // not a secret. Debug builds report to the "debug"
+        // environment so dev noise never pollutes production alerts.
+        SentrySDK.start { options in
+            options.dsn = "https://b61a97449a79315a93e6e148be0b68ca@o4511879960788992.ingest.us.sentry.io/4511879964983296"
+            options.tracesSampleRate = 0.2
+            #if DEBUG
+            options.environment = "debug"
+            #else
+            options.environment = "production"
+            #endif
+        }
+    }
+
     @UIApplicationDelegateAdaptor(PushNotificationAppDelegate.self) private var pushAppDelegate
     @State private var outfitStore = OutfitStore()
     @State private var authManager = AuthManager()
@@ -155,6 +171,11 @@ struct YaelFitsApp: App {
                                     showOnboarding = needsSetup
                                     resolvedForUserId = userId
                                 }
+                                // Tag crash reports with the user's
+                                // id (uuid only, no PII) so incidents
+                                // are traceable to affected accounts.
+                                let sentryUser = User(userId: userId.uuidString)
+                                SentrySDK.setUser(sentryUser)
 
                                 // Clip attribution: users who don't
                                 // need onboarding (existing accounts

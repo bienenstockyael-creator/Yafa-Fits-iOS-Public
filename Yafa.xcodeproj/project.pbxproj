@@ -15,6 +15,7 @@
 		10F0100FB857B9FCBCE40127 /* StateScopingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B807A90E1DD2A35EDCE8EB7A /* StateScopingTests.swift */; };
 		1122334455667788AABBCCDD /* ScrollOffsetObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8899AABBCCDDEEFF11223344 /* ScrollOffsetObserver.swift */; };
 		12D10EF491CEB4225EB2EDAF /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 87088DFCBDEF106E1E3BF96C /* Lottie */; };
+		20260809AE000000000000A3 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 20260809AE000000000000A2 /* Sentry */; };
 		16C2D83AE59F47AF7304DCCA /* InteractiveTouchSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E4A64387EDDC09043570EF5 /* InteractiveTouchSurface.swift */; };
 		17E7BA37588835D6831F3AD3 /* GenerationJobRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BAE2E8D0D3DBBFF4D20EA22 /* GenerationJobRecord.swift */; };
 		1A4E852B6B659069026E8148 /* PushNotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35C267E0A7B040C73D2CA472 /* PushNotificationService.swift */; };
@@ -545,6 +546,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				12D10EF491CEB4225EB2EDAF /* Lottie in Frameworks */,
+				20260809AE000000000000A3 /* Sentry in Frameworks */,
 				E6A5D2C92FCB84450014D135 /* PhoneNumberKit in Frameworks */,
 				1D2BA6E84DFF780E0FC3F652 /* WebP in Frameworks */,
 				4A4F1BB87ED3BD7DF0C413F7 /* Supabase in Frameworks */,
@@ -989,6 +991,7 @@
 			name = Yafa;
 			packageProductDependencies = (
 				87088DFCBDEF106E1E3BF96C /* Lottie */,
+				20260809AE000000000000A2 /* Sentry */,
 				B42B15AC89752105DAEDEE45 /* WebP */,
 				B6B48116FEE66A166D635ADA /* Supabase */,
 				E6A5D2C82FCB84450014D135 /* PhoneNumberKit */,
@@ -1090,6 +1093,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				7BB966226F388D7967BC5DFF /* XCRemoteSwiftPackageReference "lottie-ios" */,
+				20260809AE000000000000A1 /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
 				7B210CAF4E351CE25F83F8CB /* XCRemoteSwiftPackageReference "supabase-swift" */,
 				17F60354FFBFDF239CD46E7A /* XCRemoteSwiftPackageReference "Swift-WebP" */,
 				E6A5D2C72FCB84450014D135 /* XCRemoteSwiftPackageReference "PhoneNumberKit" */,
@@ -1826,6 +1830,14 @@
 				minimumVersion = 4.4.0;
 			};
 		};
+		20260809AE000000000000A1 /* XCRemoteSwiftPackageReference "sentry-cocoa" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/getsentry/sentry-cocoa.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 8.0.0;
+			};
+		};
 		E6A5D2C72FCB84450014D135 /* XCRemoteSwiftPackageReference "PhoneNumberKit" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/PhoneNumberKit/PhoneNumberKit";
@@ -1841,6 +1853,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 7BB966226F388D7967BC5DFF /* XCRemoteSwiftPackageReference "lottie-ios" */;
 			productName = Lottie;
+		};
+		20260809AE000000000000A2 /* Sentry */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 20260809AE000000000000A1 /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
+			productName = Sentry;
 		};
 		B42B15AC89752105DAEDEE45 /* WebP */ = {
 			isa = XCSwiftPackageProductDependency;

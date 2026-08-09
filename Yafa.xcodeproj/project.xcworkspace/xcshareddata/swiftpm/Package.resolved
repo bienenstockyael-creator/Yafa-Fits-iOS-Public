@@ -1,5 +1,5 @@
 {
-  "originHash" : "c77c8a12b98a64046ae439ca8f2b216702c945838d3a80ee0b51708c01b285ad",
+  "originHash" : "33bb3bb6d3e638e7c234120cd7085407d931111bdc9122d804f217c9d42f30f9",
   "pins" : [
     {
       "identity" : "libwebp-xcode",
@@ -26,6 +26,15 @@
       "state" : {
         "revision" : "52bd68dffa07ec7fc42b9851911c59e9d57fc906",
         "version" : "5.0.0"
+      }
+    },
+    {
+      "identity" : "sentry-cocoa",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/getsentry/sentry-cocoa.git",
+      "state" : {
+        "revision" : "f196cbb98e0388381d57908f2f5a9bdc385cde68",
+        "version" : "8.58.4"
       }
     },
     {
