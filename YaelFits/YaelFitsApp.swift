@@ -19,6 +19,13 @@ struct YaelFitsApp: App {
             options.environment = "production"
             #endif
         }
+        #if DEBUG
+        // Verification hook: SENTRY_TEST_EVENT=1 fires a test event so
+        // the pipeline can be confirmed from the command line.
+        if ProcessInfo.processInfo.environment["SENTRY_TEST_EVENT"] == "1" {
+            SentrySDK.capture(message: "Yafa Sentry pipeline test — ignore me")
+        }
+        #endif
     }
 
     @UIApplicationDelegateAdaptor(PushNotificationAppDelegate.self) private var pushAppDelegate
