@@ -600,11 +600,17 @@ struct SocialService {
             // Return all users when no query (for suggestions). Only
             // onboarded users — incomplete/gated rows have no username and
             // would render as "User" (RLS also enforces this server-side).
+            // Newest members first, and a cap comfortably above the
+            // community size: the old limit(50) with NO ordering meant
+            // members past the database's arbitrary first 50 rows never
+            // appeared in the browse list at all (only in name search).
+            // Revisit with real pagination when we approach the cap.
             return try await supabase
                 .from("profiles")
                 .select()
                 .eq("is_onboarded", value: true)
-                .limit(50)
+                .order("created_at", ascending: false)
+                .limit(500)
                 .execute()
                 .value
         }
