@@ -571,16 +571,15 @@ final class RealGenerationOrchestrator {
             let cutoutData = job.cutoutImage
             Task {
                 var outfitToSave = finalizedOutfit
-                if needs2DUpload, let cutoutData {
-                    do {
-                        let base = try await TwoDOutfitService.uploadFrame(
-                            cutoutData,
-                            outfitId: outfitToSave.id,
-                            userId: userId
-                        )
-                        outfitToSave.remoteBaseURL = base
-                    } catch {
-                        // Bucket upload failed — local copy still persists.
+                if needs2DUpload {
+                    // Frame data: the in-memory cutout, or (job restored
+                    // from disk without images) the local frame file.
+                    let frameData = cutoutData
+                        ?? (try? Data(contentsOf: LocalOutfitStore.shared.frameURL(
+                            for: outfitToSave, index: 0, userId: userId)))
+                    if let frameData {
+                        outfitToSave.remoteBaseURL = await TwoDOutfitService
+                            .uploadFrameWithRetry(frameData, outfitId: outfitToSave.id, userId: userId)
                     }
                 }
                 // Last-resort weather/location fetch in case the
@@ -593,7 +592,19 @@ final class RealGenerationOrchestrator {
                 if outfitToSave.location == nil {
                     outfitToSave.location = await UploadWeatherService.shared.fetchCurrentLocationName()
                 }
-                try? await OutfitService.saveArchiveOutfit(outfitToSave, userId: userId, isPublic: publishToFeed)
+                // NEVER publish an outfit other devices can't render:
+                // a public row with no remote frames is a blank card in
+                // everyone's feed (the Shreya bug). If the upload failed
+                // even after retries, save it privately — the launch
+                // heal pass re-uploads and the user can publish then.
+                let canPublish = publishToFeed
+                    && (outfitToSave.frameCount > 1 || outfitToSave.remoteBaseURL != nil)
+                if publishToFeed && !canPublish {
+                    Analytics.log("publish_blocked_frames_missing", properties: [
+                        "outfit_id": .string(outfitToSave.id),
+                    ])
+                }
+                try? await OutfitService.saveArchiveOutfit(outfitToSave, userId: userId, isPublic: canPublish)
             }
         }
 
@@ -707,15 +718,8 @@ final class RealGenerationOrchestrator {
         Task {
             var outfitToSave = preview
             if let cutoutData {
-                do {
-                    outfitToSave.remoteBaseURL = try await TwoDOutfitService.uploadFrame(
-                        cutoutData,
-                        outfitId: outfitToSave.id,
-                        userId: userId
-                    )
-                } catch {
-                    // Bucket upload failed — local copy still persists.
-                }
+                outfitToSave.remoteBaseURL = await TwoDOutfitService
+                    .uploadFrameWithRetry(cutoutData, outfitId: outfitToSave.id, userId: userId)
             }
             try? await OutfitService.saveArchiveOutfit(outfitToSave, userId: userId, isPublic: false)
         }

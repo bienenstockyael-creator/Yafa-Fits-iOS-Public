@@ -323,7 +323,9 @@ struct ContentSource {
             .order("created_at", ascending: false)
             .execute()
             .value {
-            return rows.map { $0.toOutfit() }
+            return rows
+                .filter { remotelyRenderable(remoteBaseURL: $0.remoteBaseURL, userId: $0.userId) }
+                .map { $0.toOutfit() }
         }
         let rows: [SupabaseOutfitRow] = (try? await supabase
             .from("outfits")
@@ -332,7 +334,9 @@ struct ContentSource {
             .order("created_at", ascending: false)
             .execute()
             .value) ?? []
-        return rows.map { $0.toOutfit() }
+        return rows
+            .filter { remotelyRenderable(remoteBaseURL: $0.remoteBaseURL, userId: $0.userId) }
+            .map { $0.toOutfit() }
     }
 
     static func getAllOutfits(userId: UUID) async -> [Outfit] {
@@ -367,7 +371,9 @@ struct ContentSource {
             .order("created_at", ascending: false)
             .execute()
             .value {
-            return rows.map { $0.toOutfit() }
+            return rows
+                .filter { remotelyRenderable(remoteBaseURL: $0.remoteBaseURL, userId: $0.userId) }
+                .map { $0.toOutfit() }
         }
         // Fallback: all columns, no joins — survives stale schema cache
         let rows: [SupabaseOutfitRow] = (try? await supabase
@@ -378,7 +384,9 @@ struct ContentSource {
             .order("created_at", ascending: false)
             .execute()
             .value) ?? []
-        return rows.map { $0.toOutfit() }
+        return rows
+            .filter { remotelyRenderable(remoteBaseURL: $0.remoteBaseURL, userId: $0.userId) }
+            .map { $0.toOutfit() }
     }
 
     /// Fetch multiple public outfits by id, returning each with its author
@@ -431,6 +439,17 @@ struct ContentSource {
         return nil
     }
 
+    /// Whether a public outfit row is renderable on OTHER users'
+    /// devices. Frames must be reachable remotely — except the archive
+    /// owner's legacy outfits, whose frames ship on yafafits.com and
+    /// predate `remote_base_url`. A public row failing this is the
+    /// "empty feed card" bug: published while its frame upload
+    /// silently failed, so every other device renders a blank card.
+    static func remotelyRenderable(remoteBaseURL: String?, userId: String?) -> Bool {
+        if let remote = remoteBaseURL, !remote.isEmpty { return true }
+        return userId?.lowercased() == AppConfig.archiveOwnerUserId
+    }
+
     static func getFollowedFeed(followingIds: Set<UUID>) async -> [FeedPost] {
         guard !followingIds.isEmpty else { return [] }
         let userIdStrings = followingIds.map(\.uuidString)
@@ -441,16 +460,18 @@ struct ContentSource {
                 let date: String
                 let caption: String?
                 let createdAt: String?
+                let remoteBaseURL: String?
                 enum CodingKeys: String, CodingKey {
                     case id, date, caption
                     case userId = "user_id"
                     case createdAt = "published_at"
+                    case remoteBaseURL = "remote_base_url"
                 }
             }
             let outfitRows: [FeedOutfitRow]
             if let withCaption: [FeedOutfitRow] = try? await supabase
                 .from("outfits")
-                .select("id, user_id, date, caption, published_at")
+                .select("id, user_id, date, caption, published_at, remote_base_url")
                 .eq("is_public", value: true)
                 .in("user_id", values: userIdStrings)
                 .not("published_at", operator: .is, value: "null")
@@ -462,7 +483,7 @@ struct ContentSource {
             } else {
                 outfitRows = try await supabase
                     .from("outfits")
-                    .select("id, user_id, date, published_at")
+                    .select("id, user_id, date, published_at, remote_base_url")
                     .eq("is_public", value: true)
                     .in("user_id", values: userIdStrings)
                     .not("published_at", operator: .is, value: "null")
@@ -472,9 +493,12 @@ struct ContentSource {
                     .value
             }
 
-            guard !outfitRows.isEmpty else { return [] }
+            let renderableRows = outfitRows.filter {
+                remotelyRenderable(remoteBaseURL: $0.remoteBaseURL, userId: $0.userId)
+            }
+            guard !renderableRows.isEmpty else { return [] }
 
-            let uniqueUserIds = Array(Set(outfitRows.map(\.userId)))
+            let uniqueUserIds = Array(Set(renderableRows.map(\.userId)))
             let profiles: [Profile] = try await supabase
                 .from("profiles")
                 .select()
@@ -483,7 +507,7 @@ struct ContentSource {
                 .value
             let profileMap = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id.uuidString.lowercased(), $0) })
 
-            return outfitRows.map { row in
+            return renderableRows.map { row in
                 let profile = profileMap[row.userId.lowercased()]
                 return FeedPost(
                     id: "feed-\(row.id)",
@@ -520,16 +544,18 @@ struct ContentSource {
                 let userId: String?
                 let caption: String?
                 let createdAt: String?
+                let remoteBaseURL: String?
                 enum CodingKeys: String, CodingKey {
                     case id, caption
                     case userId = "user_id"
                     case createdAt = "published_at"
+                    case remoteBaseURL = "remote_base_url"
                 }
             }
             let rows: [FeedOutfitRow]
             if let withCaption: [FeedOutfitRow] = try? await supabase
                 .from("outfits")
-                .select("id, user_id, caption, published_at")
+                .select("id, user_id, caption, published_at, remote_base_url")
                 .eq("is_public", value: true)
                 .not("published_at", operator: .is, value: "null")
                 .order("published_at", ascending: false)
@@ -540,7 +566,7 @@ struct ContentSource {
             } else {
                 rows = try await supabase
                     .from("outfits")
-                    .select("id, user_id, published_at")
+                    .select("id, user_id, published_at, remote_base_url")
                     .eq("is_public", value: true)
                     .not("published_at", operator: .is, value: "null")
                     .order("published_at", ascending: false)
@@ -549,7 +575,11 @@ struct ContentSource {
                     .value
             }
 
-            let uniqueUserIds = Array(Set(rows.compactMap(\.userId)))
+            let renderable = rows.filter {
+                remotelyRenderable(remoteBaseURL: $0.remoteBaseURL, userId: $0.userId)
+            }
+
+            let uniqueUserIds = Array(Set(renderable.compactMap(\.userId)))
             var profileMap: [String: Profile] = [:]
             if !uniqueUserIds.isEmpty {
                 // Surface profile-fetch failures rather than silently
@@ -567,7 +597,7 @@ struct ContentSource {
                 }
             }
 
-            let posts = rows.map { row -> FeedPost in
+            let posts = renderable.map { row -> FeedPost in
                 let profile = row.userId.flatMap { profileMap[$0.lowercased()] }
                 return FeedPost(
                     id: "feed-\(row.id)",
