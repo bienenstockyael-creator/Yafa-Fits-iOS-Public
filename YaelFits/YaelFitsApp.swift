@@ -65,6 +65,12 @@ struct YaelFitsApp: App {
                                 // that died with a previous session.
                                 ProductThumbnailPolisher.shared.healIfNeeded(userId: userId)
 
+                                // Re-upload 2D frames whose bucket
+                                // upload silently failed — repairs
+                                // blank feed cards published by
+                                // pre-1.2.3 builds.
+                                TwoDOutfitService.healMissingRemoteFrames(userId: userId)
+
                                 // Resolve onboarding BEFORE the heavy
                                 // outfit/feed loads. loadSocialData applies
                                 // this device's cached profile on the main
