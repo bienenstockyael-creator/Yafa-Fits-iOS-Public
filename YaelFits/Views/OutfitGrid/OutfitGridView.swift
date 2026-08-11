@@ -444,10 +444,14 @@ struct OutfitGridView: View {
     /// in-page toggle fades out via `store.archiveTogglePinned`.
     private var sectionHeader: some View {
         HStack(alignment: .center) {
-            Text("outfits")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(AppPalette.textStrong)
-                .padding(.leading, LayoutMetrics.xxSmall)
+            HStack(spacing: 5) {
+                Text("\(store.sortedOutfits.count)")
+                    .font(.system(size: 14, weight: .semibold))
+                Text(store.sortedOutfits.count == 1 ? "outfit" : "outfits")
+                    .font(.system(size: 14, weight: .medium))
+            }
+            .foregroundStyle(AppPalette.textStrong)
+            .padding(.leading, LayoutMetrics.xxSmall)
 
             Spacer()
 

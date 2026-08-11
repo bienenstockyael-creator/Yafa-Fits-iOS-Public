@@ -525,12 +525,6 @@ struct UserProfileView: View {
 
     private var statsRow: some View {
         HStack(spacing: LayoutMetrics.small) {
-            statSegment(count: publicOutfitCount, label: publicOutfitCount == 1 ? "outfit" : "outfits")
-
-            Text("·")
-                .font(.system(size: 13))
-                .foregroundStyle(AppPalette.textFaint)
-
             Button {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 showFollowers = true
@@ -543,9 +537,18 @@ struct UserProfileView: View {
                 Text("·")
                     .font(.system(size: 13))
                     .foregroundStyle(AppPalette.textFaint)
-                Text(freshness)
-                    .font(.system(size: 14))
-                    .foregroundStyle(AppPalette.textMuted)
+                // Status, not a stat: the mono-caps metadata voice
+                // (same family as the carousel's date · location
+                // chrome) + a soft activity dot.
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(Color(red: 0.45, green: 0.78, blue: 0.55))
+                        .frame(width: 5, height: 5)
+                    Text(freshness.uppercased())
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .tracking(1.6)
+                        .foregroundStyle(AppPalette.textFaint)
+                }
             }
 
             if vibesReceived > 0 {
@@ -642,10 +645,14 @@ struct UserProfileView: View {
     /// profiles (calendar view is intentionally absent here).
     private var sectionHeader: some View {
         HStack {
-            Text("outfits")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(AppPalette.textStrong)
-                .padding(.leading, LayoutMetrics.xxSmall)
+            HStack(spacing: 5) {
+                Text("\(publicOutfitCount)")
+                    .font(.system(size: 14, weight: .semibold))
+                Text(publicOutfitCount == 1 ? "outfit" : "outfits")
+                    .font(.system(size: 14, weight: .medium))
+            }
+            .foregroundStyle(AppPalette.textStrong)
+            .padding(.leading, LayoutMetrics.xxSmall)
             Spacer()
         }
         .padding(.top, LayoutMetrics.xSmall)

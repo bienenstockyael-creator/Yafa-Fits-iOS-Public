@@ -521,12 +521,9 @@ struct ProfileHeader: View {
 
     private var statsRow: some View {
         HStack(spacing: LayoutMetrics.small) {
-            statSegment(count: outfitCount, label: outfitCount == 1 ? "outfit" : "outfits")
-
-            Text("·")
-                .font(.system(size: 13))
-                .foregroundStyle(AppPalette.textFaint)
-
+            // Outfit count lives in the grid's section header now
+            // ("N outfits") — one number, next to the thing it
+            // counts, freeing this row for the social stats.
             Button {
                 let impact = UIImpactFeedbackGenerator(style: .light)
                 impact.impactOccurred()
