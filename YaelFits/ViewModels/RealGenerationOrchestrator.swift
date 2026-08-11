@@ -144,7 +144,7 @@ final class RealGenerationOrchestrator {
     /// app's grouped background. The thumbnail views fill-crop into
     /// a circle, which on a 9:16 transparent cutout showed only the
     /// torso; pre-squaring makes any crop a no-op.
-    nonisolated private static func squareThumbnail(fromCutout data: Data, side: CGFloat = 200) -> Data? {
+    nonisolated static func squareThumbnail(fromCutout data: Data, side: CGFloat = 200) -> Data? {
         guard let image = UIImage(data: data),
               image.size.width > 0, image.size.height > 0 else { return nil }
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: side, height: side))
@@ -211,7 +211,10 @@ final class RealGenerationOrchestrator {
                     throw UploadPipelineError.outOfCredits
                 }
 
-                persistPendingJob(for: job)
+                // includeImages: upgrade jobs never pass the fork
+                // (where images normally persist) — without this a
+                // relaunch loses the cutout AND the pill thumbnail.
+                persistPendingJob(for: job, includeImages: true)
                 await runPollingLoop(jobId: jobId, job: job)
             } catch is CancellationError {
                 self.endBackgroundActivity()

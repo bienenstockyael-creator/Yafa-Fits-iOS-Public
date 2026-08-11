@@ -1003,6 +1003,15 @@ class OutfitStore {
                     if twin.uploadWeather == nil { twin.uploadWeather = record.uploadWeather }
                     if twin.uploadLocation == nil { twin.uploadLocation = record.uploadLocation }
                     if twin.sourceImagePath == nil { twin.sourceImagePath = record.sourceImagePath }
+                    if twin.captureDayString == nil { twin.captureDayString = record.captureDayString }
+                    if twin.captureDate == nil { twin.captureDate = record.captureDate }
+                    if !twin.preservePublish { twin.preservePublish = record.preservePublish ?? false }
+                    // Pill thumbnail for server-restored jobs: rebuild
+                    // from the persisted cutout (squared so the circle
+                    // crop can't behead the fit).
+                    if twin.sourceImage == nil, let cutout = twin.cutoutImage {
+                        twin.sourceImage = RealGenerationOrchestrator.squareThumbnail(fromCutout: cutout) ?? cutout
+                    }
                     if twin.resultOutfitId == nil, previewArchived {
                         twin.resultOutfitId = record.previewOutfit?.id
                     }
@@ -1011,6 +1020,9 @@ class OutfitStore {
 
                 // No twin → rebuild the job wholesale from disk.
                 let job = record.makePipelineJob(cutout: assets.cutout, greenScreen: assets.green)
+                if job.sourceImage == nil, let cutout = job.cutoutImage {
+                    job.sourceImage = RealGenerationOrchestrator.squareThumbnail(fromCutout: cutout) ?? cutout
+                }
                 if previewArchived {
                     // Marks the archived 2D as this job's outfit: hides
                     // the grid placeholder (the real cell is showing)
