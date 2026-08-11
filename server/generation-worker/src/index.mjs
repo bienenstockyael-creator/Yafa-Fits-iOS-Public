@@ -127,6 +127,14 @@ async function pollLoop() {
         await resetStalledJobs();
       }
 
+      // Re-engagement pushes: hourly tick (720 x 5s sleeps). Cheap
+      // no-op when nobody qualifies; the RPC enforces inactivity
+      // window + cooldown + batch cap server-side.
+      if (pollCount % 720 === 1) {
+        await sendReengagementPushes().catch((e) =>
+          console.warn('Re-engagement tick failed:', e.message));
+      }
+
       const job = await claimNextJob();
       if (job) {
         activeJobId = job.id;
@@ -577,6 +585,37 @@ async function uploadFrames(webpPaths, outfitId, storagePrefix, onProgress) {
   await Promise.all(Array.from({ length: UPLOAD_CONCURRENCY }, () => worker()));
   await onProgress(1);
   console.log(`uploadFrames: ${webpPaths.length} frames in ${((Date.now() - started) / 1000).toFixed(1)}s`);
+}
+
+// ---------------------------------------------------------------------------
+// Re-engagement pushes
+// ---------------------------------------------------------------------------
+// Members with push tokens who haven't logged a fit in 7+ days get a
+// nudge, at most once per 14 days (users_needing_reengagement RPC
+// enforces both windows + caps the batch). This worker is the one
+// service with working APNs credentials, so the tick lives here.
+async function sendReengagementPushes() {
+  const { data: users, error } = await supabase.rpc('users_needing_reengagement');
+  if (error) {
+    // RPC missing (migration not applied yet) — stay silent-but-visible.
+    console.warn('users_needing_reengagement:', error.message);
+    return;
+  }
+  if (!users || users.length === 0) return;
+
+  console.log(`Re-engagement: nudging ${users.length} inactive member(s)`);
+  for (const { user_id } of users) {
+    await sendPushNotification(
+      user_id,
+      'It\u2019s been a minute',
+      'Today\u2019s fit belongs in your archive.',
+      'upload'
+    );
+    const { error: upsertErr } = await supabase
+      .from('reengagement_pushes')
+      .upsert({ user_id, last_sent_at: new Date().toISOString() }, { onConflict: 'user_id' });
+    if (upsertErr) console.warn('reengagement log upsert:', upsertErr.message);
+  }
 }
 
 // ---------------------------------------------------------------------------
