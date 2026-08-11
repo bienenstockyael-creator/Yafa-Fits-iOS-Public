@@ -127,10 +127,13 @@ async function pollLoop() {
         await resetStalledJobs();
       }
 
-      // Re-engagement pushes: hourly tick (720 x 5s sleeps). Cheap
-      // no-op when nobody qualifies; the RPC enforces inactivity
-      // window + cooldown + batch cap server-side.
-      if (pollCount % 720 === 1) {
+      // Re-engagement pushes: hourly tick (720 x 5s sleeps), but only
+      // inside the friendly send window — 17:00-18:59 UTC lands as
+      // morning US-West, lunch US-East, evening EU. Never a 3am buzz.
+      // Cheap no-op when nobody qualifies; the RPC enforces the 7-day
+      // inactivity window, 14-day per-user cooldown, and batch cap.
+      const utcHour = new Date().getUTCHours();
+      if (pollCount % 720 === 1 && utcHour >= 17 && utcHour < 19) {
         await sendReengagementPushes().catch((e) =>
           console.warn('Re-engagement tick failed:', e.message));
       }
