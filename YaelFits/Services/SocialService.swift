@@ -580,6 +580,27 @@ struct SocialService {
         return value
     }
 
+    /// Whole-archive aggregates for a visitor profile: total fits
+    /// (public + private) and last-logged instant. Server-side RPC —
+    /// two scalars only, never the private rows. Private ACCOUNTS
+    /// return 0/nil.
+    struct ArchiveStats: Decodable {
+        let totalFits: Int
+        let lastFitAt: Date?
+        enum CodingKeys: String, CodingKey {
+            case totalFits = "total_fits"
+            case lastFitAt = "last_fit_at"
+        }
+    }
+    static func profileArchiveStats(userId: UUID) async throws -> ArchiveStats? {
+        struct Params: Encodable { let p_user_id: String }
+        let rows: [ArchiveStats] = try await supabase
+            .rpc("profile_archive_stats", params: Params(p_user_id: userId.uuidString))
+            .execute()
+            .value
+        return rows.first
+    }
+
     // MARK: - Search
 
     static func searchOutfits(query: String) async throws -> [Outfit] {

@@ -41,6 +41,13 @@ struct UserProfileView: View {
     /// `project_yafa_outfit_count_display.md`). Falls back to
     /// `outfits.count` if the RPC fails.
     @State private var publicOutfitCount: Int = 0
+    /// Whole-archive stats (public + private, aggregates only) —
+    /// lets an active-but-private logger read as alive: the lock
+    /// row under the grid + the freshness segment in the stats.
+    /// 0/nil when the RPC is missing or the account is private,
+    /// which hides both affordances (graceful degrade).
+    @State private var totalFitCount: Int = 0
+    @State private var lastFitAt: Date?
 
     // Carousel + hero-transition state. Same shape as OutfitGridView.
     @State private var outfitFrames: [String: CGRect] = [:]
@@ -185,6 +192,9 @@ struct UserProfileView: View {
                                 emptyState
                             } else {
                                 outfitGrid
+                            }
+                            if hiddenFitCount > 0 {
+                                privateArchiveRow
                             }
                             Color.clear.frame(height: LayoutMetrics.screenPadding)
                         }
@@ -529,6 +539,15 @@ struct UserProfileView: View {
             }
             .buttonStyle(SolidPressButtonStyle())
 
+            if let freshness = freshnessLabel {
+                Text("·")
+                    .font(.system(size: 13))
+                    .foregroundStyle(AppPalette.textFaint)
+                Text(freshness)
+                    .font(.system(size: 14))
+                    .foregroundStyle(AppPalette.textMuted)
+            }
+
             if vibesReceived > 0 {
                 Text("·")
                     .font(.system(size: 13))
@@ -556,6 +575,36 @@ struct UserProfileView: View {
                 .buttonStyle(SolidPressButtonStyle())
             }
         }
+    }
+
+    /// Recency signal from the whole archive (private included) —
+    /// "should I follow this person" runs on aliveness, not volume.
+    private var freshnessLabel: String? {
+        guard let lastFitAt else { return nil }
+        let calendar = Calendar.current
+        if calendar.isDateInToday(lastFitAt) { return "logged today" }
+        let days = calendar.dateComponents([.day], from: lastFitAt, to: Date()).day ?? .max
+        return days < 7 ? "logged this week" : nil
+    }
+
+    private var hiddenFitCount: Int {
+        max(0, totalFitCount - publicOutfitCount)
+    }
+
+    /// One hairline row under the grid: the private archive exists
+    /// and has depth, even when the public grid is empty. Same lock
+    /// language as the App Clip's "+N FITS" tile.
+    private var privateArchiveRow: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "lock")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(AppPalette.textFaint)
+            Text("\(hiddenFitCount) \(hiddenFitCount == 1 ? "fit" : "fits") in the private archive")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(AppPalette.textMuted)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, LayoutMetrics.small)
     }
 
     private func statSegment(count: Int, label: String) -> some View {
@@ -960,6 +1009,7 @@ struct UserProfileView: View {
             async let followingIdsTask = try SocialService.getFollowingIds(userId: userId)
             async let vibesReceivedTask = VibesService.receivedCount(userId: userId)
             async let publicCountTask = try SocialService.publicOutfitCount(userId: userId)
+            async let archiveStatsTask = try SocialService.profileArchiveStats(userId: userId)
 
             let p = try await profileTask
             let userOutfits = await outfitsTask
@@ -973,6 +1023,9 @@ struct UserProfileView: View {
             // follower it'd fall back to 0 — same as today's
             // behavior, so no regression.
             let publicCount = (try? await publicCountTask) ?? userOutfits.count
+            // nil (RPC not deployed yet / network) degrades to no
+            // lock row + no freshness — exactly today's behavior.
+            let archiveStats = (try? await archiveStatsTask) ?? nil
 
             await MainActor.run {
                 profile = p
@@ -981,6 +1034,8 @@ struct UserProfileView: View {
                 followingIds = Array(fng)
                 vibesReceived = vibes
                 publicOutfitCount = publicCount
+                totalFitCount = archiveStats?.totalFits ?? 0
+                lastFitAt = archiveStats?.lastFitAt
                 isLoading = false
             }
         } catch {
