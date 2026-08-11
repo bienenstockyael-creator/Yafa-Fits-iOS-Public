@@ -554,6 +554,8 @@ struct ProfileHeader: View {
                             .font(.system(size: 14))
                             .foregroundStyle(AppPalette.textMuted)
                     }
+                    .lineLimit(1)
+                    .fixedSize()
                 }
                 .buttonStyle(SolidPressButtonStyle())
             }
@@ -569,6 +571,8 @@ struct ProfileHeader: View {
                 .font(.system(size: 14))
                 .foregroundStyle(AppPalette.textMuted)
         }
+        .lineLimit(1)
+        .fixedSize()
     }
 
     /// Commits the chosen header style / accent color / cutout

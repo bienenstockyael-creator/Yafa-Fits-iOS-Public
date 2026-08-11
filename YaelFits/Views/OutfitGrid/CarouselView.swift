@@ -781,10 +781,15 @@ struct CarouselView: View {
     }
 
     private func saveCircleButton(outfit: Outfit) -> some View {
-        let isSaved = store.likedIds.contains(outfit.id)
+        // Bookmark = SAVE (savedIds), a separate action from the
+        // heart's like. This was wired to toggleLike — tapping Save
+        // silently liked the fit and lit the heart.
+        let isSaved = store.savedIds.contains(outfit.id)
         return Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            store.toggleLike(outfit.id)
+            withAnimation(.easeInOut(duration: 0.18)) {
+                store.toggleSave(outfit.id)
+            }
         } label: {
             AppIcon(
                 glyph: .bookmark,

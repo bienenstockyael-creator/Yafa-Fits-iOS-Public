@@ -193,9 +193,6 @@ struct UserProfileView: View {
                             } else {
                                 outfitGrid
                             }
-                            if hiddenFitCount > 0 {
-                                privateArchiveRow
-                            }
                             Color.clear.frame(height: LayoutMetrics.screenPadding)
                         }
                     }
@@ -549,6 +546,8 @@ struct UserProfileView: View {
                         .tracking(1.6)
                         .foregroundStyle(AppPalette.textFaint)
                 }
+                .lineLimit(1)
+                .fixedSize()
             }
 
             if vibesReceived > 0 {
@@ -574,6 +573,8 @@ struct UserProfileView: View {
                             .font(.system(size: 14))
                             .foregroundStyle(AppPalette.textMuted)
                     }
+                    .lineLimit(1)
+                    .fixedSize()
                 }
                 .buttonStyle(SolidPressButtonStyle())
             }
@@ -594,22 +595,6 @@ struct UserProfileView: View {
         max(0, totalFitCount - publicOutfitCount)
     }
 
-    /// One hairline row under the grid: the private archive exists
-    /// and has depth, even when the public grid is empty. Same lock
-    /// language as the App Clip's "+N FITS" tile.
-    private var privateArchiveRow: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "lock")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(AppPalette.textFaint)
-            Text("\(hiddenFitCount) \(hiddenFitCount == 1 ? "fit" : "fits") in the private archive")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(AppPalette.textMuted)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, LayoutMetrics.small)
-    }
-
     private func statSegment(count: Int, label: String) -> some View {
         HStack(spacing: 4) {
             Text("\(count)")
@@ -619,6 +604,11 @@ struct UserProfileView: View {
                 .font(.system(size: 14))
                 .foregroundStyle(AppPalette.textMuted)
         }
+        // Stats never wrap or hyphen-break ("vib / e") — the row is
+        // sized by its content; segments hide behind Spacer pressure
+        // rather than folding.
+        .lineLimit(1)
+        .fixedSize()
     }
 
     private var followButton: some View {
@@ -652,8 +642,25 @@ struct UserProfileView: View {
                     .font(.system(size: 14, weight: .medium))
             }
             .foregroundStyle(AppPalette.textStrong)
+            .lineLimit(1)
+            .fixedSize()
             .padding(.leading, LayoutMetrics.xxSmall)
             Spacer()
+            if hiddenFitCount > 0 {
+                // Private-archive depth, on the header line the way
+                // a grid annotation should be: quiet, right-aligned,
+                // same lock language as the App Clip's locked tile.
+                HStack(spacing: 5) {
+                    Image(systemName: "lock")
+                        .font(.system(size: 10, weight: .semibold))
+                    Text("\(hiddenFitCount) private \(hiddenFitCount == 1 ? "fit" : "fits")")
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .foregroundStyle(AppPalette.textMuted)
+                .lineLimit(1)
+                .fixedSize()
+                .padding(.trailing, LayoutMetrics.xxSmall)
+            }
         }
         .padding(.top, LayoutMetrics.xSmall)
         .padding(.bottom, LayoutMetrics.xSmall)
