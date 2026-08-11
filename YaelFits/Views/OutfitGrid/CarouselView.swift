@@ -749,9 +749,6 @@ struct CarouselView: View {
                         cartCircleButton
                     }
                 } else {
-                    if isUpgradableTo3D(outfit) {
-                        upgrade3DCircleButton(outfit: outfit)
-                    }
                     saveCircleButton(outfit: outfit)
                     publishCircleButton(outfit: outfit)
                     shareCircleButton(outfit: outfit)
@@ -808,24 +805,26 @@ struct CarouselView: View {
             && !isGenerating(outfit)
     }
 
-    /// Tiny ↻✨ chip — occupies the same circle-chrome vocabulary as
-    /// the other action buttons; all the words live in the alert.
-    private func upgrade3DCircleButton(outfit: Outfit) -> some View {
+    /// Small ↻✨ badge anchored to the 2D slide's top-right — the
+    /// same corner the grid uses for its spin affordance, so it
+    /// reads as "this one could spin" rather than a fifth action.
+    /// All the words live in the alert.
+    private func upgrade3DBadge(outfit: Outfit) -> some View {
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             upgradeCandidate = outfit
         } label: {
             ZStack(alignment: .topTrailing) {
                 Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(AppPalette.iconPrimary)
                 Image(systemName: "sparkle")
-                    .font(.system(size: 7, weight: .bold))
+                    .font(.system(size: 6, weight: .bold))
                     .foregroundStyle(AppPalette.iconPrimary)
-                    .offset(x: 5, y: -4)
+                    .offset(x: 4, y: -3)
             }
-            .frame(width: 48, height: 48)
-            .appCircle()
+            .frame(width: 34, height: 34)
+            .appCircle(shadowRadius: 4, shadowY: 2)
         }
         .buttonStyle(SolidPressButtonStyle())
     }
@@ -1297,6 +1296,12 @@ struct CarouselView: View {
             }
         }
         .frame(width: slideWidth, height: slideHeight)
+        .overlay(alignment: .topTrailing) {
+            if isCurrent, showsChrome, isUpgradableTo3D(outfit) {
+                upgrade3DBadge(outfit: outfit)
+                    .opacity(slideOpacity)
+            }
+        }
         // The try-to-spin wiggle on a 2D fit: a short, horizontal-
         // dominant drag that would NOT page (under the 50pt page
         // threshold) is a user asking the flat fit to turn — surface
