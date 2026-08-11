@@ -534,6 +534,7 @@ struct CarouselView: View {
         }
         .overlay { unpublishConfirmOverlay }
         .overlay { generatingConfirmOverlay }
+        .overlay { upgradeConfirmOverlay }
         .sheet(isPresented: $showComments) {
             if let outfit = currentOutfit {
                 CommentsSheet(outfitId: outfit.id)
@@ -774,22 +775,6 @@ struct CarouselView: View {
             .accessibilityHidden(viewOnly)
         }
         .frame(maxWidth: .infinity)
-        .alert(
-            "Spin it in 3D?",
-            isPresented: Binding(
-                get: { upgradeCandidate != nil },
-                set: { if !$0 { upgradeCandidate = nil } }
-            ),
-            presenting: upgradeCandidate
-        ) { outfit in
-            Button("Spin it") {
-                store.generationOrchestrator.upgradeTo3D(outfit)
-                upgradeCandidate = nil
-            }
-            Button("Cancel", role: .cancel) { upgradeCandidate = nil }
-        } message: { _ in
-            Text("Turns this fit into a full 360°. Uses 1 credit.")
-        }
         .alert("Delete outfit?", isPresented: $showDeleteConfirmation) {
             Button("Delete", role: .destructive) { onDeleteOutfit(outfit) }
             Button("Cancel", role: .cancel) {}
@@ -812,7 +797,9 @@ struct CarouselView: View {
     private func upgrade3DBadge(outfit: Outfit) -> some View {
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            upgradeCandidate = outfit
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                upgradeCandidate = outfit
+            }
         } label: {
             ZStack(alignment: .topTrailing) {
                 Image(systemName: "arrow.triangle.2.circlepath")
@@ -1057,6 +1044,75 @@ struct CarouselView: View {
                 .transition(.scale(scale: 0.92).combined(with: .opacity))
             }
             .animation(.spring(response: 0.32, dampingFraction: 0.86), value: generatingConfirm?.key)
+        }
+    }
+
+    /// "Spin it in 3D?" confirm — same scrim + frosted appCard +
+    /// black-capsule-primary recipe as the generating confirm, so
+    /// every popup in the carousel speaks one language.
+    @ViewBuilder
+    private var upgradeConfirmOverlay: some View {
+        if let outfit = upgradeCandidate {
+            ZStack {
+                Color.black.opacity(0.18)
+                    .ignoresSafeArea()
+                    .onTapGesture { dismissUpgradeConfirm() }
+                    .transition(.opacity)
+
+                VStack(spacing: 18) {
+                    VStack(spacing: 8) {
+                        Text("Spin it in 3D?")
+                            .font(.system(size: 19, weight: .semibold))
+                            .foregroundStyle(AppPalette.textStrong)
+                            .multilineTextAlignment(.center)
+                        Text("Turns this fit into a full 360°.\nUses 1 credit.")
+                            .font(.system(size: 14, weight: .regular))
+                            .multilineTextAlignment(.center)
+                            .foregroundStyle(AppPalette.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    VStack(spacing: 10) {
+                        Button {
+                            UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+                            dismissUpgradeConfirm()
+                            store.generationOrchestrator.upgradeTo3D(outfit)
+                        } label: {
+                            Text("Spin it")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 50)
+                                .background(Capsule().fill(Color.black))
+                        }
+                        .buttonStyle(SolidPressButtonStyle())
+
+                        Button {
+                            dismissUpgradeConfirm()
+                        } label: {
+                            Text("Cancel")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(AppPalette.textPrimary)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 50)
+                                .appCapsule()
+                        }
+                        .buttonStyle(SolidPressButtonStyle())
+                    }
+                }
+                .padding(22)
+                .frame(maxWidth: 320)
+                .appCard(cornerRadius: 28)
+                .padding(.horizontal, 32)
+                .transition(.scale(scale: 0.92).combined(with: .opacity))
+            }
+            .animation(.spring(response: 0.32, dampingFraction: 0.86), value: upgradeCandidate?.id)
+        }
+    }
+
+    private func dismissUpgradeConfirm() {
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+            upgradeCandidate = nil
         }
     }
 
@@ -1317,7 +1373,9 @@ struct CarouselView: View {
                     let v = abs(value.translation.height)
                     if h > v, h < 50 {
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        upgradeCandidate = outfit
+                        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                            upgradeCandidate = outfit
+                        }
                     }
                 }
         )
