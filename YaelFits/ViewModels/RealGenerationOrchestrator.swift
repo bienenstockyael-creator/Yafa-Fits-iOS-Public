@@ -122,8 +122,10 @@ final class RealGenerationOrchestrator {
 
             let job = PipelineJob(outfitNum: outfitNum)
             // The pill/chip/expanded-card thumbnails all render
-            // sourceImage — for an upgrade, the 2D frame IS the shot.
-            job.sourceImage = cutout
+            // sourceImage with a FILL crop (right for camera shots,
+            // beheads a tall cutout) — so pre-square the frame:
+            // aspect-FIT on the pill background, crop-proof.
+            job.sourceImage = Self.squareThumbnail(fromCutout: cutout) ?? cutout
             job.cutoutImage = cutout
             job.greenScreenImage = greenScreen
             job.previewOutfit = outfit          // accept cleans the local 2D frame
@@ -136,6 +138,25 @@ final class RealGenerationOrchestrator {
             self.queue?.adoptFromServer(job)
             self.make3D(job)
         }
+    }
+
+    /// Square pill thumbnail: the whole figure aspect-FIT on the
+    /// app's grouped background. The thumbnail views fill-crop into
+    /// a circle, which on a 9:16 transparent cutout showed only the
+    /// torso; pre-squaring makes any crop a no-op.
+    nonisolated private static func squareThumbnail(fromCutout data: Data, side: CGFloat = 200) -> Data? {
+        guard let image = UIImage(data: data),
+              image.size.width > 0, image.size.height > 0 else { return nil }
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: side, height: side))
+        let squared = renderer.image { ctx in
+            UIColor(red: 236/255, green: 240/255, blue: 246/255, alpha: 1).setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: side, height: side))
+            let scale = min(side / image.size.width, side / image.size.height)
+            let w = image.size.width * scale
+            let h = image.size.height * scale
+            image.draw(in: CGRect(x: (side - w) / 2, y: (side - h) / 2, width: w, height: h))
+        }
+        return squared.jpegData(compressionQuality: 0.9)
     }
 
     /// UI gate for the upgrade affordances: modern per-user outfit
