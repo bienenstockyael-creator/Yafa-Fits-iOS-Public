@@ -117,7 +117,7 @@ final class RealGenerationOrchestrator {
                     from: outfit.frameURL(index: 0, baseURL: base)).0
             }
             guard let cutout = frameData,
-                  let greenScreen = ImageMaskingService.shared.greenScreenFromCutout(cutout)
+                  let greenScreen = await ImageMaskingService.shared.greenScreenFromCutout(cutout)
             else { return }
 
             let job = PipelineJob(outfitNum: outfitNum)
