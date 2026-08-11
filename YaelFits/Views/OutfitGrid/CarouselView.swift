@@ -1629,19 +1629,40 @@ struct CarouselView: View {
     /// Figure-drag release on a 2D fit. A committed swipe (same
     /// distance + monotonicity classification as the 3D scrub
     /// hand-off) still pages; anything scrubbier is the user asking
-    /// the flat fit to turn — surface the 3D upgrade.
+    /// the flat fit to turn — surface the 3D upgrade, but only ONCE
+    /// per outfit: accidental scrubs shouldn't nag, and after the
+    /// first prompt the ↻✨ badge remains the explicit path.
     private func handle2DFigureRelease(_ release: HorizontalPanRelease, outfit: Outfit) {
         let distanceThreshold = max(ScrubSwipe.distanceFloor, slideWidth * ScrubSwipe.distanceFractionOfSlide)
         let swipeLike = abs(release.totalTranslation) > distanceThreshold
             && release.monotonicityRatio >= ScrubSwipe.monotonicityFloor
         if swipeLike {
             handleScrubRelease(release)
-        } else if isUpgradableTo3D(outfit), upgradeCandidate == nil {
+        } else if isUpgradableTo3D(outfit), upgradeCandidate == nil,
+                  !Self.hasSeenScrubPrompt(outfit.id) {
+            Self.markScrubPromptSeen(outfit.id)
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
                 upgradeCandidate = outfit
             }
         }
+    }
+
+    /// Scrub-prompt memory (persisted): outfit ids whose gesture-
+    /// triggered "Spin it in 3D?" already showed once. Capped so the
+    /// list can't grow unbounded.
+    private static let scrubPromptSeenKey = "yafa.spin3DPromptSeenOutfitIds"
+
+    private static func hasSeenScrubPrompt(_ outfitId: String) -> Bool {
+        (UserDefaults.standard.stringArray(forKey: scrubPromptSeenKey) ?? []).contains(outfitId)
+    }
+
+    private static func markScrubPromptSeen(_ outfitId: String) {
+        var ids = UserDefaults.standard.stringArray(forKey: scrubPromptSeenKey) ?? []
+        guard !ids.contains(outfitId) else { return }
+        ids.append(outfitId)
+        if ids.count > 200 { ids.removeFirst(ids.count - 200) }
+        UserDefaults.standard.set(ids, forKey: scrubPromptSeenKey)
     }
 
     private func handleScrubRelease(_ release: HorizontalPanRelease) {
