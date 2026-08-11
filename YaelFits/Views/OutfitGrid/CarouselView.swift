@@ -1359,12 +1359,6 @@ struct CarouselView: View {
             }
         }
         .frame(width: slideWidth, height: slideHeight)
-        .overlay(alignment: .topTrailing) {
-            if isCurrent, showsChrome, isUpgradableTo3D(outfit) {
-                upgrade3DBadge(outfit: outfit)
-                    .opacity(slideOpacity)
-            }
-        }
         .overlay {
             if isCurrent && outfitToEditNote == nil {
                 diaryNoteOverlay(for: outfit)
@@ -1580,9 +1574,19 @@ struct CarouselView: View {
     }
 
     private var navButtons: some View {
+        let currentOutfit = outfits.indices.contains(currentIndex) ? outfits[currentIndex] : nil
         return HStack {
             navButton(icon: .chevronLeft, disabled: currentIndex <= 0) {
                 currentIndex -= 1
+            }
+            // The 2D→3D badge docks on the nav rail, centered above
+            // the left arrow — every floating element sits on an
+            // established rail; nothing free-floats over the fit.
+            .overlay(alignment: .center) {
+                if let outfit = currentOutfit, isUpgradableTo3D(outfit) {
+                    upgrade3DBadge(outfit: outfit)
+                        .offset(y: -51)   // arrow half 22 + 12 gap + badge half 17
+                }
             }
             Spacer()
             navButton(icon: .chevronRight, disabled: currentIndex >= outfits.count - 1) {
