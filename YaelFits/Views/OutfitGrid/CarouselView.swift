@@ -1291,6 +1291,9 @@ struct CarouselView: View {
                 outfit: outfit,
                 height: slideHeight,
                 draggable: showsChrome && isCurrent,
+                // 2D fits claim figure drags too (release routes to
+                // the 3D-upgrade prompt); margin drags still page.
+                panEvenWhenSingleFrame: isUpgradableTo3D(outfit),
                 eagerLoad: isNear,
                 // Deferred until the open transition lands (chrome fades in at
                 // the very end of the hero sequence). Preloading on mount ran
@@ -1330,7 +1333,11 @@ struct CarouselView: View {
                 // relative to its net translation. A swipe is a long,
                 // mostly one-direction drag where |net| ≈ range.
                 onHorizontalDragRelease: isCurrent ? { release in
-                    handleScrubRelease(release)
+                    if outfit.frameCount == 1 {
+                        handle2DFigureRelease(release, outfit: outfit)
+                    } else {
+                        handleScrubRelease(release)
+                    }
                 } : nil
             )
             .opacity(slideOpacity)
@@ -1358,27 +1365,6 @@ struct CarouselView: View {
                     .opacity(slideOpacity)
             }
         }
-        // The try-to-spin wiggle on a 2D fit: a short, horizontal-
-        // dominant drag that would NOT page (under the 50pt page
-        // threshold) is a user asking the flat fit to turn — surface
-        // the 3D upgrade. Committed page swipes and vertical drags
-        // pass through untouched.
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 12)
-                .onEnded { value in
-                    guard isCurrent, showsChrome,
-                          isUpgradableTo3D(outfit),
-                          upgradeCandidate == nil else { return }
-                    let h = abs(value.translation.width)
-                    let v = abs(value.translation.height)
-                    if h > v, h < 50 {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
-                            upgradeCandidate = outfit
-                        }
-                    }
-                }
-        )
         .overlay {
             if isCurrent && outfitToEditNote == nil {
                 diaryNoteOverlay(for: outfit)
@@ -1636,6 +1622,24 @@ struct CarouselView: View {
     /// happens to net out past the distance threshold is filtered out
     /// by the monotonicity check, so users dialing in a rotation
     /// angle don't accidentally flip outfits.
+    /// Figure-drag release on a 2D fit. A committed swipe (same
+    /// distance + monotonicity classification as the 3D scrub
+    /// hand-off) still pages; anything scrubbier is the user asking
+    /// the flat fit to turn — surface the 3D upgrade.
+    private func handle2DFigureRelease(_ release: HorizontalPanRelease, outfit: Outfit) {
+        let distanceThreshold = max(ScrubSwipe.distanceFloor, slideWidth * ScrubSwipe.distanceFractionOfSlide)
+        let swipeLike = abs(release.totalTranslation) > distanceThreshold
+            && release.monotonicityRatio >= ScrubSwipe.monotonicityFloor
+        if swipeLike {
+            handleScrubRelease(release)
+        } else if isUpgradableTo3D(outfit), upgradeCandidate == nil {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                upgradeCandidate = outfit
+            }
+        }
+    }
+
     private func handleScrubRelease(_ release: HorizontalPanRelease) {
         let distanceThreshold = max(ScrubSwipe.distanceFloor, slideWidth * ScrubSwipe.distanceFractionOfSlide)
         guard abs(release.totalTranslation) > distanceThreshold else { return }

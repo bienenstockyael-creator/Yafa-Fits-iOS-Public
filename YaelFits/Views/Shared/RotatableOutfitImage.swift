@@ -7,7 +7,14 @@ struct RotatableOutfitImage: View {
     let outfit: Outfit
     var height: CGFloat = FrameConfig.dimensions.height
     private let requestedDraggable: Bool
+    let panEvenWhenSingleFrame: Bool
     var draggable: Bool { requestedDraggable && outfit.frameCount > 1 }
+    /// Pan surface engagement: normally only rotatable fits claim
+    /// figure drags. The carousel opts single-frame fits in too
+    /// (`panEvenWhenSingleFrame`) so a 2D figure-drag reaches the
+    /// release handler (the 2D→3D upgrade prompt) instead of
+    /// falling through to the page gesture.
+    private var panActive: Bool { draggable || (requestedDraggable && panEvenWhenSingleFrame) }
     var eagerLoad: Bool = false
     var autoRotate: Bool = false
     var playEntranceSequence: Bool = false
@@ -51,6 +58,7 @@ struct RotatableOutfitImage: View {
         outfit: Outfit,
         height: CGFloat = FrameConfig.dimensions.height,
         draggable: Bool = false,
+        panEvenWhenSingleFrame: Bool = false,
         eagerLoad: Bool = false,
         autoRotate: Bool = false,
         playEntranceSequence: Bool = false,
@@ -73,6 +81,7 @@ struct RotatableOutfitImage: View {
         self.outfit = outfit
         self.height = height
         self.requestedDraggable = draggable
+        self.panEvenWhenSingleFrame = panEvenWhenSingleFrame
         self.eagerLoad = eagerLoad
         self.autoRotate = autoRotate
         self.playEntranceSequence = playEntranceSequence
@@ -141,17 +150,20 @@ struct RotatableOutfitImage: View {
         .frame(maxWidth: .infinity, maxHeight: height)
         .contentShape(Rectangle())
         .overlay {
-            if draggable || onTap != nil || onTapStateCapture != nil {
+            if panActive || onTap != nil || onTapStateCapture != nil {
                 InteractiveTouchSurface(
                     onTap: handleTap,
-                    panEnabled: draggable,
+                    panEnabled: panActive,
                     panCancelsTouches: scrubPanCancelsTouches,
-                    onHorizontalPanBegan: draggable ? startDragIfNeeded : nil,
-                    onHorizontalPanChanged: draggable ? { delta in
+                    onHorizontalPanBegan: panActive ? startDragIfNeeded : nil,
+                    onHorizontalPanChanged: panActive ? { delta in
+                        // Single-frame fits have no frames to advance —
+                        // the pan is claimed purely for its release.
+                        guard draggable else { return }
                         viewModel.dragChanged(delta: delta)
                     } : nil,
-                    onHorizontalPanEnded: draggable ? { release in
-                        viewModel.dragEnded()
+                    onHorizontalPanEnded: panActive ? { release in
+                        if draggable { viewModel.dragEnded() }
                         endDragIfNeeded()
                         onHorizontalDragRelease?(release)
                     } : nil
