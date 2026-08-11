@@ -188,3 +188,109 @@ select
   (select count(*) from cohort c join recent r on r.user_id = c.id) as returned,
   round(100.0 * (select count(*) from cohort c join recent r on r.user_id = c.id)
     / greatest((select count(*) from cohort), 1), 1)              as retention_pct;
+
+
+-- ── 9. UPLOADERS & FREQUENCY ─────────────────────────────────────
+-- Who is actually logging fits, and how often. "Uploader" = created
+-- at least one outfit in the window.
+select
+  count(distinct user_id)                            as uploaders_30d,
+  round(count(*)::numeric
+    / greatest(count(distinct user_id), 1), 1)       as fits_per_uploader_30d,
+  count(*)                                           as fits_30d
+from public.outfits
+where created_at > now() - interval '30 days';
+
+-- Frequency buckets, last 30 days (how the community splits).
+with per_user as (
+  select user_id, count(*) as fits
+  from public.outfits
+  where created_at > now() - interval '30 days'
+  group by 1
+)
+select
+  case
+    when fits >= 15 then 'near-daily (15+)'
+    when fits >= 4  then 'weekly-ish (4-14)'
+    else                 'dabbling (1-3)'
+  end        as bucket,
+  count(*)   as users,
+  sum(fits)  as fits
+from per_user
+group by 1 order by min(fits) desc;
+
+-- Weekly trend: active uploaders + fits per week.
+select
+  date_trunc('week', created_at)::date as week,
+  count(distinct user_id)              as uploaders,
+  count(*)                             as fits
+from public.outfits
+where created_at > now() - interval '10 weeks'
+group by 1 order by 1 desc;
+
+
+-- ── 10. PRIVATE vs PUBLIC + 2D vs 3D ─────────────────────────────
+-- Content mix: how much of the archive is shared, and how much gets
+-- the full 3D spin (frame_count > 1) vs stays a 2D still.
+select
+  count(*)                                                        as total_fits,
+  count(*) filter (where is_public)                               as public_fits,
+  round(100.0 * count(*) filter (where is_public) / greatest(count(*), 1), 1) as public_pct,
+  count(*) filter (where frame_count > 1)                         as fits_3d,
+  count(*) filter (where frame_count = 1)                         as fits_2d,
+  round(100.0 * count(*) filter (where frame_count > 1) / greatest(count(*), 1), 1) as pct_3d
+from public.outfits;
+
+-- Same mix, weekly trend.
+select
+  date_trunc('week', created_at)::date                as week,
+  count(*)                                            as fits,
+  round(100.0 * count(*) filter (where is_public) / greatest(count(*), 1), 1)      as public_pct,
+  round(100.0 * count(*) filter (where frame_count > 1) / greatest(count(*), 1), 1) as pct_3d
+from public.outfits
+where created_at > now() - interval '10 weeks'
+group by 1 order by 1 desc;
+
+
+-- ── 11. REVENUE (IAP credit packs) ───────────────────────────────
+-- NOTE: while the beta-unlimited-credits migration is active
+-- (20260619130000), nobody can hit the credit wall, so this stays
+-- empty BY DESIGN until the StoreKit flow ships + the gate reverts.
+select
+  count(distinct user_id)                     as paying_users,
+  count(*)                                    as purchases,
+  sum(credits_granted)                        as credits_sold,
+  round(sum(price_cents) / 100.0, 2)          as gross_usd
+from public.credit_purchases;
+
+-- By package.
+select
+  product_id,
+  count(*)                                    as purchases,
+  count(distinct user_id)                     as buyers,
+  round(sum(price_cents) / 100.0, 2)          as gross_usd
+from public.credit_purchases
+group by 1 order by gross_usd desc nulls last;
+
+
+-- ── 12. INACTIVITY COHORTS ───────────────────────────────────────
+-- Days since each member's last fit — the re-engagement push targets
+-- the 7+ groups (see users_needing_reengagement()).
+with last_fit as (
+  select p.id, p.username,
+         coalesce(max(o.created_at), p.created_at) as last_activity
+  from public.profiles p
+  left join public.outfits o on o.user_id = p.id
+  where p.is_onboarded
+  group by p.id, p.username
+)
+select
+  case
+    when last_activity > now() - interval '3 days'  then 'active (0-3d)'
+    when last_activity > now() - interval '7 days'  then 'cooling (4-7d)'
+    when last_activity > now() - interval '14 days' then 'lapsing (8-14d)'
+    else                                                 'dormant (15d+)'
+  end      as cohort,
+  count(*) as users
+from last_fit
+group by 1 order by min(now() - last_activity);
