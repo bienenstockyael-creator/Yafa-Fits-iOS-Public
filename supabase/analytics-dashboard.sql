@@ -253,15 +253,17 @@ group by 1 order by 1 desc;
 
 
 -- ── 11. REVENUE (IAP credit packs) ───────────────────────────────
--- NOTE: while the beta-unlimited-credits migration is active
--- (20260619130000), nobody can hit the credit wall, so this stays
--- empty BY DESIGN until the StoreKit flow ships + the gate reverts.
+-- Real revenue only: excludes sandbox-environment receipts (stored
+-- when ALLOW_SANDBOX_GRANTS was enabled for testing) and the
+-- founder's own account (@yafa's TestFlight purchases).
 select
   count(distinct user_id)                     as paying_users,
   count(*)                                    as purchases,
   sum(credits_granted)                        as credits_sold,
   round(sum(price_cents) / 100.0, 2)          as gross_usd
-from public.credit_purchases;
+from public.credit_purchases
+where coalesce(receipt_payload->>'environment', 'Production') <> 'Sandbox'
+  and user_id <> '31c9f3fd-e672-43f2-954a-0b141640e76f';  -- @yafa (founder)
 
 -- By package.
 select
@@ -270,7 +272,24 @@ select
   count(distinct user_id)                     as buyers,
   round(sum(price_cents) / 100.0, 2)          as gross_usd
 from public.credit_purchases
+where coalesce(receipt_payload->>'environment', 'Production') <> 'Sandbox'
+  and user_id <> '31c9f3fd-e672-43f2-954a-0b141640e76f'   -- @yafa (founder)
 group by 1 order by gross_usd desc nulls last;
+
+-- By buyer (usernames), same exclusions.
+select
+  p.username,
+  count(*)                                     as purchases,
+  string_agg(distinct replace(c.product_id, 'com.yafa.credits.', ''), ', ') as packs,
+  sum(c.credits_granted)                       as credits,
+  round(sum(c.price_cents) / 100.0, 2)         as spent_usd,
+  max(c.created_at)::date                      as last_purchase
+from public.credit_purchases c
+join public.profiles p on p.id = c.user_id
+where coalesce(c.receipt_payload->>'environment', 'Production') <> 'Sandbox'
+  and c.user_id <> '31c9f3fd-e672-43f2-954a-0b141640e76f'
+group by p.username
+order by spent_usd desc;
 
 
 -- ── 12. INACTIVITY COHORTS ───────────────────────────────────────
