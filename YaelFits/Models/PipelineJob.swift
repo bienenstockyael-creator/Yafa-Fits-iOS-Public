@@ -60,6 +60,9 @@ final class PipelineJob: Identifiable, @unchecked Sendable {
     var captureDayString: String?
     var captureLatitude: Double?
     var captureLongitude: Double?
+    /// 2D→3D upgrade of an already-PUBLIC fit: accept must re-save
+    /// it public (the plain accept path saves private by default).
+    var preservePublish: Bool = false
     var isRotationReversed: Bool = false
     var requestId: String?
     var prompt: String = UploadConfig.defaultPrompt
@@ -224,6 +227,7 @@ struct PersistedPendingJob: Codable, Sendable {
     let captureDayString: String?
     let captureLatitude: Double?
     let captureLongitude: Double?
+    let preservePublish: Bool?
     let prompt: String
     let sourceImagePath: String?
     let serverJobId: UUID?
@@ -248,6 +252,7 @@ struct PersistedPendingJob: Codable, Sendable {
         self.captureDayString = job.captureDayString
         self.captureLatitude = job.captureLatitude
         self.captureLongitude = job.captureLongitude
+        self.preservePublish = job.preservePublish
         self.prompt = job.prompt
         self.sourceImagePath = job.sourceImagePath
         self.serverJobId = job.serverJobId
@@ -292,6 +297,7 @@ struct PersistedPendingJob: Codable, Sendable {
         job.captureDayString = captureDayString
         job.captureLatitude = captureLatitude
         job.captureLongitude = captureLongitude
+        job.preservePublish = preservePublish ?? false
         job.prompt = prompt
         job.sourceImagePath = sourceImagePath
         job.serverJobId = serverJobId

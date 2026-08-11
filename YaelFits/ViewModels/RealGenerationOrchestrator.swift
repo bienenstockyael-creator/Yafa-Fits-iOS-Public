@@ -94,6 +94,57 @@ final class RealGenerationOrchestrator {
         }
     }
 
+    /// 2D→3D upgrade for an ALREADY-ARCHIVED 2D fit — no re-upload.
+    /// The stored frame IS the background-removed cutout, so this
+    /// skips Bria: frame → green-screen canvas → the normal make3D
+    /// submit/reserve/poll flow. The server names results by
+    /// outfit number, so accept upgrades the frames IN PLACE under
+    /// the same outfit id; date/weather/location/products/publish
+    /// state all survive.
+    func upgradeTo3D(_ outfit: Outfit) {
+        guard outfit.frameCount == 1,
+              let userId = userIdProvider(),
+              canUpgradeTo3D(outfit, userId: userId),
+              let outfitNum = outfit.outfitNumber else { return }
+
+        Task { @MainActor in
+            // Frame data: local file first; the outfit-2d-frames
+            // remote copy covers reinstalled devices.
+            var frameData = try? Data(contentsOf: LocalOutfitStore.shared.frameURL(
+                for: outfit, index: 0, userId: userId))
+            if frameData == nil, let base = outfit.resolvedRemoteBaseURL {
+                frameData = try? await URLSession.shared.data(
+                    from: outfit.frameURL(index: 0, baseURL: base)).0
+            }
+            guard let cutout = frameData,
+                  let greenScreen = ImageMaskingService.shared.greenScreenFromCutout(cutout)
+            else { return }
+
+            let job = PipelineJob(outfitNum: outfitNum)
+            job.cutoutImage = cutout
+            job.greenScreenImage = greenScreen
+            job.previewOutfit = outfit          // accept cleans the local 2D frame
+            job.resultOutfitId = outfit.id      // in-place: skip archivePreview2DIfNeeded
+            job.uploadWeather = outfit.weather
+            job.uploadLocation = outfit.location
+            job.captureDayString = outfit.date  // the fit keeps its original day
+            job.preservePublish = outfit.isPublic == true
+            job.step = .generate
+            self.queue?.adoptFromServer(job)
+            self.make3D(job)
+        }
+    }
+
+    /// UI gate for the upgrade affordances: modern per-user outfit
+    /// ids only — the server names results outfit-<uuid8>-<num>, so
+    /// legacy ids (outfit-102) would come back under a DIFFERENT id
+    /// and break the in-place upgrade.
+    nonisolated func canUpgradeTo3D(_ outfit: Outfit, userId: UUID) -> Bool {
+        outfit.frameCount == 1
+            && outfit.id.lowercased().hasPrefix("outfit-\(userId.uuidString.lowercased().prefix(8))-")
+            && outfit.outfitNumber != nil
+    }
+
     /// User tapped "Generate 3D". Submit + reserve credit + poll.
     func make3D(_ job: PipelineJob) {
         cancel(job)
@@ -205,11 +256,12 @@ final class RealGenerationOrchestrator {
         if job.uploadLocation == nil { job.uploadLocation = location }
     }
 
-    /// User tapped "Accept" in the review card.
+    /// User tapped "Accept" in the review card. `preservePublish`
+    /// keeps an upgraded already-public fit public.
     func accept(_ job: PipelineJob) {
         cancel(job)
         tasks[job.id] = Task { @MainActor in
-            self.finalize(job: job, publishToFeed: false)
+            self.finalize(job: job, publishToFeed: job.preservePublish)
         }
     }
 
@@ -394,7 +446,7 @@ final class RealGenerationOrchestrator {
                 remoteOutfit.isRotationReversed = false
                 let localDateFormatter = DateFormatter()
                 localDateFormatter.dateFormat = "yyyy-MM-dd"
-                remoteOutfit.date = localDateFormatter.string(from: Date())
+                remoteOutfit.date = job.captureDayString ?? localDateFormatter.string(from: Date())
                 if remoteOutfit.weather == nil { remoteOutfit.weather = job.uploadWeather }
                 if remoteOutfit.location == nil, let uploadLocation = job.uploadLocation {
                     remoteOutfit.location = uploadLocation

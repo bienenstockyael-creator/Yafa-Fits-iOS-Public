@@ -72,6 +72,21 @@ actor ImageMaskingService {
         )
     }
 
+    /// Green-screen canvas from an ALREADY background-removed cutout
+    /// — the 2D→3D upgrade path: the archived 2D frame IS the cutout,
+    /// so Bria is skipped entirely and the frame goes straight onto
+    /// the Kling 9:16 green canvas (subject bounds re-detected, so a
+    /// previously-composed archive canvas re-centers correctly).
+    func greenScreenFromCutout(_ cutoutPNGData: Data) -> Data? {
+        guard let cutout = CIImage(data: cutoutPNGData) else { return nil }
+        let canvas = composeForKling(cutout, sourceCanvasSize: cutout.extent.size)
+        return ciContext.pngRepresentation(
+            of: canvas,
+            format: .RGBA8,
+            colorSpace: colorSpace
+        )
+    }
+
     private func removeBackground(
         from cgImage: CGImage,
         sourceImageData: Data,

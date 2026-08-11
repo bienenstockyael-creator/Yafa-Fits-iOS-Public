@@ -127,6 +127,8 @@ struct CarouselView: View {
     /// card so the user always gets a prompt before destructive
     /// action, regardless of which surface they tap from.
     @State private var showDeleteConfirmation = false
+    /// 2D fit queued for the "spin it in 3D" confirm alert.
+    @State private var upgradeCandidate: Outfit?
     /// Outfit pending the publish (caption/products) sheet. nil at rest.
     @State private var outfitToPublish: Outfit?
     /// Per-outfit optimistic published state, keyed by outfit id, so the
@@ -747,6 +749,9 @@ struct CarouselView: View {
                         cartCircleButton
                     }
                 } else {
+                    if isUpgradableTo3D(outfit) {
+                        upgrade3DCircleButton(outfit: outfit)
+                    }
                     saveCircleButton(outfit: outfit)
                     publishCircleButton(outfit: outfit)
                     shareCircleButton(outfit: outfit)
@@ -772,12 +777,57 @@ struct CarouselView: View {
             .accessibilityHidden(viewOnly)
         }
         .frame(maxWidth: .infinity)
+        .alert(
+            "Spin it in 3D?",
+            isPresented: Binding(
+                get: { upgradeCandidate != nil },
+                set: { if !$0 { upgradeCandidate = nil } }
+            ),
+            presenting: upgradeCandidate
+        ) { outfit in
+            Button("Spin it") {
+                store.generationOrchestrator.upgradeTo3D(outfit)
+                upgradeCandidate = nil
+            }
+            Button("Cancel", role: .cancel) { upgradeCandidate = nil }
+        } message: { _ in
+            Text("Turns this fit into a full 360°. Uses 1 credit.")
+        }
         .alert("Delete outfit?", isPresented: $showDeleteConfirmation) {
             Button("Delete", role: .destructive) { onDeleteOutfit(outfit) }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This removes the outfit from your archive.")
         }
+    }
+
+    /// Upgrade affordance gate: own archive, 2D fit, modern id.
+    private func isUpgradableTo3D(_ outfit: Outfit) -> Bool {
+        guard !viewOnly, let userId = store.userId else { return false }
+        return store.generationOrchestrator.canUpgradeTo3D(outfit, userId: userId)
+            && !isGenerating(outfit)
+    }
+
+    /// Tiny ↻✨ chip — occupies the same circle-chrome vocabulary as
+    /// the other action buttons; all the words live in the alert.
+    private func upgrade3DCircleButton(outfit: Outfit) -> some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            upgradeCandidate = outfit
+        } label: {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppPalette.iconPrimary)
+                Image(systemName: "sparkle")
+                    .font(.system(size: 7, weight: .bold))
+                    .foregroundStyle(AppPalette.iconPrimary)
+                    .offset(x: 5, y: -4)
+            }
+            .frame(width: 48, height: 48)
+            .appCircle()
+        }
+        .buttonStyle(SolidPressButtonStyle())
     }
 
     private func saveCircleButton(outfit: Outfit) -> some View {
@@ -1247,6 +1297,25 @@ struct CarouselView: View {
             }
         }
         .frame(width: slideWidth, height: slideHeight)
+        // The try-to-spin wiggle on a 2D fit: a short, horizontal-
+        // dominant drag that would NOT page (under the 50pt page
+        // threshold) is a user asking the flat fit to turn — surface
+        // the 3D upgrade. Committed page swipes and vertical drags
+        // pass through untouched.
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 12)
+                .onEnded { value in
+                    guard isCurrent, showsChrome,
+                          isUpgradableTo3D(outfit),
+                          upgradeCandidate == nil else { return }
+                    let h = abs(value.translation.width)
+                    let v = abs(value.translation.height)
+                    if h > v, h < 50 {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        upgradeCandidate = outfit
+                    }
+                }
+        )
         .overlay {
             if isCurrent && outfitToEditNote == nil {
                 diaryNoteOverlay(for: outfit)
