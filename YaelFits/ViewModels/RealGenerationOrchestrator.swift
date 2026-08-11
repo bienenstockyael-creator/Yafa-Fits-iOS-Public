@@ -479,6 +479,30 @@ final class RealGenerationOrchestrator {
                     let existing = remoteOutfit.products ?? []
                     remoteOutfit.products = existing + job.autoDetectedProducts
                 }
+                // In-place upgrade (and the normal fork flow, where
+                // the preview 2D shares the id): the finished 3D
+                // wears the ORIGINAL fit's metadata — caption, tags,
+                // products added mid-generation, the diary note —
+                // only the frames are new. Without this, accept
+                // replaced the local outfit with a server-built one
+                // whose empty tags/products then overwrote the row.
+                if let original = job.previewOutfit, original.id == remoteOutfit.id {
+                    remoteOutfit.caption = original.caption ?? remoteOutfit.caption
+                    remoteOutfit.tags = original.tags ?? remoteOutfit.tags
+                    remoteOutfit.activity = original.activity ?? remoteOutfit.activity
+                    if remoteOutfit.products?.isEmpty != false {
+                        remoteOutfit.products = original.products
+                    }
+                    remoteOutfit.diaryNote = original.diaryNote
+                    remoteOutfit.noteStyle = original.noteStyle
+                    remoteOutfit.noteShared = original.noteShared
+                    remoteOutfit.noteX = original.noteX
+                    remoteOutfit.noteY = original.noteY
+                    remoteOutfit.noteScale = original.noteScale
+                    remoteOutfit.noteRotation = original.noteRotation
+                    remoteOutfit.noteColorIndex = original.noteColorIndex
+                    remoteOutfit.isPublic = original.isPublic
+                }
                 job.stagedOutfit = remoteOutfit
                 job.step = .review
                 job.isProcessing = false
