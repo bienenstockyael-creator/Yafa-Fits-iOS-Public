@@ -534,17 +534,16 @@ struct UserProfileView: View {
                 Text("·")
                     .font(.system(size: 13))
                     .foregroundStyle(AppPalette.textFaint)
-                // Status, not a stat: the mono-caps metadata voice
-                // (same family as the carousel's date · location
-                // chrome) + a soft activity dot.
-                HStack(spacing: 5) {
+                // Status marker: the green activity dot carries the
+                // "alive" signal; the text speaks the same voice as
+                // the followers/vibes stats around it.
+                HStack(spacing: 6) {
                     Circle()
                         .fill(Color(red: 0.45, green: 0.78, blue: 0.55))
-                        .frame(width: 5, height: 5)
-                    Text(freshness.uppercased())
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .tracking(1.6)
-                        .foregroundStyle(AppPalette.textFaint)
+                        .frame(width: 6, height: 6)
+                    Text(freshness)
+                        .font(.system(size: 14))
+                        .foregroundStyle(AppPalette.textMuted)
                 }
                 .lineLimit(1)
                 .fixedSize()
