@@ -51,6 +51,15 @@ final class PipelineJob: Identifiable, @unchecked Sendable {
     var previewOutfit: Outfit?
     var uploadWeather: Weather?
     var uploadLocation: String?
+    /// Camera-roll capture metadata (EXIF). Non-nil ONLY for roll
+    /// picks older than the live window: the outfit's date comes
+    /// from `captureDayString`, and weather/location resolve from
+    /// the capture instant + GPS instead of the live fetches — a
+    /// July photo must never wear today's weather.
+    var captureDate: Date?
+    var captureDayString: String?
+    var captureLatitude: Double?
+    var captureLongitude: Double?
     var isRotationReversed: Bool = false
     var requestId: String?
     var prompt: String = UploadConfig.defaultPrompt
@@ -209,6 +218,12 @@ struct PersistedPendingJob: Codable, Sendable {
     let step: Step
     let uploadWeather: Weather?
     let uploadLocation: String?
+    // Camera-roll capture metadata — optional so snapshots written
+    // by older builds decode fine.
+    let captureDate: Date?
+    let captureDayString: String?
+    let captureLatitude: Double?
+    let captureLongitude: Double?
     let prompt: String
     let sourceImagePath: String?
     let serverJobId: UUID?
@@ -229,6 +244,10 @@ struct PersistedPendingJob: Codable, Sendable {
         self.outfitNum = job.outfitNum
         self.uploadWeather = job.uploadWeather
         self.uploadLocation = job.uploadLocation
+        self.captureDate = job.captureDate
+        self.captureDayString = job.captureDayString
+        self.captureLatitude = job.captureLatitude
+        self.captureLongitude = job.captureLongitude
         self.prompt = job.prompt
         self.sourceImagePath = job.sourceImagePath
         self.serverJobId = job.serverJobId
@@ -269,6 +288,10 @@ struct PersistedPendingJob: Codable, Sendable {
         job.previewOutfit = previewOutfit
         job.uploadWeather = uploadWeather
         job.uploadLocation = uploadLocation
+        job.captureDate = captureDate
+        job.captureDayString = captureDayString
+        job.captureLatitude = captureLatitude
+        job.captureLongitude = captureLongitude
         job.prompt = prompt
         job.sourceImagePath = sourceImagePath
         job.serverJobId = serverJobId

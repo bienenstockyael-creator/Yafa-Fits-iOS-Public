@@ -15,8 +15,12 @@ struct GenerationPicker: View {
     @Binding var isPresented: Bool
     /// Fired when the user finishes picking — never called with nil
     /// (cancel paths just set `isPresented = false`). Receives the
-    /// raw `UIImage` so the queue can normalize/encode it.
-    let onImagePicked: (UIImage) -> Void
+    /// raw `UIImage` so the queue can normalize/encode it, plus the
+    /// photo's capture metadata for camera-roll picks: EXIF date +
+    /// GPS drive the fit's date/location/weather. nil for camera
+    /// shots and for roll picks taken within the last ~2h (both
+    /// behave as "live": today + current weather, unchanged).
+    let onImagePicked: (UIImage, PhotoMetadata?) -> Void
 
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var showingCamera = false
@@ -75,8 +79,18 @@ struct GenerationPicker: View {
             Task {
                 if let data = try? await newItem.loadTransferable(type: Data.self),
                    let uiImage = UIImage(data: data) {
+                    // EXIF rides the raw Data — read it BEFORE the
+                    // UIImage conversion strips it. Recent captures
+                    // are treated as live so the roll and camera
+                    // paths can't drift for a just-shot photo.
+                    var metadata = PhotoMetadataService.extract(from: data)
+                    if let captured = metadata?.captureDate,
+                       Date().timeIntervalSince(captured) < PhotoMetadataService.liveWindow {
+                        metadata = nil
+                    }
+                    let resolved = metadata
                     await MainActor.run {
-                        onImagePicked(uiImage)
+                        onImagePicked(uiImage, resolved)
                         dismiss()
                     }
                 } else {
@@ -91,7 +105,7 @@ struct GenerationPicker: View {
             GenerationCameraCapture { image in
                 showingCamera = false
                 if let image {
-                    onImagePicked(image)
+                    onImagePicked(image, nil)
                     dismiss()
                 }
             }

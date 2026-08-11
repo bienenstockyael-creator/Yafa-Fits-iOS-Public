@@ -58,16 +58,32 @@ final class CarouselEditCoordinator {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         let newDateString = formatter.string(from: editableDate)
-        if newDateString != outfit.date {
+        let dateChanged = newDateString != outfit.date
+        if dateChanged {
             store.updateOutfitDate(outfitId: outfitId, date: newDateString)
             Task { try? await OutfitService.updateOutfitDate(outfitId: outfitId, date: newDateString) }
         }
 
         let trimmedLocation = editableLocation.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalized = trimmedLocation.isEmpty ? nil : trimmedLocation
-        if normalized != outfit.location {
+        let locationChanged = normalized != outfit.location
+        if locationChanged {
             store.updateOutfitLocation(outfitId: outfitId, location: normalized)
             Task { try? await OutfitService.updateOutfitLocation(outfitId: outfitId, location: normalized) }
+        }
+
+        // Weather follows the fit: a new date and/or place means the
+        // pill re-derives for that day at that location (WeatherKit
+        // history). Empty/un-geocodable location → the pill CLEARS —
+        // showing the old weather under a new date would be a lie.
+        if dateChanged || locationChanged {
+            let day = editableDate
+            let place = normalized
+            Task { @MainActor in
+                let weather = await UploadWeatherService.shared.weather(forPlaceName: place, onDay: day)
+                store.updateOutfitWeather(outfitId: outfitId, weather: weather)
+                try? await OutfitService.updateOutfitWeather(outfitId: outfitId, weather: weather)
+            }
         }
 
         let originalTags = outfit.tags ?? []

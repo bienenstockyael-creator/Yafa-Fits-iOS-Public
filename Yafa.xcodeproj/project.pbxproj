@@ -142,6 +142,7 @@
 		A95A14866E6CEABC11DBCDDB /* public-feed.json in Resources */ = {isa = PBXBuildFile; fileRef = E9EEE7F7310371BA0DB650A1 /* public-feed.json */; };
 		AABBCC10000000000000CCC1 /* CreditService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC10000000000000CCC2 /* CreditService.swift */; };
 		AABBCC20000000000000CCC1 /* TwoDOutfitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC20000000000000CCC2 /* TwoDOutfitService.swift */; };
+		20260811AB000000000000A1 /* PhotoMetadataService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20260811AB000000000000A2 /* PhotoMetadataService.swift */; };
 		AABBCC30000000000000CCC1 /* Outfit3DGlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC30000000000000CCC2 /* Outfit3DGlow.swift */; };
 		AABBCC40000000000000CCC1 /* SavedOutfitsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC40000000000000CCC2 /* SavedOutfitsSheet.swift */; };
 		AB99B2F085034E2A1CBBF77A /* cloudy.json in Resources */ = {isa = PBXBuildFile; fileRef = 8E93326E60084B89CA340A41 /* cloudy.json */; };
@@ -381,6 +382,7 @@
 		AA9CDA154F7FD6F2F0D57A92 /* VideoFrameSequenceExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFrameSequenceExporter.swift; sourceTree = "<group>"; };
 		AABBCC10000000000000CCC2 /* CreditService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreditService.swift; sourceTree = "<group>"; };
 		AABBCC20000000000000CCC2 /* TwoDOutfitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TwoDOutfitService.swift; sourceTree = "<group>"; };
+		20260811AB000000000000A2 /* PhotoMetadataService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoMetadataService.swift; sourceTree = "<group>"; };
 		AABBCC30000000000000CCC2 /* Outfit3DGlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Outfit3DGlow.swift; sourceTree = "<group>"; };
 		AABBCC40000000000000CCC2 /* SavedOutfitsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedOutfitsSheet.swift; sourceTree = "<group>"; };
 		AE0BE487007AB6D1CE6EC826 /* FalSegmentationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FalSegmentationService.swift; sourceTree = "<group>"; };
@@ -819,6 +821,7 @@
 				AABBCC10000000000000CCC2 /* CreditService.swift */,
 				202606071300000A000001 /* CreditPurchaseService.swift */,
 				AABBCC20000000000000CCC2 /* TwoDOutfitService.swift */,
+				20260811AB000000000000A2 /* PhotoMetadataService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -1215,6 +1218,7 @@
 				BC22750567EDDC797832CD21 /* YaelFitsApp.swift in Sources */,
 				AABBCC10000000000000CCC1 /* CreditService.swift in Sources */,
 				AABBCC20000000000000CCC1 /* TwoDOutfitService.swift in Sources */,
+				20260811AB000000000000A1 /* PhotoMetadataService.swift in Sources */,
 				AABBCC30000000000000CCC1 /* Outfit3DGlow.swift in Sources */,
 				AABBCC40000000000000CCC1 /* SavedOutfitsSheet.swift in Sources */,
 			);

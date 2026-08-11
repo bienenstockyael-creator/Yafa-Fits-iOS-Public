@@ -145,12 +145,22 @@ final class GenerationQueue {
     func enqueue(
         sourceImage: Data,
         weather: Weather?,
-        location: String?
+        location: String?,
+        captureMetadata: PhotoMetadata? = nil
     ) -> PipelineJob {
         let job = PipelineJob(outfitNum: nextOutfitNumber())
         job.sourceImage = sourceImage
         job.uploadWeather = weather
         job.uploadLocation = location
+        // Camera-roll pick of an older photo: the fit belongs to the
+        // day the photo was TAKEN. The orchestrator resolves this
+        // into date/location/weather instead of the live fetches.
+        if let captureMetadata {
+            job.captureDate = captureMetadata.captureDate
+            job.captureDayString = captureMetadata.dayString
+            job.captureLatitude = captureMetadata.coordinate?.latitude
+            job.captureLongitude = captureMetadata.coordinate?.longitude
+        }
         job.statusTitle = "Queued"
         job.statusDetail = "Waiting for a worker to pick this up."
 

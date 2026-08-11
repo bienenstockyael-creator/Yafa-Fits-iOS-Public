@@ -586,7 +586,7 @@ struct RootView: View {
     /// Picker callback. Encodes the selected `UIImage` to JPEG data
     /// and enqueues a new generation. Weather + location are stamped
     /// later by `RealGenerationOrchestrator` via `UploadWeatherService`.
-    private func handlePickedImage(_ image: UIImage) {
+    private func handlePickedImage(_ image: UIImage, metadata: PhotoMetadata?) {
         guard let data = image.jpegData(compressionQuality: 1) else { return }
 
         // Take the user to where the new placeholder will appear.
@@ -610,7 +610,8 @@ struct RootView: View {
             store.generationQueue.enqueue(
                 sourceImage: data,
                 weather: nil,
-                location: nil
+                location: nil,
+                captureMetadata: metadata
             )
         }
         // Scroll to top so the new placeholder is in view. Slight

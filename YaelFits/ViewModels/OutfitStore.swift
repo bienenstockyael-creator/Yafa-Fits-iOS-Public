@@ -720,6 +720,12 @@ class OutfitStore {
         persistCache()
     }
 
+    func updateOutfitWeather(outfitId: String, weather: Weather?) {
+        guard let index = outfits.firstIndex(where: { $0.id == outfitId }) else { return }
+        outfits[index].weather = weather
+        persistCache()
+    }
+
     func updateOutfitLocation(outfitId: String, location: String?) {
         guard let index = outfits.firstIndex(where: { $0.id == outfitId }) else { return }
         let trimmed = location?.trimmingCharacters(in: .whitespacesAndNewlines)

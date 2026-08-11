@@ -101,6 +101,26 @@ struct OutfitService {
             .execute()
     }
 
+    /// Weather follows the fit's date/location — the edit flow
+    /// re-derives it whenever either changes. nil CLEARS the pill
+    /// (wrong-day weather is worse than none).
+    static func updateOutfitWeather(outfitId: String, weather: Weather?) async throws {
+        struct WeatherUpdate: Encodable {
+            let weather_temp_f: Int?
+            let weather_temp_c: Int?
+            let weather_condition: String?
+        }
+        try await supabase
+            .from("outfits")
+            .update(WeatherUpdate(
+                weather_temp_f: weather?.tempF,
+                weather_temp_c: weather?.tempC,
+                weather_condition: weather?.condition
+            ))
+            .eq("id", value: outfitId)
+            .execute()
+    }
+
     static func updateOutfitDiaryNote(
         outfitId: String,
         note: String?,

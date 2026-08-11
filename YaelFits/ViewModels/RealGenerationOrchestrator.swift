@@ -1,3 +1,4 @@
+import CoreLocation
 import Foundation
 import SwiftUI
 import UIKit
@@ -171,18 +172,37 @@ final class RealGenerationOrchestrator {
             // Block briefly on weather/location if they haven't
             // landed yet — a fast 2D tap can beat the parallel
             // fetch from `start`, and the outfit deserves its tags.
-            if job.uploadWeather == nil || job.uploadLocation == nil {
-                async let fetchedWeather = UploadWeatherService.shared.fetchCurrentWeather()
-                async let fetchedLocation = UploadWeatherService.shared.fetchCurrentLocationName()
-                let (weather, location) = await (fetchedWeather, fetchedLocation)
-                if job.uploadWeather == nil { job.uploadWeather = weather }
-                if job.uploadLocation == nil { job.uploadLocation = location }
-            }
+            await self.resolveUploadTags(for: job)
             self.build2DOutfit(job: job, userId: userId, cutoutData: cutoutData)
             if job.stagedOutfit != nil {
                 self.finalize(job: job, publishToFeed: false)
             }
         }
+    }
+
+    /// Resolve the job's weather/location tags. Live shots use the
+    /// device's current fixes; camera-roll picks resolve from the
+    /// photo's capture moment + GPS — and NEVER fall back to the
+    /// current fixes (a July photo must not wear today's weather;
+    /// no GPS just means empty, editable tags).
+    @MainActor
+    private func resolveUploadTags(for job: PipelineJob) async {
+        guard job.uploadWeather == nil || job.uploadLocation == nil else { return }
+        if let captureDate = job.captureDate {
+            guard let lat = job.captureLatitude, let lon = job.captureLongitude else { return }
+            let place = CLLocation(latitude: lat, longitude: lon)
+            async let fetchedWeather = UploadWeatherService.shared.fetchWeather(at: place, on: captureDate)
+            async let fetchedName = UploadWeatherService.shared.locationName(for: place)
+            let (weather, name) = await (fetchedWeather, fetchedName)
+            if job.uploadWeather == nil { job.uploadWeather = weather }
+            if job.uploadLocation == nil { job.uploadLocation = name }
+            return
+        }
+        async let fetchedWeather = UploadWeatherService.shared.fetchCurrentWeather()
+        async let fetchedLocation = UploadWeatherService.shared.fetchCurrentLocationName()
+        let (weather, location) = await (fetchedWeather, fetchedLocation)
+        if job.uploadWeather == nil { job.uploadWeather = weather }
+        if job.uploadLocation == nil { job.uploadLocation = location }
     }
 
     /// User tapped "Accept" in the review card.
@@ -313,14 +333,9 @@ final class RealGenerationOrchestrator {
 
             // Fire weather + location in parallel with Bria so they're
             // ready by the time the user reaches review.
-            Task { [weak job] in
-                async let weatherTask = UploadWeatherService.shared.fetchCurrentWeather()
-                async let locationTask = UploadWeatherService.shared.fetchCurrentLocationName()
-                let (weather, location) = await (weatherTask, locationTask)
-                await MainActor.run {
-                    job?.uploadWeather = weather
-                    job?.uploadLocation = location
-                }
+            Task { [weak self, weak job] in
+                guard let self, let job else { return }
+                await self.resolveUploadTags(for: job)
             }
 
             beginBackgroundActivity()
@@ -449,7 +464,7 @@ final class RealGenerationOrchestrator {
         let outfit = Outfit(
             id: outfitId,
             name: "Outfit \(job.outfitNum)",
-            date: dateFormatter.string(from: Date()),
+            date: job.captureDayString ?? dateFormatter.string(from: Date()),
             frameCount: 1,
             folder: outfitId,
             prefix: "",
@@ -563,6 +578,7 @@ final class RealGenerationOrchestrator {
         if let userId = userIdProvider() {
             let needs2DUpload = finalizedOutfit.frameCount == 1 && finalizedOutfit.remoteBaseURL == nil
             let cutoutData = job.cutoutImage
+            let captureDayOverride = job.captureDayString
             Task {
                 var outfitToSave = finalizedOutfit
                 if needs2DUpload, let cutoutData {
@@ -581,11 +597,16 @@ final class RealGenerationOrchestrator {
                 // `start` task missed them (location denied, slow
                 // network) so the persisted outfit at least gets
                 // a chance at the tags.
-                if outfitToSave.weather == nil {
-                    outfitToSave.weather = await UploadWeatherService.shared.fetchCurrentWeather()
-                }
-                if outfitToSave.location == nil {
-                    outfitToSave.location = await UploadWeatherService.shared.fetchCurrentLocationName()
+                // Last-chance CURRENT fetches are for live shots only:
+                // a camera-roll fit without GPS keeps empty tags
+                // rather than borrowing today's weather.
+                if captureDayOverride == nil {
+                    if outfitToSave.weather == nil {
+                        outfitToSave.weather = await UploadWeatherService.shared.fetchCurrentWeather()
+                    }
+                    if outfitToSave.location == nil {
+                        outfitToSave.location = await UploadWeatherService.shared.fetchCurrentLocationName()
+                    }
                 }
                 try? await OutfitService.saveArchiveOutfit(outfitToSave, userId: userId, isPublic: publishToFeed)
             }
@@ -654,7 +675,7 @@ final class RealGenerationOrchestrator {
         let outfit = Outfit(
             id: outfitId,
             name: "Outfit \(job.outfitNum)",
-            date: dateFormatter.string(from: Date()),
+            date: job.captureDayString ?? dateFormatter.string(from: Date()),
             frameCount: 1,
             folder: outfitId,
             prefix: "",
