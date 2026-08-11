@@ -638,13 +638,25 @@ final class RealGenerationOrchestrator {
             }
             if finalizedOutfit.weather == nil { finalizedOutfit.weather = existing.weather }
             if finalizedOutfit.location == nil { finalizedOutfit.location = existing.location }
+            // The archived original's DATE is always the truth —
+            // fork day for normal generations, the EXIF day for
+            // camera-roll fits, the original day for 2D→3D
+            // upgrades. Without this, a job restored from the
+            // server (relaunch mid-render) loses captureDayString
+            // and the accept stamps today.
+            finalizedOutfit.date = existing.date
             // Published mid-render (review-card sheet or archive
             // globe) → the frame upgrade must not reset the local
             // published flag, or the archive reads unpublished and
             // the user can't unpublish.
             if finalizedOutfit.isPublic == nil { finalizedOutfit.isPublic = existing.isPublic }
         }
-        if publishToFeed { finalizedOutfit.isPublic = true }
+        // A fit that is ALREADY public (published mid-render, or a
+        // 2D→3D upgrade of a public fit — including jobs restored
+        // from the server, which lose preservePublish) must stay
+        // public through the accept's row upsert.
+        let effectivePublish = publishToFeed || finalizedOutfit.isPublic == true
+        if effectivePublish { finalizedOutfit.isPublic = true }
 
         onAcceptOutfit(finalizedOutfit)
         if publishToFeed {
@@ -708,9 +720,9 @@ final class RealGenerationOrchestrator {
                 // everyone's feed (the Shreya bug). If the upload failed
                 // even after retries, save it privately — the launch
                 // heal pass re-uploads and the user can publish then.
-                let canPublish = publishToFeed
+                let canPublish = effectivePublish
                     && (outfitToSave.frameCount > 1 || outfitToSave.remoteBaseURL != nil)
-                if publishToFeed && !canPublish {
+                if effectivePublish && !canPublish {
                     Analytics.log("publish_blocked_frames_missing", properties: [
                         "outfit_id": .string(outfitToSave.id),
                     ])
