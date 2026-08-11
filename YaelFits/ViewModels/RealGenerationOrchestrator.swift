@@ -121,6 +121,9 @@ final class RealGenerationOrchestrator {
             else { return }
 
             let job = PipelineJob(outfitNum: outfitNum)
+            // The pill/chip/expanded-card thumbnails all render
+            // sourceImage — for an upgrade, the 2D frame IS the shot.
+            job.sourceImage = cutout
             job.cutoutImage = cutout
             job.greenScreenImage = greenScreen
             job.previewOutfit = outfit          // accept cleans the local 2D frame
