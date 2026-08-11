@@ -1579,18 +1579,18 @@ struct CarouselView: View {
             navButton(icon: .chevronLeft, disabled: currentIndex <= 0) {
                 currentIndex -= 1
             }
-            // The 2D→3D badge docks on the nav rail, centered above
-            // the left arrow — every floating element sits on an
-            // established rail; nothing free-floats over the fit.
-            .overlay(alignment: .center) {
-                if let outfit = currentOutfit, isUpgradableTo3D(outfit) {
-                    upgrade3DBadge(outfit: outfit)
-                        .offset(y: -51)   // arrow half 22 + 12 gap + badge half 17
-                }
-            }
             Spacer()
             navButton(icon: .chevronRight, disabled: currentIndex >= outfits.count - 1) {
                 currentIndex += 1
+            }
+            // The 2D→3D badge lives at the slide's top but shares the
+            // right arrow's vertical axis — same rail, same centers,
+            // no free-floating chrome over the fit.
+            .overlay(alignment: .center) {
+                if let outfit = currentOutfit, isUpgradableTo3D(outfit) {
+                    upgrade3DBadge(outfit: outfit)
+                        .offset(y: -(slideHeight / 2 - 17))
+                }
             }
         }
         .padding(.horizontal, Self.cardInset)
