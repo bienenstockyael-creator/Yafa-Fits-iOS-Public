@@ -721,6 +721,19 @@ struct FeedPostCard: View {
             guard newOutfit != nil, !cardVisible else { return }
             withAnimation(.easeOut(duration: 0.3)) { cardVisible = true }
         }
+        .onChange(of: isInitiallyLiked) { oldValue, newValue in
+            // A feed refresh delivered server truth that already
+            // includes our optimistic like/unlike. Fold the local
+            // delta away — keeping it double-counts (the "2 likes
+            // for my 1 like" bug: refreshed count includes the like
+            // AND localLikeAdjustment still adds +1).
+            guard likeToggled else { return }
+            let intended = !oldValue
+            if newValue == intended {
+                likeToggled = false
+                localLikeAdjustment = 0
+            }
+        }
         .onAppear {
             // Animate the fade-in even when outfit is already
             // resolved at appear time (i.e., cache hit). Previously
